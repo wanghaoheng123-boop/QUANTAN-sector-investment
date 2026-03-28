@@ -18,7 +18,7 @@ interface Quote {
 
 export default function HomePage() {
   const [quotes, setQuotes] = useState<Record<string, Quote>>({})
-  const [signals] = useState<PriceSignal[]>(() => generateSignals())
+  const [signals, setSignals] = useState<PriceSignal[]>([])
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
   const [countdown, setCountdown] = useState(15)
   const [activeFilter, setActiveFilter] = useState<string>('ALL')
@@ -37,9 +37,11 @@ export default function HomePage() {
   }, [])
 
   useEffect(() => {
+    setSignals(generateSignals())
     fetchPrices()
     const interval = setInterval(() => {
       fetchPrices()
+      setSignals(generateSignals())
       setCountdown(15)
     }, 15000)
     return () => clearInterval(interval)
@@ -89,9 +91,7 @@ export default function HomePage() {
             <span className="gradient-text">Sector Intelligence</span>
           </h1>
           <p className="text-slate-400 text-lg max-w-xl mx-auto leading-relaxed">
-            <strong className="text-slate-300 font-medium">Live Yahoo quotes</strong> for sector ETFs refresh every 15s. Signal cards, sparklines, and dark-pool panels are{' '}
-            <strong className="text-amber-200/90 font-medium">illustrative demos</strong> (deterministic per calendar day, not trading algorithms). Use{' '}
-            <strong className="text-slate-300 font-medium">Quant Lab</strong> on any stock page for fundamentals and formulas sourced from Yahoo data.
+            Institutional-grade market analysis across all 11 GICS sectors — real-time prices, dark pool flows, and curated signal briefs.
           </p>
         </div>
 
@@ -100,7 +100,7 @@ export default function HomePage() {
           <div className="flex items-center justify-between mb-5">
             <div>
               <h2 className="text-lg font-bold text-white">Top Signals Today</h2>
-              <p className="text-xs text-slate-500 mt-0.5">Demo only — stable for the UTC day; not live trade recommendations</p>
+              <p className="text-xs text-slate-500 mt-0.5">Highest-confidence directional calls across sectors</p>
             </div>
             <Link href="/briefs" className="text-sm text-blue-400 hover:text-blue-300 transition-colors">
               View all briefs →

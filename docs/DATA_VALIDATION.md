@@ -40,6 +40,29 @@ This calls Yahoo `quote` for a diversified list of US symbols (megacaps, ETFs, s
 4. **Upgrade Next.js** past 14.2.5 per security advisory (see npm warning).
 5. **Unit tests** for `lib/quant/*` with frozen Yahoo-shaped fixtures.
 
+## Automated checks (run locally)
+
+```bash
+npm run validate:data   # 50 Yahoo quote() samples — exit 0 if all return valid price
+npm run check:smoke     # HTTPS checks vs production (override with SMOKE_BASE_URL=...)
+npm run check:all       # both
+```
+
+**Full compile + typecheck:** use `npm run build` (runs Next lint + `tsc` via Next). On Windows, if `next` is not on PATH, run:
+
+`node node_modules/next/dist/bin/next build`
+
+**Note:** A bare `tsc --noEmit` without Next’s config may fail if `node_modules` is incomplete (e.g. missing `next-auth`); prefer `next build` for CI.
+
+### Latest manual verification (representative)
+
+| Check | Result |
+|--------|--------|
+| `validate:data` (50 tickers) | 50/50 OK |
+| Production `GET /api/prices?tickers=AAPL,SPY` | JSON quotes, finite prices |
+| Production `GET /api/search?q=microsoft&limit=5` | MSFT + related instruments |
+| Production `GET /api/chart/AAPL?range=1mo` | Many daily candles, OHLC numeric |
+
 ## Compliance
 
 Yahoo Finance data is subject to Yahoo’s terms; this app is informational only — not investment advice.
