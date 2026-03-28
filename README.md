@@ -25,6 +25,8 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
+**Data sources & accuracy:** see [docs/DATA_VALIDATION.md](docs/DATA_VALIDATION.md) (what is live Yahoo vs demo UI, why numbers used to “jump”, and `npm run validate:data` for a 50-symbol quote smoke test).
+
 ### OAuth setup
 
 1. **Google** — Create OAuth 2.0 Client ID (Web). Redirect: `{NEXTAUTH_URL}/api/auth/callback/google`.
@@ -48,9 +50,11 @@ Bloomberg does **not** offer a public REST API for browser or serverless apps. T
 
 ### Deploy (e.g. Vercel)
 
+**Production URL:** [https://antigravity-sectors.vercel.app](https://antigravity-sectors.vercel.app) (updates when you push to GitHub `main`).
+
 1. Push this folder to a GitHub repository (see below).
-2. Import the repo in [Vercel](https://vercel.com); set the same environment variables as `.env.example`.
-3. Set `NEXTAUTH_URL` to your production URL.
+2. In [Vercel](https://vercel.com), the project can stay linked to that repo for automatic deploys.
+3. In **Vercel → Project → Settings → Environment Variables**, add the same keys as `.env.example`. Set **`NEXTAUTH_URL`** to `https://antigravity-sectors.vercel.app` (or your custom domain) and **`NEXTAUTH_SECRET`** (e.g. `openssl rand -base64 32`). Without `NEXTAUTH_SECRET`, sign-in routes may error in production.
 
 ## GitHub & Cursor
 

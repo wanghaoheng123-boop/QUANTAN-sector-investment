@@ -41,7 +41,6 @@ export default function HomePage() {
     fetchPrices()
     const interval = setInterval(() => {
       fetchPrices()
-      setSignals(generateSignals())
       setCountdown(15)
     }, 15000)
     return () => clearInterval(interval)
@@ -91,7 +90,9 @@ export default function HomePage() {
             <span className="gradient-text">Sector Intelligence</span>
           </h1>
           <p className="text-slate-400 text-lg max-w-xl mx-auto leading-relaxed">
-            Live sector & commodity ETF quotes with charts; desk-style monitor; simulated dark pool / signal cards for workflow demos — verify all data with your vendor feeds.
+            <strong className="text-slate-300 font-medium">Live Yahoo quotes</strong> for sector ETFs refresh every 15s. Signal cards, sparklines, and dark-pool panels are{' '}
+            <strong className="text-amber-200/90 font-medium">illustrative demos</strong> (deterministic per calendar day, not trading algorithms). Use{' '}
+            <strong className="text-slate-300 font-medium">Quant Lab</strong> on any stock page for fundamentals and formulas sourced from Yahoo data.
           </p>
         </div>
 
@@ -100,7 +101,7 @@ export default function HomePage() {
           <div className="flex items-center justify-between mb-5">
             <div>
               <h2 className="text-lg font-bold text-white">Top Signals Today</h2>
-              <p className="text-xs text-slate-500 mt-0.5">Highest-confidence directional calls across sectors</p>
+              <p className="text-xs text-slate-500 mt-0.5">Demo only — stable for the UTC day; not live trade recommendations</p>
             </div>
             <Link href="/briefs" className="text-sm text-blue-400 hover:text-blue-300 transition-colors">
               View all briefs →

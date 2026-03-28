@@ -1,5 +1,7 @@
 // Mock data generators for prices, dark pool, signals, and news
-// All generators use deterministic seeds to prevent hydration mismatches
+// Deterministic seeds: same inputs → same outputs for SSR/hydration.
+// Demo signals/sparklines use a **calendar-day** seed so they do not “jump” every 15s
+// (live ETF prices on the home page still refresh from /api/prices on an interval).
 
 import { Brief, DarkPoolPrint, PriceSignal, SECTORS } from './sectors'
 
@@ -67,13 +69,17 @@ const SEED_PRICES: Record<string, number> = {
   QQQ: 461.70,
 }
 
-// Use a time-based seed that changes every 15s — stable within a render cycle
-function getTimeSeed() {
-  return Math.floor(Date.now() / 15000)
+/** UTC calendar day as a stable integer (changes at midnight UTC). */
+function dailySeed(salt = 0): number {
+  const d = new Date()
+  const y = d.getUTCFullYear()
+  const m = d.getUTCMonth() + 1
+  const day = d.getUTCDate()
+  return y * 10000 + m * 100 + day + salt
 }
 
 export function generateQuote(ticker: string, seedOffset: number = 0) {
-  const rng = mulberry32(getTimeSeed() + seedOffset + ticker.charCodeAt(0) * 31)
+  const rng = mulberry32(dailySeed(9) + seedOffset + ticker.charCodeAt(0) * 31)
   const base = SEED_PRICES[ticker] || 100
   const change = (rng() - 0.5) * 4
   const pct = (change / base) * 100
@@ -148,7 +154,7 @@ const SIGNAL_RATIONALES = [
 
 export function generateSignals(seedOffset: number = 0): PriceSignal[] {
   return SECTORS.map((sector, idx) => {
-    const rng = mulberry32(getTimeSeed() + idx * 17 + seedOffset + 1234)
+    const rng = mulberry32(dailySeed(3) + idx * 17 + seedOffset + 1234)
     const base = SEED_PRICES[sector.etf] || 100
     const rand = rng()
     const direction: PriceSignal['direction'] =
@@ -180,7 +186,7 @@ export function generateSignals(seedOffset: number = 0): PriceSignal[] {
 
 // ─── Sparkline generator (7-day mini price history) ────────────────────────
 export function generateSparkline(ticker: string): number[] {
-  const rng = mulberry32(ticker.charCodeAt(0) * 7 + getTimeSeed() + 555)
+  const rng = mulberry32(ticker.charCodeAt(0) * 7 + dailySeed(7) + 555)
   const base = SEED_PRICES[ticker] || 100
   let price = base * 0.97
   return Array.from({ length: 14 }, () => {
