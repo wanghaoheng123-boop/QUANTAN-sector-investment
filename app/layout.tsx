@@ -46,7 +46,6 @@ export default function RootLayout({
           <header className="sticky top-0 z-50 border-b border-slate-800/50 bg-slate-950/90 backdrop-blur-xl">
             <div className="max-w-7xl mx-auto px-4 min-h-14 flex flex-wrap items-center justify-between gap-y-2 py-2">
               <a href="/" className="flex items-center gap-2.5">
-                <img src="/quantan-logo.svg" alt="QUANTAN" className="h-7 w-auto" />
                 <span className="font-bold text-white text-sm">QUANTAN</span>
                 <span className="text-slate-500 text-sm hidden sm:block">/ Market Intelligence</span>
               </a>
