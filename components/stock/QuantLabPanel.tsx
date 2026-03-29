@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { CODEX_FRAMEWORKS } from '@/lib/quant/frameworks'
-import { ChevronDown, ChevronRight, RefreshCw, Scale, BookOpen, LineChart, Layers } from 'lucide-react'
+import { ChevronDown, ChevronRight, RefreshCw, Scale, BookOpen, LineChart, Layers, Eye, EyeOff, Lock } from 'lucide-react'
 import { halfKelly } from '@/lib/quant/kelly'
+import { PROVIDER_LABELS, DEFAULT_MODELS } from '@/app/api/trading-agents/[ticker]/route'
+import type { LLMProvider } from '@/app/api/trading-agents/[ticker]/route'
 
 type Payload = {
   symbol: string
@@ -145,15 +147,21 @@ export default function QuantLabPanel({ ticker }: { ticker: string }) {
   const [llmResult, setLlmResult] = useState<Record<string, unknown> | null>(null)
   const [llmError, setLlmError] = useState<string | null>(null)
   const [llmLoading, setLlmLoading] = useState(false)
-  const [llmProvider, setLlmProvider] = useState('openai')
-  const [llmDeepModel, setLlmDeepModel] = useState('gpt-5.2')
-  const [llmQuickModel, setLlmQuickModel] = useState('gpt-5-mini')
+  const [llmProvider, setLlmProvider] = useState<LLMProvider>('openai')
+  const [llmDeepModel, setLlmDeepModel] = useState('gpt-4o')
+  const [llmQuickModel, setLlmQuickModel] = useState('gpt-4o-mini')
   const [llmDebateRounds, setLlmDebateRounds] = useState(1)
   const [llmRiskRounds, setLlmRiskRounds] = useState(1)
   const [llmTradeDate, setLlmTradeDate] = useState('')
   const [llmHasRun, setLlmHasRun] = useState(false)
+  const [llmApiKey, setLlmApiKey] = useState('')
+  const [llmShowKey, setLlmShowKey] = useState(false)
 
   const runLlmAnalysis = useCallback(async () => {
+    if (!llmApiKey.trim()) {
+      setLlmError('Please enter your API key first. It is stored only in your browser session and never sent to any server other than your chosen LLM provider.')
+      return
+    }
     setLlmLoading(true)
     setLlmError(null)
     setLlmResult(null)
@@ -165,6 +173,7 @@ export default function QuantLabPanel({ ticker }: { ticker: string }) {
         quick_think_llm: llmQuickModel,
         max_debate_rounds: llmDebateRounds,
         max_risk_discuss_rounds: llmRiskRounds,
+        api_key: llmApiKey.trim(),
       }
       if (llmTradeDate) body.trade_date = llmTradeDate
       const r = await fetch(`/api/trading-agents/${encodeURIComponent(ticker)}`, {
@@ -181,7 +190,7 @@ export default function QuantLabPanel({ ticker }: { ticker: string }) {
     } finally {
       setLlmLoading(false)
     }
-  }, [ticker, llmProvider, llmDeepModel, llmQuickModel, llmDebateRounds, llmRiskRounds, llmTradeDate])
+  }, [ticker, llmProvider, llmDeepModel, llmQuickModel, llmDebateRounds, llmRiskRounds, llmTradeDate, llmApiKey])
 
   const fetchLlmLatest = useCallback(async () => {
     setLlmLoading(true)
@@ -229,6 +238,33 @@ export default function QuantLabPanel({ ticker }: { ticker: string }) {
     },
     [ticker]
   )
+
+  // Persist API key to sessionStorage (cleared when tab closes)
+  const handleApiKeyChange = useCallback((key: string) => {
+    setLlmApiKey(key)
+    try {
+      if (key.trim()) sessionStorage.setItem('llm_api_key', key)
+      else sessionStorage.removeItem('llm_api_key')
+    } catch {}
+  }, [])
+
+  // Load API key from sessionStorage on mount
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem('llm_api_key')
+      if (saved) setLlmApiKey(saved)
+    } catch {}
+  }, [])
+
+  // When provider changes, reset to that provider's default models
+  const handleProviderChange = useCallback((p: LLMProvider) => {
+    setLlmProvider(p)
+    const defaults = DEFAULT_MODELS[p]
+    if (defaults) {
+      setLlmDeepModel(defaults.deep)
+      setLlmQuickModel(defaults.quick)
+    }
+  }, [])
 
   useEffect(() => {
     setWacc(0.09)
@@ -899,21 +935,76 @@ export default function QuantLabPanel({ ticker }: { ticker: string }) {
                 </div>
               </div>
 
+              {/* API Key — user-supplied, never stored server-side */}
+              <div className="rounded-lg border border-amber-500/25 bg-amber-950/10 p-3 space-y-2">
+                <div className="flex items-center gap-2">
+                  <Lock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                  <p className="text-[10px] text-amber-200/80 font-semibold uppercase tracking-wide">Your API Key (Required)</p>
+                </div>
+                <p className="text-[10px] text-amber-200/60 leading-relaxed">
+                  Your key goes directly to the LLM provider — never through the Antigravity server.
+                  Stored only in your browser session (<code className="font-mono">sessionStorage</code>, cleared on tab close).
+                  <a
+                    href="https://platform.openai.com/api-keys"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline ml-1"
+                  >
+                    Get an OpenAI key
+                  </a>
+                  {', '}
+                  <a
+                    href="https://console.anthropic.com/settings/keys"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline"
+                  >
+                    Anthropic
+                  </a>
+                  {', '}
+                  <a
+                    href="https://aistudio.google.com/app/apikey"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline"
+                  >
+                    Google AI
+                  </a>
+                  .
+                </p>
+                <div className="relative">
+                  <input
+                    type={llmShowKey ? 'text' : 'password'}
+                    value={llmApiKey}
+                    onChange={(e) => handleApiKeyChange(e.target.value)}
+                    placeholder="sk-...  (Paste your API key here)"
+                    className="w-full rounded bg-slate-950 border border-amber-500/30 text-amber-100 px-3 py-2 pr-9 text-xs font-mono placeholder:text-amber-200/30"
+                    autoComplete="off"
+                    spellCheck={false}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setLlmShowKey(s => !s)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-amber-400/60 hover:text-amber-300 transition-colors"
+                    title={llmShowKey ? 'Hide key' : 'Show key'}
+                  >
+                    {llmShowKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+              </div>
+
               {/* Provider & model */}
               <div className="grid grid-cols-2 gap-3 text-xs">
                 <label className="flex flex-col gap-1">
                   <span className="text-slate-400 text-[10px] uppercase tracking-wide">Provider</span>
                   <select
                     value={llmProvider}
-                    onChange={(e) => setLlmProvider(e.target.value)}
+                    onChange={(e) => handleProviderChange(e.target.value as LLMProvider)}
                     className="rounded bg-slate-900 border border-slate-700 text-slate-200 px-2 py-1.5 font-mono"
                   >
-                    <option value="openai">OpenAI (GPT)</option>
-                    <option value="google">Google (Gemini)</option>
-                    <option value="anthropic">Anthropic (Claude)</option>
-                    <option value="xai">xAI (Grok)</option>
-                    <option value="openrouter">OpenRouter</option>
-                    <option value="ollama">Ollama (local)</option>
+                    {(Object.keys(PROVIDER_LABELS) as LLMProvider[]).map((p) => (
+                      <option key={p} value={p}>{PROVIDER_LABELS[p]}</option>
+                    ))}
                   </select>
                 </label>
                 <label className="flex flex-col gap-1">
@@ -923,7 +1014,7 @@ export default function QuantLabPanel({ ticker }: { ticker: string }) {
                     value={llmDeepModel}
                     onChange={(e) => setLlmDeepModel(e.target.value)}
                     className="rounded bg-slate-900 border border-slate-700 text-slate-200 px-2 py-1.5 font-mono"
-                    placeholder="gpt-5.2"
+                    placeholder="gpt-4o"
                   />
                 </label>
                 <label className="flex flex-col gap-1">
@@ -933,7 +1024,7 @@ export default function QuantLabPanel({ ticker }: { ticker: string }) {
                     value={llmQuickModel}
                     onChange={(e) => setLlmQuickModel(e.target.value)}
                     className="rounded bg-slate-900 border border-slate-700 text-slate-200 px-2 py-1.5 font-mono"
-                    placeholder="gpt-5-mini"
+                    placeholder="gpt-4o-mini"
                   />
                 </label>
                 <label className="flex flex-col gap-1">
@@ -994,9 +1085,10 @@ export default function QuantLabPanel({ ticker }: { ticker: string }) {
             {llmError && (
               <div className="rounded-xl border border-red-500/30 bg-red-950/20 p-4 text-xs text-red-200/90">
                 <strong className="text-red-300">Error:</strong> {llmError}
-                {llmError.includes('OPENAI_API_KEY') || llmError.includes('api_key') || llmError.includes('Not set') ? (
+                {llmError.includes('OPENAI_API_KEY') || llmError.includes('api_key') || llmError.includes('Not set') || llmError.includes('secret is too short') ? (
                   <p className="text-red-300/60 mt-2">
-                    No LLM key detected. Set <code className="text-red-200 font-mono">OPENAI_API_KEY</code> (or your provider's equivalent) in your environment before starting the Python server.
+                    The Python server could not authenticate with the LLM provider. Make sure your API key is valid and has credits/quotas available.
+                    The key is sent directly to {llmProvider === 'openai' ? 'OpenAI' : llmProvider === 'anthropic' ? 'Anthropic' : 'your chosen provider'} — Antigravity never sees or stores it.
                   </p>
                 ) : null}
               </div>
