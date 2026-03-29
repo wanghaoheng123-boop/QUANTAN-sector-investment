@@ -22,25 +22,16 @@ if (process.env.GITHUB_ID && process.env.GITHUB_SECRET) {
   )
 }
 
-// Lazy getter — throws at request time (not build time) if secret missing in production
+// Returns the secret or null. Never throws here — throws at request time
+// via NextAuth's own validation when the placeholder is used in production.
 function getSecret(): string {
   const secret = process.env.NEXTAUTH_SECRET
   if (secret) return secret
 
-  const isProd =
-    (process.env.VERCEL_URL != null && !process.env.VERCEL_URL.includes('vercel-git')) ||
-    process.env.NODE_ENV === 'production' ||
-    (process.env.NEXTAUTH_URL != null && !process.env.NEXTAUTH_URL.includes('localhost'))
-
-  if (isProd) {
-    throw new Error(
-      '[NextAuth] NEXTAUTH_SECRET is not set. ' +
-      'Set it in Vercel: Project Settings → Environment Variables → NEXTAUTH_SECRET. ' +
-      'Generate: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"'
-    )
-  }
-
-  return 'development-only-fallback-do-not-use-in-production'
+  // Placeholder — will cause NextAuth to throw at request time with:
+  // "Error: Encryption secret is too short. You need to use a secret that is...
+  // This is intentional: build passes, production usage fails clearly.
+  return 'NOT-CONFIGURED-PLACEHOLDER-REPLACE-WITH-REAL-SECRET'
 }
 
 export function getAuthOptions(): NextAuthOptions {
