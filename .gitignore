@@ -41,3 +41,5 @@ yarn-error.log*
 # Cloud / Finder duplicate filenames
 * 2.*
 * 3.*
+
+.vercel

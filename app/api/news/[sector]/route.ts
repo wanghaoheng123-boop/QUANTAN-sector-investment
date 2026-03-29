@@ -51,7 +51,6 @@ async function fetchNewsForTickers(tickers: string[], sector: string): Promise<N
     try {
       const result = await yahooFinance.search(ticker, {
         newsCount: 4,
-        enableFuzzyProps: false,
       })
       if (!result?.news || !Array.isArray(result.news)) continue
 

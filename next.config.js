@@ -12,7 +12,10 @@ const nextConfig = {
   },
   // Prevent Next.js from bundling yahoo-finance2 and its broken ESM shim.
   // Resolved by Node.js natively at runtime instead.
-  serverExternalPackages: ['yahoo-finance2'],
+  // Next.js 14 uses experimental.serverComponentsExternalPackages
+  experimental: {
+    serverComponentsExternalPackages: ['yahoo-finance2'],
+  },
 }
 
 module.exports = withPWA(nextConfig)

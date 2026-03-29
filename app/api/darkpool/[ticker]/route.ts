@@ -228,14 +228,12 @@ export async function GET(
         : {}
 
     const keyStats = (
-      summary.defaultKeyStatistics ??
-      summary.defaultKeyStatistics ??
+      (summary.defaultKeyStatistics as Record<string, unknown>) ??
       {}
     ) as Record<string, unknown>
 
     const financialData = (
-      summary.financialData ??
-      (summary.financialData as Record<string, unknown>) ??
+      (summary.financialData as unknown as Record<string, unknown>) ??
       null
     ) as Record<string, unknown> | null
 

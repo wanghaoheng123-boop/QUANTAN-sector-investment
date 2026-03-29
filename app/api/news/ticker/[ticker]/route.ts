@@ -33,7 +33,6 @@ export async function GET(
   try {
     const result = await yahooFinance.search(ticker, {
       newsCount: 15,
-      enableFuzzyProps: false,
     })
 
     const news: NewsItem[] = (

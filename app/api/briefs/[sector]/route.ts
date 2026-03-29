@@ -151,7 +151,7 @@ export async function GET(
       null
     ),
     fetchWithFallback(
-      yf.search(etf, { newsCount: 8, enableFuzzyProps: false }),
+      yf.search(etf, { newsCount: 8 }),
       null
     ),
   ])

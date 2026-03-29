@@ -25,7 +25,7 @@ if (process.env.GITHUB_ID && process.env.GITHUB_SECRET) {
 export const authOptions: NextAuthOptions = {
   providers,
   session: { strategy: 'jwt', maxAge: 30 * 24 * 60 * 60 },
-  secret: process.env.NEXTAUTH_SECRET,
+  secret: process.env.NEXTAUTH_SECRET || 'dev-secret-fallback-change-in-production-at-least-32-chars',
   pages: {
     signIn: '/auth/signin',
   },

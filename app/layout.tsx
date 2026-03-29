@@ -3,7 +3,7 @@ import './globals.css'
 import Link from 'next/link'
 import GlobalSearch from '@/components/GlobalSearch'
 import Providers from '@/components/Providers'
-import AuthNav from '@/components/AuthNav'
+import SafeAuth from '@/components/SafeAuth'
 import ComplianceBanner from '@/components/ComplianceBanner'
 
 export const viewport: Viewport = {
@@ -59,7 +59,7 @@ export default function RootLayout({
                 <Link href="/heatmap" className="text-sm font-medium text-slate-400 hover:text-white transition-colors">Heatmap</Link>
                 <Link href="/briefs" className="text-sm font-medium text-slate-400 hover:text-white transition-colors">Briefs</Link>
                 <GlobalSearch />
-                <AuthNav />
+                <SafeAuth />
                 <div className="flex items-center gap-1.5 bg-green-500/10 px-2 py-1 rounded-md border border-green-500/20">
                   <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
                   LIVE
