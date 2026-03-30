@@ -48,13 +48,95 @@ Bloomberg does **not** offer a public REST API for browser or serverless apps. T
 5. **Starter stub**: `scripts/bloomberg-bridge-example.py` — replace `fetch_bloomberg_fields` with real `blpapi` code from Bloomberg’s SDK.
 6. **Health check**: `GET /api/bloomberg-bridge/health` from this app verifies reachability (no secrets in response).
 
-### Deploy (e.g. Vercel)
+### Deploy (Vercel or Alibaba ECS)
 
 **Production URL:** [https://antigravity-sectors.vercel.app](https://antigravity-sectors.vercel.app) (updates when you push to GitHub `main`).
 
 1. Push this folder to a GitHub repository (see below).
 2. In [Vercel](https://vercel.com), the project can stay linked to that repo for automatic deploys.
 3. In **Vercel → Project → Settings → Environment Variables**, add the same keys as `.env.example`. Set **`NEXTAUTH_URL`** to `https://antigravity-sectors.vercel.app` (or your custom domain) and **`NEXTAUTH_SECRET`** (e.g. `openssl rand -base64 32`). Without `NEXTAUTH_SECRET`, sign-in routes may error in production.
+
+For Alibaba ECS + auto-sync from GitHub `main`, see:
+
+- `docs/ECS_DEPLOY.md`
+- `.github/workflows/ecs-deploy.yml`
+
+### Deployment status
+
+Replace `YOUR_GITHUB_USER` and `YOUR_REPO` below once, then badges show live status:
+
+- Vercel deploy workflow badge:  
+  `https://github.com/YOUR_GITHUB_USER/YOUR_REPO/actions/workflows/vercel-deploy.yml/badge.svg`
+- ECS deploy workflow badge:  
+  `https://github.com/YOUR_GITHUB_USER/YOUR_REPO/actions/workflows/ecs-deploy.yml/badge.svg`
+
+Example markdown:
+
+```md
+[![Vercel Deploy](https://github.com/YOUR_GITHUB_USER/YOUR_REPO/actions/workflows/vercel-deploy.yml/badge.svg)](https://github.com/YOUR_GITHUB_USER/YOUR_REPO/actions/workflows/vercel-deploy.yml)
+[![Alibaba ECS Deploy](https://github.com/YOUR_GITHUB_USER/YOUR_REPO/actions/workflows/ecs-deploy.yml/badge.svg)](https://github.com/YOUR_GITHUB_USER/YOUR_REPO/actions/workflows/ecs-deploy.yml)
+```
+
+### Health checks (both URLs)
+
+Set two base URLs:
+
+- `VERCEL_URL=https://your-vercel-domain`
+- `ECS_URL=https://your-ecs-domain`
+
+Check app health endpoints manually:
+
+```bash
+curl -sS "$VERCEL_URL/api/bloomberg-bridge/health"
+curl -sS "$ECS_URL/api/bloomberg-bridge/health"
+```
+
+Quick status-only check:
+
+```bash
+curl -I "$VERCEL_URL"
+curl -I "$ECS_URL"
+```
+
+Recommended monitoring targets (UptimeRobot, Better Stack, Datadog Synthetics, etc.):
+
+- `GET /` (homepage availability)
+- `GET /api/bloomberg-bridge/health` (backend path responsiveness)
+- Optional deep check: a lightweight quote endpoint once you define a stable symbol query
+
+Alert rule baseline:
+
+- Frequency: every 1 minute
+- Trigger: 2 consecutive failures
+- Notify: email + mobile push
+
+### Failover plan
+
+#### 1) Manual DNS failover (simplest, lowest cost)
+
+- Keep primary DNS (for example `www`) pointing to Vercel.
+- Keep secondary DNS (for example `hk`) pointing to ECS.
+- If Vercel is down, update `www` DNS record to ECS target.
+- Lower DNS TTL to `60-120` seconds for faster switching.
+- After recovery, point DNS back to Vercel.
+
+#### 2) Cloudflare Load Balancing (automatic failover)
+
+- Put your domain on Cloudflare.
+- Create two pools:
+  - Pool A -> Vercel origin
+  - Pool B -> ECS origin
+- Add health monitor (HTTP/HTTPS) for `/` or `/api/bloomberg-bridge/health`.
+- Configure steering:
+  - Primary pool: Vercel
+  - Fallback pool: ECS
+- Enable session affinity if needed for auth-sensitive flows.
+
+Operational notes:
+
+- Keep env vars synchronized between Vercel and ECS (especially auth/payment keys).
+- Keep OAuth callback URLs registered for both domains.
+- Test failover monthly with a controlled drill (disable primary temporarily, verify automatic/manual switch).
 
 ## GitHub & Cursor
 
