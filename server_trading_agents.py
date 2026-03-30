@@ -296,8 +296,9 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],   # tighten for production if needed
-    allow_credentials=True,
+    allow_origins=["*"],
+    # Browsers forbid credentials with wildcard origin; Next.js calls this server-side too.
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )

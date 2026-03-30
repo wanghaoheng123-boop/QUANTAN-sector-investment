@@ -14,7 +14,8 @@ export const dynamic = 'force-dynamic'
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const interval = searchParams.get('interval') || '1d'
-  const limit = Math.min(parseInt(searchParams.get('limit') || '500'), 1000)
+  const rawLimit = parseInt(searchParams.get('limit') || '500', 10)
+  const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 1000) : 500
 
   const binanceInterval = INTERVAL_MAP[interval] || '1d'
 

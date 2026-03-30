@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useCallback, useState, useMemo } from 'react'
+import { useEffect, useRef, useCallback, useMemo, useState } from 'react'
 import type {
   IChartApi,
   ISeriesApi,
@@ -161,11 +161,33 @@ export default function KLineChart({
   const macdHistRef         = useRef<ISeriesApi<'Histogram'> | null>(null)
   const resizeRef           = useRef<ResizeObserver | null>(null)
 
-  // Track previous candle count to decide update vs replace strategy
+  /** Previous candle count — updated at end of data effect */
   const prevCandlesLenRef = useRef(0)
+  /** First bar time — when it changes, dataset was replaced (timeframe / refresh) */
+  const firstBarTimeRef = useRef<string | number | null>(null)
 
   // Memoize indicators to prevent effect re-runs on parent re-renders
   const indicators = useMemo(() => indicatorsProp, [indicatorsProp])
+
+  /** Local visibility for legend + buttons (chart series toggles are ref-driven) */
+  type VisKey = 'ema20' | 'ema50' | 'vwap' | 'bollingerBands' | 'fibonacci'
+  const [vis, setVis] = useState<Record<VisKey, boolean>>(() => ({
+    ema20: indicatorsProp.ema20 !== false,
+    ema50: indicatorsProp.ema50 !== false,
+    vwap: indicatorsProp.vwap === true,
+    bollingerBands: indicatorsProp.bollingerBands === true,
+    fibonacci: indicatorsProp.fibonacci === true,
+  }))
+
+  useEffect(() => {
+    setVis({
+      ema20: indicatorsProp.ema20 !== false,
+      ema50: indicatorsProp.ema50 !== false,
+      vwap: indicatorsProp.vwap === true,
+      bollingerBands: indicatorsProp.bollingerBands === true,
+      fibonacci: indicatorsProp.fibonacci === true,
+    })
+  }, [indicatorsProp])
 
   const INDICATOR_DEFS = useMemo(() => [
     { key: 'ema20' as const,          label: 'EMA 20',     color: 'bg-yellow-400' },
@@ -316,53 +338,60 @@ export default function KLineChart({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []) // ← Runs ONLY once on mount
 
-  // ── B. Data update: uses update() for append, setData() for replace ──
+  // ── B. Data update: incremental update() for live last-bar ticks; setData on range change ──
   useEffect(() => {
     if (!candleRef.current || candles.length === 0) return
 
     const chart = chartRef.current
     const prevLen = prevCandlesLenRef.current
-    prevCandlesLenRef.current = candles.length
+    const len = candles.length
+    const firstTime = candles[0]?.time ?? null
 
-    // Determine strategy: if new candles align with old (same last time or appended),
-    // use O(1) update(). Otherwise full O(n) setData().
-    const isAppend =
-      prevLen > 0 &&
-      candles.length > prevLen &&
-      candles[prevLen - 1]?.time === candles[prevLen]?.time
+    const fullReset =
+      prevLen === 0 ||
+      len < prevLen ||
+      len > prevLen + 1 ||
+      (firstBarTimeRef.current !== null &&
+        firstTime !== null &&
+        String(firstBarTimeRef.current) !== String(firstTime))
+
+    const touchLast = !fullReset && len > 0 && (len === prevLen || len === prevLen + 1)
 
     const saveRange = chart?.timeScale().getVisibleLogicalRange() ?? null
 
-    // Candlestick — update() for single append, setData() for replace
-    if (isAppend && candles.length === prevLen + 1) {
-      const c = candles[candles.length - 1]
-      candleRef.current.update({ time: c.time as Time, open: c.open, high: c.high, low: c.low, close: c.close } as CandlestickData<Time>)
-    } else {
-      candleRef.current.setData(
-        candles.map(c => ({ time: c.time as Time, open: c.open, high: c.high, low: c.low, close: c.close })) as CandlestickData<Time>[]
-      )
-    }
+    const candleArr = candles.map(c => ({
+      time: c.time as Time,
+      open: c.open,
+      high: c.high,
+      low: c.low,
+      close: c.close,
+    })) as CandlestickData<Time>[]
 
-    // Volume
-    if (isAppend && candles.length === prevLen + 1) {
-      const c = candles[candles.length - 1]
+    const volArr = candles.map(c => ({
+      time: c.time as Time,
+      value: c.volume,
+      color: c.close >= c.open ? '#00d08430' : '#ff475730',
+    })) as HistogramData<Time>[]
+
+    if (touchLast) {
+      const c = candles[len - 1]
+      candleRef.current.update({
+        time: c.time as Time,
+        open: c.open,
+        high: c.high,
+        low: c.low,
+        close: c.close,
+      } as CandlestickData<Time>)
       volumeRef.current?.update({
         time: c.time as Time,
         value: c.volume,
         color: c.close >= c.open ? '#00d08430' : '#ff475730',
       } as HistogramData<Time>)
     } else {
-      volumeRef.current?.setData(
-        candles.map(c => ({
-          time: c.time as Time,
-          value: c.volume,
-          color: c.close >= c.open ? '#00d08430' : '#ff475730',
-        })) as HistogramData<Time>[]
-      )
+      candleRef.current.setData(candleArr)
+      volumeRef.current?.setData(volArr)
     }
 
-    // Indicators — always full recalc since they depend on all candles
-    // (incremental EMA would save ~60% computation for the common append case)
     const closes = candles.map(c => c.close)
 
     const ema20Data = calcEMA(closes, 20)
@@ -373,49 +402,21 @@ export default function KLineChart({
         .map((c, i) => ({ time: c.time as Time, value: values[i] }))
         .filter(d => !isNaN(d.value)) as LineData<Time>[]
 
-    if (isAppend && ema20Ref.current) {
-      const last = closes.length - 1
-      if (!isNaN(ema20Data[last])) {
-        ema20Ref.current.update({ time: candles[last].time as Time, value: ema20Data[last] } as LineData<Time>)
-      }
-    } else {
-      ema20Ref.current?.setData(lineData(ema20Data))
-    }
-
-    if (isAppend && ema50Ref.current) {
-      const last = closes.length - 1
-      if (!isNaN(ema50Data[last])) {
-        ema50Ref.current.update({ time: candles[last].time as Time, value: ema50Data[last] } as LineData<Time>)
-      }
-    } else {
-      ema50Ref.current?.setData(lineData(ema50Data))
-    }
+    ema20Ref.current?.setData(lineData(ema20Data))
+    ema50Ref.current?.setData(lineData(ema50Data))
 
     // VWAP
     if (indicators.vwap && vwapRef.current) {
       const vwapData = calcVWAP(candles)
-      if (isAppend) {
-        const last = vwapData[vwapData.length - 1]
-        if (last && !isNaN(last.value)) vwapRef.current.update(last as LineData<Time>)
-      } else {
-        vwapRef.current.setData(vwapData.filter(d => !isNaN(d.value)) as LineData<Time>[])
-      }
+      vwapRef.current.setData(vwapData.filter(d => !isNaN(d.value)) as LineData<Time>[])
     }
 
     // Bollinger Bands
     if (indicators.bollingerBands && bbUpperRef.current && bbMidRef.current && bbLowerRef.current) {
       const bb = calcBollingerBands(closes)
-      if (isAppend) {
-        const last = closes.length - 1
-        const t = candles[last].time as Time
-        if (!isNaN(bb[last].upper)) bbUpperRef.current.update({ time: t, value: bb[last].upper } as LineData<Time>)
-        if (!isNaN(bb[last].mid))   bbMidRef.current.update({ time: t, value: bb[last].mid } as LineData<Time>)
-        if (!isNaN(bb[last].lower)) bbLowerRef.current.update({ time: t, value: bb[last].lower } as LineData<Time>)
-      } else {
-        bbUpperRef.current.setData(lineData(bb.map(b => b.upper)))
-        bbMidRef.current.setData(lineData(bb.map(b => b.mid)))
-        bbLowerRef.current.setData(lineData(bb.map(b => b.lower)))
-      }
+      bbUpperRef.current.setData(lineData(bb.map(b => b.upper)))
+      bbMidRef.current.setData(lineData(bb.map(b => b.mid)))
+      bbLowerRef.current.setData(lineData(bb.map(b => b.lower)))
     }
 
     // Markers
@@ -446,41 +447,25 @@ export default function KLineChart({
     // RSI sub-chart
     if (showRSI && rsiLineRef.current && rsiChartRef.current) {
       const rsiVals = calcRSI(closes)
-      if (isAppend) {
-        const last = closes.length - 1
-        if (!isNaN(rsiVals[last])) {
-          rsiLineRef.current.update({ time: candles[last].time as Time, value: rsiVals[last] } as LineData<Time>)
-        }
-      } else {
-        rsiLineRef.current.setData(lineData(rsiVals))
-      }
+      rsiLineRef.current.setData(lineData(rsiVals))
     }
 
     // MACD sub-chart
     if (showRSI && macdLineRef.current && macdSignalRef.current && macdHistRef.current && macdChartRef.current) {
       const macdVals = calcMACD(closes)
-      if (isAppend) {
-        const last = closes.length - 1
-        const t = candles[last].time as Time
-        const m = macdVals[last]
-        if (!isNaN(m.macd))     macdLineRef.current.update({ time: t, value: m.macd } as LineData<Time>)
-        if (!isNaN(m.signal))   macdSignalRef.current.update({ time: t, value: m.signal } as LineData<Time>)
-        if (!isNaN(m.histogram)) macdHistRef.current.update({
-          time: t, value: m.histogram,
-          color: m.histogram >= 0 ? '#00d08480' : '#ff475780',
-        } as HistogramData<Time>)
-      } else {
-        macdLineRef.current.setData(lineData(macdVals.map(m => m.macd)))
-        macdSignalRef.current.setData(lineData(macdVals.map(m => m.signal)))
-        macdHistRef.current.setData(
-          candles.map((c, i) => ({
-            time: c.time as Time,
-            value: macdVals[i].histogram,
-            color: macdVals[i].histogram >= 0 ? '#00d08480' : '#ff475780',
-          })).filter(d => !isNaN(d.value)) as HistogramData<Time>[]
-        )
-      }
+      macdLineRef.current.setData(lineData(macdVals.map(m => m.macd)))
+      macdSignalRef.current.setData(lineData(macdVals.map(m => m.signal)))
+      macdHistRef.current.setData(
+        candles.map((c, i) => ({
+          time: c.time as Time,
+          value: macdVals[i].histogram,
+          color: macdVals[i].histogram >= 0 ? '#00d08480' : '#ff475780',
+        })).filter(d => !isNaN(d.value)) as HistogramData<Time>[]
+      )
     }
+
+    firstBarTimeRef.current = firstTime
+    prevCandlesLenRef.current = len
 
     // Restore zoom
     if (saveRange !== null && chart) {
@@ -489,18 +474,22 @@ export default function KLineChart({
   }, [candles, darkPoolMarkers, newsMarkers, showRSI, indicators])
 
   // ── C. Toggle indicator visibility ─────────────────────────────
-  const toggleIndicator = useCallback((key: keyof typeof indicators) => {
-    if (key === 'ema20' && ema20Ref.current) ema20Ref.current.applyOptions({ visible: !indicators.ema20 })
-    if (key === 'ema50' && ema50Ref.current) ema50Ref.current.applyOptions({ visible: !indicators.ema50 })
-    if (key === 'vwap' && vwapRef.current) vwapRef.current.applyOptions({ visible: !indicators.vwap })
+  const toggleIndicator = useCallback((key: VisKey) => {
+    setVis(prev => {
+      const next = { ...prev, [key]: !prev[key] }
+      if (key === 'ema20' && ema20Ref.current) ema20Ref.current.applyOptions({ visible: next.ema20 })
+      if (key === 'ema50' && ema50Ref.current) ema50Ref.current.applyOptions({ visible: next.ema50 })
+      if (key === 'vwap' && vwapRef.current) vwapRef.current.applyOptions({ visible: next.vwap })
       if (key === 'bollingerBands') {
-        if (bbUpperRef.current) bbUpperRef.current.applyOptions({ visible: !indicators.bollingerBands })
-        if (bbMidRef.current) bbMidRef.current.applyOptions({ visible: !indicators.bollingerBands })
-        if (bbLowerRef.current) bbLowerRef.current.applyOptions({ visible: !indicators.bollingerBands })
+        if (bbUpperRef.current) bbUpperRef.current.applyOptions({ visible: next.bollingerBands })
+        if (bbMidRef.current) bbMidRef.current.applyOptions({ visible: next.bollingerBands })
+        if (bbLowerRef.current) bbLowerRef.current.applyOptions({ visible: next.bollingerBands })
       }
-  }, [indicators])
+      return next
+    })
+  }, [])
 
-  const activeIndicators = INDICATOR_DEFS.filter(d => indicators[d.key])
+  const activeIndicators = INDICATOR_DEFS.filter(d => vis[d.key])
 
   return (
     <div className="relative select-none">
@@ -524,7 +513,7 @@ export default function KLineChart({
               key={d.key}
               onClick={() => toggleIndicator(d.key)}
               className={`px-1.5 py-0.5 rounded text-[10px] font-mono transition-colors ${
-                indicators[d.key]
+                vis[d.key]
                   ? 'bg-slate-700 text-white'
                   : 'bg-slate-800 text-slate-600 hover:text-slate-400'
               }`}

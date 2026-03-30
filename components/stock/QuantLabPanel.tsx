@@ -131,6 +131,7 @@ function isLlmConnectivityCode(code: string | null): boolean {
     'analysis_timeout',
     'network_error',
     'parse_error',
+    'invalid_trading_agents_base',
   ].includes(code)
 }
 
@@ -191,7 +192,7 @@ export default function QuantLabPanel({ ticker }: { ticker: string }) {
     if (!llmApiKey.trim()) {
       setLlmErrorCode('missing_api_key')
       setLlmError(
-        'Please enter your API key first. It is stored only in your browser session and sent to your deployed TradingAgents backend for this run (then to the LLM provider).'
+        'Please enter your API key first. It stays in your browser until you run an analysis (sessionStorage; cleared when the tab closes).'
       )
       return
     }
@@ -1008,15 +1009,17 @@ export default function QuantLabPanel({ ticker }: { ticker: string }) {
                 </div>
               </div>
 
-              {/* API Key — user-supplied, never stored server-side */}
+              {/* API Key — user-supplied; see privacy note below */}
               <div className="rounded-lg border border-amber-500/25 bg-amber-950/10 p-3 space-y-2">
                 <div className="flex items-center gap-2">
                   <Lock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                   <p className="text-[10px] text-amber-200/80 font-semibold uppercase tracking-wide">Your API Key (Required)</p>
                 </div>
                 <p className="text-[10px] text-amber-200/60 leading-relaxed">
-                  Your key goes directly to the LLM provider — never through the QUANTAN server.
-                  Stored only in your browser session (<code className="font-mono">sessionStorage</code>, cleared on tab close).
+                  <strong className="text-amber-200/85">Privacy:</strong> QUANTAN does not save your key in a database.
+                  When you run an analysis, the key travels in one request: your browser → this site&apos;s API →{' '}
+                  <em>your</em> TradingAgents server (HTTPS in production) → the LLM provider. Use a backend URL you control (e.g. Railway).
+                  Stored only in this tab (<code className="font-mono">sessionStorage</code>, cleared on tab close).
                   <a
                     href="https://platform.openai.com/api-keys"
                     target="_blank"
@@ -1187,7 +1190,8 @@ export default function QuantLabPanel({ ticker }: { ticker: string }) {
                       </li>
                       <li>
                         In Vercel → Project → Environment Variables, set{' '}
-                        <code className="font-mono text-red-200">TRADING_AGENTS_BASE</code> to your public URL (no trailing slash), then redeploy.
+                        <code className="font-mono text-red-200">TRADING_AGENTS_BASE</code> to your public{' '}
+                        <code className="font-mono text-red-200">https://</code> origin (required in production; no trailing slash), then redeploy.
                       </li>
                       <li>Local dev: run <code className="font-mono text-red-200">python server_trading_agents.py</code> on port 3001 — no env var needed in <code className="font-mono text-red-200">npm run dev</code>.</li>
                     </ol>

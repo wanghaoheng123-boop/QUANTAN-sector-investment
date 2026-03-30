@@ -8,12 +8,10 @@ import type { BtcCandle } from '@/lib/crypto'
 
 const KLineChart = dynamic(() => import('@/components/KLineChart'), { ssr: false })
 
-interface DpMarker {
-  time: string; price: number; size: number; sentiment: 'BULLISH' | 'BEARISH'
-}
-interface NewsMarker {
-  time: string; headline: string; impact: 'positive' | 'negative' | 'neutral'
-}
+// Binance WebSocket streams (wss — secure, public, no API keys)
+const PRICE_WS = 'wss://stream.binance.com:9443/ws/btcusdt@ticker'
+const KLINE_WS = (interval: string) =>
+  `wss://stream.binance.com:9443/stream?streams=btcusdt@kline_${interval}`
 
 const TIMEFRAMES = [
   ['5m', '5m'], ['15m', '15m'], ['1h', '1H'], ['4h', '4H'],
@@ -23,29 +21,32 @@ const INDICATOR_PRESETS = [
   ['ema', 'EMA'], ['vwap', 'VWAP'], ['bb', 'BB'], ['fib', 'Fib'], ['all', 'All'],
 ] as const
 
-// Binance WebSocket streams (wss — secure)
-const PRICE_WS = 'wss://stream.binance.com:9443/ws/btcusdt@ticker'
-const KLINE_WS = (interval: string) =>
-  `wss://stream.binance.com:9443/stream?streams=btcusdt@kline_${interval}`
-
 export default function BtcPage() {
   const [candles, setCandles] = useState<BtcCandle[]>([])
   const [activeTab, setActiveTab] = useState<'chart' | 'quant'>('chart')
   const [activeRange, setActiveRange] = useState<string>('1d')
   const [activeIndicator, setActiveIndicator] = useState<string>('ema')
   const [loading, setLoading] = useState(true)
+  const [fetchError, setFetchError] = useState<string | null>(null)
   const [btcPrice, setBtcPrice] = useState<{
     price: number; change24h: number; changePct24h: number; high24h: number; low24h: number; volume24h: number
   } | null>(null)
   const [wsConnected, setWsConnected] = useState(false)
 
-  // Client-side candle cache: Map<interval, BtcCandle[]>
   const candleCacheRef = useRef<Map<string, BtcCandle[]>>(new Map())
-  // WebSocket refs
   const priceWsRef = useRef<WebSocket | null>(null)
   const klineWsRef = useRef<WebSocket | null>(null)
+  /** Bumps on each new kline subscription — ignore stale onmessage from closed sockets */
+  const klineGenRef = useRef(0)
+  const klineReconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const priceReconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  /** Always the interval the user selected (fixes reconnect after timeframe change) */
+  const activeRangeRef = useRef(activeRange)
 
-  // Memoized indicators object — never recreated unless activeIndicator changes
+  useEffect(() => {
+    activeRangeRef.current = activeRange
+  }, [activeRange])
+
   const indicatorConfig = useMemo(() => {
     if (activeIndicator === 'all') return { ema20: true, ema50: true, vwap: true, bollingerBands: true, fibonacci: true }
     if (activeIndicator === 'ema') return { ema20: true, ema50: true, vwap: false, bollingerBands: false, fibonacci: false }
@@ -54,126 +55,157 @@ export default function BtcPage() {
     return { ema20: false, ema50: false, vwap: false, bollingerBands: false, fibonacci: true }
   }, [activeIndicator])
 
-  // ── Fetch initial candles (REST) ──────────────────────────────────────────
   const fetchCandles = useCallback((interval: string) => {
-    // Return cached data immediately if available
+    setFetchError(null)
     const cached = candleCacheRef.current.get(interval)
-    if (cached) { setCandles(cached); setLoading(false) }
+    if (cached?.length) {
+      setCandles(cached)
+      setLoading(false)
+    }
 
     setLoading(true)
-    fetch(`/api/crypto/btc?interval=${interval}&limit=500`)
-      .then(r => r.json())
+    fetch(`/api/crypto/btc?interval=${encodeURIComponent(interval)}&limit=500`)
+      .then(async r => {
+        if (!r.ok) {
+          const t = await r.text().catch(() => '')
+          throw new Error(t || `HTTP ${r.status}`)
+        }
+        return r.json()
+      })
       .then(data => {
-        if (data.candles) {
+        if (data.candles?.length) {
           candleCacheRef.current.set(interval, data.candles)
           setCandles(data.candles)
+        } else {
+          setFetchError(data.error || 'No candle data returned')
         }
       })
-      .catch(console.error)
+      .catch(err => {
+        console.error('[BTC] fetch candles', err)
+        setFetchError(err instanceof Error ? err.message : String(err))
+      })
       .finally(() => setLoading(false))
   }, [])
 
-  // ── Connect / reconnect WebSocket for live candle updates ─────────────────
   const connectKlineWs = useCallback((interval: string) => {
-    // Close existing kline WS
+    if (klineReconnectTimerRef.current) {
+      clearTimeout(klineReconnectTimerRef.current)
+      klineReconnectTimerRef.current = null
+    }
+
+    klineGenRef.current += 1
+    const gen = klineGenRef.current
+
     klineWsRef.current?.close()
     klineWsRef.current = null
 
     const ws = new WebSocket(KLINE_WS(interval))
+    klineWsRef.current = ws
 
-    ws.onmessage = (event) => {
+    ws.onmessage = event => {
+      if (gen !== klineGenRef.current) return
+
       try {
         const msg = JSON.parse(event.data)
-        // Binance combined stream format: { stream: "...", data: { kline: {...} } }
         const k = msg.data?.k
         if (!k) return
 
         const candle: BtcCandle = {
-          time: Math.floor(new Date(k.t).getTime() / 1000),
-          open:   parseFloat(k.o),
-          high:   parseFloat(k.h),
-          low:    parseFloat(k.l),
-          close:  parseFloat(k.c),
+          time: Math.floor(Number(k.t) / 1000),
+          open: parseFloat(k.o),
+          high: parseFloat(k.h),
+          low: parseFloat(k.l),
+          close: parseFloat(k.c),
           volume: parseFloat(k.v),
         }
+        if ([candle.open, candle.high, candle.low, candle.close].some(Number.isNaN)) return
 
-        // Update cache AND state
-        candleCacheRef.current.set(interval, prev => {
-          if (!prev || prev.length === 0) return [candle]
-          const last = prev[prev.length - 1]
-          if (last.time === candle.time) {
-            // Update current candle in place
-            return [...prev.slice(0, -1), candle]
-          }
-          // New candle
-          return [...prev, candle]
-        })
+        const cacheKey = activeRangeRef.current
+        const prevCached = candleCacheRef.current.get(cacheKey) ?? []
+        const nextCached =
+          prevCached.length === 0
+            ? [candle]
+            : prevCached[prevCached.length - 1].time === candle.time
+              ? [...prevCached.slice(0, -1), candle]
+              : [...prevCached, candle]
+        candleCacheRef.current.set(cacheKey, nextCached)
 
         setCandles(prev => {
-          if (!prev || prev.length === 0) return [candle]
+          if (gen !== klineGenRef.current) return prev
+          if (!prev?.length) return [candle]
           const last = prev[prev.length - 1]
           if (last.time === candle.time) return [...prev.slice(0, -1), candle]
           return [...prev, candle]
         })
-      } catch {}
+      } catch {
+        /* ignore malformed frames */
+      }
     }
 
     ws.onopen = () => setWsConnected(true)
     ws.onerror = () => setWsConnected(false)
     ws.onclose = () => {
       setWsConnected(false)
-      // Reconnect after 3 seconds if still on chart tab
-      setTimeout(() => {
-        if (activeTab === 'chart') connectKlineWs(interval)
+      if (gen !== klineGenRef.current) return
+      klineReconnectTimerRef.current = setTimeout(() => {
+        klineReconnectTimerRef.current = null
+        if (activeRangeRef.current !== interval) return
+        connectKlineWs(activeRangeRef.current)
       }, 3000)
     }
+  }, [])
 
-    klineWsRef.current = ws
-  }, [activeTab])
-
-  // ── Connect price WebSocket ────────────────────────────────────────────────
   const connectPriceWs = useCallback(() => {
+    if (priceReconnectTimerRef.current) {
+      clearTimeout(priceReconnectTimerRef.current)
+      priceReconnectTimerRef.current = null
+    }
+
     priceWsRef.current?.close()
     const ws = new WebSocket(PRICE_WS)
+    priceWsRef.current = ws
 
-    ws.onmessage = (event) => {
+    ws.onmessage = event => {
       try {
         const d = JSON.parse(event.data)
         if (d.lastPrice) {
-          setBtcPrice(prev => ({
-            price:         parseFloat(d.lastPrice),
-            change24h:     parseFloat(d.priceChange),
-            changePct24h:  parseFloat(d.priceChangePercent),
-            high24h:       parseFloat(d.highPrice),
-            low24h:        parseFloat(d.lowPrice),
-            volume24h:     parseFloat(d.volume),
-          }))
+          setBtcPrice({
+            price: parseFloat(d.lastPrice),
+            change24h: parseFloat(d.priceChange),
+            changePct24h: parseFloat(d.priceChangePercent),
+            high24h: parseFloat(d.highPrice),
+            low24h: parseFloat(d.lowPrice),
+            volume24h: parseFloat(d.volume),
+          })
         }
-      } catch {}
+      } catch {
+        /* ignore */
+      }
     }
 
     ws.onerror = () => {}
     ws.onclose = () => {
-      setTimeout(connectPriceWs, 5000)
+      priceReconnectTimerRef.current = setTimeout(() => {
+        priceReconnectTimerRef.current = null
+        connectPriceWs()
+      }, 5000)
     }
-
-    priceWsRef.current = ws
   }, [])
 
-  // ── Initial load ───────────────────────────────────────────────────────────
   useEffect(() => {
     fetchCandles(activeRange)
     connectKlineWs(activeRange)
     connectPriceWs()
 
     return () => {
+      if (klineReconnectTimerRef.current) clearTimeout(klineReconnectTimerRef.current)
+      if (priceReconnectTimerRef.current) clearTimeout(priceReconnectTimerRef.current)
       priceWsRef.current?.close()
       klineWsRef.current?.close()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []) // Only on mount
+  }, [])
 
-  // ── When timeframe changes ────────────────────────────────────────────────
   useEffect(() => {
     if (activeTab !== 'chart') return
     fetchCandles(activeRange)
@@ -185,7 +217,6 @@ export default function BtcPage() {
 
   return (
     <div className="min-h-screen">
-      {/* Header */}
       <div className="border-b border-slate-800 py-6" style={{ background: 'linear-gradient(180deg, #f7931a08 0%, transparent 100%)' }}>
         <div className="max-w-7xl mx-auto px-4">
           <div className="flex items-start justify-between flex-wrap gap-4">
@@ -245,12 +276,11 @@ export default function BtcPage() {
         </div>
       </div>
 
-      {/* Main */}
       <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div className="flex flex-wrap gap-1 bg-slate-900 rounded-lg p-1 border border-slate-800">
             {([['chart', 'Chart'], ['quant', 'Quant Lab']] as const).map(([tab, label]) => (
-              <button key={tab} onClick={() => setActiveTab(tab)}
+              <button key={tab} type="button" onClick={() => setActiveTab(tab)}
                 className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all ${activeTab === tab ? 'bg-slate-700 text-white' : 'text-slate-500 hover:text-slate-300'}`}>
                 {label}
               </button>
@@ -261,7 +291,7 @@ export default function BtcPage() {
             <div className="flex flex-wrap items-center gap-2">
               <div className="flex flex-wrap gap-1 bg-slate-900 rounded-lg p-1 border border-slate-800">
                 {TIMEFRAMES.map(([val, label]) => (
-                  <button key={val} onClick={() => setActiveRange(val)}
+                  <button key={val} type="button" onClick={() => setActiveRange(val)}
                     className={`px-2.5 py-1 text-[11px] rounded-md transition-all ${activeRange === val ? 'bg-slate-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>
                     {label}
                   </button>
@@ -269,7 +299,7 @@ export default function BtcPage() {
               </div>
               <div className="flex flex-wrap gap-1 bg-slate-900 rounded-lg p-1 border border-slate-800">
                 {INDICATOR_PRESETS.map(([val, label]) => (
-                  <button key={val} onClick={() => setActiveIndicator(val)}
+                  <button key={val} type="button" onClick={() => setActiveIndicator(val)}
                     className={`px-2.5 py-1 text-[11px] rounded-md transition-all ${activeIndicator === val ? 'bg-slate-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>
                     {label}
                   </button>
@@ -291,6 +321,11 @@ export default function BtcPage() {
                 <span>{candles.length} candles</span>
               </div>
             </div>
+            {fetchError && (
+              <div className="mb-3 rounded-lg border border-amber-500/30 bg-amber-950/20 px-3 py-2 text-[11px] text-amber-200/90">
+                REST: {fetchError}
+              </div>
+            )}
             {loading && candles.length === 0 ? (
               <div className="h-[480px] bg-slate-800/20 rounded-xl animate-pulse flex flex-col items-center justify-center border border-slate-800/50">
                 <span className="text-slate-500 text-sm font-mono mb-2">Connecting to Binance...</span>
@@ -316,7 +351,6 @@ export default function BtcPage() {
           <BtcQuantLab candles={candles} />
         )}
 
-        {/* Live data footer */}
         <div className="text-center text-[10px] text-slate-700">
           Data sourced from Binance Public API via WebSocket (real-time) and REST (historical). Prices are indicative.
         </div>

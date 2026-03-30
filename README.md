@@ -63,14 +63,14 @@ For Alibaba ECS + auto-sync from GitHub `main`, see:
 
 ### LLM Multi-Agent Analysis (TradingAgents)
 
-The **LLM Multi-Agent Analysis** feature in the Quant Lab requires the `server_trading_agents.py` Python backend to be deployed separately. This keeps your API key entirely in your browser — QUANTAN never sees or stores it.
+The **LLM Multi-Agent Analysis** tab needs the `server_trading_agents.py` Python backend running **on infrastructure you control** (recommended: [Railway](https://railway.app)). Your LLM API key is **not** stored in QUANTAN’s database; when you run an analysis it is sent in a single request from your browser through this app’s API to your backend, then to the LLM provider. **Use `https://` for `TRADING_AGENTS_BASE` on Vercel** so traffic to your backend is encrypted.
 
-#### Zero-cost deployment (Railway or Render)
+#### Recommended: Railway (simplest)
 
 **Step 1: Deploy the Python backend**
 
 1. Create a free account at [railway.app](https://railway.app) (500 hrs/month free, $5 sign-up credit).
-2. Click **New Project → Deploy from GitHub** → select the `QUANTAN-sector-investment` repo.
+2. Click **New Project → Deploy from GitHub** → select your repo (same one that contains `server_trading_agents.py`).
 3. Railway injects **`PORT`**; the repo includes a **`Procfile`** that runs:
    ```
    python server_trading_agents.py --host 0.0.0.0 --port $PORT
@@ -89,7 +89,7 @@ The **LLM Multi-Agent Analysis** feature in the Quant Lab requires the `server_t
 
 6. In **Vercel → Project → Settings → Environment Variables**, add:
    - Name: `TRADING_AGENTS_BASE`
-   - Value: `https://your-app.up.railway.app` (no trailing slash)
+   - Value: `https://your-app.up.railway.app` (must be **`https://`**, no trailing slash)
    - Environments: **Production** (and Preview if you want)
 
 7. Redeploy the Next.js app — the LLM tab will now connect automatically.
@@ -97,6 +97,8 @@ The **LLM Multi-Agent Analysis** feature in the Quant Lab requires the `server_t
 **Step 3: Verify**
 
 8. Go to any stock page → Quant Lab → LLM Agents → paste your API key → click Run. The backend will be reachable and the analysis will run using your key.
+
+**Alternative hosts:** Render, Fly.io, or any VPS work the same way — expose FastAPI on a public **`https://`** URL and point `TRADING_AGENTS_BASE` at the origin.
 
 **Local development:** run `python server_trading_agents.py` alongside `npm run dev`. It listens on `http://127.0.0.1:3001` by default. No environment variable needed locally.
 

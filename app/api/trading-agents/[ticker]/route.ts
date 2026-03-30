@@ -4,23 +4,74 @@ import { SUPPORTED_PROVIDERS, DEFAULT_MODELS, type LLMProvider } from '@/lib/tra
 const TIMEOUT_MS = 5 * 60 * 1000 // 5 minutes — TradingAgents can be slow
 
 const DEPLOY_HINT =
-  'Deploy server_trading_agents.py to Railway or Render, set TRADING_AGENTS_BASE in Vercel ' +
-  'Environment Variables to the public URL (no trailing slash). See README: LLM Multi-Agent Analysis (TradingAgents).'
+  'Recommended: deploy `server_trading_agents.py` on Railway using the included Procfile, then set ' +
+  '`TRADING_AGENTS_BASE` in Vercel to the public https:// URL (no trailing slash). See README: LLM Multi-Agent Analysis.'
 
-/** Prefer TRADING_AGENTS_BASE; in local dev only, fall back to localhost Python server. */
-function resolveTradingAgentsBase(): string | null {
+type TradingAgentsResolved =
+  | { ok: true; base: string }
+  | { ok: false; reason: 'missing' | 'invalid_url' | 'insecure_base' }
+
+/**
+ * Prefer TRADING_AGENTS_BASE (validated). Local dev falls back to localhost.
+ * Production requires https:// to protect API keys in transit to your backend.
+ */
+function resolveTradingAgentsBase(): TradingAgentsResolved {
   const raw = process.env.TRADING_AGENTS_BASE?.trim()
-  if (raw) return raw.replace(/\/$/, '')
-  if (process.env.NODE_ENV === 'development') return 'http://127.0.0.1:3001'
-  return null
+  if (raw) {
+    const normalized = raw.replace(/\/$/, '')
+    let u: URL
+    try {
+      u = new URL(normalized)
+    } catch {
+      return { ok: false, reason: 'invalid_url' }
+    }
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') {
+      return { ok: false, reason: 'invalid_url' }
+    }
+    if (u.username || u.password) {
+      return { ok: false, reason: 'invalid_url' }
+    }
+    const base = u.origin
+    if (process.env.NODE_ENV === 'production' && u.protocol !== 'https:') {
+      return { ok: false, reason: 'insecure_base' }
+    }
+    return { ok: true, base }
+  }
+  if (process.env.NODE_ENV === 'development') {
+    return { ok: true, base: 'http://127.0.0.1:3001' }
+  }
+  return { ok: false, reason: 'missing' }
 }
 
-function backendNotConfiguredResponse(details: string) {
+function tradingAgentsConfigErrorResponse(resolved: Extract<TradingAgentsResolved, { ok: false }>) {
+  if (resolved.reason === 'missing') {
+    return NextResponse.json(
+      {
+        error: 'backend_not_configured',
+        message: `TradingAgents backend is not configured for this deployment. ${DEPLOY_HINT}`,
+        details: 'TRADING_AGENTS_BASE is not set',
+      },
+      { status: 502 }
+    )
+  }
+  if (resolved.reason === 'insecure_base') {
+    return NextResponse.json(
+      {
+        error: 'invalid_trading_agents_base',
+        message:
+          'TRADING_AGENTS_BASE must use https:// in production so your API key is encrypted in transit. ' +
+          'Use your Railway (or other host) public HTTPS URL, e.g. https://your-app.up.railway.app',
+        details: 'http:// is not accepted when NODE_ENV=production',
+      },
+      { status: 502 }
+    )
+  }
   return NextResponse.json(
     {
-      error: 'backend_not_configured',
-      message: `TradingAgents backend is not reachable from this deployment. ${DEPLOY_HINT}`,
-      details,
+      error: 'invalid_trading_agents_base',
+      message:
+        'TRADING_AGENTS_BASE is not a valid http(s) URL. Use the origin only, e.g. https://your-app.up.railway.app (no path, no credentials).',
+      details: 'invalid_url',
     },
     { status: 502 }
   )
@@ -37,10 +88,11 @@ export async function GET(
     return NextResponse.json({ error: 'ticker is required' }, { status: 400 })
   }
 
-  const TA_BASE = resolveTradingAgentsBase()
-  if (!TA_BASE) {
-    return backendNotConfiguredResponse('TRADING_AGENTS_BASE is not set')
+  const resolved = resolveTradingAgentsBase()
+  if (!resolved.ok) {
+    return tradingAgentsConfigErrorResponse(resolved)
   }
+  const TA_BASE = resolved.base
 
   try {
     const controller = new AbortController()
@@ -159,10 +211,11 @@ export async function POST(
     )
   }
 
-  const TA_BASE = resolveTradingAgentsBase()
-  if (!TA_BASE) {
-    return backendNotConfiguredResponse('TRADING_AGENTS_BASE is not set')
+  const resolved = resolveTradingAgentsBase()
+  if (!resolved.ok) {
+    return tradingAgentsConfigErrorResponse(resolved)
   }
+  const TA_BASE = resolved.base
 
   // Sanitize: strip any top-level fields that shouldn't be forwarded
   const { api_key: _stripped, ..._clean } = body as Record<string, unknown>
