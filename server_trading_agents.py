@@ -378,15 +378,17 @@ async def latest_analysis(ticker: str):
 
 def main():
     parser = argparse.ArgumentParser(description="TradingAgents FastAPI server")
-    parser.add_argument("--host", default="127.0.0.1", help="Host to bind")
+    parser.add_argument("--host", default="0.0.0.0", help="Host to bind (0.0.0.0 for external access on Railway/Render)")
     parser.add_argument("--port", type=int, default=3001, help="Port to bind")
     args = parser.parse_args()
 
     import uvicorn
-    print(f"\nTradingAgents API -> http://{args.host}:{args.port}")
-    print(f"  POST /analyze/{{ticker}}    run analysis (include api_key in body for user-supplied key)")
+    print(f"\n{'='*60}")
+    print(f"TradingAgents API -> http://{args.host}:{args.port}")
+    print(f"  POST /analyze/{{ticker}}    run analysis (include api_key in body)")
     print(f"  GET  /analyze/{{ticker}}/latest  cached result")
-    print(f"  GET  /health\n")
+    print(f"  GET  /health")
+    print(f"{'='*60}\n")
     uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
 
 

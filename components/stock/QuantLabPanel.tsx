@@ -1085,7 +1085,22 @@ export default function QuantLabPanel({ ticker }: { ticker: string }) {
             {llmError && (
               <div className="rounded-xl border border-red-500/30 bg-red-950/20 p-4 text-xs text-red-200/90">
                 <strong className="text-red-300">Error:</strong> {llmError}
-                {llmError.includes('OPENAI_API_KEY') || llmError.includes('api_key') || llmError.includes('Not set') || llmError.includes('secret is too short') ? (
+
+                {llmError.includes('backend_not_configured') ? (
+                  <div className="mt-2 space-y-1">
+                    <p className="text-red-300/80">
+                      The LLM analysis server is not deployed. To use this feature:
+                    </p>
+                    <ol className="text-red-300/60 list-decimal pl-4 space-y-0.5">
+                      <li>Deploy <code className="font-mono text-red-200">server_trading_agents.py</code> to Railway (railway.app) or Render</li>
+                      <li>Set the Railway URL as <code className="font-mono text-red-200">TRADING_AGENTS_BASE</code> in Vercel project settings</li>
+                      <li>Restart the deployment — the error will clear automatically</li>
+                    </ol>
+                    <p className="text-red-300/60 mt-1">
+                      This keeps your API key entirely in your browser — QUANTAN never sees or stores it.
+                    </p>
+                  </div>
+                ) : llmError.includes('secret is too short') || llmError.includes('OPENAI_API_KEY') || llmError.includes('api_key') || llmError.includes('Not set') ? (
                   <p className="text-red-300/60 mt-2">
                     The Python server could not authenticate with the LLM provider. Make sure your API key is valid and has credits/quotas available.
                     The key is sent directly to {llmProvider === 'openai' ? 'OpenAI' : llmProvider === 'anthropic' ? 'Anthropic' : 'your chosen provider'} — QUANTAN never sees or stores it.

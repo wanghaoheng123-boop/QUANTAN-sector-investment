@@ -1,0 +1,7 @@
+# QUANTAN TradingAgents Backend Dependencies
+# Install with: pip install -r requirements.txt
+
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+pydantic>=2.0.0
+tradingagents>=0.2.0

@@ -61,6 +61,44 @@ For Alibaba ECS + auto-sync from GitHub `main`, see:
 - `docs/ECS_DEPLOY.md`
 - `.github/workflows/ecs-deploy.yml`
 
+### LLM Multi-Agent Analysis (TradingAgents)
+
+The **LLM Multi-Agent Analysis** feature in the Quant Lab requires the `server_trading_agents.py` Python backend to be deployed separately. This keeps your API key entirely in your browser — QUANTAN never sees or stores it.
+
+#### Zero-cost deployment (Railway or Render)
+
+**Step 1: Deploy the Python backend**
+
+1. Create a free account at [railway.app](https://railway.app) (500 hrs/month free, $5 sign-up credit).
+2. Click **New Project → Deploy from GitHub** → select the `QUANTAN-sector-investment` repo.
+3. Set the **start command** to:
+   ```
+   python server_trading_agents.py --host 0.0.0.0 --port 3001
+   ```
+4. Railway will auto-detect Python and install dependencies from `requirements.txt` if present. Create a `requirements.txt` in the repo root:
+   ```
+   fastapi>=0.115.0
+   uvicorn>=0.32.0
+   pydantic>=2.0.0
+   tradingagents>=0.2.0
+   ```
+5. Once deployed, Railway gives you a URL like `https://your-app.up.railway.app`. Copy it.
+
+**Step 2: Connect it to Vercel**
+
+6. In **Vercel → Project → Settings → Environment Variables**, add:
+   - Name: `TRADING_AGENTS_BASE`
+   - Value: `https://your-app.up.railway.app` (no trailing slash)
+   - Environments: **Production** (and Preview if you want)
+
+7. Redeploy the Next.js app — the LLM tab will now connect automatically.
+
+**Step 3: Verify**
+
+8. Go to any stock page → Quant Lab → LLM Agents → paste your API key → click Run. The backend will be reachable and the analysis will run using your key.
+
+**Local development:** run `python server_trading_agents.py` alongside `npm run dev`. It listens on `http://127.0.0.1:3001` by default. No environment variable needed locally.
+
 ### Deployment status
 
 Replace `YOUR_GITHUB_USER` and `YOUR_REPO` below once, then badges show live status:
@@ -141,7 +179,7 @@ Operational notes:
 ## GitHub & Cursor
 
 **Remote:** this repo is set up to push to  
-`https://github.com/wanghaoheng123-boop/antigravity-sector-investment1`  
+`https://github.com/wanghaoheng123-boop/QUANTAN-sector-investment`  
 (`origin`). To publish updates from your PC (PowerShell):
 
 ```powershell
