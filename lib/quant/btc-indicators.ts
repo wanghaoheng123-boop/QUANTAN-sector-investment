@@ -3,6 +3,8 @@
  * All functions are pure — no network calls, no side effects.
  */
 
+import { PERP_FUNDING_HIGH_ABS } from './fundingConstants'
+
 export interface BtcCandle {
   time: string | number
   open: number
@@ -118,9 +120,11 @@ export function calcATR(candles: BtcCandle[], period = 14): number[] {
 
 export function calcOBV(candles: BtcCandle[]): number[] {
   let cumulative = 0
-  return candles.map(c => {
-    if (c.close > candles[candles.indexOf(c) - 1]?.close) cumulative += c.volume
-    else if (c.close < candles[candles.indexOf(c) - 1]?.close) cumulative -= c.volume
+  return candles.map((c, i) => {
+    if (i === 0) return 0
+    const prevClose = candles[i - 1].close
+    if (c.close > prevClose) cumulative += c.volume
+    else if (c.close < prevClose) cumulative -= c.volume
     return cumulative
   })
 }
@@ -205,6 +209,8 @@ export interface IndicatorSignal {
 
 export function generateSignals(candles: BtcCandle[], fundingRate?: number, fearGreed?: number): IndicatorSignal[] {
   const closes = candles.map(c => c.close)
+  if (closes.length < 55) return []
+
   const rsi = calcRSI(closes)
   const macd = calcMACD(closes)
   const bb = calcBollingerBands(closes)
@@ -218,28 +224,60 @@ export function generateSignals(candles: BtcCandle[], fundingRate?: number, fear
   const latestClose = closes[closes.length - 1]
   const signals: IndicatorSignal[] = []
 
+  if (
+    !Number.isFinite(latestRSI) ||
+    !Number.isFinite(latestClose) ||
+    !Number.isFinite(latestEMA20) ||
+    !Number.isFinite(latestEMA50)
+  ) {
+    return []
+  }
+
   // RSI
   if (latestRSI < 30) signals.push({ indicator: 'RSI(14)', signal: 'BUY', strength: Math.round((30 - latestRSI) / 30 * 100), description: `Oversold at ${latestRSI.toFixed(1)}` })
   else if (latestRSI > 70) signals.push({ indicator: 'RSI(14)', signal: 'SELL', strength: Math.round((latestRSI - 70) / 30 * 100), description: `Overbought at ${latestRSI.toFixed(1)}` })
   else signals.push({ indicator: 'RSI(14)', signal: 'HOLD', strength: 50, description: `Neutral at ${latestRSI.toFixed(1)}` })
 
-  // MACD
-  if ((latestMACD.histogram ?? 0) > 0) signals.push({ indicator: 'MACD', signal: 'BUY', strength: 60, description: 'MACD histogram positive' })
-  else signals.push({ indicator: 'MACD', signal: 'SELL', strength: 60, description: 'MACD histogram negative' })
+  // MACD (skip if not converged — avoids flip-flopping on NaN)
+  const hist = latestMACD.histogram
+  if (Number.isFinite(hist)) {
+    if (hist > 0) signals.push({ indicator: 'MACD', signal: 'BUY', strength: 60, description: 'MACD histogram positive' })
+    else if (hist < 0) signals.push({ indicator: 'MACD', signal: 'SELL', strength: 60, description: 'MACD histogram negative' })
+  }
 
   // EMA Cross
   if (latestEMA20 > latestEMA50) signals.push({ indicator: 'EMA Cross', signal: 'BUY', strength: 70, description: `EMA20 ($${latestEMA20.toFixed(0)}) > EMA50 ($${latestEMA50.toFixed(0)})` })
   else signals.push({ indicator: 'EMA Cross', signal: 'SELL', strength: 70, description: `EMA20 ($${latestEMA20.toFixed(0)}) < EMA50 ($${latestEMA50.toFixed(0)})` })
 
   // Bollinger Bands
-  if (latestBB.upper && latestClose < latestBB.lower) signals.push({ indicator: 'Bollinger Bands', signal: 'BUY', strength: 65, description: 'Price below lower BB band' })
-  else if (latestBB.upper && latestClose > latestBB.upper) signals.push({ indicator: 'Bollinger Bands', signal: 'SELL', strength: 65, description: 'Price above upper BB band' })
-  else signals.push({ indicator: 'Bollinger Bands', signal: 'HOLD', strength: 40, description: 'Price within BB bands' })
+  if (
+    Number.isFinite(latestBB.lower) &&
+    Number.isFinite(latestBB.upper) &&
+    latestBB.upper != null &&
+    latestBB.lower != null
+  ) {
+    if (latestClose < latestBB.lower) signals.push({ indicator: 'Bollinger Bands', signal: 'BUY', strength: 65, description: 'Price below lower BB band' })
+    else if (latestClose > latestBB.upper) signals.push({ indicator: 'Bollinger Bands', signal: 'SELL', strength: 65, description: 'Price above upper BB band' })
+    else signals.push({ indicator: 'Bollinger Bands', signal: 'HOLD', strength: 40, description: 'Price within BB bands' })
+  }
 
-  // Funding Rate
-  if (fundingRate != null) {
-    if (fundingRate > 0.01) signals.push({ indicator: 'Funding Rate', signal: 'SELL', strength: 75, description: `High funding rate (${(fundingRate * 100).toFixed(3)}%) suggests overleveraged longs` })
-    else if (fundingRate < -0.01) signals.push({ indicator: 'Funding Rate', signal: 'BUY', strength: 75, description: `Negative funding rate (${(fundingRate * 100).toFixed(3)}%) suggests overleveraged shorts` })
+  // Funding Rate (Binance decimal scale — see lib/quant/fundingConstants.ts)
+  if (fundingRate != null && Number.isFinite(fundingRate)) {
+    if (fundingRate > PERP_FUNDING_HIGH_ABS) {
+      signals.push({
+        indicator: 'Funding Rate',
+        signal: 'SELL',
+        strength: 75,
+        description: `Elevated positive funding (${(fundingRate * 100).toFixed(4)}% / interval) — longs pay shorts (crowding)`,
+      })
+    } else if (fundingRate < -PERP_FUNDING_HIGH_ABS) {
+      signals.push({
+        indicator: 'Funding Rate',
+        signal: 'BUY',
+        strength: 75,
+        description: `Elevated negative funding (${(fundingRate * 100).toFixed(4)}% / interval) — shorts pay longs (crowding)`,
+      })
+    }
   }
 
   // Fear & Greed

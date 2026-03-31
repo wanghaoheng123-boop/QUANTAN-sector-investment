@@ -4,9 +4,21 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import BtcQuantLab from '@/components/crypto/BtcQuantLab'
+import CryptoChartBoundary from '@/components/crypto/CryptoChartBoundary'
 import type { BtcCandle } from '@/lib/crypto'
+import { apiUrl } from '@/lib/apiBase'
+import { normalizeBtcCandles } from '@/lib/normalizeBtcCandles'
+import type { ChartEmaKey } from '@/lib/chartEma'
+import { CHART_EMA_PERIODS } from '@/lib/chartEma'
 
-const KLineChart = dynamic(() => import('@/components/KLineChart'), { ssr: false })
+const KLineChart = dynamic(() => import('@/components/KLineChart'), {
+  ssr: false,
+  loading: () => (
+    <div className="h-[480px] bg-slate-800/20 rounded-xl flex items-center justify-center border border-slate-800/50">
+      <span className="text-slate-500 text-sm font-mono">Loading chart…</span>
+    </div>
+  ),
+})
 
 // Binance WebSocket streams (wss — secure, public, no API keys)
 const PRICE_WS = 'wss://stream.binance.com:9443/ws/btcusdt@ticker'
@@ -21,6 +33,65 @@ const INDICATOR_PRESETS = [
   ['ema', 'EMA'], ['vwap', 'VWAP'], ['bb', 'BB'], ['fib', 'Fib'], ['all', 'All'],
 ] as const
 
+function coingeckoDaysParam(interval: string): number | 'max' {
+  switch (interval) {
+    case '5m':
+    case '15m':
+      return 1
+    case '1h':
+      return 7
+    case '4h':
+      return 30
+    case '1d':
+      return 365
+    case '1w':
+    case '1M':
+      return 'max'
+    default:
+      return 365
+  }
+}
+
+async function fetchCoinGeckoCandlesClient(
+  interval: string,
+  limit: number,
+  signal: AbortSignal
+): Promise<BtcCandle[] | null> {
+  const days = coingeckoDaysParam(interval)
+  const url = `https://api.coingecko.com/api/v3/coins/bitcoin/ohlc?vs_currency=usd&days=${days}`
+  const res = await fetch(url, { signal, cache: 'no-store' })
+  if (!res.ok) return null
+  const rows = (await res.json()) as unknown
+  if (!Array.isArray(rows) || rows.length === 0) return null
+  const slice = rows.slice(-Math.min(limit, rows.length))
+  const out = slice
+    .map((r) => {
+      if (!Array.isArray(r) || r.length < 5) return null
+      const t = Math.floor(Number(r[0]) / 1000)
+      return {
+        time: t,
+        open: Number(r[1]),
+        high: Number(r[2]),
+        low: Number(r[3]),
+        close: Number(r[4]),
+        volume: 1,
+      } as BtcCandle
+    })
+    .filter((x): x is BtcCandle => x !== null)
+  return normalizeBtcCandles(out)
+}
+
+const defaultEmaSelection = (): Record<ChartEmaKey, boolean> => ({
+  ema9: false,
+  ema12: false,
+  ema20: true,
+  ema21: false,
+  ema26: false,
+  ema50: true,
+  ema100: false,
+  ema200: false,
+})
+
 export default function BtcPage() {
   const [candles, setCandles] = useState<BtcCandle[]>([])
   const [activeTab, setActiveTab] = useState<'chart' | 'quant'>('chart')
@@ -28,6 +99,9 @@ export default function BtcPage() {
   const [activeIndicator, setActiveIndicator] = useState<string>('ema')
   const [loading, setLoading] = useState(true)
   const [fetchError, setFetchError] = useState<string | null>(null)
+  /** Set when REST uses Kraken fallback (Binance blocked or failed). */
+  const [restFallbackNote, setRestFallbackNote] = useState<string | null>(null)
+  const [emaSelection, setEmaSelection] = useState<Record<ChartEmaKey, boolean>>(defaultEmaSelection)
   const [btcPrice, setBtcPrice] = useState<{
     price: number; change24h: number; changePct24h: number; high24h: number; low24h: number; volume24h: number
   } | null>(null)
@@ -40,22 +114,60 @@ export default function BtcPage() {
   const klineGenRef = useRef(0)
   const klineReconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const priceReconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  /** True after Binance ticker WebSocket delivered a price — skip CoinGecko REST header quote. */
+  const priceFromBinanceWsRef = useRef(false)
   /** Always the interval the user selected (fixes reconnect after timeframe change) */
   const activeRangeRef = useRef(activeRange)
+  /** Invalidates in-flight REST responses when interval changes or unmounts. */
+  const candlesRequestIdRef = useRef(0)
+  const candlesAbortRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
     activeRangeRef.current = activeRange
   }, [activeRange])
 
   const indicatorConfig = useMemo(() => {
-    if (activeIndicator === 'all') return { ema20: true, ema50: true, vwap: true, bollingerBands: true, fibonacci: true }
-    if (activeIndicator === 'ema') return { ema20: true, ema50: true, vwap: false, bollingerBands: false, fibonacci: false }
-    if (activeIndicator === 'vwap') return { ema20: false, ema50: false, vwap: true, bollingerBands: false, fibonacci: false }
-    if (activeIndicator === 'bb') return { ema20: false, ema50: false, vwap: false, bollingerBands: true, fibonacci: false }
-    return { ema20: false, ema50: false, vwap: false, bollingerBands: false, fibonacci: true }
-  }, [activeIndicator])
+    const allEmasOn = (): Record<ChartEmaKey, boolean> => ({
+      ema9: true,
+      ema12: true,
+      ema20: true,
+      ema21: true,
+      ema26: true,
+      ema50: true,
+      ema100: true,
+      ema200: true,
+    })
+    const allEmasOff = (): Record<ChartEmaKey, boolean> => ({
+      ema9: false,
+      ema12: false,
+      ema20: false,
+      ema21: false,
+      ema26: false,
+      ema50: false,
+      ema100: false,
+      ema200: false,
+    })
+    if (activeIndicator === 'all') {
+      return { ...allEmasOn(), vwap: true, bollingerBands: true, fibonacci: true }
+    }
+    if (activeIndicator === 'ema') {
+      return { ...emaSelection, vwap: false, bollingerBands: false, fibonacci: false }
+    }
+    if (activeIndicator === 'vwap') {
+      return { ...allEmasOff(), vwap: true, bollingerBands: false, fibonacci: false }
+    }
+    if (activeIndicator === 'bb') {
+      return { ...allEmasOff(), vwap: false, bollingerBands: true, fibonacci: false }
+    }
+    return { ...allEmasOff(), vwap: false, bollingerBands: false, fibonacci: true }
+  }, [activeIndicator, emaSelection])
 
   const fetchCandles = useCallback((interval: string) => {
+    candlesAbortRef.current?.abort()
+    const ac = new AbortController()
+    candlesAbortRef.current = ac
+    const reqId = ++candlesRequestIdRef.current
+
     setFetchError(null)
     const cached = candleCacheRef.current.get(interval)
     if (cached?.length) {
@@ -64,27 +176,119 @@ export default function BtcPage() {
     }
 
     setLoading(true)
-    fetch(`/api/crypto/btc?interval=${encodeURIComponent(interval)}&limit=500`)
-      .then(async r => {
-        if (!r.ok) {
-          const t = await r.text().catch(() => '')
-          throw new Error(t || `HTTP ${r.status}`)
+    setRestFallbackNote(null)
+
+    const url = `${apiUrl('/api/crypto/btc')}?interval=${encodeURIComponent(interval)}&limit=500`
+
+    const parsePayload = async (r: Response): Promise<Record<string, unknown> | { _bad: true; msg: string }> => {
+      const ct = r.headers.get('content-type') ?? ''
+      const text = await r.text()
+      if (!ct.includes('application/json')) {
+        if (!text) return { _bad: true as const, msg: `Empty response (HTTP ${r.status})` }
+        return { _bad: true as const, msg: `Non-JSON response (HTTP ${r.status}): ${text.slice(0, 200)}` }
+      }
+      try {
+        return JSON.parse(text) as Record<string, unknown>
+      } catch {
+        return { _bad: true as const, msg: `Invalid JSON (HTTP ${r.status}): ${text.slice(0, 200)}` }
+      }
+    }
+
+    const isBadPayload = (p: unknown): p is { _bad: true; msg: string } =>
+      typeof p === 'object' && p !== null && '_bad' in p && (p as { _bad?: boolean })._bad === true
+
+    ;(async () => {
+      let lastErr: Error | null = null
+      for (let attempt = 0; attempt < 3; attempt++) {
+        if (ac.signal.aborted) return
+        if (attempt > 0) await new Promise((r) => setTimeout(r, 350 * attempt))
+        try {
+          const r = await fetch(url, {
+            signal: ac.signal,
+            cache: 'no-store',
+            headers: { Accept: 'application/json' },
+          })
+          const payload = await parsePayload(r)
+          if (isBadPayload(payload)) {
+            lastErr = new Error(payload.msg)
+            continue
+          }
+          const p = payload as {
+            userMessage?: string
+            error?: string
+            details?: string
+            candles?: BtcCandle[]
+            note?: string
+          }
+          if (!r.ok) {
+            let msg =
+              typeof p.userMessage === 'string'
+                ? p.userMessage
+                : typeof p.error === 'string'
+                  ? p.error
+                  : typeof p.details === 'string'
+                    ? p.details
+                    : `HTTP ${r.status}`
+            // Some deployments wrap backend errors as JSON string in `message`.
+            if (typeof msg === 'string' && msg.trim().startsWith('{')) {
+              try {
+                const parsed = JSON.parse(msg) as { userMessage?: string; error?: string; details?: string }
+                msg = parsed.userMessage ?? parsed.error ?? parsed.details ?? msg
+              } catch {
+                /* keep original string */
+              }
+            }
+            lastErr = new Error(msg)
+            if (r.status !== 429 && r.status < 500) break
+            continue
+          }
+          if (reqId !== candlesRequestIdRef.current || ac.signal.aborted) return
+          if (p.candles?.length) {
+            const normalized = normalizeBtcCandles(p.candles as BtcCandle[])
+            if (normalized.length === 0) {
+              setFetchError('Received candles but none passed validation (check API payload).')
+              return
+            }
+            candleCacheRef.current.set(interval, normalized)
+            setCandles(normalized)
+            setRestFallbackNote(typeof p.note === 'string' ? p.note : null)
+            setFetchError(null)
+          } else {
+            setFetchError(typeof p.error === 'string' ? p.error : 'No candle data returned')
+          }
+          return
+        } catch (err) {
+          if (err instanceof Error && err.name === 'AbortError') return
+          lastErr = err instanceof Error ? err : new Error(String(err))
         }
-        return r.json()
-      })
-      .then(data => {
-        if (data.candles?.length) {
-          candleCacheRef.current.set(interval, data.candles)
-          setCandles(data.candles)
-        } else {
-          setFetchError(data.error || 'No candle data returned')
+      }
+      if (reqId !== candlesRequestIdRef.current || ac.signal.aborted) return
+      try {
+        const cg = await fetchCoinGeckoCandlesClient(interval, 500, ac.signal)
+        if (reqId !== candlesRequestIdRef.current || ac.signal.aborted) return
+        if (cg && cg.length > 0) {
+          candleCacheRef.current.set(interval, cg)
+          setCandles(cg)
+          setRestFallbackNote(
+            'Server API is unavailable in this region/network. Loaded OHLC directly from CoinGecko in the browser.'
+          )
+          setFetchError(null)
+          return
         }
-      })
-      .catch(err => {
+      } catch {
+        /* ignore fallback failure */
+      }
+      setFetchError(lastErr?.message ?? 'Failed to load candles')
+    })()
+      .catch((err) => {
         console.error('[BTC] fetch candles', err)
-        setFetchError(err instanceof Error ? err.message : String(err))
+        if (reqId === candlesRequestIdRef.current) {
+          setFetchError(err instanceof Error ? err.message : String(err))
+        }
       })
-      .finally(() => setLoading(false))
+      .finally(() => {
+        if (reqId === candlesRequestIdRef.current) setLoading(false)
+      })
   }, [])
 
   const connectKlineWs = useCallback((interval: string) => {
@@ -121,6 +325,7 @@ export default function BtcPage() {
         if ([candle.open, candle.high, candle.low, candle.close].some(Number.isNaN)) return
 
         const cacheKey = activeRangeRef.current
+        // Map#set must receive the new array — never pass a function (unlike React setState).
         const prevCached = candleCacheRef.current.get(cacheKey) ?? []
         const nextCached =
           prevCached.length === 0
@@ -167,15 +372,18 @@ export default function BtcPage() {
 
     ws.onmessage = event => {
       try {
-        const d = JSON.parse(event.data)
-        if (d.lastPrice) {
+        const d = JSON.parse(event.data) as Record<string, unknown>
+        // Raw ticker stream uses short keys (c/P/h/l/v), some gateways use verbose keys.
+        const price = Number(d.lastPrice ?? d.c)
+        if (Number.isFinite(price) && price > 0) {
+          priceFromBinanceWsRef.current = true
           setBtcPrice({
-            price: parseFloat(d.lastPrice),
-            change24h: parseFloat(d.priceChange),
-            changePct24h: parseFloat(d.priceChangePercent),
-            high24h: parseFloat(d.highPrice),
-            low24h: parseFloat(d.lowPrice),
-            volume24h: parseFloat(d.volume),
+            price,
+            change24h: Number(d.priceChange ?? d.p) || 0,
+            changePct24h: Number(d.priceChangePercent ?? d.P) || 0,
+            high24h: Number(d.highPrice ?? d.h) || price,
+            low24h: Number(d.lowPrice ?? d.l) || price,
+            volume24h: Number(d.volume ?? d.v) || 0,
           })
         }
       } catch {
@@ -192,25 +400,111 @@ export default function BtcPage() {
     }
   }, [])
 
+  /** When Binance WSS is blocked, show header price from CoinGecko via same-origin API. */
   useEffect(() => {
-    fetchCandles(activeRange)
-    connectKlineWs(activeRange)
-    connectPriceWs()
-
-    return () => {
-      if (klineReconnectTimerRef.current) clearTimeout(klineReconnectTimerRef.current)
-      if (priceReconnectTimerRef.current) clearTimeout(priceReconnectTimerRef.current)
-      priceWsRef.current?.close()
-      klineWsRef.current?.close()
+    const loadRestQuote = async () => {
+      if (priceFromBinanceWsRef.current) return
+      try {
+        const r = await fetch(apiUrl('/api/crypto/btc/quote'), {
+          cache: 'no-store',
+          headers: { Accept: 'application/json' },
+        })
+        if (r.ok) {
+          const d = (await r.json()) as {
+            price?: number
+            change24h?: number
+            changePct24h?: number
+            high24h?: number
+            low24h?: number
+            volume24h?: number
+          }
+          if (!d.price || !Number.isFinite(d.price)) return
+          setBtcPrice({
+            price: d.price,
+            change24h: d.change24h ?? 0,
+            changePct24h: d.changePct24h ?? 0,
+            high24h: d.high24h ?? d.price,
+            low24h: d.low24h ?? d.price,
+            volume24h: d.volume24h ?? 0,
+          })
+          return
+        }
+        // Last-resort direct quote, independent of app API deployment.
+        const cg = await fetch(
+          'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true&include_24hr_vol=true',
+          { cache: 'no-store' }
+        )
+        if (!cg.ok) return
+        const q = (await cg.json()) as { bitcoin?: { usd?: number; usd_24h_change?: number; usd_24h_vol?: number } }
+        const p = Number(q.bitcoin?.usd)
+        if (!Number.isFinite(p) || p <= 0) return
+        setBtcPrice({
+          price: p,
+          change24h: 0,
+          changePct24h: Number(q.bitcoin?.usd_24h_change) || 0,
+          high24h: p,
+          low24h: p,
+          volume24h: Number(q.bitcoin?.usd_24h_vol) || 0,
+        })
+      } catch {
+        /* ignore */
+      }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    const t = setTimeout(loadRestQuote, 4000)
+    const iv = setInterval(loadRestQuote, 60_000)
+    return () => {
+      clearTimeout(t)
+      clearInterval(iv)
+    }
   }, [])
 
+  /** Binance ticker — one connection for the page lifetime. */
   useEffect(() => {
-    if (activeTab !== 'chart') return
+    connectPriceWs()
+    return () => {
+      if (priceReconnectTimerRef.current) clearTimeout(priceReconnectTimerRef.current)
+      priceReconnectTimerRef.current = null
+      priceWsRef.current?.close()
+      priceWsRef.current = null
+    }
+  }, [connectPriceWs])
+
+  /**
+   * REST + kline when Chart tab is active only (avoids double-fetch / double-WS on mount).
+   * Leaving Chart closes kline to reduce flaky duplicate streams.
+   */
+  useEffect(() => {
+    if (activeTab !== 'chart') {
+      klineGenRef.current += 1
+      if (klineReconnectTimerRef.current) {
+        clearTimeout(klineReconnectTimerRef.current)
+        klineReconnectTimerRef.current = null
+      }
+      klineWsRef.current?.close()
+      klineWsRef.current = null
+      setWsConnected(false)
+      return
+    }
     fetchCandles(activeRange)
     connectKlineWs(activeRange)
-  }, [activeRange, activeTab, fetchCandles, connectKlineWs])
+    return () => {
+      if (klineReconnectTimerRef.current) {
+        clearTimeout(klineReconnectTimerRef.current)
+        klineReconnectTimerRef.current = null
+      }
+    }
+  }, [activeTab, activeRange, fetchCandles, connectKlineWs])
+
+  useEffect(() => {
+    return () => {
+      candlesAbortRef.current?.abort()
+      candlesRequestIdRef.current += 1
+      klineGenRef.current += 1
+      if (klineReconnectTimerRef.current) clearTimeout(klineReconnectTimerRef.current)
+      klineWsRef.current?.close()
+      klineWsRef.current = null
+    }
+  }, [])
 
   const isUp = (btcPrice?.changePct24h ?? 0) >= 0
   const color = '#f7931a'
@@ -232,7 +526,7 @@ export default function BtcPage() {
                 </div>
                 <h1 className="text-2xl font-bold text-white tracking-wide">Bitcoin (BTC)</h1>
                 <p className="text-sm text-slate-400 mt-0.5">
-                  BTC/USDT · Binance · Real-time WebSocket stream
+                  BTC/USDT · REST: Binance → Kraken → CoinGecko · Live: Binance WebSocket (or REST quote if blocked)
                 </p>
               </div>
             </div>
@@ -305,6 +599,35 @@ export default function BtcPage() {
                   </button>
                 ))}
               </div>
+              {(activeIndicator === 'ema' || activeIndicator === 'all') && (
+                <div className="flex flex-wrap items-center gap-1.5 w-full sm:w-auto">
+                  <span className="text-[10px] text-slate-500 uppercase shrink-0">EMAs</span>
+                  <div className="flex flex-wrap gap-0.5">
+                    {CHART_EMA_PERIODS.map((p) => {
+                      const key = `ema${p}` as ChartEmaKey
+                      const on = activeIndicator === 'all' ? true : emaSelection[key]
+                      return (
+                        <button
+                          key={p}
+                          type="button"
+                          disabled={activeIndicator === 'all'}
+                          onClick={() =>
+                            setEmaSelection((prev) => ({ ...prev, [key]: !prev[key] }))
+                          }
+                          className={`px-1.5 py-0.5 text-[10px] font-mono rounded border transition-all ${
+                            on
+                              ? 'bg-amber-500/20 border-amber-500/40 text-amber-200'
+                              : 'border-slate-700 text-slate-500 hover:border-slate-600'
+                          } ${activeIndicator === 'all' ? 'opacity-60 cursor-not-allowed' : ''}`}
+                          title={activeIndicator === 'all' ? 'All indicators on' : `Toggle EMA ${p}`}
+                        >
+                          {p}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -321,9 +644,16 @@ export default function BtcPage() {
                 <span>{candles.length} candles</span>
               </div>
             </div>
+            {restFallbackNote && !fetchError && (
+              <div className="mb-3 rounded-lg border border-cyan-500/25 bg-cyan-950/15 px-3 py-2 text-[11px] text-cyan-100/90">
+                <span className="font-medium text-cyan-200/90">REST fallback</span>
+                <p className="text-cyan-100/75 leading-relaxed mt-0.5">{restFallbackNote}</p>
+              </div>
+            )}
             {fetchError && (
-              <div className="mb-3 rounded-lg border border-amber-500/30 bg-amber-950/20 px-3 py-2 text-[11px] text-amber-200/90">
-                REST: {fetchError}
+              <div className="mb-3 rounded-lg border border-amber-500/30 bg-amber-950/20 px-3 py-2 text-[11px] text-amber-200/90 space-y-1">
+                <div className="font-medium text-amber-100">REST data unavailable</div>
+                <p className="text-amber-200/80 leading-relaxed">{fetchError}</p>
               </div>
             )}
             {loading && candles.length === 0 ? (
@@ -331,19 +661,24 @@ export default function BtcPage() {
                 <span className="text-slate-500 text-sm font-mono mb-2">Connecting to Binance...</span>
               </div>
             ) : candles.length > 0 ? (
-              <KLineChart
-                candles={candles as any}
-                darkPoolMarkers={[]}
-                newsMarkers={[]}
-                color={color}
-                ticker="BTC"
-                range={activeRange}
-                showRSI
-                indicators={indicatorConfig}
-              />
+              <CryptoChartBoundary title="BTC chart crashed">
+                <KLineChart
+                  candles={candles as any}
+                  darkPoolMarkers={[]}
+                  newsMarkers={[]}
+                  color={color}
+                  ticker="BTC"
+                  range={activeRange}
+                  showRSI
+                  indicators={indicatorConfig}
+                />
+              </CryptoChartBoundary>
             ) : (
-              <div className="h-[480px] bg-slate-800/10 rounded-xl flex items-center justify-center border border-dashed border-slate-800">
-                <span className="text-slate-600 text-sm">No BTC data available from Binance</span>
+              <div className="h-[480px] bg-slate-800/10 rounded-xl flex flex-col items-center justify-center gap-2 border border-dashed border-slate-800 px-6 text-center">
+                <span className="text-slate-500 text-sm">No candle data yet</span>
+                <span className="text-[11px] text-slate-600 max-w-md">
+                  If this persists, open DevTools → Network, reload, and check <code className="text-slate-500">/api/crypto/btc</code> (should be 200 with a <code className="text-slate-500">candles</code> array). Disable VPN or try another network if all exchanges time out.
+                </span>
               </div>
             )}
           </div>
@@ -351,8 +686,12 @@ export default function BtcPage() {
           <BtcQuantLab candles={candles} />
         )}
 
-        <div className="text-center text-[10px] text-slate-700">
-          Data sourced from Binance Public API via WebSocket (real-time) and REST (historical). Prices are indicative.
+        <div className="text-center text-[10px] text-slate-700 max-w-3xl mx-auto space-y-1">
+          <p>
+            Data sourced from Binance Public API via WebSocket (real-time) and REST (historical). If you see a geo-restriction
+            message, Binance is blocking your server or network region — not a bug in this app.
+          </p>
+          <p>Prices are indicative.</p>
         </div>
       </div>
     </div>

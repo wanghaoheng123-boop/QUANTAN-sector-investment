@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
+import YahooFinance from 'yahoo-finance2'
+import { yahooSymbolFromParam } from '@/lib/quant/yahooSymbol'
 
 // Prevent Next.js from attempting static rendering — this route needs request.url at runtime.
 export const dynamic = 'force-dynamic'
-import YahooFinance from 'yahoo-finance2'
-import { yahooSymbolFromParam } from '@/lib/quant/yahooSymbol'
 
 const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] })
 

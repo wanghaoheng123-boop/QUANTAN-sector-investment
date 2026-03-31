@@ -8,7 +8,7 @@ const DEPLOY_HINT =
   '`TRADING_AGENTS_BASE` in Vercel to the public https:// URL (no trailing slash). See README: LLM Multi-Agent Analysis.'
 
 type TradingAgentsResolved =
-  | { ok: true; base: string }
+  | { ok: true; base: string; source: 'project' | 'managed_fallback' | 'local_dev' }
   | { ok: false; reason: 'missing' | 'invalid_url' | 'insecure_base' }
 
 /**
@@ -16,9 +16,12 @@ type TradingAgentsResolved =
  * Production requires https:// to protect API keys in transit to your backend.
  */
 function resolveTradingAgentsBase(): TradingAgentsResolved {
-  const raw = process.env.TRADING_AGENTS_BASE?.trim()
-  if (raw) {
-    const normalized = raw.replace(/\/$/, '')
+  const parseBase = (
+    raw: string | undefined,
+    source: 'project' | 'managed_fallback'
+  ): TradingAgentsResolved => {
+    if (!raw?.trim()) return { ok: false, reason: 'missing' }
+    const normalized = raw.trim().replace(/\/$/, '')
     let u: URL
     try {
       u = new URL(normalized)
@@ -35,11 +38,21 @@ function resolveTradingAgentsBase(): TradingAgentsResolved {
     if (process.env.NODE_ENV === 'production' && u.protocol !== 'https:') {
       return { ok: false, reason: 'insecure_base' }
     }
-    return { ok: true, base }
+    return { ok: true, base, source }
   }
+
+  const primary = parseBase(process.env.TRADING_AGENTS_BASE, 'project')
+  if (primary.ok) return primary
+  if (primary.reason !== 'missing') return primary
+
+  const fallback = parseBase(process.env.TRADING_AGENTS_FALLBACK_BASE, 'managed_fallback')
+  if (fallback.ok) return fallback
+  if (fallback.reason !== 'missing') return fallback
+
   if (process.env.NODE_ENV === 'development') {
-    return { ok: true, base: 'http://127.0.0.1:3001' }
+    return { ok: true, base: 'http://127.0.0.1:3001', source: 'local_dev' }
   }
+
   return { ok: false, reason: 'missing' }
 }
 
@@ -48,8 +61,11 @@ function tradingAgentsConfigErrorResponse(resolved: Extract<TradingAgentsResolve
     return NextResponse.json(
       {
         error: 'backend_not_configured',
-        message: `TradingAgents backend is not configured for this deployment. ${DEPLOY_HINT}`,
-        details: 'TRADING_AGENTS_BASE is not set',
+        message:
+          'TradingAgents backend is not configured for this deployment. Ask the site owner to set ' +
+          'TRADING_AGENTS_BASE (or managed TRADING_AGENTS_FALLBACK_BASE), or self-host via Railway. ' +
+          DEPLOY_HINT,
+        details: 'TRADING_AGENTS_BASE / TRADING_AGENTS_FALLBACK_BASE are not set',
       },
       { status: 502 }
     )
@@ -59,7 +75,7 @@ function tradingAgentsConfigErrorResponse(resolved: Extract<TradingAgentsResolve
       {
         error: 'invalid_trading_agents_base',
         message:
-          'TRADING_AGENTS_BASE must use https:// in production so your API key is encrypted in transit. ' +
+          'TRADING_AGENTS_BASE or TRADING_AGENTS_FALLBACK_BASE must use https:// in production so your API key is encrypted in transit. ' +
           'Use your Railway (or other host) public HTTPS URL, e.g. https://your-app.up.railway.app',
         details: 'http:// is not accepted when NODE_ENV=production',
       },
@@ -70,7 +86,7 @@ function tradingAgentsConfigErrorResponse(resolved: Extract<TradingAgentsResolve
     {
       error: 'invalid_trading_agents_base',
       message:
-        'TRADING_AGENTS_BASE is not a valid http(s) URL. Use the origin only, e.g. https://your-app.up.railway.app (no path, no credentials).',
+        'TRADING_AGENTS_BASE/TRADING_AGENTS_FALLBACK_BASE is not a valid http(s) URL. Use the origin only, e.g. https://your-app.up.railway.app (no path, no credentials).',
       details: 'invalid_url',
     },
     { status: 502 }

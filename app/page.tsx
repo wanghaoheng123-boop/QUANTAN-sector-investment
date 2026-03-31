@@ -18,6 +18,19 @@ interface Quote {
   quoteTime?: string | null
 }
 
+function formatUtcDateTime(ts: string): string {
+  const d = new Date(ts)
+  if (!Number.isFinite(d.getTime())) return 'Invalid date'
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: 'UTC',
+  }).format(d)
+}
+
 export default function HomePage() {
   const [quotes, setQuotes] = useState<Record<string, Quote>>({})
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
@@ -214,7 +227,7 @@ export default function HomePage() {
                             {sector?.name ?? brief.sector}
                           </span>
                           <span className="text-xs text-slate-600">
-                            {new Date(brief.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                            {formatUtcDateTime(brief.timestamp)}
                           </span>
                           <span className="text-xs text-slate-600">{brief.readTime} min read</span>
                         </div>

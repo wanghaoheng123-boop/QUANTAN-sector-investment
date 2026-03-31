@@ -2,6 +2,16 @@
 const withPWA = require('@ducanh2912/next-pwa').default({
   dest: 'public',
   disable: process.env.NODE_ENV === 'development',
+  /** Never cache Next API routes in the service worker — stale 451/empty bodies break crypto. */
+  extendDefaultRuntimeCaching: true,
+  workboxOptions: {
+    runtimeCaching: [
+      {
+        urlPattern: ({ url }) => url.pathname.startsWith('/api/'),
+        handler: 'NetworkOnly',
+      },
+    ],
+  },
 })
 
 const nextConfig = {

@@ -23,6 +23,12 @@ interface DpMarker {
   time: string; price: number; size: number; sentiment: 'BULLISH' | 'BEARISH';
 }
 
+const SECTOR_MAIN_TABS = [
+  ['chart', 'Chart'],
+  ['darkpool', 'Dark Pool'],
+  ['news', 'News'],
+] as const
+
 export default function SectorPage({ params }: { params: { slug: string } }) {
   const sector = getSectorBySlug(params.slug)
   if (!sector) notFound()
@@ -46,14 +52,22 @@ export default function SectorPage({ params }: { params: { slug: string } }) {
   const [activeRange, setActiveRange] = useState('6M')
 
   useEffect(() => {
-    fetch(`/api/chart/${sector.etf}`)
-      .then((r) => r.json())
+    let cancelled = false
+    fetch(`/api/chart/${encodeURIComponent(sector.etf)}?range=${encodeURIComponent(activeRange)}`)
+      .then((r) => {
+        if (!r.ok) return Promise.reject(new Error(`HTTP ${r.status}`))
+        return r.json()
+      })
       .then((data) => {
+        if (cancelled) return
         setCandles(data.candles ?? [])
         setDarkPoolMarkers(data.darkPoolMarkers ?? [])
       })
       .catch(() => {})
-  }, [sector.etf])
+    return () => {
+      cancelled = true
+    }
+  }, [sector.etf, activeRange])
 
   useEffect(() => {
     const pull = () => {
@@ -170,17 +184,18 @@ export default function SectorPage({ params }: { params: { slug: string } }) {
             {/* Tab navigation */}
             <div className="flex items-center justify-between">
               <div className="flex gap-1 bg-slate-900 rounded-lg p-1 border border-slate-800">
-                {['chart', 'darkpool', 'news'].map(tab => (
+                {SECTOR_MAIN_TABS.map(([tab, label]) => (
                   <button
                     key={tab}
+                    type="button"
                     onClick={() => setActiveTab(tab)}
-                    className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all capitalize ${
+                    className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all ${
                       activeTab === tab
                         ? 'bg-slate-700 text-white'
                         : 'text-slate-500 hover:text-slate-300'
                     }`}
                   >
-                    {tab === 'darkpool' ? 'Dark Pool' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+                    {label}
                   </button>
                 ))}
               </div>
@@ -209,7 +224,7 @@ export default function SectorPage({ params }: { params: { slug: string } }) {
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-sm font-semibold text-white">{sector.etf} · Candlestick Chart</span>
                   <div className="flex items-center gap-3 text-xs text-slate-500">
-                    <span>1D bars · 1Y data</span>
+                    <span>1D bars · {activeRange} window</span>
                   </div>
                 </div>
                 {candles.length > 0 ? (

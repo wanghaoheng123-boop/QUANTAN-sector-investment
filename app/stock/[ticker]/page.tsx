@@ -23,6 +23,21 @@ interface DpMarker {
 // Intraday ranges — need chart refresh polling
 const INTRADAY_RANGES = new Set(['5m', '15m', '1H', '4H', '1D', '1W'])
 
+const STOCK_MAIN_TABS = [
+  ['chart', 'Chart'],
+  ['quant', 'Quant Lab'],
+  ['darkpool', 'Dark Pool'],
+  ['news', 'News'],
+] as const
+
+const STOCK_INDICATOR_PRESETS = [
+  ['ema', 'EMA'],
+  ['vwap', 'VWAP'],
+  ['bb', 'BB'],
+  ['fib', 'Fib'],
+  ['all', 'All'],
+] as const
+
 export default function StockPage({ params }: { params: { ticker: string } }) {
   const ticker = params.ticker.toUpperCase()
 
@@ -42,22 +57,28 @@ export default function StockPage({ params }: { params: { ticker: string } }) {
   // Stable callbacks — defined with useCallback to avoid stale closures
   const fetchChartData = useCallback((range: string) => {
     setLoading(true)
-    fetch(`/api/chart/${ticker}?range=${range}`)
-      .then(r => r.json())
-      .then(data => {
+    fetch(`/api/chart/${encodeURIComponent(ticker)}?range=${encodeURIComponent(range)}`)
+      .then((r) => {
+        if (!r.ok) return Promise.reject(new Error(`HTTP ${r.status}`))
+        return r.json()
+      })
+      .then((data) => {
         if (data.candles) {
           setCandles(data.candles)
           setDarkPoolMarkers(data.darkPoolMarkers ?? [])
         }
       })
-      .catch(e => console.error('[Chart] Error:', e))
+      .catch((e) => console.error('[Chart] Error:', e))
       .finally(() => setLoading(false))
   }, [ticker])
 
   const fetchQuote = useCallback(() => {
-    fetch(`/api/prices?tickers=${ticker}`)
-      .then(r => r.json())
-      .then(data => {
+    fetch(`/api/prices?tickers=${encodeURIComponent(ticker)}`)
+      .then((r) => {
+        if (!r.ok) return Promise.reject(new Error(`HTTP ${r.status}`))
+        return r.json()
+      })
+      .then((data) => {
         const q = data.quotes?.find((q: { ticker: string }) => q.ticker === ticker)
         if (q) setQuote(q)
       })
@@ -105,11 +126,41 @@ export default function StockPage({ params }: { params: { ticker: string } }) {
 
   // Memoize indicators — prevents KLineChart re-renders on unrelated state changes
   const indicatorConfig = useMemo(() => {
-    if (activeIndicator === 'all') return { ema20: true, ema50: true, vwap: true, bollingerBands: true, fibonacci: true }
-    if (activeIndicator === 'ema') return { ema20: true, ema50: true, vwap: false, bollingerBands: false, fibonacci: false }
-    if (activeIndicator === 'vwap') return { ema20: false, ema50: false, vwap: true, bollingerBands: false, fibonacci: false }
-    if (activeIndicator === 'bb') return { ema20: false, ema50: false, vwap: false, bollingerBands: true, fibonacci: false }
-    return { ema20: false, ema50: false, vwap: false, bollingerBands: false, fibonacci: true }
+    const allEma = {
+      ema9: true,
+      ema12: true,
+      ema20: true,
+      ema21: true,
+      ema26: true,
+      ema50: true,
+      ema100: true,
+      ema200: true,
+    }
+    const emaOnly20_50 = {
+      ema9: false,
+      ema12: false,
+      ema20: true,
+      ema21: false,
+      ema26: false,
+      ema50: true,
+      ema100: false,
+      ema200: false,
+    }
+    const emaOff = {
+      ema9: false,
+      ema12: false,
+      ema20: false,
+      ema21: false,
+      ema26: false,
+      ema50: false,
+      ema100: false,
+      ema200: false,
+    }
+    if (activeIndicator === 'all') return { ...allEma, vwap: true, bollingerBands: true, fibonacci: true }
+    if (activeIndicator === 'ema') return { ...emaOnly20_50, vwap: false, bollingerBands: false, fibonacci: false }
+    if (activeIndicator === 'vwap') return { ...emaOff, vwap: true, bollingerBands: false, fibonacci: false }
+    if (activeIndicator === 'bb') return { ...emaOff, vwap: false, bollingerBands: true, fibonacci: false }
+    return { ...emaOff, vwap: false, bollingerBands: false, fibonacci: true }
   }, [activeIndicator])
 
   const news = getNewsForSector('technology')
@@ -170,10 +221,10 @@ export default function StockPage({ params }: { params: { ticker: string } }) {
       <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div className="flex flex-wrap gap-1 bg-slate-900 rounded-lg p-1 border border-slate-800">
-            {(['chart', 'quant', 'darkpool', 'news'] as const).map(tab => (
-              <button key={tab} onClick={() => setActiveTab(tab)}
+            {STOCK_MAIN_TABS.map(([tab, label]) => (
+              <button key={tab} type="button" onClick={() => setActiveTab(tab)}
                 className={`px-3 sm:px-4 py-1.5 text-xs font-medium rounded-md transition-all ${activeTab === tab ? 'bg-slate-700 text-white' : 'text-slate-500 hover:text-slate-300'}`}>
-                {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                {label}
               </button>
             ))}
           </div>
@@ -189,10 +240,10 @@ export default function StockPage({ params }: { params: { ticker: string } }) {
                 ))}
               </div>
               <div className="flex flex-wrap gap-1 bg-slate-900 rounded-lg p-1 border border-slate-800">
-                {(['ema', 'vwap', 'bb', 'fib', 'all'] as const).map(ind => (
-                  <button key={ind} onClick={() => setActiveIndicator(ind)}
-                    className={`px-2.5 py-1 text-[11px] rounded-md transition-all ${activeIndicator === ind ? 'bg-slate-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>
-                    {ind.toUpperCase()}
+                {STOCK_INDICATOR_PRESETS.map(([val, label]) => (
+                  <button key={val} type="button" onClick={() => setActiveIndicator(val)}
+                    className={`px-2.5 py-1 text-[11px] rounded-md transition-all ${activeIndicator === val ? 'bg-slate-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>
+                    {label}
                   </button>
                 ))}
               </div>

@@ -1,3 +1,7 @@
+import { PERP_FUNDING_HIGH_ABS, PERP_FUNDING_MODERATE_ABS } from './quant/fundingConstants'
+
+export { PERP_FUNDING_HIGH_ABS, PERP_FUNDING_MODERATE_ABS } from './quant/fundingConstants'
+
 // ─── BTC indicator calculations ────────────────────────────────────────────────
 
 export interface BtcCandle {
@@ -103,16 +107,54 @@ export function calcVWAP(candles: BtcCandle[]): { time: number; value: number }[
   })
 }
 
-/** Funding rate interpretation */
+/**
+ * Funding rate interpretation (Binance-style decimal).
+ * Positive rate → longs pay shorts (crowded long risk); negative → shorts pay longs.
+ * Signal is a *positioning / contrarian* read, not a price-direction guarantee.
+ */
 export function interpretFundingRate(rate: number): {
   label: string
   color: string
+  /** Contrarian lean: crowded longs (positive rate) vs crowded shorts (negative rate). */
   signal: 'BULLISH' | 'BEARISH' | 'NEUTRAL'
 } {
-  if (rate > 0.01)   return { label: 'High Positive', color: 'text-red-400', signal: 'BULLISH' }
-  if (rate > 0)      return { label: 'Slight Positive', color: 'text-orange-400', signal: 'BULLISH' }
-  if (rate < -0.01)  return { label: 'High Negative', color: 'text-blue-400', signal: 'BEARISH' }
-  if (rate < 0)      return { label: 'Slight Negative', color: 'text-cyan-400', signal: 'BEARISH' }
+  if (!Number.isFinite(rate)) {
+    return { label: 'Invalid', color: 'text-slate-400', signal: 'NEUTRAL' }
+  }
+  if (rate > PERP_FUNDING_HIGH_ABS) {
+    return {
+      label: 'Very high (longs pay)',
+      color: 'text-orange-400',
+      signal: 'BEARISH',
+    }
+  }
+  if (rate > PERP_FUNDING_MODERATE_ABS) {
+    return {
+      label: 'Elevated (longs pay)',
+      color: 'text-amber-400',
+      signal: 'BEARISH',
+    }
+  }
+  if (rate > 0) {
+    return { label: 'Slight (longs pay)', color: 'text-slate-400', signal: 'NEUTRAL' }
+  }
+  if (rate < -PERP_FUNDING_HIGH_ABS) {
+    return {
+      label: 'Very high (shorts pay)',
+      color: 'text-cyan-400',
+      signal: 'BULLISH',
+    }
+  }
+  if (rate < -PERP_FUNDING_MODERATE_ABS) {
+    return {
+      label: 'Elevated (shorts pay)',
+      color: 'text-sky-400',
+      signal: 'BULLISH',
+    }
+  }
+  if (rate < 0) {
+    return { label: 'Slight (shorts pay)', color: 'text-slate-400', signal: 'NEUTRAL' }
+  }
   return { label: 'Neutral', color: 'text-slate-400', signal: 'NEUTRAL' }
 }
 

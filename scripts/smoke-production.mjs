@@ -94,6 +94,44 @@ async function main() {
   const health = await getJson('/api/bloomberg-bridge/health')
   passed &= ok(health.ok && health.status === 200, `GET bloomberg-bridge/health → ${health.status}`)
 
+  const btc = await getJson('/api/crypto/btc?interval=1d&limit=15')
+  if (btc.status === 502 || btc.status === 503) {
+    console.log(
+      `  ⚠ GET /api/crypto/btc → ${btc.status} (Binance unreachable from this host — skip BTC candle checks; run verify:btc for direct Binance)`
+    )
+  } else {
+    passed &= ok(btc.ok && btc.status === 200, `GET /api/crypto/btc → ${btc.status}`)
+    const btcCandles = btc.json?.candles
+    passed &= ok(Array.isArray(btcCandles) && btcCandles.length >= 5, `BTC candles (${btcCandles?.length})`)
+    const b0 = btcCandles?.[0]
+    const bLast = btcCandles?.[btcCandles.length - 1]
+    passed &= ok(
+      b0 && typeof b0.close === 'number' && b0.close > 0,
+      'BTC first candle has positive close'
+    )
+    if (b0 && bLast && typeof b0.time === 'number' && typeof bLast.time === 'number') {
+      passed &= ok(bLast.time > b0.time, 'BTC candle times ascending')
+    }
+    if (bLast && typeof bLast.high === 'number' && typeof bLast.low === 'number') {
+      passed &= ok(bLast.high >= bLast.low, 'BTC OHLC: high >= low')
+    }
+  }
+
+  const btcM = await getJson('/api/crypto/btc/metrics')
+  if (btcM.status === 502 || btcM.status === 503) {
+    console.log('  ⚠ /api/crypto/btc/metrics unavailable (Binance — optional)')
+  } else {
+    passed &= ok(btcM.ok && btcM.status === 200, `GET /api/crypto/btc/metrics → ${btcM.status}`)
+    const fj = btcM.json
+    const hasData =
+      fj &&
+      (fj.fundingRate != null ||
+        fj.openInterest != null ||
+        fj.takerBuyVolume != null ||
+        fj.longShortRatio != null)
+    passed &= ok(hasData, 'BTC metrics has at least one numeric field')
+  }
+
   if (process.env.SMOKE_EXTENDED === '1') {
     const fundPath =
       '/api/fundamentals/AAPL?wacc=0.09&tg=0.025&gBear=0.02&gBase=0.05&gBull=0.09'

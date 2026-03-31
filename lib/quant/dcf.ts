@@ -28,6 +28,7 @@ export function runDcf(input: DcfInputs): DcfResult | null {
   if (!Number.isFinite(fcf0) || !Number.isFinite(shares) || shares <= 0) return null
   if (wacc <= terminalGrowth || wacc <= 0 || wacc >= 0.5) return null
   if (terminalGrowth < -0.02 || terminalGrowth > 0.06) return null
+  if (!Number.isFinite(explicitGrowth) || explicitGrowth < -0.3 || explicitGrowth > 0.45) return null
 
   let pvExplicit = 0
   let fcf = fcf0

@@ -4,8 +4,11 @@ import { generateDarkPoolMarkers } from '@/lib/mockData'
 
 const yahooFinance = new YahooFinance()
 
-// In-memory per-ticker cache: Map<ticker+range, { candles, expiresAt }>
-const _chartCache = new Map<string, { candles: any[]; darkPoolMarkers: any[]; expiresAt: number }>()
+// In-memory per-ticker cache (never expose expiresAt or raw entry to clients)
+const _chartCache = new Map<
+  string,
+  { candles: any[]; darkPoolMarkers: any[]; expiresAt: number; range: string; interval: string }
+>()
 const CHART_CACHE_TTL_MS = 30_000 // 30 seconds — balances freshness vs rate limits
 
 export async function GET(
@@ -23,7 +26,14 @@ export async function GET(
   const cached = _chartCache.get(cacheKey)
   if (cached && now < cached.expiresAt) {
     return NextResponse.json(
-      { ticker, ...cached, _cached: true },
+      {
+        ticker,
+        candles: cached.candles,
+        darkPoolMarkers: cached.darkPoolMarkers,
+        range: cached.range,
+        interval: cached.interval,
+        _cached: true,
+      },
       { headers: { 'Cache-Control': 'public, max-age=30, stale-while-revalidate=60' } }
     )
   }
@@ -72,7 +82,13 @@ export async function GET(
     )
 
     // Store in cache
-    _chartCache.set(cacheKey, { candles, darkPoolMarkers, expiresAt: now + CHART_CACHE_TTL_MS })
+    _chartCache.set(cacheKey, {
+      candles,
+      darkPoolMarkers,
+      expiresAt: now + CHART_CACHE_TTL_MS,
+      range,
+      interval,
+    })
 
     return NextResponse.json(
       { ticker, candles, darkPoolMarkers, range, interval, _cached: false },

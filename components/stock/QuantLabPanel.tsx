@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { CODEX_FRAMEWORKS } from '@/lib/quant/frameworks'
-import { ChevronDown, ChevronRight, RefreshCw, Scale, BookOpen, LineChart, Layers, Eye, EyeOff, Lock } from 'lucide-react'
+import { ChevronDown, ChevronRight, RefreshCw, Scale, BookOpen, LineChart, Layers, Eye, EyeOff, Lock, CheckCircle2 } from 'lucide-react'
 import { halfKelly } from '@/lib/quant/kelly'
 import { PROVIDER_LABELS, DEFAULT_MODELS } from '@/lib/trading-agents-config'
 import type { LLMProvider } from '@/lib/trading-agents-config'
+import { LlmDeployAssistant } from '@/components/stock/LlmDeployAssistant'
 
 type Payload = {
   symbol: string
@@ -151,6 +152,10 @@ function isLlmProviderAuthFailure(code: string | null, message: string): boolean
   )
 }
 
+type LlmBackendHealth =
+  | { checked: false; status: 'unknown'; message: string }
+  | { checked: true; status: 'ready' | 'config_error' | 'unreachable'; message: string; source?: string; base?: string }
+
 export default function QuantLabPanel({ ticker }: { ticker: string }) {
   const [sub, setSub] = useState<'summary' | 'technicals' | 'financials' | 'valuation' | 'frameworks' | 'llm'>('summary')
   const [adv, setAdv] = useState<{
@@ -187,6 +192,61 @@ export default function QuantLabPanel({ ticker }: { ticker: string }) {
   const [llmHasRun, setLlmHasRun] = useState(false)
   const [llmApiKey, setLlmApiKey] = useState('')
   const [llmShowKey, setLlmShowKey] = useState(false)
+  const [llmHealthLoading, setLlmHealthLoading] = useState(false)
+  const [llmBackendHealth, setLlmBackendHealth] = useState<LlmBackendHealth>({
+    checked: false,
+    status: 'unknown',
+    message: 'Checking backend status…',
+  })
+
+  const checkLlmBackendHealth = useCallback(async () => {
+    setLlmHealthLoading(true)
+    try {
+      const r = await fetch('/api/trading-agents/health', { cache: 'no-store' })
+      const j = (await r.json()) as Record<string, unknown>
+      const status = String(j.status || 'unknown')
+      if (status === 'ready') {
+        setLlmBackendHealth({
+          checked: true,
+          status: 'ready',
+          message: 'Backend connected and ready.',
+          source: typeof j.source === 'string' ? j.source : undefined,
+          base: typeof j.base === 'string' ? j.base : undefined,
+        })
+        setLlmErrorCode((prev) => {
+          if (prev && isLlmConnectivityCode(prev)) {
+            setLlmError(null)
+            return null
+          }
+          return prev
+        })
+      } else if (status === 'config_error') {
+        setLlmBackendHealth({
+          checked: true,
+          status: 'config_error',
+          message: 'Backend is not configured yet. Use the Deploy button to set it up.',
+          source: typeof j.source === 'string' ? j.source : undefined,
+          base: typeof j.base === 'string' ? j.base : undefined,
+        })
+      } else {
+        setLlmBackendHealth({
+          checked: true,
+          status: 'unreachable',
+          message: 'Backend is configured but unreachable. Check service status or URL.',
+          source: typeof j.source === 'string' ? j.source : undefined,
+          base: typeof j.base === 'string' ? j.base : undefined,
+        })
+      }
+    } catch {
+      setLlmBackendHealth({
+        checked: true,
+        status: 'unreachable',
+        message: 'Failed to check backend status due to a network error.',
+      })
+    } finally {
+      setLlmHealthLoading(false)
+    }
+  }, [])
 
   const runLlmAnalysis = useCallback(async () => {
     if (!llmApiKey.trim()) {
@@ -329,6 +389,11 @@ export default function QuantLabPanel({ ticker }: { ticker: string }) {
       if (saved) setLlmApiKey(saved)
     } catch {}
   }, [])
+
+  useEffect(() => {
+    if (sub !== 'llm' || llmBackendHealth.checked || llmHealthLoading) return
+    void checkLlmBackendHealth()
+  }, [sub, llmBackendHealth.checked, llmHealthLoading, checkLlmBackendHealth])
 
   // When provider changes, reset to that provider's default models
   const handleProviderChange = useCallback((p: LLMProvider) => {
@@ -990,7 +1055,60 @@ export default function QuantLabPanel({ ticker }: { ticker: string }) {
         )}
 
         {sub === 'llm' && (
-          <div className="space-y-5">
+          <div className="flex flex-col lg:flex-row-reverse gap-4 items-start">
+            <LlmDeployAssistant
+              backendReady={llmBackendHealth.checked && llmBackendHealth.status === 'ready'}
+            />
+            <div className="flex-1 min-w-0 space-y-5 w-full">
+            <div
+              className={`rounded-xl border p-3 ${
+                llmBackendHealth.checked && llmBackendHealth.status === 'ready'
+                  ? 'border-emerald-500/35 bg-emerald-950/25'
+                  : 'border-slate-700/80 bg-slate-900/40'
+              }`}
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  {llmBackendHealth.checked && llmBackendHealth.status === 'ready' ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" aria-hidden />
+                  ) : (
+                    <span
+                      className={`inline-block h-2 w-2 rounded-full ${
+                        llmBackendHealth.status === 'ready'
+                          ? 'bg-emerald-400'
+                          : llmBackendHealth.status === 'unknown'
+                            ? 'bg-slate-500'
+                            : 'bg-rose-400'
+                      }`}
+                    />
+                  )}
+                  <p className="text-xs text-slate-200 font-semibold">
+                    {llmBackendHealth.checked && llmBackendHealth.status === 'ready'
+                      ? 'Setup complete'
+                      : 'LLM backend status'}
+                  </p>
+                  {llmBackendHealth.checked && llmBackendHealth.status === 'ready' && (
+                    <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-300/95">
+                      Ready
+                    </span>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void checkLlmBackendHealth()}
+                  disabled={llmHealthLoading}
+                  className="text-[11px] rounded border border-slate-600 px-2 py-1 text-slate-300 hover:bg-slate-800 disabled:opacity-50"
+                >
+                  {llmHealthLoading ? 'Checking…' : 'Check connection'}
+                </button>
+              </div>
+              <p className="mt-2 text-[11px] text-slate-400">{llmBackendHealth.message}</p>
+              {llmBackendHealth.base && (
+                <p className="mt-1 text-[10px] text-slate-500 font-mono break-all">
+                  {llmBackendHealth.source || 'backend'}: {llmBackendHealth.base}
+                </p>
+              )}
+            </div>
             {/* Header + config */}
             <div className="rounded-xl border border-amber-500/20 bg-amber-950/10 p-4 space-y-3">
               <div className="flex items-start gap-2">
@@ -1141,7 +1259,12 @@ export default function QuantLabPanel({ ticker }: { ticker: string }) {
                 <button
                   type="button"
                   onClick={runLlmAnalysis}
-                  disabled={llmLoading}
+                  disabled={
+                    llmLoading ||
+                    llmHealthLoading ||
+                    llmBackendHealth.status === 'config_error' ||
+                    llmBackendHealth.status === 'unreachable'
+                  }
                   className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-xs font-semibold transition-colors"
                 >
                   {llmLoading ? '⏳ Running agents…' : '▶ Run LLM Analysis'}
@@ -1177,24 +1300,38 @@ export default function QuantLabPanel({ ticker }: { ticker: string }) {
                 ) : isLlmConnectivityCode(llmErrorCode) ? (
                   <div className="mt-2 space-y-1">
                     <p className="text-amber-200/90 font-semibold">Connectivity / deployment</p>
-                    <p className="text-red-300/80">
-                      The Next.js app could not reach your TradingAgents Python server (wrong URL, server down, or env not set on Vercel).
-                    </p>
-                    <ol className="text-red-300/60 list-decimal pl-4 space-y-0.5">
-                      <li>
-                        Deploy <code className="font-mono text-red-200">server_trading_agents.py</code> to{' '}
-                        <a href="https://railway.app" target="_blank" rel="noopener noreferrer" className="underline">
-                          Railway
-                        </a>{' '}
-                        or Render (use <code className="font-mono text-red-200">Procfile</code> or start command with <code className="font-mono text-red-200">--host 0.0.0.0</code> and <code className="font-mono text-red-200">$PORT</code>).
-                      </li>
-                      <li>
-                        In Vercel → Project → Environment Variables, set{' '}
-                        <code className="font-mono text-red-200">TRADING_AGENTS_BASE</code> to your public{' '}
-                        <code className="font-mono text-red-200">https://</code> origin (required in production; no trailing slash), then redeploy.
-                      </li>
-                      <li>Local dev: run <code className="font-mono text-red-200">python server_trading_agents.py</code> on port 3001 — no env var needed in <code className="font-mono text-red-200">npm run dev</code>.</li>
-                    </ol>
+                    {llmBackendHealth.status === 'ready' ? (
+                      <>
+                        <p className="text-red-300/80">
+                          The backend was healthy earlier. This is usually a temporary glitch or a timeout during the run.
+                        </p>
+                        <p className="text-red-300/60 mt-1">
+                          Click <strong className="text-red-200/90">Check connection</strong> above, then try again. If it keeps
+                          failing, open <strong className="text-red-200/90">Advanced: self-host</strong> on the right.
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-red-300/80">
+                          The Next.js app could not reach your TradingAgents Python server (wrong URL, server down, or env not set on Vercel).
+                        </p>
+                        <ol className="text-red-300/60 list-decimal pl-4 space-y-0.5">
+                          <li>
+                            Deploy <code className="font-mono text-red-200">server_trading_agents.py</code> to{' '}
+                            <a href="https://railway.app" target="_blank" rel="noopener noreferrer" className="underline">
+                              Railway
+                            </a>{' '}
+                            or Render (use <code className="font-mono text-red-200">Procfile</code> or start command with <code className="font-mono text-red-200">--host 0.0.0.0</code> and <code className="font-mono text-red-200">$PORT</code>).
+                          </li>
+                          <li>
+                            In Vercel → Project → Environment Variables, set{' '}
+                            <code className="font-mono text-red-200">TRADING_AGENTS_BASE</code> to your public{' '}
+                            <code className="font-mono text-red-200">https://</code> origin (required in production; no trailing slash), then redeploy.
+                          </li>
+                          <li>Local dev: run <code className="font-mono text-red-200">python server_trading_agents.py</code> on port 3001 — no env var needed in <code className="font-mono text-red-200">npm run dev</code>.</li>
+                        </ol>
+                      </>
+                    )}
                   </div>
                 ) : isLlmProviderAuthFailure(llmErrorCode, llmError) ? (
                   <div className="mt-2 space-y-1">
@@ -1288,6 +1425,7 @@ export default function QuantLabPanel({ ticker }: { ticker: string }) {
                 Click <strong className="text-slate-400">Run LLM Analysis</strong> to start the multi-agent debate.
               </div>
             )}
+            </div>
           </div>
         )}
       </div>

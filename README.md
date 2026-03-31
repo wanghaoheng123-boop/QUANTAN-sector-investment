@@ -91,12 +91,14 @@ The **LLM Multi-Agent Analysis** tab needs the `server_trading_agents.py` Python
    - Name: `TRADING_AGENTS_BASE`
    - Value: `https://your-app.up.railway.app` (must be **`https://`**, no trailing slash)
    - Environments: **Production** (and Preview if you want)
+   - Optional (for zero-setup users): set `TRADING_AGENTS_FALLBACK_BASE` to a shared managed backend URL. It is used only when `TRADING_AGENTS_BASE` is not set.
 
 7. Redeploy the Next.js app — the LLM tab will now connect automatically.
 
 **Step 3: Verify**
 
 8. Go to any stock page → Quant Lab → LLM Agents → paste your API key → click Run. The backend will be reachable and the analysis will run using your key.
+9. In the LLM tab, use **Check connection** to verify backend availability before running analysis.
 
 **Alternative hosts:** Render, Fly.io, or any VPS work the same way — expose FastAPI on a public **`https://`** URL and point `TRADING_AGENTS_BASE` at the origin.
 
