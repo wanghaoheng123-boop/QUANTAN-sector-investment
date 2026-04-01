@@ -52,8 +52,12 @@ Bloomberg does **not** offer a public REST API for browser or serverless apps. T
 
 **Production URL:** [https://antigravity-sectors.vercel.app](https://antigravity-sectors.vercel.app) (updates automatically when you push to GitHub `main`).
 
+**Source control and hosting:** Only **GitHub** (this repo) and **Vercel** (linked via the Vercel GitHub App). There is **no** Alibaba Cloud / ECS / secondary server sync. Deployments are triggered by pushes to `main`; Vercel clones the commit and builds on Vercel’s runners.
+
+**For other developers:** See [docs/DEPLOY_ADVISORY.md](docs/DEPLOY_ADVISORY.md) for why older GitHub Actions “Vercel CLI” workflows failed and the operational checklist. CI runs **`npm run typecheck`** on Ubuntu via [`.github/workflows/ci.yml`](.github/workflows/ci.yml) (no Vercel token required).
+
 1. Push this folder to a GitHub repository (see below).
-2. In [Vercel](https://vercel.com), the project can stay linked to that repo for automatic deploys.
+2. In [Vercel](https://vercel.com), keep the project **Git-linked** to that repo so every push to `main` triggers a production build.
 3. In **Vercel → Project → Settings → Environment Variables**, add the same keys as `.env.example`. Set **`NEXTAUTH_URL`** to `https://antigravity-sectors.vercel.app` (or your custom domain) and **`NEXTAUTH_SECRET`** (e.g. `openssl rand -base64 32`). Without `NEXTAUTH_SECRET`, sign-in routes may error in production.
 
 ### LLM Multi-Agent Analysis (TradingAgents)
