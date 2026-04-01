@@ -4,6 +4,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      skip_pull:
+        description: 'Skip vercel pull (use prebuilt artifacts only)'
+        required: false
+        default: 'false'
 
 jobs:
   deploy:
@@ -24,7 +29,29 @@ jobs:
         run: npm install -g vercel@50.37.3
 
       - name: Pull Vercel Environment Information
-        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+        if: ${{ github.event.inputs.skip_pull != 'true' }}
+        run: |
+          echo "Running: vercel pull --yes --environment=production"
+          EXIT_CODE=0
+          OUTPUT=$(vercel pull --yes --environment=production --token="${{ secrets.VERCEL_TOKEN }}" 2>&1) || EXIT_CODE=$?
+          echo "$OUTPUT"
+          if [ $EXIT_CODE -ne 0 ]; then
+            # Check if token is the likely cause
+            if echo "$OUTPUT" | grep -qi "token\|unauthorized\|authentication\|invalid\|403\|401"; then
+              echo ""
+              echo "============================================"
+              echo "ERROR: Vercel authentication failed."
+              echo ""
+              echo "Likely cause: The VERCEL_TOKEN secret is missing, expired, or invalid."
+              echo ""
+              echo "FIX: Go to https://vercel.com/settings/tokens → Create Token"
+              echo "     Then add it to: GitHub → Settings → Secrets → Actions → New repository secret"
+              echo "     Name: VERCEL_TOKEN"
+              echo "============================================"
+            fi
+            exit $EXIT_CODE
+          fi
+          echo "vercel pull completed successfully"
 
       - name: Build Project Artifacts
         run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
