@@ -23,20 +23,30 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # Set env vars before build (NEXTAUTH_SECRET is required for Next.js build)
-      # Uses GitHub secrets if available, otherwise falls back to build-safe placeholder
       - name: Set build environment variables
         run: |
-          echo "NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-build-only-placeholder-$(date +%s)}" >> $GITHUB_ENV
+          echo "NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-build-placeholder-$(date +%s)}" >> $GITHUB_ENV
           echo "NEXTAUTH_URL=${NEXTAUTH_URL:-https://quantan.vercel.app}" >> $GITHUB_ENV
 
-      # Standard Next.js production build
       - name: Build Project Artifacts
-        run: npm run build
+        run: |
+          echo "=== Environment ==="
+          env | grep -E "NEXTAUTH|NODE|VERCEL" || true
+          echo ""
+          echo "=== Running npm run build ==="
+          npm run build 2>&1
+          BUILD_EXIT=$?
+          echo ""
+          echo "=== Build exit code: $BUILD_EXIT ==="
+          if [ $BUILD_EXIT -ne 0 ]; then
+            echo "BUILD FAILED — check output above for errors"
+          fi
+          exit $BUILD_EXIT
 
-      # Deploy using Vercel CLI (reads projectId from vercel.json in repo)
       - name: Install Vercel CLI
+        if: always()
         run: npm install -g vercel@50.37.3
 
       - name: Deploy to Vercel
+        if: success()
         run: vercel deploy .next --prod --token=${{ secrets.VERCEL_TOKEN }}
