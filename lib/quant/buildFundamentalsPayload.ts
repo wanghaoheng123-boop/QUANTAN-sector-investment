@@ -12,7 +12,9 @@ import {
   sharpeRatio,
   sortinoRatio,
   trendLabel,
+  ma200Regime,
   type OhlcBar,
+  type MA200Regime,
 } from './technicals'
 import { alignCloses, logReturns, correlation, excessReturn } from './relativeStrength'
 import { bandPosition, computeResearchScore } from './researchScore'
@@ -299,6 +301,10 @@ export function buildFundamentalsPayload(
   const volRegime20over60 =
     vol20d != null && vol60d != null && vol60d > 0 ? vol20d / vol60d : null
 
+  /** 200-day MA deviation regime — buy-the-dip / falling-knife classifier */
+  const ma200RegimeVal: MA200Regime | null =
+    price != null && closes.length >= 220 ? ma200Regime(price, closes, rsi14) : null
+
   let fib: { fib382: number; fib500: number; fib618: number } | null = null
   if (high52w != null && low52w != null && high52w > low52w) {
     const r = high52w - low52w
@@ -361,6 +367,7 @@ export function buildFundamentalsPayload(
     researchScore,
     earnings,
     pivots,
+    ma200Regime: ma200RegimeVal,
     range52w: {
       high: high52w,
       low: low52w,

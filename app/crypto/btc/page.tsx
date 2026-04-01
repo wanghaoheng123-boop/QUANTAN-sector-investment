@@ -81,16 +81,13 @@ async function fetchCoinGeckoCandlesClient(
   return normalizeBtcCandles(out)
 }
 
-const defaultEmaSelection = (): Record<ChartEmaKey, boolean> => ({
-  ema9: false,
-  ema12: false,
-  ema20: true,
-  ema21: false,
-  ema26: false,
-  ema50: true,
-  ema100: false,
-  ema200: false,
-})
+const defaultEmaSelection = (): Record<ChartEmaKey, boolean> => {
+  const out: Partial<Record<ChartEmaKey, boolean>> = {}
+  for (const p of CHART_EMA_PERIODS) {
+    out[`ema${p}` as ChartEmaKey] = (p === 20 || p === 50) // default on: 20 & 50
+  }
+  return out as Record<ChartEmaKey, boolean>
+}
 
 export default function BtcPage() {
   const [candles, setCandles] = useState<BtcCandle[]>([])

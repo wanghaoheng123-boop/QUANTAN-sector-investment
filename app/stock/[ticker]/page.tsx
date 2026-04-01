@@ -10,6 +10,7 @@ import NewsFeed from '@/components/NewsFeed'
 import { getNewsForSector, generateDarkPoolPrints } from '@/lib/mockData'
 import { DarkPoolPrint } from '@/lib/sectors'
 import type { DarkPoolAnalysis } from '@/lib/darkpool'
+import { CHART_EMA_PERIODS, type ChartEmaKey } from '@/lib/chartEma'
 
 const KLineChart = dynamic(() => import('@/components/KLineChart'), { ssr: false })
 
@@ -126,41 +127,24 @@ export default function StockPage({ params }: { params: { ticker: string } }) {
 
   // Memoize indicators — prevents KLineChart re-renders on unrelated state changes
   const indicatorConfig = useMemo(() => {
-    const allEma = {
-      ema9: true,
-      ema12: true,
-      ema20: true,
-      ema21: true,
-      ema26: true,
-      ema50: true,
-      ema100: true,
-      ema200: true,
+    // Build all-true / all-false EMA maps from the comprehensive CHART_EMA_PERIODS list
+    const allEmaOn: Record<string, boolean> = {}
+    const allEmaOff: Record<string, boolean> = {}
+    for (const p of CHART_EMA_PERIODS) {
+      const k = `ema${p}` as ChartEmaKey
+      allEmaOn[k] = true
+      allEmaOff[k] = false
     }
-    const emaOnly20_50 = {
-      ema9: false,
-      ema12: false,
-      ema20: true,
-      ema21: false,
-      ema26: false,
-      ema50: true,
-      ema100: false,
-      ema200: false,
-    }
-    const emaOff = {
-      ema9: false,
-      ema12: false,
-      ema20: false,
-      ema21: false,
-      ema26: false,
-      ema50: false,
-      ema100: false,
-      ema200: false,
-    }
-    if (activeIndicator === 'all') return { ...allEma, vwap: true, bollingerBands: true, fibonacci: true }
-    if (activeIndicator === 'ema') return { ...emaOnly20_50, vwap: false, bollingerBands: false, fibonacci: false }
-    if (activeIndicator === 'vwap') return { ...emaOff, vwap: true, bollingerBands: false, fibonacci: false }
-    if (activeIndicator === 'bb') return { ...emaOff, vwap: false, bollingerBands: true, fibonacci: false }
-    return { ...emaOff, vwap: false, bollingerBands: false, fibonacci: true }
+    // EMA preset: enable only 20 and 50 by default
+    const ema20_50: Record<string, boolean> = { ...allEmaOff }
+    ema20_50['ema20'] = true
+    ema20_50['ema50'] = true
+
+    if (activeIndicator === 'all') return { ...allEmaOn, vwap: true, bollingerBands: true, fibonacci: true }
+    if (activeIndicator === 'ema') return { ...ema20_50, vwap: false, bollingerBands: false, fibonacci: false }
+    if (activeIndicator === 'vwap') return { ...allEmaOff, vwap: true, bollingerBands: false, fibonacci: false }
+    if (activeIndicator === 'bb') return { ...allEmaOff, vwap: false, bollingerBands: true, fibonacci: false }
+    return { ...allEmaOff, vwap: false, bollingerBands: false, fibonacci: true }
   }, [activeIndicator])
 
   const news = getNewsForSector('technology')

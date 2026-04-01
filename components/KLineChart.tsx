@@ -42,14 +42,15 @@ interface NewsMarker {
 }
 
 export type KLineIndicatorFlags = {
-  ema9?: boolean
-  ema12?: boolean
-  ema20?: boolean
-  ema21?: boolean
-  ema26?: boolean
-  ema50?: boolean
-  ema100?: boolean
-  ema200?: boolean
+  ema4?: boolean;  ema5?: boolean;  ema6?: boolean;  ema7?: boolean;  ema8?: boolean;
+  ema9?: boolean;  ema10?: boolean; ema12?: boolean;
+  ema15?: boolean; ema20?: boolean; ema21?: boolean; ema26?: boolean;
+  ema30?: boolean; ema40?: boolean;
+  ema50?: boolean; ema60?: boolean;
+  ema100?: boolean;
+  ema150?: boolean;
+  ema200?: boolean;
+  ema250?: boolean;
   vwap?: boolean
   bollingerBands?: boolean
   fibonacci?: boolean
@@ -67,28 +68,41 @@ interface KLineChartProps {
 }
 
 const DEFAULT_INDICATORS: Required<KLineIndicatorFlags> = {
-  ema9: false,
-  ema12: false,
-  ema20: true,
-  ema21: false,
-  ema26: false,
-  ema50: true,
+  ema4: false, ema5: false, ema6: false, ema7: false, ema8: false,
+  ema9: false, ema10: false, ema12: false,
+  ema15: false, ema20: true, ema21: false, ema26: false,
+  ema30: false, ema40: false,
+  ema50: true, ema60: false,
   ema100: false,
+  ema150: false,
   ema200: false,
+  ema250: false,
   vwap: false,
   bollingerBands: false,
   fibonacci: false,
 }
 
 const EMA_LEGEND_TAILWIND: Record<ChartEmaPeriod, string> = {
-  9: 'bg-cyan-400',
-  12: 'bg-lime-400',
-  20: 'bg-amber-400',
-  21: 'bg-yellow-400',
-  26: 'bg-orange-400',
-  50: 'bg-violet-400',
-  100: 'bg-pink-400',
+  4:   'bg-cyan-300',
+  5:   'bg-cyan-400',
+  6:   'bg-cyan-500',
+  7:   'bg-cyan-700',
+  8:   'bg-cyan-600',
+  9:   'bg-lime-500',
+  10:  'bg-lime-400',
+  12:  'bg-lime-600',
+  15:  'bg-amber-400',
+  20:  'bg-amber-500',
+  21:  'bg-orange-500',
+  26:  'bg-orange-600',
+  30:  'bg-yellow-600',
+  40:  'bg-amber-600',
+  50:  'bg-violet-500',
+  60:  'bg-violet-600',
+  100: 'bg-pink-500',
+  150: 'bg-teal-500',
   200: 'bg-slate-400',
+  250: 'bg-orange-400',
 }
 
 function isEmaLineVisible(ind: KLineIndicatorFlags, period: ChartEmaPeriod): boolean {

@@ -99,6 +99,18 @@ type Payload = {
     lastSurprisePct: number | null
   }
   pivots?: { pivot: number; r1: number; s1: number; r2: number; s2: number; r3: number; s3: number } | null
+  ma200Regime?: {
+    zone: string
+    deviationPct: number | null
+    slopePositive: boolean | null
+    label: string
+    color: string
+    riskLevel: 'low' | 'medium' | 'high' | 'extreme'
+    interpretation: string
+    forwardReturnContext: string
+    dipSignal: 'STRONG_DIP' | 'WATCH_DIP' | 'FALLING_KNIFE' | 'OVERBOUGHT' | 'IN_TREND' | 'INSUFFICIENT_DATA'
+    dipSignalExplained: string
+  } | null
   range52w?: { high: number | null; low: number | null; position: number | null }
   fibRetracement?: { fib382: number; fib500: number; fib618: number } | null
   priceSources?: {
@@ -722,6 +734,86 @@ export default function QuantLabPanel({ ticker }: { ticker: string }) {
                 <span>Vol 20d/60d: {data.technicals.volRegime20over60?.toFixed(2) ?? '—'}</span>
               </div>
             </div>
+
+            {/* 200-day MA deviation regime — buy-the-dip / falling-knife signal */}
+            {data.ma200Regime && (
+              <div
+                className="rounded-xl border p-4"
+                style={{ borderColor: data.ma200Regime.color + '55', backgroundColor: data.ma200Regime.color + '0d' }}
+              >
+                <div className="flex items-start justify-between flex-wrap gap-3">
+                  <div>
+                    <div className="text-[10px] uppercase tracking-widest mb-1" style={{ color: data.ma200Regime.color }}>
+                      200-Day MA Regime
+                    </div>
+                    <div className="text-xl font-bold" style={{ color: data.ma200Regime.color }}>
+                      {data.ma200Regime.label}
+                    </div>
+                    <div className="text-xs text-slate-400 mt-0.5">
+                      {data.technicals.sma200 != null
+                        ? `200DMA: $${data.technicals.sma200.toFixed(2)}`
+                        : ''}
+                      {data.ma200Regime.deviationPct != null
+                        ? ` · Deviation: ${data.ma200Regime.deviationPct >= 0 ? '+' : ''}${data.ma200Regime.deviationPct.toFixed(1)}%`
+                        : ''}
+                    </div>
+                  </div>
+                  <div
+                    className={`text-sm font-bold px-3 py-1 rounded-full border ${
+                      data.ma200Regime.dipSignal === 'STRONG_DIP'
+                        ? 'bg-emerald-950/60 border-emerald-500/50 text-emerald-300'
+                        : data.ma200Regime.dipSignal === 'FALLING_KNIFE'
+                          ? 'bg-red-950/60 border-red-500/50 text-red-300'
+                          : data.ma200Regime.dipSignal === 'WATCH_DIP'
+                            ? 'bg-yellow-950/60 border-yellow-500/50 text-yellow-300'
+                            : 'bg-slate-900/60 border-slate-700 text-slate-300'
+                    }`}
+                  >
+                    {data.ma200Regime.dipSignal === 'STRONG_DIP'
+                      ? '✓ BUY THE DIP'
+                      : data.ma200Regime.dipSignal === 'FALLING_KNIFE'
+                        ? '✗ FALLING KNIFE'
+                        : data.ma200Regime.dipSignal === 'WATCH_DIP'
+                          ? '⚠ WATCH — NO ADD'
+                          : data.ma200Regime.dipSignal === 'OVERBOUGHT'
+                            ? '⚠ OVERBOUGHT'
+                            : data.ma200Regime.dipSignal === 'IN_TREND'
+                              ? '→ IN TREND'
+                              : data.ma200Regime.dipSignal}
+                  </div>
+                </div>
+                <p className="text-xs text-slate-400 mt-2 leading-relaxed">
+                  {data.ma200Regime.dipSignalExplained}
+                </p>
+                <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
+                  {data.ma200Regime.forwardReturnContext}
+                </p>
+                <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-2 text-[10px] text-slate-600">
+                  <div>
+                    <span className="uppercase tracking-wide mr-1">Risk: </span>
+                    <span
+                      className={
+                        data.ma200Regime.riskLevel === 'low'
+                          ? 'text-green-400'
+                          : data.ma200Regime.riskLevel === 'medium'
+                            ? 'text-yellow-400'
+                            : 'text-red-400'
+                      }
+                    >
+                      {data.ma200Regime.riskLevel}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="uppercase tracking-wide mr-1">200MA slope: </span>
+                    {data.ma200Regime.slopePositive === true
+                      ? '↗ Rising'
+                      : data.ma200Regime.slopePositive === false
+                        ? '↘ Declining'
+                        : '—'}
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="rounded-xl border border-slate-800 p-4">
