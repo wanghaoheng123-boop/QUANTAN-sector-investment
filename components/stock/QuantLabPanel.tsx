@@ -1195,7 +1195,7 @@ export default function QuantLabPanel({ ticker }: { ticker: string }) {
                 </button>
               </div>
               <p className="mt-2 text-[11px] text-slate-400">{llmBackendHealth.message}</p>
-              {llmBackendHealth.base && (
+              {llmBackendHealth.checked && llmBackendHealth.base && (
                 <p className="mt-1 text-[10px] text-slate-500 font-mono break-all">
                   {llmBackendHealth.source || 'backend'}: {llmBackendHealth.base}
                 </p>

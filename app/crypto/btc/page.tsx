@@ -89,6 +89,15 @@ const defaultEmaSelection = (): Record<ChartEmaKey, boolean> => {
   return out as Record<ChartEmaKey, boolean>
 }
 
+/** Full EMA grid for "all indicators on/off" presets — must match every `ChartEmaKey`. */
+function allEmaRecord(value: boolean): Record<ChartEmaKey, boolean> {
+  const out: Partial<Record<ChartEmaKey, boolean>> = {}
+  for (const p of CHART_EMA_PERIODS) {
+    out[`ema${p}` as ChartEmaKey] = value
+  }
+  return out as Record<ChartEmaKey, boolean>
+}
+
 export default function BtcPage() {
   const [candles, setCandles] = useState<BtcCandle[]>([])
   const [activeTab, setActiveTab] = useState<'chart' | 'quant'>('chart')
@@ -124,26 +133,8 @@ export default function BtcPage() {
   }, [activeRange])
 
   const indicatorConfig = useMemo(() => {
-    const allEmasOn = (): Record<ChartEmaKey, boolean> => ({
-      ema9: true,
-      ema12: true,
-      ema20: true,
-      ema21: true,
-      ema26: true,
-      ema50: true,
-      ema100: true,
-      ema200: true,
-    })
-    const allEmasOff = (): Record<ChartEmaKey, boolean> => ({
-      ema9: false,
-      ema12: false,
-      ema20: false,
-      ema21: false,
-      ema26: false,
-      ema50: false,
-      ema100: false,
-      ema200: false,
-    })
+    const allEmasOn = (): Record<ChartEmaKey, boolean> => allEmaRecord(true)
+    const allEmasOff = (): Record<ChartEmaKey, boolean> => allEmaRecord(false)
     if (activeIndicator === 'all') {
       return { ...allEmasOn(), vwap: true, bollingerBands: true, fibonacci: true }
     }
