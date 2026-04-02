@@ -5,8 +5,16 @@ import { useRouter } from 'next/navigation'
 import { yahooSymbolFromParam } from '@/lib/quant/yahooSymbol'
 
 const SEARCH_LIMIT = 40
+const RECENT_SEARCHES_KEY = 'quantan_recent_searches'
+const MAX_RECENT = 5
 
-/** Rough ticker pattern: AAPL, BRK-B, 7203.T, ^VIX, GC=F */
+interface Quote {
+  symbol: string
+  shortname: string
+  exchange: string
+  typeDisp: string
+}
+
 function looksLikeDirectTicker(s: string): string | null {
   const t = s.trim().toUpperCase()
   if (t.length < 1 || t.length > 24) return null
@@ -14,16 +22,47 @@ function looksLikeDirectTicker(s: string): string | null {
   return yahooSymbolFromParam(t)
 }
 
+function getRecentSearches(): Quote[] {
+  if (typeof window === 'undefined') return []
+  try {
+    const stored = localStorage.getItem(RECENT_SEARCHES_KEY)
+    return stored ? JSON.parse(stored) : []
+  } catch {
+    return []
+  }
+}
+
+function addRecentSearch(quote: Quote): void {
+  if (typeof window === 'undefined') return
+  try {
+    const recent = getRecentSearches().filter(r => r.symbol !== quote.symbol)
+    const updated = [quote, ...recent].slice(0, MAX_RECENT)
+    localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(updated))
+  } catch {}
+}
+
+function removeRecentSearch(symbol: string): void {
+  if (typeof window === 'undefined') return
+  try {
+    const recent = getRecentSearches().filter(r => r.symbol !== symbol)
+    localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(recent))
+  } catch {}
+}
+
 export default function GlobalSearch() {
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState<
-    { symbol: string; shortname: string; exchange: string; typeDisp: string }[]
-  >([])
+  const [results, setResults] = useState<Quote[]>([])
   const [loading, setLoading] = useState(false)
   const [fetchError, setFetchError] = useState<string | null>(null)
   const [isOpen, setIsOpen] = useState(false)
+  const [recentSearches, setRecentSearches] = useState<Quote[]>([])
   const wrapperRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
+
+  useEffect(() => {
+    setRecentSearches(getRecentSearches())
+  }, [])
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -33,6 +72,18 @@ export default function GlobalSearch() {
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault()
+        inputRef.current?.focus()
+        setIsOpen(true)
+      }
+    }
+    document.addEventListener('keydown', handleGlobalKeyDown)
+    return () => document.removeEventListener('keydown', handleGlobalKeyDown)
   }, [])
 
   useEffect(() => {
@@ -57,8 +108,7 @@ export default function GlobalSearch() {
         if ((data.quotes || []).length === 0 && data.error) {
           setFetchError(String(data.error))
         }
-      } catch (e) {
-        console.error('Search error', e)
+      } catch {
         setFetchError('Network error — try again')
         setResults([])
       } finally {
@@ -79,28 +129,45 @@ export default function GlobalSearch() {
     [router]
   )
 
+  const handleSelectResult = useCallback((quote: Quote) => {
+    addRecentSearch(quote)
+    setRecentSearches(getRecentSearches())
+    goToStock(quote.symbol)
+  }, [goToStock])
+
+  const handleRemoveRecent = useCallback((e: React.MouseEvent, symbol: string) => {
+    e.stopPropagation()
+    removeRecentSearch(symbol)
+    setRecentSearches(getRecentSearches())
+  }, [])
+
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key !== 'Enter') return
-    e.preventDefault()
-    const direct = looksLikeDirectTicker(query)
-    if (direct) {
-      goToStock(direct)
-      return
-    }
-    if (results.length > 0) {
-      goToStock(results[0].symbol)
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      const direct = looksLikeDirectTicker(query)
+      if (direct) {
+        goToStock(direct)
+        return
+      }
+      if (results.length > 0) {
+        handleSelectResult(results[0])
+      }
     }
   }
+
+  const showRecent = isOpen && query.trim().length === 0 && recentSearches.length > 0
+  const showResults = isOpen && query.trim().length > 0
 
   return (
     <div ref={wrapperRef} className="relative w-full max-w-md">
       <div className="relative flex items-center">
-        <div className="absolute left-3 text-slate-500">
+        <div className="absolute left-3 text-slate-500 pointer-events-none">
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
         </div>
         <input
+          ref={inputRef}
           type="text"
           value={query}
           onChange={(e) => {
@@ -109,16 +176,20 @@ export default function GlobalSearch() {
           }}
           onFocus={() => setIsOpen(true)}
           onKeyDown={onKeyDown}
-          placeholder="Search name or symbol (Enter = open)…"
-          className="w-full bg-slate-900 border border-slate-800 rounded-md py-1.5 pl-9 pr-3 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors"
+          placeholder="Search name or symbol…"
+          className="w-full bg-slate-900 border border-slate-800 rounded-md py-1.5 pl-9 pr-16 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors"
           aria-label="Search stocks and ETFs"
           autoComplete="off"
         />
-        {loading && (
-          <div className="absolute right-3">
+        <div className="absolute right-2 flex items-center gap-1">
+          {loading ? (
             <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-          </div>
-        )}
+          ) : (
+            <kbd className="hidden sm:flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-mono text-slate-500 bg-slate-800 border border-slate-700 rounded">
+              <span className="text-xs">⌘</span>K
+            </kbd>
+          )}
+        </div>
       </div>
 
       <p className="text-[10px] text-slate-600 mt-1 px-0.5">
@@ -128,7 +199,49 @@ export default function GlobalSearch() {
         <p className="text-[10px] text-amber-500/90 mt-1 px-0.5">{fetchError}</p>
       )}
 
-      {isOpen && query.trim().length > 0 && (
+      {showRecent && (
+        <div
+          className="absolute top-full left-0 right-0 mt-1 bg-slate-900 border border-slate-800 rounded-md shadow-xl overflow-hidden z-[100]"
+          onMouseDown={(e) => e.preventDefault()}
+        >
+          <div className="px-3 py-2 text-[10px] text-slate-500 uppercase tracking-wider font-medium border-b border-slate-800">
+            Recent Searches
+          </div>
+          <ul role="listbox" aria-label="Recent searches">
+            {recentSearches.map((quote) => (
+              <li key={quote.symbol}>
+                <button
+                  type="button"
+                  onClick={() => handleSelectResult(quote)}
+                  className="w-full text-left px-4 py-2.5 hover:bg-slate-800 transition-colors flex items-center justify-between group"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <svg className="w-3.5 h-3.5 text-slate-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <div className="min-w-0">
+                      <div className="text-sm font-bold text-white font-mono">{quote.symbol}</div>
+                      <div className="text-xs text-slate-500 truncate max-w-[180px]">{quote.shortname}</div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => handleRemoveRecent(e, quote.symbol)}
+                    className="opacity-0 group-hover:opacity-100 p-1 text-slate-500 hover:text-white transition-all"
+                    aria-label={`Remove ${quote.symbol} from recent searches`}
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {showResults && (
         <div
           className="absolute top-full left-0 right-0 mt-1 bg-slate-900 border border-slate-800 rounded-md shadow-xl overflow-hidden z-[100] max-h-96 overflow-y-auto"
           onMouseDown={(e) => e.preventDefault()}
@@ -141,7 +254,7 @@ export default function GlobalSearch() {
                 <li key={quote.symbol}>
                   <button
                     type="button"
-                    onClick={() => goToStock(quote.symbol)}
+                    onClick={() => handleSelectResult(quote)}
                     className="w-full text-left px-4 py-3 hover:bg-slate-800 transition-colors flex items-center justify-between border-b border-slate-800/50 last:border-0"
                   >
                     <div className="min-w-0 pr-2">

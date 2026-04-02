@@ -78,7 +78,6 @@ async function runBacktest(filterTickers?: string[]): Promise<{
   const bnhAvg = results.length > 0
     ? results.reduce((s, r) => s + r.bnhReturn, 0) / results.length
     : 0
-  const alpha = portfolio.totalReturn - bnhAvg
 
   return {
     runId: `run_${Date.now()}`,
@@ -90,7 +89,7 @@ async function runBacktest(filterTickers?: string[]): Promise<{
       avgReturn: portfolio.totalReturn,
       avgAnnReturn: portfolio.annualizedReturn,
       bnhAvg,
-      alpha,
+      alpha: portfolio.alpha,  // FIX C2: True portfolio alpha from combined equity
       sharpeRatio: portfolio.sharpeRatio,
       sortinoRatio: portfolio.sortinoRatio,
       maxPortfolioDd: portfolio.maxDrawdown,
@@ -100,6 +99,8 @@ async function runBacktest(filterTickers?: string[]): Promise<{
       totalTrades: portfolio.totalTrades,
       totalInstruments: portfolio.totalInstruments,
       sectorSummary: portfolio.sectorReturns,
+      initialCapital: portfolio.initialCapital,
+      finalCapital: portfolio.finalCapital,
     },
   }
 }

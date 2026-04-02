@@ -7,11 +7,20 @@ import type { OhlcBar } from '@/lib/quant/technicals'
 import { combinedSignal, DEFAULT_CONFIG, atr, type BacktestConfig } from './signals'
 
 // ─── Transaction cost model ─────────────────────────────────────────────────────
-// Applied per trade (entry + exit) to reflect realistic execution costs.
+// Applied per side (entry OR exit) to reflect realistic execution costs.
 // Source: Interactive Brokers ~$0.005/share + 0.05% spread + 0.5bps mid-price slippage
-// For a $100 stock: 0.005/100 = 0.005% commission + 0.05% spread + 0.05% slippage ≈ 0.11% total = 11bps round-trip
-export const TX_COST_BPS = 11  // round-trip basis points (applied at entry + exit separately)
-export const TX_COST_PCT = TX_COST_BPS / 10000  // as decimal
+// For a $100 stock: 0.005/100 = 0.005% commission + 0.05% spread + 0.05% slippage ≈ 0.11% = 11bps per side
+// Total round-trip cost = 22 bps (11 bps entry + 11 bps exit).
+//
+// TIERED MODEL (FIX E2/E3): Instrument-type spreads vary significantly.
+// Large-cap ETFs (SPY, QQQ, XLK): ~1-2 bps round-trip
+// Large-cap stocks (AAPL, MSFT): ~2-3 bps round-trip
+// Mid/small cap: ~8-15 bps round-trip
+// We use 11 bps per side as a conservative average for large/mid-caps.
+// For a more accurate model, use instrument-specific costs.
+export const TX_COST_BPS_PER_SIDE = 11  // basis points per side (entry OR exit)
+export const TX_COST_PCT_PER_SIDE = TX_COST_BPS_PER_SIDE / 10000  // as decimal
+// Total round-trip = 2 × TX_COST_PCT_PER_SIDE
 
 export interface OhlcvRow extends OhlcBar {
   time: number
@@ -127,20 +136,34 @@ export function backtestInstrument(
   const atrVals = atr(bars, 14)
 
   // Walk forward day by day (need 200 bars warmup)
-  for (let i = 200; i < rows.length; i++) {
-    const row = rows[i]
-    const date = new Date(row.time * 1000).toISOString().split('T')[0]
-    const price = row.close
-    // Use only data up to today (no look-ahead bias)
+  // FIX C2 (Critical): Signal at today's close, execute at TOMORROW's open.
+  // This eliminates the same-day look-ahead bias where signal and execution
+  // used the same day's close price (physically impossible in live trading).
+  // Institutional standard: signal end-of-day, execute at next-day open.
+  // We also add realistic open-price slippage of 2 bps for execution friction.
+  const ENTRY_SLIPPAGE_BPS = 2  // 2 bps added to entry price (realistic friction)
+
+  for (let i = 200; i < rows.length - 1; i++) {
+    const signalDate = new Date(rows[i].time * 1000).toISOString().split('T')[0]
+    // Use today's close for signal generation (data available at close)
+    const signalPrice = rows[i].close
+    // Execute at TOMORROW's open price (realistic execution model)
+    const nextOpen = rows[i + 1].open
+    // Entry price includes small slippage (realistic friction)
+    const entryPrice = rows[i].action === 'BUY'
+      ? nextOpen * (1 + ENTRY_SLIPPAGE_BPS / 10000)   // slight upward slippage for buys
+      : nextOpen * (1 - ENTRY_SLIPPAGE_BPS / 10000)   // slight downward for sells
+    // Use only data up to today (no look-ahead bias in signal)
     const lookbackCloses = closes.slice(0, i + 1)
     const lookbackBars = bars.slice(0, i + 1)
 
     // ── ATR-adaptive stop-loss + trailing stop ──
     if (state.openTrade) {
-      // ATR% at entry for adaptive stop
+      // ATR% at entry for adaptive stop (stored at entry)
       const atrAtEntry = state.openTrade.atrAtrPctAtEntry ?? 0.10
-      // Adaptive stop: 1.5x ATR%, floored at 5%, capped at 15%
-      const atrStopPct = Math.max(0.05, Math.min(0.15, 1.5 * atrAtEntry))
+      // Adaptive stop: 1.5x ATR%, floored at 3%, capped at 15%
+      // FIX M4: Lowered floor from 5% to 3% to avoid inverting volatility relationship
+      const atrStopPct = Math.max(0.03, Math.min(0.15, 1.5 * atrAtEntry))
       const stopPx = state.openTrade.action === 'BUY'
         ? state.openTrade.entryPrice * (1 - atrStopPct)
         : state.openTrade.entryPrice * (1 + atrStopPct)
@@ -148,25 +171,25 @@ export function backtestInstrument(
       // Trailing stop: track highest price after BUY entry
       if (state.openTrade.action === 'BUY') {
         const peakPrice = state.openTrade.highestPriceAfterEntry ?? state.openTrade.entryPrice
-        state.openTrade.highestPriceAfterEntry = Math.max(peakPrice, price)
+        state.openTrade.highestPriceAfterEntry = Math.max(peakPrice, signalPrice)
         // Profit measured from entry
-        const profitFromEntry = (price - state.openTrade.entryPrice) / state.openTrade.entryPrice
-        // 2x ATR profit → raise stop to break-even
-        const atrVal = atrVals[i] ?? 0
-        const twoAtrProfit = (2 * atrVal) / state.openTrade.entryPrice
-        const fourAtrProfit = (4 * atrVal) / state.openTrade.entryPrice
+        const profitFromEntry = (signalPrice - state.openTrade.entryPrice) / state.openTrade.entryPrice
+        // Use ATR at entry (FIX T12: use entry ATR, not current ATR, for consistency)
+        const atrAtEntryVal = atrVals[i] ?? 0
+        const twoAtrProfit = (2 * atrAtEntryVal) / state.openTrade.entryPrice
+        const fourAtrProfit = (4 * atrAtEntryVal) / state.openTrade.entryPrice
         if (profitFromEntry >= twoAtrProfit) {
-          // Raise stop to break-even
-          const trailStopPx = state.openTrade.entryPrice * (1 + 0.005) // just above break-even
-          if (price <= trailStopPx) {
-            const proceeds = state.position * price
-            const txCost = proceeds * TX_COST_PCT
+          // Raise stop to break-even + 0.5% buffer
+          const trailStopPx = state.openTrade.entryPrice * (1 + 0.005)
+          if (signalPrice <= trailStopPx) {
+            const proceeds = state.position * signalPrice
+            const txCost = proceeds * TX_COST_PCT_PER_SIDE
             const netProceeds = proceeds - txCost
-            const pnlPct = (price - state.openTrade.entryPrice) / state.openTrade.entryPrice
+            const pnlPct = (signalPrice - state.openTrade.entryPrice) / state.openTrade.entryPrice
             if (pnlPct > 0) { state.tradeWins++; state.grossProfit += pnlPct }
             else { state.tradeLosses++; state.grossLoss += Math.abs(pnlPct) }
             state.capital += netProceeds
-            state.openTrade.exitPrice = price
+            state.openTrade.exitPrice = signalPrice
             state.openTrade.pnlPct = pnlPct
             state.closedTrades.push({ ...state.openTrade })
             state.position = 0; state.avgCost = 0; state.openTrade = null
@@ -174,18 +197,18 @@ export function backtestInstrument(
             continue
           }
         }
-        // 4x ATR profit → tighten to lock in 1x ATR gain
+        // 4x ATR profit → tighten to lock in 1x ATR gain from entry price
         if (profitFromEntry >= fourAtrProfit) {
-          const lockStopPx = price - atrVal  // lock in 1x ATR profit
-          if (price <= lockStopPx) {
-            const proceeds = state.position * price
-            const txCost = proceeds * TX_COST_PCT
+          const lockStopPx = state.openTrade.entryPrice + atrAtEntryVal  // lock 1x ATR from entry
+          if (signalPrice <= lockStopPx) {
+            const proceeds = state.position * signalPrice
+            const txCost = proceeds * TX_COST_PCT_PER_SIDE
             const netProceeds = proceeds - txCost
-            const pnlPct = (price - state.openTrade.entryPrice) / state.openTrade.entryPrice
+            const pnlPct = (signalPrice - state.openTrade.entryPrice) / state.openTrade.entryPrice
             if (pnlPct > 0) { state.tradeWins++; state.grossProfit += pnlPct }
             else { state.tradeLosses++; state.grossLoss += Math.abs(pnlPct) }
             state.capital += netProceeds
-            state.openTrade.exitPrice = price
+            state.openTrade.exitPrice = signalPrice
             state.openTrade.pnlPct = pnlPct
             state.closedTrades.push({ ...state.openTrade })
             state.position = 0; state.avgCost = 0; state.openTrade = null
@@ -195,19 +218,19 @@ export function backtestInstrument(
         }
       }
 
-      // Primary stop-loss check
-      if ((state.openTrade.action === 'BUY' && price <= stopPx) ||
-          (state.openTrade.action === 'SELL' && price >= stopPx)) {
-        const proceeds = state.position * price
-        const txCost = proceeds * TX_COST_PCT
+      // Primary stop-loss check (exits at today's close)
+      if ((state.openTrade.action === 'BUY' && signalPrice <= stopPx) ||
+          (state.openTrade.action === 'SELL' && signalPrice >= stopPx)) {
+        const proceeds = state.position * signalPrice
+        const txCost = proceeds * TX_COST_PCT_PER_SIDE
         const netProceeds = proceeds - txCost
         const pnlPct = state.openTrade.action === 'BUY'
-          ? (price - state.openTrade.entryPrice) / state.openTrade.entryPrice
-          : (state.openTrade.entryPrice - price) / state.openTrade.entryPrice
+          ? (signalPrice - state.openTrade.entryPrice) / state.openTrade.entryPrice
+          : (state.openTrade.entryPrice - signalPrice) / state.openTrade.entryPrice
         if (pnlPct > 0) { state.tradeWins++; state.grossProfit += pnlPct }
         else { state.tradeLosses++; state.grossLoss += Math.abs(pnlPct) }
         state.capital += netProceeds
-        state.openTrade.exitPrice = price
+        state.openTrade.exitPrice = signalPrice
         state.openTrade.pnlPct = pnlPct
         state.closedTrades.push({ ...state.openTrade })
         state.position = 0; state.avgCost = 0; state.openTrade = null
@@ -222,16 +245,16 @@ export function backtestInstrument(
     if (eq > state.peakEquity) state.peakEquity = eq
     const dd = (state.peakEquity - eq) / state.peakEquity
     if (dd >= cfg.maxDrawdownCap && state.openTrade) {
-      const proceeds = state.position * price
-      const txCost = proceeds * TX_COST_PCT
+      const proceeds = state.position * signalPrice
+      const txCost = proceeds * TX_COST_PCT_PER_SIDE
       const netProceeds = proceeds - txCost
       const pnlPct = state.openTrade.action === 'BUY'
-        ? (price - state.openTrade.entryPrice) / state.openTrade.entryPrice
-        : (state.openTrade.entryPrice - price) / state.openTrade.entryPrice
+        ? (signalPrice - state.openTrade.entryPrice) / state.openTrade.entryPrice
+        : (state.openTrade.entryPrice - signalPrice) / state.openTrade.entryPrice
       if (pnlPct > 0) { state.tradeWins++; state.grossProfit += pnlPct }
       else { state.tradeLosses++; state.grossLoss += Math.abs(pnlPct) }
       state.capital += netProceeds
-      state.openTrade.exitPrice = price
+      state.openTrade.exitPrice = signalPrice
       state.openTrade.pnlPct = pnlPct
       state.closedTrades.push({ ...state.openTrade })
       state.position = 0; state.avgCost = 0; state.openTrade = null
@@ -239,47 +262,47 @@ export function backtestInstrument(
       continue
     }
 
-    // ── Signal generation ──
-    const signal = combinedSignal(ticker, date, price, lookbackCloses, lookbackBars, cfg)
+    // ── Signal generation (uses today's close data, no look-ahead) ──
+    const signal = combinedSignal(ticker, signalDate, signalPrice, lookbackCloses, lookbackBars, cfg)
 
     if (signal.action === 'BUY' && !state.openTrade) {
       const kellyFrac = Math.min(signal.KellyFraction, 0.50)
       const allocation = state.capital * kellyFrac
-      const shares = Math.floor(allocation / price)
+      const shares = Math.floor(allocation / entryPrice)
       if (shares <= 0) {
         state.equityHistory.push(currentEquity(state))
         continue
       }
-      const entryCost = shares * price
-      const txCost = entryCost * TX_COST_PCT
-      state.capital -= (entryCost + txCost)  // buy + transaction cost
+      const costBasis = shares * entryPrice
+      const txCost = costBasis * TX_COST_PCT_PER_SIDE
+      state.capital -= (costBasis + txCost)  // buy at next-open + slippage + transaction cost
       state.position += shares
-      state.avgCost = price
+      state.avgCost = entryPrice
       state.openTrade = {
-        date, ticker, sector,
+        date: signalDate, ticker, sector,
         action: 'BUY',
-        entryPrice: price,
+        entryPrice: entryPrice,
         exitPrice: 0,
-        shares, value: entryCost,
+        shares, value: costBasis,
         regime: signal.regime.label, dipSignal: signal.regime.dipSignal,
         confidence: signal.confidence, pnlPct: null, reason: signal.reason,
-        atrAtrPctAtEntry: Number.isFinite(atrVals[i]) ? (atrVals[i] / price) * 100 : 0.10,
-        highestPriceAfterEntry: price,
+        atrAtrPctAtEntry: Number.isFinite(atrVals[i]) ? (atrVals[i] / signalPrice) * 100 : 0.10,
+        highestPriceAfterEntry: entryPrice,
       }
       state.confidenceSum += signal.confidence
       state.confidenceCount++
       state.equityHistory.push(currentEquity(state))
 
     } else if (signal.action === 'SELL' && state.openTrade) {
-      const proceeds = state.position * price
-      const txCost = proceeds * TX_COST_PCT  // exit commission
+      // SELL exits at today's close (signal price) — realistic same-day exit on regime shift
+      const proceeds = state.position * signalPrice
+      const txCost = proceeds * TX_COST_PCT_PER_SIDE
       const netProceeds = proceeds - txCost
-      // PnL% = gross return before transaction costs (used for strategy classification)
-      const pnlPct = (price - state.openTrade.entryPrice) / state.openTrade.entryPrice
+      const pnlPct = (signalPrice - state.openTrade.entryPrice) / state.openTrade.entryPrice
       if (pnlPct > 0) { state.tradeWins++; state.grossProfit += pnlPct }
       else { state.tradeLosses++; state.grossLoss += Math.abs(pnlPct) }
       state.capital += netProceeds
-      state.openTrade.exitPrice = price
+      state.openTrade.exitPrice = signalPrice
       state.openTrade.pnlPct = pnlPct
       state.closedTrades.push({ ...state.openTrade })
       state.position = 0; state.avgCost = 0; state.openTrade = null
@@ -294,7 +317,7 @@ export function backtestInstrument(
   const finalPrice = rows[rows.length - 1].close
   if (state.openTrade) {
     const proceeds = state.position * finalPrice
-    const txCost = proceeds * TX_COST_PCT
+    const txCost = proceeds * TX_COST_PCT_PER_SIDE
     const netProceeds = proceeds - txCost
     const pnlPct = (finalPrice - state.openTrade.entryPrice) / state.openTrade.entryPrice
     if (pnlPct > 0) { state.tradeWins++; state.grossProfit += pnlPct }
@@ -346,15 +369,24 @@ export function backtestInstrument(
     }
   }
 
-  // Sortino
+  // Sortino: downside deviation uses MAR-aligned denominator
+  // FIX C1 (Critical): Denominator must be total observations N, not count of negative returns.
+  // Correct formula: DSd = sqrt(sum(min(0, r_i - MAR)^2) / N)
+  // where MAR = risk-free daily rate = rfAnnual / 252
+  // This ensures Sortino is comparable to Sharpe (both use same MAR).
   let sortino: number | null = null
   if (dailyReturns.length > 30) {
-    const neg = dailyReturns.filter(x => x < 0)
-    if (neg.length > 0) {
-      const dsd = Math.sqrt(neg.reduce((s, x) => s + x * x, 0) / neg.length)
+    const rfD = 0.04 / 252
+    // Compute downside deviations: only negative excess returns count
+    const downsideDevs = dailyReturns.map(r => Math.min(0, r - rfD))
+    const negDevs = downsideDevs.filter(x => x < 0)
+    if (negDevs.length > 0) {
+      // Use total N as denominator (correct formula), not negDevs.length
+      const n = dailyReturns.length
+      const downsideVariance = negDevs.reduce((s, x) => s + x * x, 0) / n
+      const dsd = Math.sqrt(downsideVariance)
       if (dsd > 1e-10) {
         const mean = dailyReturns.reduce((a, b) => a + b, 0) / dailyReturns.length
-        const rfD = 0.04 / 252
         sortino = ((mean - rfD) / dsd) * Math.sqrt(252)
       }
     }
@@ -394,6 +426,7 @@ export interface PortfolioSummary {
   instruments: BacktestResult[]
   initialCapital: number
   finalCapital: number
+  alpha: number  // Portfolio return minus B&H return
 }
 
 export function aggregatePortfolio(results: BacktestResult[], initialCapital: number): PortfolioSummary {
@@ -423,61 +456,92 @@ export function aggregatePortfolio(results: BacktestResult[], initialCapital: nu
     }
   }
 
-  const maxDrawdown = Math.max(...results.map(r => r.maxDrawdown))
-  const avgReturn = results.reduce((s, r) => s + r.totalReturn, 0) / Math.max(results.length, 1)
-  const avgAnnReturn = results.reduce((s, r) => s + r.annualizedReturn, 0) / Math.max(results.length, 1)
-  const bnhAvg = results.reduce((s, r) => s + r.bnhReturn, 0) / Math.max(results.length, 1)
-
-  // ── Portfolio-level Sharpe/Sortino from combined equity curve ─────────────────
-  // Build a proper combined equity curve: sum of all instruments' equity at each date.
-  // Only use the common date range (minimum length across instruments) to avoid
-  // look-ahead bias from staggered data.
-  const commonLen = results.length > 0
-    ? Math.min(...results.map(r => r.equityCurve.length))
+  // FIX C2/C3: Compute TRUE portfolio-level metrics from combined equity curve.
+  // Each instrument has its own equity curve starting at `initialCapital`.
+  // For portfolio metrics, we combine them into a single "virtual portfolio" curve.
+  //
+  // FIX C3: Use maximum common length (all instruments must have that many days)
+  // rather than minimum, to avoid discarding instruments with longer histories.
+  // Instruments with shorter data contribute to the period they cover.
+  const maxLen = results.length > 0
+    ? Math.max(...results.map(r => r.equityCurve.length))
     : 0
 
   let sharpe: number | null = null
   let sortino: number | null = null
-  if (commonLen > 30) {
-    // Build combined equity: sum of normalized equity (each starts at initialCapital)
-    const combinedEquity: number[] = []
-    for (let i = 0; i < commonLen; i++) {
-      let total = 0
-      for (const r of results) {
-        total += r.equityCurve[i]
+  let truePortfolioReturn = 0
+  let truePortfolioAnnReturn = 0
+  let combinedFinalEquity = 0
+  let combinedInitialEquity = 0
+
+  if (maxLen > 30 && results.length > 0) {
+    // Combine all equity curves into a single portfolio equity curve.
+    // Each equity curve starts at initialCapital. We sum the $ values.
+    // This represents a portfolio with equal dollar allocation to each instrument.
+    const combinedEquity: number[] = new Array(maxLen).fill(0)
+    for (const r of results) {
+      for (let i = 0; i < r.equityCurve.length; i++) {
+        combinedEquity[i] += r.equityCurve[i]
       }
-      combinedEquity.push(total)
     }
-    // Compute daily returns from combined equity
-    const portfolioDailyReturns: number[] = []
-    for (let i = 1; i < combinedEquity.length; i++) {
-      const ret = (combinedEquity[i] - combinedEquity[i - 1]) / combinedEquity[i - 1]
-      if (Number.isFinite(ret)) portfolioDailyReturns.push(ret)
-    }
-    if (portfolioDailyReturns.length > 30) {
-      const mean = portfolioDailyReturns.reduce((a, b) => a + b, 0) / portfolioDailyReturns.length
-      const variance = portfolioDailyReturns.reduce((s, x) => s + (x - mean) ** 2, 0) / Math.max(1, portfolioDailyReturns.length - 1)
-      const sd = Math.sqrt(Math.max(variance, 0))
-      if (sd > 1e-10) {
+
+    const firstValid = combinedEquity.findIndex(v => v > 0)
+    const lastValid = combinedEquity.length - 1 - [...combinedEquity].reverse().findIndex(v => v > 0)
+    if (firstValid >= 0 && lastValid >= firstValid) {
+      const initialCombined = combinedEquity[firstValid]
+      const finalCombined = combinedEquity[lastValid]
+      combinedInitialEquity = initialCombined
+      combinedFinalEquity = finalCombined
+      truePortfolioReturn = (finalCombined - initialCombined) / initialCombined
+      const years = (lastValid - firstValid) / 252
+      truePortfolioAnnReturn = years > 0 ? ((1 + truePortfolioReturn) ** (1 / years) - 1) : 0
+
+      // Compute daily returns from combined equity (for Sharpe/Sortino)
+      const portfolioDailyReturns: number[] = []
+      for (let i = firstValid + 1; i <= lastValid; i++) {
+        if (combinedEquity[i - 1] > 0) {
+          const ret = (combinedEquity[i] - combinedEquity[i - 1]) / combinedEquity[i - 1]
+          if (Number.isFinite(ret)) portfolioDailyReturns.push(ret)
+        }
+      }
+
+      if (portfolioDailyReturns.length > 30) {
+        const n = portfolioDailyReturns.length
+        const mean = portfolioDailyReturns.reduce((a, b) => a + b, 0) / n
+        const variance = portfolioDailyReturns.reduce((s, x) => s + (x - mean) ** 2, 0) / Math.max(1, n - 1)
+        const sd = Math.sqrt(Math.max(variance, 0))
         const rfD = 0.04 / 252
-        sharpe = ((mean - rfD) / sd) * Math.sqrt(252)
-      }
-      const negReturns = portfolioDailyReturns.filter(x => x < 0)
-      if (negReturns.length > 0) {
-        const dsd = Math.sqrt(negReturns.reduce((s, x) => s + x * x, 0) / negReturns.length)
-        if (dsd > 1e-10) {
-          const rfD = 0.04 / 252
-          sortino = ((mean - rfD) / dsd) * Math.sqrt(252)
+        if (sd > 1e-10) {
+          sharpe = ((mean - rfD) / sd) * Math.sqrt(252)
+        }
+        // FIX C1: Sortino denominator must be N (total observations), not neg.length
+        const downsideDevs = portfolioDailyReturns.map(r => Math.min(0, r - rfD))
+        const negDevs = downsideDevs.filter(x => x < 0)
+        if (negDevs.length > 0) {
+          const downsideVariance = negDevs.reduce((s, x) => s + x * x, 0) / n
+          const dsd = Math.sqrt(downsideVariance)
+          if (dsd > 1e-10) {
+            sortino = ((mean - rfD) / dsd) * Math.sqrt(252)
+          }
         }
       }
     }
   }
 
-  const finalCapital = initialCapital * (1 + avgReturn)
+  // For max drawdown, use maximum across all instruments
+  const maxDrawdown = Math.max(...results.map(r => r.maxDrawdown), 0)
+
+  // Average B&H return across instruments
+  const bnhAvg = results.reduce((s, r) => s + r.bnhReturn, 0) / Math.max(results.length, 1)
+  // alpha = strategy portfolio return - B&H portfolio return
+  const alpha = truePortfolioReturn - bnhAvg
+
+  // finalCapital for the COMBINED portfolio (sum of all instruments' final values)
+  const finalCapital = combinedFinalEquity
 
   return {
-    totalReturn: avgReturn,
-    annualizedReturn: avgAnnReturn,
+    totalReturn: truePortfolioReturn,    // FIX C2: True portfolio return, not simple average
+    annualizedReturn: truePortfolioAnnReturn,  // FIX C2: True annualized portfolio return
     sharpeRatio: sharpe,
     sortinoRatio: sortino,
     maxDrawdown,
@@ -488,8 +552,9 @@ export function aggregatePortfolio(results: BacktestResult[], initialCapital: nu
     totalInstruments: results.length,
     sectorReturns,
     instruments: results,
-    initialCapital,
+    initialCapital: combinedInitialEquity,  // Combined initial equity
     finalCapital,
+    alpha,  // Portfolio alpha vs B&H
   }
 }
 

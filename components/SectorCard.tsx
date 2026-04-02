@@ -31,19 +31,28 @@ export default function SectorCard({ sector, quote, signal }: SectorCardProps) {
   const sigCfg = signal ? SIGNAL_CONFIG[signal.direction] : null
   const session = signal?.source === 'yahoo-session'
 
+  const priorPrice = sparkData.length >= 2 ? sparkData[0] : null
+  const lastPrice = sparkData.length >= 2 ? sparkData[1] : null
+
   return (
     <Link href={`/sector/${sector.slug}`}>
       <div
-        className={`group relative rounded-2xl p-4 border transition-all duration-300 hover:scale-[1.02] hover:shadow-xl cursor-pointer overflow-hidden ${sector.borderColor}`}
+        className={`group relative rounded-2xl p-4 border transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl cursor-pointer overflow-hidden animate-card-enter ${sector.borderColor}`}
         style={{
           background: 'linear-gradient(135deg, rgba(14,14,22,0.97) 0%, rgba(9,9,16,0.99) 100%)',
-          boxShadow: `0 0 0 1px ${sector.color}12`,
+          boxShadow: `0 0 0 1px ${sector.color}12, 0 0 30px ${sector.color}08`,
         }}
       >
         {/* Hover radial glow */}
         <div
           className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
-          style={{ background: `radial-gradient(circle at 50% 0%, ${sector.color}0a 0%, transparent 65%)` }}
+          style={{ background: `radial-gradient(circle at 50% 0%, ${sector.color}18 0%, transparent 65%)` }}
+        />
+
+        {/* Prominent hover glow effect */}
+        <div
+          className="absolute -inset-px opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none rounded-2xl"
+          style={{ boxShadow: `0 0 40px ${sector.color}30, inset 0 0 30px ${sector.color}10` }}
         />
 
         {/* Header row */}
@@ -73,10 +82,10 @@ export default function SectorCard({ sector, quote, signal }: SectorCardProps) {
           <div>
             {quote ? (
               <>
-                <div className="text-xl font-bold text-white font-mono leading-none">
+                <div className="text-xl font-bold text-white font-mono leading-none transition-all duration-300">
                   ${quote.price.toFixed(2)}
                 </div>
-                <div className={`text-xs font-mono mt-0.5 ${isUp ? 'text-green-400' : 'text-red-400'}`}>
+                <div className={`text-xs font-mono mt-0.5 transition-all duration-300 ${isUp ? 'text-green-400' : 'text-red-400'}`}>
                   {isUp ? '▲' : '▼'} {Math.abs(quote.changePct).toFixed(2)}%
                 </div>
               </>
@@ -88,9 +97,24 @@ export default function SectorCard({ sector, quote, signal }: SectorCardProps) {
             )}
           </div>
           {sparkData.length >= 2 ? (
-            <div className="flex flex-col items-end gap-0.5">
+            <div className="flex flex-col items-end gap-0.5 relative group/sparkline">
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 opacity-0 group-hover/sparkline:opacity-100 transition-opacity duration-200 pointer-events-none z-10">
+                <div className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 shadow-xl whitespace-nowrap">
+                  <div className="text-[10px] text-slate-400 font-mono space-y-0.5">
+                    <div className="flex justify-between gap-3">
+                      <span className="text-slate-500">Prior:</span>
+                      <span className="text-slate-300">${priorPrice?.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <span className="text-slate-500">Last:</span>
+                      <span className="text-white font-medium">${lastPrice?.toFixed(2)}</span>
+                    </div>
+                  </div>
+                  <div className="absolute left-1/2 -translate-x-1/2 top-full border-4 border-transparent border-t-slate-700" />
+                </div>
+              </div>
               <Sparkline data={sparkData} color={sector.color} width={72} height={28} />
-              <span className="text-[8px] text-slate-600 font-mono text-right">prior→last</span>
+              <span className="text-[8px] text-slate-600 font-mono text-right group-hover/sparkline:text-slate-500 transition-colors">prior→last</span>
             </div>
           ) : (
             <span className="text-[9px] text-slate-600 self-end">—</span>
@@ -106,7 +130,7 @@ export default function SectorCard({ sector, quote, signal }: SectorCardProps) {
             </div>
             <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden">
               <div
-                className="h-full rounded-full transition-all duration-700"
+                className="h-full rounded-full transition-all duration-700 ease-out"
                 style={{ width: `${signal.confidence}%`, backgroundColor: sector.color }}
               />
             </div>

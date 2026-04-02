@@ -182,6 +182,90 @@ export default function HomePage() {
           ))}
         </section>
 
+        {/* Market Breadth */}
+        <section className="rounded-2xl border border-slate-800 p-5 bg-slate-900/30">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-sm font-bold text-white">Market Breadth</h2>
+              <p className="text-[10px] text-slate-500 mt-0.5">Session direction distribution across all sectors</p>
+            </div>
+            <div className="flex items-center gap-4 text-[10px] font-mono">
+              <div className="flex items-center gap-1.5">
+                <div className="w-2 h-2 rounded-full bg-green-400" />
+                <span className="text-slate-400">Up {signals.filter((s) => s.direction === 'BUY').length}</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="w-2 h-2 rounded-full bg-red-400" />
+                <span className="text-slate-400">Down {signals.filter((s) => s.direction === 'SELL').length}</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="w-2 h-2 rounded-full bg-yellow-400" />
+                <span className="text-slate-400">Flat {signals.filter((s) => s.direction === 'HOLD').length}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Horizontal stacked bar */}
+          <div className="w-full h-6 bg-slate-800 rounded-lg overflow-hidden flex">
+            {signals.filter((s) => s.direction === 'BUY').length > 0 && (
+              <div
+                className="h-full bg-gradient-to-r from-green-500 to-green-400 flex items-center justify-center transition-all duration-700"
+                style={{ width: `${(signals.filter((s) => s.direction === 'BUY').length / 11) * 100}%` }}
+              >
+                {signals.filter((s) => s.direction === 'BUY').length >= 3 && (
+                  <span className="text-[10px] font-bold text-white font-mono">{signals.filter((s) => s.direction === 'BUY').length}</span>
+                )}
+              </div>
+            )}
+            {signals.filter((s) => s.direction === 'HOLD').length > 0 && (
+              <div
+                className="h-full bg-gradient-to-r from-yellow-600 to-yellow-400 flex items-center justify-center transition-all duration-700"
+                style={{ width: `${(signals.filter((s) => s.direction === 'HOLD').length / 11) * 100}%` }}
+              >
+                {signals.filter((s) => s.direction === 'HOLD').length >= 2 && (
+                  <span className="text-[10px] font-bold text-white font-mono">{signals.filter((s) => s.direction === 'HOLD').length}</span>
+                )}
+              </div>
+            )}
+            {signals.filter((s) => s.direction === 'SELL').length > 0 && (
+              <div
+                className="h-full bg-gradient-to-r from-red-400 to-red-500 flex items-center justify-center transition-all duration-700"
+                style={{ width: `${(signals.filter((s) => s.direction === 'SELL').length / 11) * 100}%` }}
+              >
+                {signals.filter((s) => s.direction === 'SELL').length >= 3 && (
+                  <span className="text-[10px] font-bold text-white font-mono">{signals.filter((s) => s.direction === 'SELL').length}</span>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Sector list below bar */}
+          <div className="mt-4 flex flex-wrap gap-2">
+            {signals
+              .sort((a, b) => (b.sessionChangePct ?? 0) - (a.sessionChangePct ?? 0))
+              .map((signal) => {
+                const sector = SECTORS.find((s) => s.etf === signal.etf)
+                const isUp = signal.direction === 'BUY'
+                const isDown = signal.direction === 'SELL'
+                const color = isUp ? '#00d084' : isDown ? '#ff4757' : '#eab308'
+                return (
+                  <div
+                    key={signal.etf}
+                    className="flex items-center gap-1.5 px-2 py-1 rounded bg-slate-800/80 border border-slate-700/50"
+                  >
+                    <span className="text-xs">{sector?.icon}</span>
+                    <span className="text-[10px] font-mono text-slate-400">{signal.etf}</span>
+                    <span className="text-[10px] font-mono font-medium" style={{ color }}>
+                      {signal.sessionChangePct != null
+                        ? `${signal.sessionChangePct >= 0 ? '+' : ''}${signal.sessionChangePct.toFixed(2)}%`
+                        : '—'}
+                    </span>
+                  </div>
+                )
+              })}
+          </div>
+        </section>
+
         {/* Sector Grid */}
         <section>
           <div className="flex flex-wrap items-center justify-between gap-3 mb-5">

@@ -61,7 +61,7 @@ export default function SignalCard({ signal, color, compact = false }: SignalCar
         <div className="flex items-center gap-2 mb-1">
           <div className="w-full bg-slate-800 rounded-full h-1.5">
             <div
-              className="h-1.5 rounded-full transition-all"
+              className="h-1.5 rounded-full transition-all duration-500"
               style={{ width: `${signal.confidence}%`, backgroundColor: color }}
             />
           </div>
@@ -76,7 +76,10 @@ export default function SignalCard({ signal, color, compact = false }: SignalCar
   }
 
   return (
-    <div className={`rounded-2xl p-5 border ${config.bg} ${config.border}`}>
+    <div
+      className={`rounded-2xl p-5 border ${config.bg} ${config.border} animate-card-enter`}
+      style={{ boxShadow: `0 0 40px ${color}15, 0 4px 20px rgba(0,0,0,0.3)` }}
+    >
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
@@ -101,10 +104,11 @@ export default function SignalCard({ signal, color, compact = false }: SignalCar
               strokeLinecap="round"
               strokeDasharray={`${2 * Math.PI * 24}`}
               strokeDashoffset={`${2 * Math.PI * 24 * (1 - signal.confidence / 100)}`}
-              style={{ transition: 'stroke-dashoffset 0.8s ease' }}
+              className="animate-confidence-ring"
+              style={{ filter: `drop-shadow(0 0 4px ${color})` }}
             />
           </svg>
-          <div className="absolute inset-0 flex items-center justify-center">
+          <div className="absolute inset-0 flex items-center justify-center animate-pulse-subtle">
             <span className="text-xs font-bold text-white">{signal.confidence}%</span>
           </div>
         </div>

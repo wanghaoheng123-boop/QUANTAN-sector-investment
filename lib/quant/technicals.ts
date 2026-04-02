@@ -27,20 +27,31 @@ export function ema(values: number[], period: number): number[] {
   return out
 }
 
-/** Wilder RSI (14). */
+/** Wilder RSI (14).
+ * FIX H2: Properly uses FIRST `period` changes for initialization (not last),
+ * and applies Wilder's recursive smoothing formula.
+ * This matches the industry-standard Wilder RSI implementation.
+ */
 export function rsi(closes: number[], period = 14): number | null {
   if (closes.length < period + 1) return null
-  let gain = 0
-  let loss = 0
-  for (let i = closes.length - period; i < closes.length; i++) {
+  let avgGain = 0
+  let avgLoss = 0
+  // FIX: Use FIRST `period` changes (not last), initialized as simple average
+  for (let i = 1; i <= period; i++) {
     const ch = closes[i] - closes[i - 1]
-    if (ch >= 0) gain += ch
-    else loss -= ch
+    if (ch >= 0) avgGain += ch
+    else avgLoss -= ch
   }
-  gain /= period
-  loss /= period
-  if (loss === 0) return 100
-  const rs = gain / loss
+  avgGain /= period
+  avgLoss /= period
+  // FIX: Apply Wilder smoothing for subsequent bars (recursive formula)
+  for (let i = period + 1; i < closes.length; i++) {
+    const ch = closes[i] - closes[i - 1]
+    avgGain = (avgGain * (period - 1) + Math.max(0, ch)) / period
+    avgLoss = (avgLoss * (period - 1) + Math.max(0, -ch)) / period
+  }
+  if (avgLoss === 0) return 100
+  const rs = avgGain / avgLoss
   return 100 - 100 / (1 + rs)
 }
 
@@ -83,19 +94,29 @@ export function bollinger(closes: number[], period = 20, mult = 2): {
   return { mid, upper, lower, pctB }
 }
 
-/** Wilder ATR. */
+/** Wilder ATR (Average True Range).
+ * FIX H1: Properly initializes from FIRST `period` TRs (not last),
+ * and applies Wilder's recursive smoothing formula.
+ *
+ * Returns the most recent ATR value as a single number (backward compatible).
+ * For full time series, use the parallel implementation in lib/backtest/signals.ts atr().
+ */
 export function atr(bars: OhlcBar[], period = 14): number | null {
   if (bars.length < period + 1) return null
   const trs: number[] = []
   for (let i = 1; i < bars.length; i++) {
-    const h = bars[i].high
-    const l = bars[i].low
-    const pc = bars[i - 1].close
-    trs.push(Math.max(h - l, Math.abs(h - pc), Math.abs(l - pc)))
+    trs.push(Math.max(
+      bars[i].high - bars[i].low,
+      Math.abs(bars[i].high - bars[i - 1].close),
+      Math.abs(bars[i].low - bars[i - 1].close),
+    ))
   }
-  let sum = 0
-  for (let i = 0; i < period; i++) sum += trs[trs.length - period + i]
-  return sum / period
+  // FIX: Initialize from FIRST `period` TRs (not last), with Wilder smoothing
+  let avg = trs.slice(0, period).reduce((a, b) => a + b, 0) / period
+  for (let i = period; i < trs.length; i++) {
+    avg = (avg * (period - 1) + trs[i]) / period  // Wilder smoothing
+  }
+  return avg
 }
 
 export function maxDrawdown(closes: number[]): { maxDd: number; maxDdPct: number } | null {
@@ -132,18 +153,27 @@ export function sharpeRatio(dailyReturns: number[], rfAnnual = 0.04): number | n
   return (mean / sd) * Math.sqrt(252)
 }
 
-/** Sortino using downside deviation vs 0. */
+/** Sortino using downside deviation vs MAR.
+ * FIX C1: Denominator must be total observations N, not count of negative returns.
+ * Correct formula: DSd = sqrt(sum(min(0, r_i - MAR)^2) / N)
+ * where N = total number of daily return observations.
+ */
 export function sortinoRatio(dailyReturns: number[], marDaily = 0): number | null {
   if (dailyReturns.length < 20) return null
-  const downsideSq = dailyReturns
-    .map((x) => Math.min(0, x - marDaily))
-    .map((x) => x * x)
-  const neg = dailyReturns.map((x) => x - marDaily).filter((x) => x < 0)
-  if (neg.length === 0) return null
-  const d = Math.sqrt(downsideSq.reduce((s, x) => s + x, 0) / neg.length)
-  if (d === 0) return null
-  const mean = dailyReturns.reduce((a, b) => a + b, 0) / dailyReturns.length
-  return (mean / d) * Math.sqrt(252)
+  const n = dailyReturns.length
+  // Downside deviations: only negative excess returns over MAR
+  const downsideSq = dailyReturns.map((x) => {
+    const dev = Math.min(0, x - marDaily)
+    return dev * dev
+  })
+  // FIX: Use total N as denominator (not count of negative observations)
+  const downsideVariance = downsideSq.reduce((s, x) => s + x, 0) / n
+  const dsd = Math.sqrt(downsideVariance)
+  if (dsd === 0) return null
+  const mean = dailyReturns.reduce((a, b) => a + b, 0) / n
+  // Use excess return over MAR for numerator
+  const excessMean = mean - marDaily
+  return (excessMean / dsd) * Math.sqrt(252)
 }
 
 export function trendLabel(sma50: number | null, sma200: number | null, price: number): string {

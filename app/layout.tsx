@@ -5,6 +5,9 @@ import GlobalSearch from '@/components/GlobalSearch'
 import Providers from '@/components/Providers'
 import SafeAuth from '@/components/SafeAuth'
 import ComplianceBanner from '@/components/ComplianceBanner'
+import KeyboardShortcuts from '@/components/KeyboardShortcuts'
+import MarketStatus from '@/components/MarketStatus'
+import Breadcrumbs from '@/components/Breadcrumbs'
 
 export const viewport: Viewport = {
   themeColor: '#0a0a0f',
@@ -45,10 +48,13 @@ export default function RootLayout({
           {/* Global Nav */}
           <header className="sticky top-0 z-50 border-b border-slate-800/50 bg-slate-950/90 backdrop-blur-xl">
             <div className="max-w-7xl mx-auto px-4 min-h-14 flex flex-wrap items-center justify-between gap-y-2 py-2">
-              <a href="/" className="flex items-center gap-2.5">
-                <span className="font-bold text-white text-sm">QUANTAN</span>
-                <span className="text-slate-500 text-sm hidden sm:block">/ Market Intelligence</span>
-              </a>
+              <div className="flex items-center gap-4">
+                <a href="/" className="flex items-center gap-2.5">
+                  <span className="font-bold text-white text-sm">QUANTAN</span>
+                  <span className="text-slate-500 text-sm hidden sm:block">/ Market Intelligence</span>
+                </a>
+                <Breadcrumbs />
+              </div>
               <nav className="flex flex-wrap items-center gap-x-4 gap-y-2 sm:gap-6">
                 <Link href="/" className="text-sm font-medium text-slate-400 hover:text-white transition-colors">Markets</Link>
                 <Link href="/desk" className="text-sm font-medium text-slate-400 hover:text-white transition-colors">Desk</Link>
@@ -63,6 +69,7 @@ export default function RootLayout({
                 <Link href="/briefs" className="text-sm font-medium text-slate-400 hover:text-white transition-colors">Briefs</Link>
                 <GlobalSearch />
                 <SafeAuth />
+                <MarketStatus />
                 <div className="flex items-center gap-1.5 bg-green-500/10 px-2 py-1 rounded-md border border-green-500/20">
                   <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
                   LIVE
@@ -71,6 +78,7 @@ export default function RootLayout({
             </div>
           </header>
           <main>{children}</main>
+          <KeyboardShortcuts />
           <ComplianceBanner />
           <footer className="border-t border-slate-800 mt-12 py-10">
             <div className="max-w-7xl mx-auto px-4 text-center text-xs text-slate-600">

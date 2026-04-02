@@ -11,6 +11,8 @@ import type {
   SeriesMarker,
   SeriesMarkerPosition,
   SeriesMarkerShape,
+  CrosshairMode,
+  LineStyle,
 } from 'lightweight-charts'
 import {
   CHART_EMA_COLORS,
@@ -18,6 +20,9 @@ import {
   type ChartEmaKey,
   type ChartEmaPeriod,
 } from '@/lib/chartEma'
+
+const TIMEFRAMES = ['1D', '1W', '1M', '3M', '6M', '1Y', 'ALL'] as const
+type Timeframe = typeof TIMEFRAMES[number]
 
 interface Candle {
   time: string
@@ -68,6 +73,8 @@ interface KLineChartProps {
   /** Fires whenever a user toggles an indicator via the chart overlay buttons.
    *  Use this to sync the external indicator selection state (e.g. for a side panel). */
   onIndicatorsChange?: (vis: Record<VisKey, boolean>) => void
+  /** Callback when user selects a timeframe */
+  onTimeframeChange?: (tf: Timeframe) => void
 }
 
 const DEFAULT_INDICATORS: Required<KLineIndicatorFlags> = {
@@ -303,10 +310,21 @@ export default function KLineChart({
 
   /** Bumped when async chart `init()` finishes so the data effect runs after `candleRef` exists. */
   const [chartReadyGen, setChartReadyGen] = useState(0)
+  const [selectedTimeframe, setSelectedTimeframe] = useState<Timeframe>('3M')
 
   const indicators = useMemo(() => indicatorsProp, [indicatorsProp])
 
   const [vis, setVis] = useState<Record<VisKey, boolean>>(() => buildVisFromProps(indicatorsProp))
+
+  const [crosshairData, setCrosshairData] = useState<{
+    price: number
+    time: string
+    open: number
+    high: number
+    low: number
+    close: number
+    volume: number
+  } | null>(null)
 
   useEffect(() => {
     setVis(buildVisFromProps(indicatorsProp))
@@ -353,13 +371,48 @@ export default function KLineChart({
         grid: { vertLines: { color: '#1e1e2e' }, horzLines: { color: '#1e1e2e' } },
         crosshair: {
           mode: CrosshairMode.Normal,
-          vertLine: { color: '#334155', labelBackgroundColor: '#1e293b' },
-          horzLine: { color: '#334155', labelBackgroundColor: '#1e293b' },
+          vertLine: {
+            color: '#64748b',
+            labelBackgroundColor: '#0f172a',
+            lineStyle: LineStyle.Dashed,
+            lineWidth: 1,
+            labelVisible: true,
+            showLabelOnlyOnLastLine: true,
+          },
+          horzLine: {
+            color: '#64748b',
+            labelBackgroundColor: '#0f172a',
+            lineStyle: LineStyle.Dashed,
+            lineWidth: 1,
+            labelVisible: true,
+            showLabelOnlyOnLastLine: true,
+          },
         },
         rightPriceScale: { borderColor: '#1e1e2e' },
         timeScale: { borderColor: '#1e1e2e', timeVisible: true, secondsVisible: false, rightOffset: 5 },
         width: containerRef.current.clientWidth,
         height: showRSI ? 280 : 380,
+      })
+
+      // Subscribe to crosshair move for OHLCV tooltip
+      main.subscribeCrosshairMove((param) => {
+        if (!param.time || !param.seriesData.size) {
+          setCrosshairData(null)
+          return
+        }
+        const candleData = param.seriesData.get(candleRef.current)
+        const volumeData = param.seriesData.get(volumeRef.current)
+        if (candleData && 'open' in candleData) {
+          setCrosshairData({
+            time: String(param.time),
+            open: candleData.open,
+            high: candleData.high,
+            low: candleData.low,
+            close: candleData.close,
+            price: candleData.close,
+            volume: volumeData && 'value' in volumeData ? volumeData.value : 0,
+          })
+        }
       })
       chartRef.current = main
 
@@ -636,11 +689,12 @@ export default function KLineChart({
     const volArr = candles.map((c, i) => {
       const isUp = c.close >= c.open
       const isUnusual = volSMA[i] && c.volume > volSMA[i] * 2
-      const baseColor = isUp ? '#00d084' : '#ff4757'
+      // Vivid green/red for up/down bars, brighter for unusual volume
+      const baseColor = isUp ? '#22c55e' : '#ef4444'
       return {
         time: c.time as Time,
         value: c.volume,
-        color: isUnusual ? baseColor + 'aa' : baseColor + '30',
+        color: isUnusual ? baseColor + 'dd' : baseColor + '60',
       }
     }) as HistogramData<Time>[]
 
@@ -788,6 +842,11 @@ export default function KLineChart({
     onIndicatorsChange?.(next)
   }, [onIndicatorsChange])
 
+  const handleTimeframeChange = useCallback((tf: Timeframe) => {
+    setSelectedTimeframe(tf)
+    onTimeframeChange?.(tf)
+  }, [onTimeframeChange])
+
   const latestCandle = candles[candles.length - 1]
   const isUp = latestCandle ? latestCandle.close >= latestCandle.open : true
   const priceStr = latestCandle
@@ -811,8 +870,54 @@ export default function KLineChart({
 
   return (
     <div className="relative select-none">
+      {/* ── Timeframe Selector ── */}
+      <div className="flex items-center gap-1 px-3 py-2 bg-slate-950/80 border-b border-slate-800/50">
+        {TIMEFRAMES.map((tf) => (
+          <button
+            key={tf}
+            onClick={() => handleTimeframeChange(tf)}
+            className={`px-2.5 py-1 rounded text-[11px] font-mono font-medium transition-all ${
+              selectedTimeframe === tf
+                ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40'
+                : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/50 border border-transparent'
+            }`}
+          >
+            {tf}
+          </button>
+        ))}
+        <div className="ml-auto flex items-center gap-2">
+          {/* VP hint */}
+          <span className="text-[10px] text-slate-600 font-mono">VP</span>
+          <span className="text-[10px] text-slate-700">|</span>
+          {/* Crosshair OHLCV display */}
+          {crosshairData ? (
+            <div className="flex items-center gap-3 text-[10px] font-mono">
+              <span className="text-slate-400">
+                O <span className="text-slate-300">{crosshairData.open.toFixed(2)}</span>
+              </span>
+              <span className="text-slate-400">
+                H <span className="text-green-400">{crosshairData.high.toFixed(2)}</span>
+              </span>
+              <span className="text-slate-400">
+                L <span className="text-red-400">{crosshairData.low.toFixed(2)}</span>
+              </span>
+              <span className="text-slate-400">
+                C <span className={crosshairData.close >= crosshairData.open ? 'text-green-400' : 'text-red-400'}>{crosshairData.close.toFixed(2)}</span>
+              </span>
+              <span className="text-slate-400">
+                Vol <span className="text-slate-300">{crosshairData.volume >= 1000000 ? (crosshairData.volume / 1000000).toFixed(2) + 'M' : crosshairData.volume >= 1000 ? (crosshairData.volume / 1000).toFixed(1) + 'K' : crosshairData.volume.toFixed(0)}</span>
+              </span>
+            </div>
+          ) : (
+            <div className="text-[10px] font-mono text-slate-600">
+              {priceStr} {isUp ? '+' : ''}{chgPct}%
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* ── Enhanced legend with price / change / volume ── */}
-      <div className="absolute top-3 left-3 right-3 z-10 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs bg-slate-950/80 backdrop-blur-sm px-3 py-2 rounded-lg border border-slate-800/50 max-h-[min(40vh,220px)] overflow-y-auto">
+      <div className="absolute top-[52px] left-3 right-3 z-10 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs bg-slate-950/80 backdrop-blur-sm px-3 py-2 rounded-lg border border-slate-800/50 max-h-[min(40vh,220px)] overflow-y-auto">
         {/* Live price summary */}
         <span className={`text-sm font-mono font-bold mr-1 ${isUp ? 'text-green-400' : 'text-red-400'}`}>
           {isUp ? '▲' : '▼'} {priceStr}
@@ -846,7 +951,6 @@ export default function KLineChart({
           <span className="text-green-400 text-[10px]">▲</span>
           <span className="text-slate-400">News</span>
         </span>
-        {/* Indicator toggle buttons have been moved to the right-side IndicatorPanel */}
       </div>
 
       <div ref={containerRef} className="w-full rounded-t-lg overflow-hidden min-h-[200px]" />
