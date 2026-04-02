@@ -1,22 +1,22 @@
 /**
  * GET /api/backtest/live
- * Returns CURRENT regime + signal for all 56 instruments using latest daily close.
- * Uses Yahoo Finance (stocks) + CoinGecko (BTC).
- * Cached for 60s. Filter with ?tickers=AAPL,NVDA
+ * Returns CURRENT regime + signal for all 56 instruments using the latest
+ * available daily close from locally pre-fetched data files.
+ * No external API calls — works in any environment.
+ * Cached for 60 seconds.
  */
 
 import { NextResponse } from 'next/server'
 import { SECTORS } from '@/lib/sectors'
-import { loadStockHistory, loadBtcHistory, barsFromRows } from '@/lib/backtest/dataLoader'
+import { loadStockHistory, loadBtcHistory, availableTickers } from '@/lib/backtest/dataLoader'
 import {
   regimeSignal,
-  sma,
-  ema,
   rsi,
   macdFn,
   atr,
   bollinger,
 } from '@/lib/backtest/signals'
+import type { OhlcBar } from '@/lib/quant/technicals'
 
 // ─── In-memory cache ──────────────────────────────────────────────────────────
 
@@ -44,21 +44,17 @@ interface InstrumentSignal {
   KellyFraction: number
   regimeColor: string
   candles: number
+  lastDate: string | null
 }
 
-// ─── Stock signal ───────────────────────────────────────────────────────────
+// ─── Compute signal for one stock ────────────────────────────────────────────
 
-async function stockSignal(ticker: string, sector: string): Promise<InstrumentSignal | null> {
-  let rows
-  try {
-    rows = await loadStockHistory(ticker, 1825)
-  } catch {
-    return null
-  }
+function stockSignal(ticker: string, sector: string): InstrumentSignal | null {
+  const rows = loadStockHistory(ticker)
   if (rows.length < 200) return null
 
-  const closes = rows.map(r => r.close)
-  const bars = barsFromRows(rows)
+  const closes = rows.map((r) => r.close)
+  const bars: OhlcBar[] = rows.map(({ open, high, low, close }) => ({ open, high, low, close }))
   const price = closes[closes.length - 1]
   const prevPrice = closes[closes.length - 2]
   const changePct = prevPrice ? ((price - prevPrice) / prevPrice) * 100 : null
@@ -95,6 +91,10 @@ async function stockSignal(ticker: string, sector: string): Promise<InstrumentSi
     FIRST_DIP: '#84cc16', DEEP_DIP: '#eab308', BEAR_ALERT: '#f97316',
     CRASH_ZONE: '#ef4444', INSUFFICIENT_DATA: '#64748b',
   }
+
+  const lastDate = rows.length > 0
+    ? new Date(rows[rows.length - 1].time * 1000).toISOString().split('T')[0]
+    : null
 
   return {
     ticker, sector, price, changePct,
@@ -107,22 +107,18 @@ async function stockSignal(ticker: string, sector: string): Promise<InstrumentSi
     action, confidence, KellyFraction: kelly,
     regimeColor: colorMap[reg.zone] ?? '#64748b',
     candles: closes.length,
+    lastDate,
   }
 }
 
-// ─── BTC signal ────────────────────────────────────────────────────────────
+// ─── Compute signal for BTC ──────────────────────────────────────────────────
 
-async function btcSignal(): Promise<InstrumentSignal | null> {
-  let rows
-  try {
-    rows = await loadBtcHistory(1825)
-  } catch {
-    return null
-  }
+function btcSignal(): InstrumentSignal | null {
+  const rows = loadBtcHistory()
   if (rows.length < 200) return null
 
-  const closes = rows.map(r => r.close)
-  const bars = barsFromRows(rows)
+  const closes = rows.map((r) => r.close)
+  const bars: OhlcBar[] = rows.map(({ open, high, low, close }) => ({ open, high, low, close }))
   const price = closes[closes.length - 1]
   const prevPrice = closes[closes.length - 2]
   const changePct = prevPrice ? ((price - prevPrice) / prevPrice) * 100 : null
@@ -160,6 +156,10 @@ async function btcSignal(): Promise<InstrumentSignal | null> {
     CRASH_ZONE: '#ef4444', INSUFFICIENT_DATA: '#64748b',
   }
 
+  const lastDate = rows.length > 0
+    ? new Date(rows[rows.length - 1].time * 1000).toISOString().split('T')[0]
+    : null
+
   return {
     ticker: 'BTC', sector: 'Crypto', price, changePct,
     zone: reg.zone, dipSignal: reg.dipSignal,
@@ -171,6 +171,7 @@ async function btcSignal(): Promise<InstrumentSignal | null> {
     action, confidence, KellyFraction: kelly,
     regimeColor: colorMap[reg.zone] ?? '#64748b',
     candles: closes.length,
+    lastDate,
   }
 }
 
@@ -180,7 +181,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const tickersParam = searchParams.get('tickers')
   const specificTickers = tickersParam
-    ? tickersParam.split(',').map(t => t.trim().toUpperCase())
+    ? tickersParam.split(',').map((t) => t.trim().toUpperCase())
     : null
 
   // Serve from cache if fresh
@@ -190,35 +191,23 @@ export async function GET(request: Request) {
     })
   }
 
-  const startMs = Date.now()
   const results: InstrumentSignal[] = []
-
-  // Run all in parallel with 25s timeout
-  const tasks: Promise<void>[] = []
+  const localTickers = availableTickers()
+  const localSet = new Set(localTickers.map((t) => t.toUpperCase()))
 
   for (const sector of SECTORS) {
     for (const ticker of sector.topHoldings) {
       if (specificTickers && !specificTickers.includes(ticker)) continue
-      tasks.push(
-        stockSignal(ticker, sector.name)
-          .then(s => { if (s) results.push(s) })
-          .catch(() => {/* skip */})
-      )
+      if (!localSet.has(ticker.toUpperCase())) continue
+      const s = stockSignal(ticker, sector.name)
+      if (s) results.push(s)
     }
   }
 
   if (!specificTickers || specificTickers.includes('BTC')) {
-    tasks.push(
-      btcSignal()
-        .then(s => { if (s) results.push(s) })
-        .catch(() => {/* skip */})
-    )
+    const s = btcSignal()
+    if (s) results.push(s)
   }
-
-  await Promise.race([
-    Promise.allSettled(tasks),
-    new Promise<void>(resolve => setTimeout(resolve, 25_000)),
-  ])
 
   // Sort: BUY first, then HOLD, then SELL; within each group by confidence desc
   const actionOrder = { BUY: 0, HOLD: 1, SELL: 2 }
@@ -230,12 +219,12 @@ export async function GET(request: Request) {
 
   const data = {
     computedAt: new Date().toISOString(),
-    computationTimeMs: Date.now() - startMs,
+    dataSource: 'local',
     instruments: results,
     summary: {
-      buySignals: results.filter(r => r.action === 'BUY').length,
-      holdSignals: results.filter(r => r.action === 'HOLD').length,
-      sellSignals: results.filter(r => r.action === 'SELL').length,
+      buySignals: results.filter((r) => r.action === 'BUY').length,
+      holdSignals: results.filter((r) => r.action === 'HOLD').length,
+      sellSignals: results.filter((r) => r.action === 'SELL').length,
     },
   }
 

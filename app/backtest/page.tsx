@@ -6,31 +6,28 @@ import EquityCurveChart from '@/components/backtest/EquityCurveChart'
 import SectorHeatmap from '@/components/backtest/SectorHeatmap'
 import InstrumentTable from '@/components/backtest/InstrumentTable'
 import TradeLog from '@/components/backtest/TradeLog'
-import type { BacktestResult, Trade } from '@/lib/backtest/engine'
-
-interface SectorSummary {
-  return: number
-  annReturn: number
-  tickers: string[]
-}
-
-interface PortfolioSummary {
-  avgReturn: number
-  avgAnnReturn: number
-  totalTrades: number
-  winRate: number
-  maxPortfolioDd: number
-  bnhAvg: number
-  alpha: number
-}
+import type { BacktestResult } from '@/lib/backtest/engine'
 
 interface BacktestData {
   runId: string
   computedAt: string
   instruments: { ticker: string; sector: string; candles: number }[]
   results: BacktestResult[]
-  portfolio: PortfolioSummary
-  sectorSummary: Record<string, SectorSummary>
+  portfolio: {
+    avgReturn: number
+    avgAnnReturn: number
+    bnhAvg: number
+    alpha: number
+    sharpeRatio: number | null
+    sortinoRatio: number | null
+    maxPortfolioDd: number
+    winRate: number
+    profitFactor: number
+    avgTradeReturn: number
+    totalTrades: number
+    totalInstruments: number
+    sectorSummary: Record<string, { totalReturn: number; annReturn: number; tickers: string[] }>
+  }
 }
 
 // ─── Number formatters ─────────────────────────────────────────────────────────
@@ -114,7 +111,8 @@ export default function BacktestPage() {
     )
   }
 
-  const { results, portfolio, sectorSummary, computedAt } = data
+  const { results, portfolio, computedAt } = data
+  const sectorSummary = portfolio.sectorSummary
   const INITIAL_CAPITAL = 100_000
 
   const sectorColors: Record<string, string> = {

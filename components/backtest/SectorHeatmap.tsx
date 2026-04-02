@@ -1,17 +1,25 @@
 'use client'
 
 interface SectorSummary {
-  return: number
+  totalReturn: number
   annReturn: number
   tickers: string[]
 }
 
 interface Props {
-  sectorSummary: Record<string, SectorSummary>
+  sectorSummary: Record<string, SectorSummary> | null
   sectorColors: Record<string, string>
 }
 
 export default function SectorHeatmap({ sectorSummary, sectorColors }: Props) {
+  if (!sectorSummary) {
+    return (
+      <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-6 flex items-center justify-center h-32">
+        <p className="text-slate-500 text-sm">Loading sector data…</p>
+      </div>
+    )
+  }
+
   const entries = Object.entries(sectorSummary).sort((a, b) => b[1].annReturn - a[1].annReturn)
 
   return (
@@ -42,7 +50,7 @@ export default function SectorHeatmap({ sectorSummary, sectorColors }: Props) {
                 {isPositive ? '+' : '−'}{(ret * 100).toFixed(2)}%
               </div>
               <div className="text-[10px] text-slate-500 mt-1">
-                {isPositive ? '+' : '−'}{(data.return * 100).toFixed(2)}% total
+                {isPositive ? '+' : '−'}{(data.totalReturn * 100).toFixed(2)}% total
               </div>
               {/* Bar visualization */}
               <div className="mt-2 h-1 bg-slate-700/50 rounded-full overflow-hidden">

@@ -234,6 +234,13 @@ export function backtestInstrument(
     if (d > maxDd) maxDd = d
   }
 
+  // Compute daily returns from equity curve (for Sharpe/Sortino)
+  const dailyReturns: number[] = []
+  for (let i = 1; i < state.equityHistory.length; i++) {
+    const ret = (state.equityHistory[i] - state.equityHistory[i - 1]) / state.equityHistory[i - 1]
+    if (Number.isFinite(ret)) dailyReturns.push(ret)
+  }
+
   // Win rate
   const closed = state.closedTrades
   const winRate = closed.length > 0 ? state.tradeWins / closed.length : 0
@@ -242,9 +249,9 @@ export function backtestInstrument(
 
   // Sharpe (annualized, daily)
   let sharpe: number | null = null
-  if (state.dailyReturns.length > 30) {
-    const mean = state.dailyReturns.reduce((a, b) => a + b, 0) / state.dailyReturns.length
-    const v = state.dailyReturns.reduce((s, x) => s + (x - mean) ** 2, 0) / Math.max(1, state.dailyReturns.length - 1)
+  if (dailyReturns.length > 30) {
+    const mean = dailyReturns.reduce((a, b) => a + b, 0) / dailyReturns.length
+    const v = dailyReturns.reduce((s, x) => s + (x - mean) ** 2, 0) / Math.max(1, dailyReturns.length - 1)
     const sd = Math.sqrt(Math.max(v, 0))
     if (sd > 1e-10) {
       const rfD = 0.04 / 252
@@ -254,12 +261,12 @@ export function backtestInstrument(
 
   // Sortino
   let sortino: number | null = null
-  if (state.dailyReturns.length > 30) {
-    const neg = state.dailyReturns.filter(x => x < 0)
+  if (dailyReturns.length > 30) {
+    const neg = dailyReturns.filter(x => x < 0)
     if (neg.length > 0) {
       const dsd = Math.sqrt(neg.reduce((s, x) => s + x * x, 0) / neg.length)
       if (dsd > 1e-10) {
-        const mean = state.dailyReturns.reduce((a, b) => a + b, 0) / state.dailyReturns.length
+        const mean = dailyReturns.reduce((a, b) => a + b, 0) / dailyReturns.length
         const rfD = 0.04 / 252
         sortino = ((mean - rfD) / dsd) * Math.sqrt(252)
       }
@@ -275,7 +282,7 @@ export function backtestInstrument(
     maxDrawdown: maxDd, winRate, profitFactor, avgTradeReturn,
     totalTrades: closed.length, closedTrades: closed,
     openTrade: null,
-    dailyReturns: state.dailyReturns,
+    dailyReturns,
     equityCurve: state.equityHistory,
     days, confidenceAvg: state.confidenceCount > 0 ? state.confidenceSum / state.confidenceCount : 0,
     stopLossPct: cfg.stopLossPct,
@@ -334,8 +341,33 @@ export function aggregatePortfolio(results: BacktestResult[], initialCapital: nu
   const avgAnnReturn = results.reduce((s, r) => s + r.annualizedReturn, 0) / Math.max(results.length, 1)
   const bnhAvg = results.reduce((s, r) => s + r.bnhReturn, 0) / Math.max(results.length, 1)
 
+  // Aggregate all daily returns across instruments for portfolio-level Sharpe/Sortino
+  const allDailyReturns: number[] = []
+  for (const r of results) {
+    for (const d of r.dailyReturns) {
+      if (Number.isFinite(d)) allDailyReturns.push(d)
+    }
+  }
+
   let sharpe: number | null = null
   let sortino: number | null = null
+  if (allDailyReturns.length > 30) {
+    const mean = allDailyReturns.reduce((a, b) => a + b, 0) / allDailyReturns.length
+    const variance = allDailyReturns.reduce((s, x) => s + (x - mean) ** 2, 0) / Math.max(1, allDailyReturns.length - 1)
+    const sd = Math.sqrt(Math.max(variance, 0))
+    if (sd > 1e-10) {
+      const rfD = 0.04 / 252
+      sharpe = ((mean - rfD) / sd) * Math.sqrt(252)
+    }
+    const negReturns = allDailyReturns.filter(x => x < 0)
+    if (negReturns.length > 0) {
+      const dsd = Math.sqrt(negReturns.reduce((s, x) => s + x * x, 0) / negReturns.length)
+      if (dsd > 1e-10) {
+        const rfD = 0.04 / 252
+        sortino = ((mean - rfD) / dsd) * Math.sqrt(252)
+      }
+    }
+  }
 
   const finalCapital = initialCapital * (1 + avgReturn)
 

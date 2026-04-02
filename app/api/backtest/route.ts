@@ -1,14 +1,15 @@
 /**
  * GET /api/backtest
  * Returns full backtest results for all 56 instruments (55 sector stocks + BTC).
+ * Reads from locally pre-fetched JSON data files (scripts/backtestData/).
  * Cached for 1 hour. Filter with ?tickers=AAPL,NVDA
  *
- * POST /api/backtest — recompute (invalidates cache)
+ * POST /api/backtest — recompute (clears cache)
  */
 
 import { NextResponse } from 'next/server'
 import { SECTORS } from '@/lib/sectors'
-import { loadStockHistory, loadBtcHistory } from '@/lib/backtest/dataLoader'
+import { loadStockHistory, loadBtcHistory, availableTickers } from '@/lib/backtest/dataLoader'
 import { backtestInstrument, aggregatePortfolio } from '@/lib/backtest/engine'
 
 // ─── In-memory cache ──────────────────────────────────────────────────────────
@@ -21,50 +22,85 @@ const CACHE_TTL_MS = 60 * 60 * 1000 // 1 hour
 async function runBacktest(filterTickers?: string[]): Promise<{
   runId: string
   computedAt: string
+  dataSource: 'local'
   instruments: { ticker: string; sector: string; candles: number }[]
   results: ReturnType<typeof backtestInstrument>[]
-  portfolio: ReturnType<typeof aggregatePortfolio>
+  portfolio: {
+    avgReturn: number
+    avgAnnReturn: number
+    bnhAvg: number
+    alpha: number
+    sharpeRatio: number | null
+    sortinoRatio: number | null
+    maxPortfolioDd: number
+    winRate: number
+    profitFactor: number
+    avgTradeReturn: number
+    totalTrades: number
+    totalInstruments: number
+    sectorSummary: Record<string, { totalReturn: number; annReturn: number; tickers: string[] }>
+  }
 }> {
   const instruments: { ticker: string; sector: string; candles: number }[] = []
   const results: ReturnType<typeof backtestInstrument>[] = []
 
+  // Check what's available locally
+  const localTickers = availableTickers()
+  const available = new Set(localTickers.map(t => t.toUpperCase()))
+
   for (const sector of SECTORS) {
     for (const ticker of sector.topHoldings) {
       if (filterTickers && !filterTickers.includes(ticker)) continue
-      try {
-        const rows = await loadStockHistory(ticker, 1825)
-        instruments.push({ ticker, sector: sector.name, candles: rows.length })
-        if (rows.length >= 100) {
-          results.push(backtestInstrument(ticker, sector.name, rows))
-        }
-      } catch (e) {
-        console.error(`[backtest] ${ticker}:`, e)
+      if (!available.has(ticker.toUpperCase())) {
         instruments.push({ ticker, sector: sector.name, candles: 0 })
+        continue
+      }
+      const rows = loadStockHistory(ticker)
+      instruments.push({ ticker, sector: sector.name, candles: rows.length })
+      if (rows.length >= 100) {
+        results.push(backtestInstrument(ticker, sector.name, rows))
       }
     }
   }
 
   // BTC
   if (!filterTickers || filterTickers.includes('BTC')) {
-    try {
-      const btcRows = await loadBtcHistory(1825)
-      if (btcRows.length > 0) {
-        instruments.push({ ticker: 'BTC', sector: 'Crypto', candles: btcRows.length })
-        results.push(backtestInstrument('BTC', 'Crypto', btcRows))
-      }
-    } catch (e) {
-      console.error('[backtest] BTC:', e)
+    const btcRows = loadBtcHistory()
+    instruments.push({ ticker: 'BTC', sector: 'Crypto', candles: btcRows.length })
+    if (btcRows.length >= 100) {
+      results.push(backtestInstrument('BTC', 'Crypto', btcRows))
     }
   }
 
   const portfolio = aggregatePortfolio(results, 100_000)
 
+  // Reshape to what the frontend expects
+  const bnhAvg = results.length > 0
+    ? results.reduce((s, r) => s + r.bnhReturn, 0) / results.length
+    : 0
+  const alpha = portfolio.totalReturn - bnhAvg
+
   return {
     runId: `run_${Date.now()}`,
     computedAt: new Date().toISOString(),
+    dataSource: 'local',
     instruments,
     results,
-    portfolio,
+    portfolio: {
+      avgReturn: portfolio.totalReturn,
+      avgAnnReturn: portfolio.annualizedReturn,
+      bnhAvg,
+      alpha,
+      sharpeRatio: portfolio.sharpeRatio,
+      sortinoRatio: portfolio.sortinoRatio,
+      maxPortfolioDd: portfolio.maxDrawdown,
+      winRate: portfolio.winRate,
+      profitFactor: portfolio.profitFactor,
+      avgTradeReturn: portfolio.avgTradeReturn,
+      totalTrades: portfolio.totalTrades,
+      totalInstruments: portfolio.totalInstruments,
+      sectorSummary: portfolio.sectorReturns,
+    },
   }
 }
 
@@ -74,10 +110,10 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const tickersParam = searchParams.get('tickers')
   const filterTickers = tickersParam
-    ? tickersParam.split(',').map(t => t.trim().toUpperCase())
+    ? tickersParam.split(',').map((t) => t.trim().toUpperCase())
     : undefined
 
-  // Serve from cache only for full (unfiltered) runs
+  // Serve from cache for full (unfiltered) runs
   if (!filterTickers && cache && Date.now() - cache.timestamp < CACHE_TTL_MS) {
     return NextResponse.json(cache.data)
   }
