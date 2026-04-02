@@ -185,16 +185,14 @@ export async function GET(
       (q as Record<string, unknown>).regularMarketChangePercent
     )
 
-    function parseQuoteTime(ts: unknown): string | null {
+    const parseQuoteTime = (ts: unknown): string | null => {
       if (ts == null) return null
-      // ts can be a Date object, an ISO string, or a Unix timestamp (seconds)
       if (ts instanceof Date) return ts.toISOString()
       if (typeof ts === 'string') {
         const d = new Date(ts)
         return Number.isFinite(d.getTime()) ? d.toISOString() : null
       }
       if (typeof ts === 'number') {
-        // Seconds (Unix epoch) — multiply to ms; detect if already ms by magnitude
         const ms = ts > 1e12 ? ts : ts * 1000
         return Number.isFinite(ms) ? new Date(ms).toISOString() : null
       }
