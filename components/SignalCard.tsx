@@ -105,7 +105,12 @@ export default function SignalCard({ signal, color, compact = false }: SignalCar
               strokeDasharray={`${2 * Math.PI * 24}`}
               strokeDashoffset={`${2 * Math.PI * 24 * (1 - signal.confidence / 100)}`}
               className="animate-confidence-ring"
-              style={{ filter: `drop-shadow(0 0 4px ${color})` }}
+              style={{
+                filter: `drop-shadow(0 0 4px ${color})`,
+                // Ring animation ends at this offset; without it, keyframes fallback 150.79
+                // hides the full ring after forwards fill.
+                ['--ring-offset' as string]: `${2 * Math.PI * 24 * (1 - signal.confidence / 100)}`,
+              }}
             />
           </svg>
           <div className="absolute inset-0 flex items-center justify-center animate-pulse-subtle">
