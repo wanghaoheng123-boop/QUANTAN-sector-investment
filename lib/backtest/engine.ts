@@ -149,10 +149,9 @@ export function backtestInstrument(
     const signalPrice = rows[i].close
     // Execute at TOMORROW's open price (realistic execution model)
     const nextOpen = rows[i + 1].open
-    // Entry price includes small slippage (realistic friction)
-    const entryPrice = rows[i].action === 'BUY'
-      ? nextOpen * (1 + ENTRY_SLIPPAGE_BPS / 10000)   // slight upward slippage for buys
-      : nextOpen * (1 - ENTRY_SLIPPAGE_BPS / 10000)   // slight downward for sells
+    // Entry price + slippage is computed only when opening a BUY (after signal below).
+    // OhlcvRow has no `action`; using rows[i].action was always undefined and forced
+    // the sell branch (downward slippage), biasing long entries optimistically.
     // Use only data up to today (no look-ahead bias in signal)
     const lookbackCloses = closes.slice(0, i + 1)
     const lookbackBars = bars.slice(0, i + 1)
@@ -268,6 +267,8 @@ export function backtestInstrument(
     if (signal.action === 'BUY' && !state.openTrade) {
       const kellyFrac = Math.min(signal.KellyFraction, 0.50)
       const allocation = state.capital * kellyFrac
+      // Long entries: pay slightly above the open (adverse selection / friction).
+      const entryPrice = nextOpen * (1 + ENTRY_SLIPPAGE_BPS / 10000)
       const shares = Math.floor(allocation / entryPrice)
       if (shares <= 0) {
         state.equityHistory.push(currentEquity(state))
@@ -478,10 +479,16 @@ export function aggregatePortfolio(results: BacktestResult[], initialCapital: nu
     // Combine all equity curves into a single portfolio equity curve.
     // Each equity curve starts at initialCapital. We sum the $ values.
     // This represents a portfolio with equal dollar allocation to each instrument.
+    // Carry forward each instrument's last equity after its series ends so shorter
+    // histories (e.g. stocks ~252d/yr vs BTC ~365d/yr) do not drop to zero and
+    // create a fake cliff in combined portfolio equity.
     const combinedEquity: number[] = new Array(maxLen).fill(0)
     for (const r of results) {
-      for (let i = 0; i < r.equityCurve.length; i++) {
-        combinedEquity[i] += r.equityCurve[i]
+      const curve = r.equityCurve
+      if (curve.length === 0) continue
+      const lastVal = curve[curve.length - 1]
+      for (let i = 0; i < maxLen; i++) {
+        combinedEquity[i] += i < curve.length ? curve[i] : lastVal
       }
     }
 

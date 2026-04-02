@@ -39,12 +39,12 @@ const INDICATOR_DEFS: IndicatorDef[] = [
     key: `ema${p}` as ChartEmaKey,
     label: `EMA ${p}`,
     color: EMA_COLOR[p] ?? 'bg-slate-400',
-    dotColor: EMA_COLOR[p]?.replace('bg-', 'text-') ?? 'text-slate-400',
+    dotColor: EMA_COLOR[p] ?? 'bg-slate-400',
   })),
-  { key: 'vwap', label: 'VWAP', color: 'bg-cyan-500', dotColor: 'text-cyan-500' },
-  { key: 'bollingerBands', label: 'BB(20,2)', color: 'bg-amber-400/60', dotColor: 'text-amber-400' },
-  { key: 'fibonacci', label: 'Fib', color: 'bg-rose-400/60', dotColor: 'text-rose-400' },
-  { key: 'volSma', label: 'Vol SMA(20)', color: 'bg-indigo-400/60', dotColor: 'text-indigo-400' },
+  { key: 'vwap', label: 'VWAP', color: 'bg-cyan-500', dotColor: 'bg-cyan-500' },
+  { key: 'bollingerBands', label: 'BB(20,2)', color: 'bg-amber-400/60', dotColor: 'bg-amber-400' },
+  { key: 'fibonacci', label: 'Fib', color: 'bg-rose-400/60', dotColor: 'bg-rose-400' },
+  { key: 'volSma', label: 'Vol SMA(20)', color: 'bg-indigo-400/60', dotColor: 'bg-indigo-400' },
 ]
 
 interface IndicatorPanelProps {
