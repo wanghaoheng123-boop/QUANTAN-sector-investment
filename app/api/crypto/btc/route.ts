@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { aggregateCandlesToNMinutes } from '@/lib/cryptoCandleAggregate'
 
 const KRAKEN_OHLC = 'https://api.kraken.com/0/public/OHLC'
 const COINBASE_CANDLES = 'https://api.exchange.coinbase.com/products/BTC-USD/candles'
@@ -70,10 +69,10 @@ type CandleRow = {
  */
 async function fetchCoinGeckoOhlc(binanceInterval: string, limit: number): Promise<CandleRow[] | null> {
   const days: Record<string, number | 'max'> = {
+    '1m': 1,
     '5m': 1, '15m': 1, '1h': 7, '4h': 30,
     '1d': 365, '1w': 'max', '1M': 'max',
   }
-  if (binanceInterval === '1m' || binanceInterval === '3m') return null
   const d = days[binanceInterval] ?? 365
   const url = `https://api.coingecko.com/api/v3/coins/bitcoin/ohlc?vs_currency=usd&days=${d === 'max' ? 'max' : d}`
 
@@ -202,36 +201,8 @@ async function fetchKrakenOhlc(binanceInterval: string, limit: number): Promise<
 
 const INTERVAL_MAP: Record<string, string> = {
   '1m': '1m',
-  '3m': '3m',
   '5m': '5m', '15m': '15m', '1h': '1h', '4h': '4h',
   '1d': '1d', '1w': '1w', '1M': '1M',
-}
-
-async function fetch3mFrom1mSources(limit: number): Promise<{
-  candles: CandleRow[]
-  source: string
-  note: string
-} | null> {
-  const need = Math.min(720, Math.max(limit * 5, limit))
-  const kr = await fetchKrakenOhlc('1m', need)
-  if (kr?.length) {
-    const candles = aggregateCandlesToNMinutes(kr, 3).slice(-limit)
-    return {
-      candles,
-      source: 'Kraken Public API (1m → 3m)',
-      note: '3-minute bars aggregated from Kraken XBT/USD 1m OHLC.',
-    }
-  }
-  const cb = await fetchCoinbaseOhlc('1m', Math.min(300, need))
-  if (cb?.length) {
-    const candles = aggregateCandlesToNMinutes(cb, 3).slice(-limit)
-    return {
-      candles,
-      source: 'Coinbase Exchange (1m → 3m)',
-      note: '3-minute bars aggregated from Coinbase BTC-USD 1m candles.',
-    }
-  }
-  return null
 }
 
 export const dynamic = 'force-dynamic'
@@ -243,16 +214,42 @@ export async function GET(req: NextRequest) {
   const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 1000) : 500
   const binanceInterval = INTERVAL_MAP[interval] || '1d'
 
-  if (binanceInterval === '3m') {
-    const pack = await fetch3mFrom1mSources(limit)
-    if (pack?.candles.length) {
+  // ── 1m: CoinGecko OHLC is not true 1-minute — prefer Coinbase (60s) then Kraken ─
+  if (binanceInterval === '1m') {
+    const cb1 = await fetchCoinbaseOhlc('1m', limit)
+    if (cb1?.length) {
       return NextResponse.json(
         {
           symbol: SYMBOL,
-          interval: '3m',
-          candles: pack.candles,
-          source: pack.source,
-          note: pack.note,
+          interval: '1m',
+          candles: cb1,
+          source: 'Coinbase Exchange API (1m)',
+        },
+        { headers: { 'Cache-Control': 'no-store', 'CDN-Cache-Control': 'no-store' } }
+      )
+    }
+    const kr1 = await fetchKrakenOhlc('1m', limit)
+    if (kr1?.length) {
+      return NextResponse.json(
+        {
+          symbol: SYMBOL,
+          interval: '1m',
+          candles: kr1,
+          source: 'Kraken Public API (1m)',
+          note: 'Coinbase unavailable; served XBT/USD 1-minute OHLC from Kraken.',
+        },
+        { headers: { 'Cache-Control': 'no-store', 'CDN-Cache-Control': 'no-store' } }
+      )
+    }
+    const cg1 = await fetchCoinGeckoOhlc('1m', limit)
+    if (cg1?.length) {
+      return NextResponse.json(
+        {
+          symbol: SYMBOL,
+          interval: '1m',
+          candles: cg1,
+          source: 'CoinGecko (coarse fallback)',
+          note: 'True 1m unavailable; CoinGecko daily OHLC may be coarser than 1 minute.',
         },
         { headers: { 'Cache-Control': 'no-store', 'CDN-Cache-Control': 'no-store' } }
       )
@@ -260,41 +257,11 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(
       {
         error: 'btc_data_unavailable',
-        userMessage:
-          '3m BTC OHLC could not be built from 1m data (Kraken/Coinbase). Try 1m, 5m, or reload.',
+        userMessage: '1-minute BTC OHLC could not be loaded. Try again or pick 5m.',
       },
       { status: 503 }
     )
   }
-
-  if (binanceInterval === '1m') {
-    const kr = await fetchKrakenOhlc('1m', limit)
-    if (kr?.length) {
-      return NextResponse.json(
-        {
-          symbol: SYMBOL,
-          interval: '1m',
-          candles: kr,
-          source: 'Kraken Public API',
-        },
-        { headers: { 'Cache-Control': 'no-store', 'CDN-Cache-Control': 'no-store' } }
-      )
-    }
-    const cb = await fetchCoinbaseOhlc('1m', limit)
-    if (cb?.length) {
-      return NextResponse.json(
-        {
-          symbol: SYMBOL,
-          interval: '1m',
-          candles: cb,
-          source: 'Coinbase Exchange API',
-          note: 'Kraken unavailable; BTC-USD 1m candles from Coinbase.',
-        },
-        { headers: { 'Cache-Control': 'no-store', 'CDN-Cache-Control': 'no-store' } }
-      )
-    }
-  }
-
 
   // ── Primary: CoinGecko (globally accessible, no geo-blocking) ───────────────
   const cg = await fetchCoinGeckoOhlc(binanceInterval, limit)

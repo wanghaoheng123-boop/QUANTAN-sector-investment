@@ -65,20 +65,17 @@ interface KLineChartProps {
   range?: string
   showRSI?: boolean
   indicators?: KLineIndicatorFlags
-  /** Fires whenever a user toggles an indicator via the chart overlay buttons.
-   *  Use this to sync the external indicator selection state (e.g. for a side panel). */
-  onIndicatorsChange?: (vis: Record<VisKey, boolean>) => void
 }
 
 const DEFAULT_INDICATORS: Required<KLineIndicatorFlags> = {
   ema4: false, ema5: false, ema6: false, ema7: false, ema8: false,
-  ema9: true, ema10: false, ema12: false,
+  ema9: false, ema10: false, ema12: false,
   ema15: false, ema20: true, ema21: false, ema26: false,
   ema30: false, ema40: false,
   ema50: true, ema60: false,
   ema100: false,
   ema150: false,
-  ema200: true,
+  ema200: false,
   ema250: false,
   vwap: false,
   bollingerBands: false,
@@ -109,15 +106,13 @@ const EMA_LEGEND_TAILWIND: Record<ChartEmaPeriod, string> = {
 }
 
 function isEmaLineVisible(ind: KLineIndicatorFlags, period: ChartEmaPeriod): boolean {
-  if (period === 9) return ind.ema9 !== false
   if (period === 20) return ind.ema20 !== false
   if (period === 50) return ind.ema50 !== false
-  if (period === 200) return ind.ema200 !== false
   const k = `ema${period}` as keyof KLineIndicatorFlags
   return ind[k] === true
 }
 
-type VisKey = ChartEmaKey | 'vwap' | 'bollingerBands' | 'fibonacci' | 'volSma'
+type VisKey = ChartEmaKey | 'vwap' | 'bollingerBands' | 'fibonacci'
 
 function buildVisFromProps(ind: KLineIndicatorFlags): Record<VisKey, boolean> {
   const out = {} as Record<VisKey, boolean>
@@ -128,7 +123,6 @@ function buildVisFromProps(ind: KLineIndicatorFlags): Record<VisKey, boolean> {
   out.vwap = ind.vwap === true
   out.bollingerBands = ind.bollingerBands === true
   out.fibonacci = ind.fibonacci === true
-  out.volSma = true // always visible by default; user can toggle via legend
   return out
 }
 
@@ -217,41 +211,6 @@ function calcVWAP(candles: Candle[]): { time: Time; value: number }[] {
   })
 }
 
-function calcATR(candles: Candle[], period = 14): number[] {
-  const tr: number[] = []
-  for (let i = 0; i < candles.length; i++) {
-    if (i === 0) {
-      tr.push(candles[i].high - candles[i].low)
-    } else {
-      const hl = candles[i].high - candles[i].low
-      const hc = Math.abs(candles[i].high - candles[i - 1].close)
-      const lc = Math.abs(candles[i].low - candles[i - 1].close)
-      tr.push(Math.max(hl, hc, lc))
-    }
-  }
-  const atr: number[] = new Array(tr.length).fill(NaN)
-  if (tr.length < period) return atr
-  let avg = tr.slice(0, period).reduce((a, b) => a + b, 0) / period
-  atr[period - 1] = avg
-  for (let i = period; i < tr.length; i++) {
-    avg = (avg * (period - 1) + tr[i]) / period
-    atr[i] = avg
-  }
-  return atr
-}
-
-function calcVolumeSMA(volumes: number[], period = 20): number[] {
-  const sma: number[] = new Array(volumes.length).fill(NaN)
-  if (volumes.length < period) return sma
-  let avg = volumes.slice(0, period).reduce((a, b) => a + b, 0) / period
-  sma[period - 1] = avg
-  for (let i = period; i < volumes.length; i++) {
-    avg = (avg * (period - 1) + volumes[i]) / period
-    sma[i] = avg
-  }
-  return sma
-}
-
 // ─────────────────────────────────────────────────────────────────
 // Chart component
 // ─────────────────────────────────────────────────────────────────
@@ -263,7 +222,6 @@ export default function KLineChart({
   color,
   showRSI = true,
   indicators: indicatorsIn,
-  onIndicatorsChange,
 }: KLineChartProps) {
   const indicatorsProp = useMemo(
     () => ({ ...DEFAULT_INDICATORS, ...indicatorsIn }),
@@ -273,8 +231,6 @@ export default function KLineChart({
   const containerRef = useRef<HTMLDivElement>(null)
   const rsiRef = useRef<HTMLDivElement>(null)
   const macdRef = useRef<HTMLDivElement>(null)
-  const atrRef = useRef<HTMLDivElement>(null)
-  const tooltipRef = useRef<HTMLDivElement | null>(null)
 
   const chartRef = useRef<IChartApi | null>(null)
   const candleRef = useRef<ISeriesApi<'Candlestick'> | null>(null)
@@ -286,16 +242,10 @@ export default function KLineChart({
   const bbLowerRef = useRef<ISeriesApi<'Line'> | null>(null)
   const rsiChartRef = useRef<IChartApi | null>(null)
   const rsiLineRef = useRef<ISeriesApi<'Line'> | null>(null)
-  const rsiObRef = useRef<ISeriesApi<'Line'> | null>(null)
-  const rsiOsRef = useRef<ISeriesApi<'Line'> | null>(null)
   const macdChartRef = useRef<IChartApi | null>(null)
   const macdLineRef = useRef<ISeriesApi<'Line'> | null>(null)
   const macdSignalRef = useRef<ISeriesApi<'Line'> | null>(null)
   const macdHistRef = useRef<ISeriesApi<'Histogram'> | null>(null)
-  const macdZeroRef = useRef<ISeriesApi<'Line'> | null>(null)
-  const atrChartRef = useRef<IChartApi | null>(null)
-  const atrLineRef = useRef<ISeriesApi<'Line'> | null>(null)
-  const volSmaRef = useRef<ISeriesApi<'Line'> | null>(null)
   const resizeRef = useRef<ResizeObserver | null>(null)
 
   const prevCandlesLenRef = useRef(0)
@@ -335,7 +285,6 @@ export default function KLineChart({
       { key: 'vwap' as const, label: 'VWAP', color: 'bg-cyan-500' },
       { key: 'bollingerBands' as const, label: 'BB(20,2)', color: 'bg-amber-400/60' },
       { key: 'fibonacci' as const, label: 'Fib', color: 'bg-rose-400/60' },
-      { key: 'volSma' as const, label: 'Vol SMA(20)', color: 'bg-indigo-400/60' },
     ]
   }, [])
 
@@ -359,7 +308,7 @@ export default function KLineChart({
         rightPriceScale: { borderColor: '#1e1e2e' },
         timeScale: { borderColor: '#1e1e2e', timeVisible: true, secondsVisible: false, rightOffset: 5 },
         width: containerRef.current.clientWidth,
-        height: showRSI ? 280 : 380,
+        height: showRSI ? 300 : 380,
       })
       chartRef.current = main
 
@@ -380,18 +329,6 @@ export default function KLineChart({
       })
       vs.priceScale().applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } })
       volumeRef.current = vs
-
-      // Volume SMA(20) — always created, visibility toggled via applyOptions
-      const volSmaSeries = main.addLineSeries({
-        color: '#6366f180',
-        lineWidth: 1,
-        priceLineVisible: false,
-        lastValueVisible: false,
-        crosshairMarkerVisible: false,
-        visible: false,
-        priceScaleId: 'volume',
-      })
-      volSmaRef.current = volSmaSeries
 
       const indMount = { ...DEFAULT_INDICATORS, ...indicatorsIn }
       for (const p of CHART_EMA_PERIODS) {
@@ -448,21 +385,21 @@ export default function KLineChart({
         })
         rsiChartRef.current = rc
         const rl = rc.addLineSeries({ color, lineWidth: 1, priceLineVisible: false, lastValueVisible: true })
+        rc.addLineSeries({
+          color: '#ff475750',
+          lineWidth: 1,
+          priceLineVisible: false,
+          lastValueVisible: false,
+          lineStyle: LineStyle.Dashed,
+        })
+        rc.addLineSeries({
+          color: '#00d08450',
+          lineWidth: 1,
+          priceLineVisible: false,
+          lastValueVisible: false,
+          lineStyle: LineStyle.Dashed,
+        })
         rsiLineRef.current = rl
-        rsiObRef.current = rc.addLineSeries({
-          color: '#ff475760',
-          lineWidth: 1,
-          priceLineVisible: false,
-          lastValueVisible: false,
-          lineStyle: LineStyle.Dashed,
-        })
-        rsiOsRef.current = rc.addLineSeries({
-          color: '#00d08460',
-          lineWidth: 1,
-          priceLineVisible: false,
-          lastValueVisible: false,
-          lineStyle: LineStyle.Dashed,
-        })
         rc.timeScale().fitContent()
         main.subscribeCrosshairMove((param) => {
           if (!param.time) return
@@ -488,11 +425,9 @@ export default function KLineChart({
         const ml = mc.addLineSeries({ color: '#3b82f6', lineWidth: 1, priceLineVisible: false, lastValueVisible: true })
         const sl = mc.addLineSeries({ color: '#f59e0b', lineWidth: 1, priceLineVisible: false, lastValueVisible: true })
         const hl = mc.addHistogramSeries({ priceLineVisible: false, lastValueVisible: false })
-        const zl = mc.addLineSeries({ color: '#475569', lineWidth: 1, priceLineVisible: false, lastValueVisible: false })
         macdLineRef.current = ml
         macdSignalRef.current = sl
         macdHistRef.current = hl
-        macdZeroRef.current = zl
         mc.timeScale().fitContent()
         main.subscribeCrosshairMove((param) => {
           if (!param.time) return
@@ -504,44 +439,12 @@ export default function KLineChart({
         })
       }
 
-      // ATR(14) panel — new volatility panel alongside RSI/MACD
-      if (showRSI && atrRef.current) {
-        const ac = createChart(atrRef.current, {
-          layout: { background: { color: '#0a0a12' }, textColor: '#94a3b8' },
-          grid: { vertLines: { color: '#1e1e2e' }, horzLines: { color: '#1e1e2e' } },
-          rightPriceScale: { borderColor: '#1e1e2e' },
-          timeScale: { borderColor: '#1e1e2e', timeVisible: true, secondsVisible: false },
-          crosshair: { mode: CrosshairMode.Normal },
-          width: atrRef.current.clientWidth,
-          height: 80,
-        })
-        atrChartRef.current = ac
-        const al = ac.addLineSeries({
-          color: '#a78bfa',
-          lineWidth: 1,
-          priceLineVisible: false,
-          lastValueVisible: true,
-          crosshairMarkerVisible: true,
-        })
-        atrLineRef.current = al
-        ac.timeScale().fitContent()
-        main.subscribeCrosshairMove((param) => {
-          if (!param.time) return
-          ac.setCrosshairPosition(param.point ? param.point.y : 0, param.time, al)
-        })
-        ac.subscribeCrosshairMove((param) => {
-          if (!param.time) return
-          main.setCrosshairPosition(param.point ? param.point.y : 0, param.time, cs)
-        })
-      }
-
       resizeRef.current = new ResizeObserver((entries) => {
         if (!mounted) return
         const { width } = entries[0].contentRect
         main.applyOptions({ width })
         rsiChartRef.current?.applyOptions({ width })
         macdChartRef.current?.applyOptions({ width })
-        atrChartRef.current?.applyOptions({ width })
       })
       resizeRef.current.observe(containerRef.current)
 
@@ -575,10 +478,6 @@ export default function KLineChart({
       macdLineRef.current = null
       macdSignalRef.current = null
       macdHistRef.current = null
-      atrChartRef.current?.remove()
-      atrChartRef.current = null
-      atrLineRef.current = null
-      volSmaRef.current = null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -624,25 +523,11 @@ export default function KLineChart({
       close: c.close,
     })) as CandlestickData<Time>[]
 
-    const closes = candles.map((c) => c.close)
-    const volumes = candles.map((c) => c.volume)
-    const volSMA = calcVolumeSMA(volumes, 20)
-
-    const lineData = (values: number[]) =>
-      candles
-        .map((c, i) => ({ time: c.time as Time, value: values[i] }))
-        .filter((d) => !isNaN(d.value)) as LineData<Time>[]
-
-    const volArr = candles.map((c, i) => {
-      const isUp = c.close >= c.open
-      const isUnusual = volSMA[i] && c.volume > volSMA[i] * 2
-      const baseColor = isUp ? '#00d084' : '#ff4757'
-      return {
-        time: c.time as Time,
-        value: c.volume,
-        color: isUnusual ? baseColor + 'aa' : baseColor + '30',
-      }
-    }) as HistogramData<Time>[]
+    const volArr = candles.map((c) => ({
+      time: c.time as Time,
+      value: c.volume,
+      color: c.close >= c.open ? '#00d08430' : '#ff475730',
+    })) as HistogramData<Time>[]
 
     if (touchLast) {
       const c = candles[len - 1]
@@ -653,17 +538,22 @@ export default function KLineChart({
         low: c.low,
         close: c.close,
       } as CandlestickData<Time>)
-      const lastVol = volArr[volArr.length - 1]
-      volumeRef.current?.update(lastVol)
+      volumeRef.current?.update({
+        time: c.time as Time,
+        value: c.volume,
+        color: c.close >= c.open ? '#00d08430' : '#ff475730',
+      } as HistogramData<Time>)
     } else {
       candleRef.current.setData(candleArr)
       volumeRef.current?.setData(volArr)
     }
 
-    // Volume SMA(20) line
-    if (volSmaRef.current) {
-      volSmaRef.current.setData(lineData(volSMA))
-    }
+    const closes = candles.map((c) => c.close)
+
+    const lineData = (values: number[]) =>
+      candles
+        .map((c, i) => ({ time: c.time as Time, value: values[i] }))
+        .filter((d) => !isNaN(d.value)) as LineData<Time>[]
 
     for (const p of CHART_EMA_PERIODS) {
       const series = emaLineRefs.current[p]
@@ -711,11 +601,6 @@ export default function KLineChart({
     if (showRSI && rsiLineRef.current && rsiChartRef.current) {
       const rsiVals = calcRSI(closes)
       rsiLineRef.current.setData(lineData(rsiVals))
-      // RSI 70 (overbought) and 30 (oversold) horizontal ref lines
-      if (rsiObRef.current && rsiOsRef.current) {
-        rsiObRef.current.setData(lineData(rsiVals.map(() => 70)))
-        rsiOsRef.current.setData(lineData(rsiVals.map(() => 30)))
-      }
     }
 
     if (showRSI && macdLineRef.current && macdSignalRef.current && macdHistRef.current && macdChartRef.current) {
@@ -727,23 +612,10 @@ export default function KLineChart({
           .map((c, i) => ({
             time: c.time as Time,
             value: macdVals[i].histogram,
-            color: macdVals[i].histogram >= 0 ? '#00d08490' : '#ff475790',
+            color: macdVals[i].histogram >= 0 ? '#00d08480' : '#ff475780',
           }))
           .filter((d) => !isNaN(d.value)) as HistogramData<Time>[]
       )
-      // MACD zero line
-      if (macdZeroRef.current) {
-        macdZeroRef.current.setData(lineData(macdVals.map(() => 0)))
-      }
-    }
-
-    // ATR(14) data
-    if (showRSI && atrLineRef.current && atrChartRef.current) {
-      const atrVals = calcATR(candles, 14)
-      atrLineRef.current.setData(lineData(atrVals))
-      if (!touchLast) {
-        try { atrChartRef.current.timeScale().fitContent() } catch { /* ignore */ }
-      }
     }
 
     firstBarTimeRef.current = firstTime
@@ -768,9 +640,8 @@ export default function KLineChart({
   }, [candles, darkPoolMarkers, newsMarkers, showRSI, indicatorsProp, vis, chartReadyGen])
 
   const toggleIndicator = useCallback((key: VisKey) => {
-    let next = {} as Record<VisKey, boolean>
     setVis((prev) => {
-      next = { ...prev, [key]: !prev[key] }
+      const next = { ...prev, [key]: !prev[key] }
       const emaMatch = /^ema(\d+)$/.exec(key)
       if (emaMatch) {
         const p = Number(emaMatch[1]) as ChartEmaPeriod
@@ -784,60 +655,19 @@ export default function KLineChart({
       }
       return next
     })
-    // Sync to external state (e.g. side panel)
-    onIndicatorsChange?.(next)
-  }, [onIndicatorsChange])
-
-  const latestCandle = candles[candles.length - 1]
-  const isUp = latestCandle ? latestCandle.close >= latestCandle.open : true
-  const priceStr = latestCandle
-    ? `$${latestCandle.close.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-    : ''
-  const chgPct = latestCandle && latestCandle.open > 0
-    ? (((latestCandle.close - latestCandle.open) / latestCandle.open) * 100).toFixed(2)
-    : '0.00'
-  const volStr = latestCandle
-    ? latestCandle.volume >= 1_000_000
-      ? `${(latestCandle.volume / 1_000_000).toFixed(2)}M`
-      : latestCandle.volume >= 1_000
-        ? `${(latestCandle.volume / 1_000).toFixed(1)}K`
-        : String(latestCandle.volume.toFixed(0))
-    : ''
-  const rangeStr = latestCandle
-    ? `H $${latestCandle.high.toLocaleString('en-US', { maximumFractionDigits: 0 })} L $${latestCandle.low.toLocaleString('en-US', { maximumFractionDigits: 0 })}`
-    : ''
+  }, [])
 
   const activeIndicators = INDICATOR_DEFS.filter((d) => vis[d.key])
 
   return (
     <div className="relative select-none">
-      {/* ── Enhanced legend with price / change / volume ── */}
-      <div className="absolute top-3 left-3 right-3 z-10 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs bg-slate-950/80 backdrop-blur-sm px-3 py-2 rounded-lg border border-slate-800/50 max-h-[min(40vh,220px)] overflow-y-auto">
-        {/* Live price summary */}
-        <span className={`text-sm font-mono font-bold mr-1 ${isUp ? 'text-green-400' : 'text-red-400'}`}>
-          {isUp ? '▲' : '▼'} {priceStr}
-        </span>
-        <span className={`text-xs font-mono ${isUp ? 'text-green-400/80' : 'text-red-400/80'}`}>
-          {isUp ? '+' : ''}{chgPct}%
-        </span>
-        {volStr && (
-          <span className="text-xs font-mono text-slate-500 border-l border-slate-700 pl-2">
-            Vol {volStr}
+      <div className="absolute top-3 left-3 right-3 z-10 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs bg-slate-950/80 backdrop-blur-sm px-2 py-1.5 rounded-lg border border-slate-800/50 max-h-[min(40vh,220px)] overflow-y-auto">
+        {activeIndicators.map((d) => (
+          <span key={d.key} className="flex items-center gap-1.5 shrink-0">
+            <span className={`w-4 h-0.5 ${d.color} inline-block rounded`} />
+            <span className="text-slate-400">{d.label}</span>
           </span>
-        )}
-        {rangeStr && (
-          <span className="text-[10px] font-mono text-slate-600">
-            {rangeStr}
-          </span>
-        )}
-        <span className="border-l border-slate-700 pl-2 flex items-center gap-1.5">
-          {activeIndicators.map((d) => (
-            <span key={d.key} className="flex items-center gap-1 shrink-0">
-              <span className={`w-4 h-0.5 ${d.color} inline-block rounded`} />
-              <span className="text-slate-400">{d.label}</span>
-            </span>
-          ))}
-        </span>
+        ))}
         <span className="flex items-center gap-1.5 shrink-0">
           <span className="text-blue-400 text-[10px]">●</span>
           <span className="text-slate-400">Dark Pool</span>
@@ -846,7 +676,20 @@ export default function KLineChart({
           <span className="text-green-400 text-[10px]">▲</span>
           <span className="text-slate-400">News</span>
         </span>
-        {/* Indicator toggle buttons have been moved to the right-side IndicatorPanel */}
+        <div className="flex flex-wrap items-center gap-1 border-l border-slate-700 pl-2 ml-1 w-full sm:w-auto">
+          {INDICATOR_DEFS.map((d) => (
+            <button
+              key={d.key}
+              type="button"
+              onClick={() => toggleIndicator(d.key)}
+              className={`px-1.5 py-0.5 rounded text-[10px] font-mono transition-colors ${
+                vis[d.key] ? 'bg-slate-700 text-white' : 'bg-slate-800 text-slate-600 hover:text-slate-400'
+              }`}
+            >
+              {d.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div ref={containerRef} className="w-full rounded-t-lg overflow-hidden min-h-[200px]" />
@@ -854,31 +697,12 @@ export default function KLineChart({
       {showRSI && (
         <>
           <div className="relative border-t border-slate-800">
-            <div className="absolute left-3 top-1 z-10 text-[10px] text-slate-500 font-mono">
-              RSI(14) {latestCandle && (() => {
-                const closes2 = candles.map(c => c.close)
-                const rsiVals = calcRSI(closes2, 14)
-                const last = rsiVals[rsiVals.length - 1]
-                return Number.isFinite(last) ? last.toFixed(1) : '—'
-              })()}
-            </div>
+            <div className="absolute left-3 top-1 z-10 text-[10px] text-slate-500 font-mono">RSI(14)</div>
             <div ref={rsiRef} className="w-full overflow-hidden" />
           </div>
           <div className="relative border-t border-slate-800">
-            <div className="absolute left-3 top-1 z-10 text-[10px] text-slate-500 font-mono">
-              MACD(12,26,9)
-            </div>
-            <div ref={macdRef} className="w-full overflow-hidden" />
-          </div>
-          <div className="relative border-t border-slate-800">
-            <div className="absolute left-3 top-1 z-10 text-[10px] text-slate-500 font-mono">
-              ATR(14) {latestCandle && (() => {
-                const atrVals = calcATR(candles, 14)
-                const last = atrVals[atrVals.length - 1]
-                return Number.isFinite(last) ? `$${last.toFixed(2)}` : '—'
-              })()}
-            </div>
-            <div ref={atrRef} className="w-full rounded-b-lg overflow-hidden" />
+            <div className="absolute left-3 top-1 z-10 text-[10px] text-slate-500 font-mono">MACD(12,26,9)</div>
+            <div ref={macdRef} className="w-full rounded-b-lg overflow-hidden" />
           </div>
         </>
       )}

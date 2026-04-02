@@ -63,11 +63,17 @@ export default function BacktestPage() {
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'overview' | 'instruments' | 'trades' | 'signals'>('overview')
   const [refreshing, setRefreshing] = useState(false)
+  // Ticker selector state
+  const [selectedTickers, setSelectedTickers] = useState<string[]>([])
+  const [tickerQuery, setTickerQuery] = useState('')
 
-  const fetchData = useCallback(async (showRefresh = false) => {
+  const fetchData = useCallback(async (showRefresh = false, tickers?: string[]) => {
     if (showRefresh) setRefreshing(true)
     try {
-      const res = await fetch(apiUrl('/api/backtest'), {
+      const url = tickers && tickers.length > 0
+        ? apiUrl(`/api/backtest?tickers=${tickers.join(',')}`)
+        : apiUrl('/api/backtest')
+      const res = await fetch(url, {
         headers: { Accept: 'application/json' },
         cache: 'no-store',
       })
@@ -83,7 +89,9 @@ export default function BacktestPage() {
     }
   }, [])
 
-  useEffect(() => { void fetchData() }, [fetchData])
+  useEffect(() => {
+    void fetchData(false, selectedTickers.length > 0 ? selectedTickers : undefined)
+  }, [fetchData, selectedTickers])
 
   if (loading) {
     return (
@@ -145,7 +153,7 @@ export default function BacktestPage() {
                 <div className="text-sm font-mono text-slate-300">{new Date(computedAt).toLocaleString()}</div>
               </div>
               <button
-                onClick={() => fetchData(true)}
+                onClick={() => fetchData(true, selectedTickers.length > 0 ? selectedTickers : undefined)}
                 disabled={refreshing}
                 className="px-3 py-1.5 bg-slate-800 text-slate-300 text-xs rounded-lg border border-slate-700 hover:bg-slate-700 disabled:opacity-50"
               >
@@ -154,13 +162,63 @@ export default function BacktestPage() {
             </div>
           </div>
 
+          {/* Ticker selector bar */}
+          <div className="mt-4 flex flex-wrap gap-3 items-center border border-slate-800 rounded-lg px-4 py-3 bg-slate-900/40">
+            <span className="text-[11px] text-slate-400 shrink-0">Instruments:</span>
+            {/* Search input */}
+            <input
+              type="text"
+              value={tickerQuery}
+              onChange={(e) => setTickerQuery(e.target.value.toUpperCase())}
+              placeholder="Search ticker (e.g. AAPL, NVDA)"
+              className="w-40 bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-cyan-500/50"
+            />
+            {/* Quick-add button */}
+            {tickerQuery && !selectedTickers.includes(tickerQuery) && (
+              <button
+                onClick={() => {
+                  if (tickerQuery.trim()) {
+                    setSelectedTickers(prev => [...prev, tickerQuery.trim()])
+                    setTickerQuery('')
+                  }
+                }}
+                className="px-2 py-1 bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 text-[10px] rounded hover:bg-cyan-500/30"
+              >
+                + Add {tickerQuery}
+              </button>
+            )}
+            {/* Selected tickers pills */}
+            {selectedTickers.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {selectedTickers.map(t => (
+                  <span key={t} className="flex items-center gap-1 px-2 py-0.5 bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 text-[10px] rounded">
+                    {t}
+                    <button onClick={() => setSelectedTickers(prev => prev.filter(x => x !== t))} className="text-cyan-400 hover:text-white ml-0.5">×</button>
+                  </span>
+                ))}
+              </div>
+            )}
+            {selectedTickers.length > 0 && (
+              <button
+                onClick={() => setSelectedTickers([])}
+                className="text-[10px] text-slate-500 hover:text-slate-300 underline"
+              >
+                Clear all
+              </button>
+            )}
+            {selectedTickers.length === 0 && (
+              <span className="text-[10px] text-slate-600">Showing all 56 instruments. Type a ticker to filter.</span>
+            )}
+          </div>
+
           {/* Strategy info bar */}
-          <div className="mt-4 flex flex-wrap gap-4 text-[11px] text-slate-500 border border-slate-800 rounded-lg px-4 py-2 bg-slate-900/40">
-            <span><span className="text-slate-400">Strategy:</span> 200EMA Deviation Regime + RSI/MACD/ATR/BB Confirmations</span>
+          <div className="flex flex-wrap gap-4 text-[11px] text-slate-500 border border-slate-800 rounded-lg px-4 py-2 bg-slate-900/40">
+            <span><span className="text-slate-400">Strategy:</span> 200EMA Deviation Regime + RSI/MACD/ATR%/BB% Confirmations</span>
             <span><span className="text-slate-400">Capital:</span> $100,000 per instrument</span>
-            <span><span className="text-slate-400">Stop Loss:</span> 10% per position</span>
+            <span><span className="text-slate-400">Stop Loss:</span> ATR-adaptive (1.5× ATR, 5–15%)</span>
+            <span><span className="text-slate-400">Trailing Stop:</span> 2× ATR → break-even, 4× ATR → 1× ATR lock</span>
             <span><span className="text-slate-400">Kelly:</span> Half-Kelly sizing (max 25%)</span>
-            <span><span className="text-slate-400">Confidence threshold:</span> 60%</span>
+            <span><span className="text-slate-400">Confidence threshold:</span> 55%</span>
             <span><span className="text-slate-400">Max Portfolio DD:</span> 25% circuit breaker</span>
           </div>
         </div>

@@ -104,9 +104,9 @@ export default function TradeLog({ trades, sectorColors }: Props) {
                   <td className={`px-3 py-2.5 font-bold ${t.action === 'BUY' ? 'text-emerald-400' : 'text-red-400'}`}>
                     {t.action}
                   </td>
-                  <td className="px-3 py-2.5 font-mono text-slate-300">${t.price.toFixed(2)}</td>
+                  <td className="px-3 py-2.5 font-mono text-slate-300">${t.entryPrice.toFixed(2)}</td>
                   <td className="px-3 py-2.5 font-mono text-slate-300">
-                    {t.pnlPct !== null ? `$${t.price.toFixed(2)}` : '—'}
+                    {t.pnlPct !== null ? `$${t.exitPrice.toFixed(2)}` : '—'}
                   </td>
                   <td className={`px-3 py-2.5 font-mono font-bold ${isWin ? 'text-emerald-400' : pnl < 0 ? 'text-red-400' : 'text-slate-400'}`}>
                     {t.pnlPct !== null ? `${isWin ? '+' : ''}${(pnl * 100).toFixed(2)}%` : 'Open'}

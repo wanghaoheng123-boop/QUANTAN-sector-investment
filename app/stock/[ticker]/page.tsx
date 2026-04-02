@@ -7,11 +7,14 @@ import DarkPoolPanel from '@/components/DarkPoolPanel'
 import WatchlistButton from '@/components/WatchlistButton'
 import QuantLabPanel from '@/components/stock/QuantLabPanel'
 import NewsFeed from '@/components/NewsFeed'
+import IndicatorPanel from '@/components/IndicatorPanel'
 import { getNewsForSector, generateDarkPoolPrints } from '@/lib/mockData'
 import { DarkPoolPrint } from '@/lib/sectors'
 import type { DarkPoolAnalysis } from '@/lib/darkpool'
 import { CHART_EMA_PERIODS, tradingDefaultEmaFlags, type ChartEmaKey } from '@/lib/chartEma'
 import { STOCK_CHART_RANGES, isStockIntradayPollRange } from '@/lib/chartYahoo'
+
+type VisKey = ChartEmaKey | 'vwap' | 'bollingerBands' | 'fibonacci' | 'volSma'
 
 const KLineChart = dynamic(() => import('@/components/KLineChart'), { ssr: false })
 
@@ -53,6 +56,37 @@ export default function StockPage({ params }: { params: { ticker: string } }) {
   const [activeRange, setActiveRange]   = useState('1Y')
   const [activeIndicator, setActiveIndicator] = useState('ema')
   const [loading, setLoading]           = useState(true)
+  // Indicator visibility state — synced from KLineChart via onIndicatorsChange
+  // Both activeIndicator (preset) and vis (individual toggles) feed into indicatorConfig
+  const [vis, setVis] = useState<Record<VisKey, boolean>>(() => buildVisFromIndicatorPreset('ema'))
+
+  // Build initial vis from preset key
+  function buildVisFromIndicatorPreset(preset: string): Record<VisKey, boolean> {
+    const allEmaOn: Record<string, boolean> = {}
+    const allEmaOff: Record<string, boolean> = {}
+    for (const p of CHART_EMA_PERIODS) {
+      const k = `ema${p}` as ChartEmaKey
+      allEmaOn[k] = true
+      allEmaOff[k] = false
+    }
+    const emaTrading = tradingDefaultEmaFlags() as Record<string, boolean>
+    if (preset === 'all') return { ...allEmaOn, vwap: true, bollingerBands: true, fibonacci: true, volSma: true } as Record<VisKey, boolean>
+    if (preset === 'ema') return { ...emaTrading, vwap: false, bollingerBands: false, fibonacci: false, volSma: true } as Record<VisKey, boolean>
+    if (preset === 'vwap') return { ...allEmaOff, vwap: true, bollingerBands: false, fibonacci: false, volSma: true } as Record<VisKey, boolean>
+    if (preset === 'bb') return { ...allEmaOff, vwap: false, bollingerBands: true, fibonacci: false, volSma: true } as Record<VisKey, boolean>
+    return { ...allEmaOff, vwap: false, bollingerBands: false, fibonacci: true, volSma: true } as Record<VisKey, boolean>
+  }
+
+  // indicatorConfig is derived from vis (individual toggles) + a base preset signal
+  const indicatorConfig = useMemo(() => {
+    // Start with the preset as baseline, then overlay individual vis toggles
+    const base = buildVisFromIndicatorPreset(activeIndicator)
+    return { ...base, ...vis }
+  }, [activeIndicator, vis])
+
+  const handleVisChange = useCallback((newVis: Record<VisKey, boolean>) => {
+    setVis(newVis)
+  }, [])
 
   const color = '#3b82f6'
 
@@ -125,25 +159,6 @@ export default function StockPage({ params }: { params: { ticker: string } }) {
       .then(data => { setDarkPoolApiData(data); setDarkPoolApiLoading(false) })
       .catch(() => setDarkPoolApiLoading(false))
   }, [ticker, activeTab])
-
-  // Memoize indicators — prevents KLineChart re-renders on unrelated state changes
-  const indicatorConfig = useMemo(() => {
-    // Build all-true / all-false EMA maps from the comprehensive CHART_EMA_PERIODS list
-    const allEmaOn: Record<string, boolean> = {}
-    const allEmaOff: Record<string, boolean> = {}
-    for (const p of CHART_EMA_PERIODS) {
-      const k = `ema${p}` as ChartEmaKey
-      allEmaOn[k] = true
-      allEmaOff[k] = false
-    }
-    const emaTrading = tradingDefaultEmaFlags() as Record<string, boolean>
-
-    if (activeIndicator === 'all') return { ...allEmaOn, vwap: true, bollingerBands: true, fibonacci: true }
-    if (activeIndicator === 'ema') return { ...emaTrading, vwap: false, bollingerBands: false, fibonacci: false }
-    if (activeIndicator === 'vwap') return { ...allEmaOff, vwap: true, bollingerBands: false, fibonacci: false }
-    if (activeIndicator === 'bb') return { ...allEmaOff, vwap: false, bollingerBands: true, fibonacci: false }
-    return { ...allEmaOff, vwap: false, bollingerBands: false, fibonacci: true }
-  }, [activeIndicator])
 
   const news = getNewsForSector('technology')
   const newsMarkers = news.slice(0, 3).map((n, i) => {
@@ -223,7 +238,7 @@ export default function StockPage({ params }: { params: { ticker: string } }) {
               </div>
               <div className="flex flex-wrap gap-1 bg-slate-900 rounded-lg p-1 border border-slate-800">
                 {STOCK_INDICATOR_PRESETS.map(([val, label]) => (
-                  <button key={val} type="button" onClick={() => setActiveIndicator(val)}
+                  <button key={val} type="button" onClick={() => { setActiveIndicator(val); setVis(buildVisFromIndicatorPreset(val)) }}
                     className={`px-2.5 py-1 text-[11px] rounded-md transition-all ${activeIndicator === val ? 'bg-slate-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>
                     {label}
                   </button>
@@ -236,8 +251,8 @@ export default function StockPage({ params }: { params: { ticker: string } }) {
         {activeTab === 'quant' ? (
           <QuantLabPanel ticker={ticker} />
         ) : (
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-            <div className="xl:col-span-2 space-y-6">
+          <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
+            <div className="xl:col-span-3 space-y-6">
               {activeTab === 'chart' && (
                 <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-4 shadow-xl">
                   <div className="flex items-center justify-between mb-3">
@@ -265,6 +280,7 @@ export default function StockPage({ params }: { params: { ticker: string } }) {
                       range={activeRange}
                       showRSI
                       indicators={indicatorConfig}
+                      onIndicatorsChange={handleVisChange}
                     />
                   ) : (
                     <div className="h-[480px] bg-slate-800/10 rounded-xl flex items-center justify-center border border-dashed border-slate-800">
@@ -282,8 +298,20 @@ export default function StockPage({ params }: { params: { ticker: string } }) {
               {activeTab === 'news' && <NewsFeed news={news} color={color} />}
             </div>
 
-            {/* Sidebar */}
-            <div className="space-y-6">
+            {/* Sidebar — 2-col layout: Session Snapshot + IndicatorPanel */}
+            <div className="xl:col-span-1 space-y-6">
+              {activeTab === 'chart' && (
+                <IndicatorPanel
+                  vis={vis}
+                  onToggle={(key) => {
+                    const next = { ...vis, [key]: !vis[key] }
+                    setVis(next)
+                    handleVisChange(next)
+                  }}
+                  title="Chart Indicators"
+                />
+              )}
+
               <div className="bg-slate-900/40 rounded-2xl border border-slate-800 p-6">
                 <h3 className="text-xs font-medium text-slate-500 uppercase tracking-widest mb-4">Session snapshot</h3>
                 <div className="space-y-4">

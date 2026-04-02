@@ -4,7 +4,7 @@
  */
 
 import type { OhlcBar } from '@/lib/quant/technicals'
-import { combinedSignal, DEFAULT_CONFIG, type BacktestConfig } from './signals'
+import { combinedSignal, DEFAULT_CONFIG, atr, type BacktestConfig } from './signals'
 
 export interface OhlcvRow extends OhlcBar {
   time: number
@@ -16,7 +16,8 @@ export interface Trade {
   ticker: string
   sector: string
   action: 'BUY' | 'SELL'
-  price: number
+  entryPrice: number
+  exitPrice: number
   shares: number
   value: number
   regime: string
@@ -24,6 +25,8 @@ export interface Trade {
   confidence: number
   pnlPct: number | null
   reason: string
+  atrAtrPctAtEntry?: number
+  highestPriceAfterEntry?: number
 }
 
 export interface BacktestResult {
@@ -113,6 +116,9 @@ export function backtestInstrument(
   const closes = rows.map(r => r.close)
   const bars: OhlcBar[] = rows.map(({ open, high, low, close }) => ({ open, high, low, close }))
 
+  // Pre-compute ATR for all bars (14-period, no look-ahead)
+  const atrVals = atr(bars, 14)
+
   // Walk forward day by day (need 200 bars warmup)
   for (let i = 200; i < rows.length; i++) {
     const row = rows[i]
@@ -122,22 +128,71 @@ export function backtestInstrument(
     const lookbackCloses = closes.slice(0, i + 1)
     const lookbackBars = bars.slice(0, i + 1)
 
-    // ── Stop-loss check ──
+    // ── ATR-adaptive stop-loss + trailing stop ──
     if (state.openTrade) {
+      // ATR% at entry for adaptive stop
+      const atrAtEntry = state.openTrade.atrAtrPctAtEntry ?? 0.10
+      // Adaptive stop: 1.5x ATR%, floored at 5%, capped at 15%
+      const atrStopPct = Math.max(0.05, Math.min(0.15, 1.5 * atrAtEntry))
       const stopPx = state.openTrade.action === 'BUY'
-        ? state.openTrade.price * (1 - cfg.stopLossPct)
-        : state.openTrade.price * (1 + cfg.stopLossPct)
+        ? state.openTrade.entryPrice * (1 - atrStopPct)
+        : state.openTrade.entryPrice * (1 + atrStopPct)
+
+      // Trailing stop: track highest price after BUY entry
+      if (state.openTrade.action === 'BUY') {
+        const peakPrice = state.openTrade.highestPriceAfterEntry ?? state.openTrade.entryPrice
+        state.openTrade.highestPriceAfterEntry = Math.max(peakPrice, price)
+        // Profit measured from entry
+        const profitFromEntry = (price - state.openTrade.entryPrice) / state.openTrade.entryPrice
+        // 2x ATR profit → raise stop to break-even
+        const atrVal = atrVals[i] ?? 0
+        const twoAtrProfit = (2 * atrVal) / state.openTrade.entryPrice
+        const fourAtrProfit = (4 * atrVal) / state.openTrade.entryPrice
+        if (profitFromEntry >= twoAtrProfit) {
+          // Raise stop to break-even
+          const trailStopPx = state.openTrade.entryPrice * (1 + 0.005) // just above break-even
+          if (price <= trailStopPx) {
+            const pnlPct = (price - state.openTrade.entryPrice) / state.openTrade.entryPrice
+            state.capital += state.position * price
+            if (pnlPct > 0) { state.tradeWins++; state.grossProfit += pnlPct }
+            else { state.tradeLosses++; state.grossLoss += Math.abs(pnlPct) }
+            state.openTrade.exitPrice = price
+            state.openTrade.pnlPct = pnlPct
+            state.closedTrades.push({ ...state.openTrade })
+            state.position = 0; state.avgCost = 0; state.openTrade = null
+            state.equityHistory.push(currentEquity(state))
+            continue
+          }
+        }
+        // 4x ATR profit → tighten to lock in 1x ATR gain
+        if (profitFromEntry >= fourAtrProfit) {
+          const lockStopPx = price - atrVal  // lock in 1x ATR profit
+          if (price <= lockStopPx) {
+            const pnlPct = (price - state.openTrade.entryPrice) / state.openTrade.entryPrice
+            state.capital += state.position * price
+            if (pnlPct > 0) { state.tradeWins++; state.grossProfit += pnlPct }
+            else { state.tradeLosses++; state.grossLoss += Math.abs(pnlPct) }
+            state.openTrade.exitPrice = price
+            state.openTrade.pnlPct = pnlPct
+            state.closedTrades.push({ ...state.openTrade })
+            state.position = 0; state.avgCost = 0; state.openTrade = null
+            state.equityHistory.push(currentEquity(state))
+            continue
+          }
+        }
+      }
+
+      // Primary stop-loss check
       if ((state.openTrade.action === 'BUY' && price <= stopPx) ||
           (state.openTrade.action === 'SELL' && price >= stopPx)) {
-        // Close at stop-loss price
         const pnlPct = state.openTrade.action === 'BUY'
-          ? (price - state.openTrade.price) / state.openTrade.price
-          : (state.openTrade.price - price) / state.openTrade.price
+          ? (price - state.openTrade.entryPrice) / state.openTrade.entryPrice
+          : (state.openTrade.entryPrice - price) / state.openTrade.entryPrice
         state.capital += state.position * price
         if (pnlPct > 0) { state.tradeWins++; state.grossProfit += pnlPct }
         else { state.tradeLosses++; state.grossLoss += Math.abs(pnlPct) }
+        state.openTrade.exitPrice = price
         state.openTrade.pnlPct = pnlPct
-        state.openTrade.price = price
         state.closedTrades.push({ ...state.openTrade })
         state.position = 0; state.avgCost = 0; state.openTrade = null
         const eq = currentEquity(state)
@@ -152,13 +207,13 @@ export function backtestInstrument(
     const dd = (state.peakEquity - eq) / state.peakEquity
     if (dd >= cfg.maxDrawdownCap && state.openTrade) {
       const pnlPct = state.openTrade.action === 'BUY'
-        ? (price - state.openTrade.price) / state.openTrade.price
-        : (state.openTrade.price - price) / state.openTrade.price
+        ? (price - state.openTrade.entryPrice) / state.openTrade.entryPrice
+        : (state.openTrade.entryPrice - price) / state.openTrade.entryPrice
       state.capital += state.position * price
       if (pnlPct > 0) { state.tradeWins++; state.grossProfit += pnlPct }
       else { state.tradeLosses++; state.grossLoss += Math.abs(pnlPct) }
+      state.openTrade.exitPrice = price
       state.openTrade.pnlPct = pnlPct
-      state.openTrade.price = price
       state.closedTrades.push({ ...state.openTrade })
       state.position = 0; state.avgCost = 0; state.openTrade = null
       state.equityHistory.push(currentEquity(state))
@@ -181,9 +236,14 @@ export function backtestInstrument(
       state.avgCost = price
       state.openTrade = {
         date, ticker, sector,
-        action: 'BUY', price, shares, value: shares * price,
+        action: 'BUY',
+        entryPrice: price,
+        exitPrice: 0,
+        shares, value: shares * price,
         regime: signal.regime.label, dipSignal: signal.regime.dipSignal,
         confidence: signal.confidence, pnlPct: null, reason: signal.reason,
+        atrAtrPctAtEntry: Number.isFinite(atrVals[i]) ? (atrVals[i] / price) * 100 : 0.10,
+        highestPriceAfterEntry: price,
       }
       state.confidenceSum += signal.confidence
       state.confidenceCount++
@@ -191,12 +251,12 @@ export function backtestInstrument(
 
     } else if (signal.action === 'SELL' && state.openTrade) {
       const proceeds = state.position * price
-      const pnlPct = (price - state.openTrade.price) / state.openTrade.price
+      const pnlPct = (price - state.openTrade.entryPrice) / state.openTrade.entryPrice
       if (pnlPct > 0) { state.tradeWins++; state.grossProfit += pnlPct }
       else { state.tradeLosses++; state.grossLoss += Math.abs(pnlPct) }
       state.capital += proceeds
+      state.openTrade.exitPrice = price
       state.openTrade.pnlPct = pnlPct
-      state.openTrade.price = price
       state.closedTrades.push({ ...state.openTrade })
       state.position = 0; state.avgCost = 0; state.openTrade = null
       state.equityHistory.push(currentEquity(state))
@@ -209,12 +269,12 @@ export function backtestInstrument(
   // ── Close remaining open position at final price ──
   const finalPrice = rows[rows.length - 1].close
   if (state.openTrade) {
-    const pnlPct = (finalPrice - state.openTrade.price) / state.openTrade.price
+    const pnlPct = (finalPrice - state.openTrade.entryPrice) / state.openTrade.entryPrice
     if (pnlPct > 0) { state.tradeWins++; state.grossProfit += pnlPct }
     else { state.tradeLosses++; state.grossLoss += Math.abs(pnlPct) }
     state.capital += state.position * finalPrice
+    state.openTrade.exitPrice = finalPrice
     state.openTrade.pnlPct = pnlPct
-    state.openTrade.price = finalPrice
     state.closedTrades.push({ ...state.openTrade })
     state.position = 0
   }
