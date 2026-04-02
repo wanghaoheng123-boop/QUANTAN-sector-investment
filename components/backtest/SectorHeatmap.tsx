@@ -12,7 +12,7 @@ interface Props {
 }
 
 export default function SectorHeatmap({ sectorSummary, sectorColors }: Props) {
-  if (!sectorSummary) {
+  if (!sectorSummary || typeof sectorSummary !== 'object') {
     return (
       <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-6 flex items-center justify-center h-32">
         <p className="text-slate-500 text-sm">Loading sector data…</p>
