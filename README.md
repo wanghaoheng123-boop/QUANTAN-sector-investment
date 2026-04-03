@@ -1,4 +1,4 @@
-# QUANTAN - Market Intelligence v2.0
+# QUANTAN - Market Intelligence v2.1 *(Antigravity UI refresh)*
 
 Next.js 14 app for **GICS sector ETFs**, **commodity proxies**, **live quotes** (Yahoo Finance via `yahoo-finance2`, with **optional Bloomberg spot prices** through a self-hosted bridge), **candlestick charts** (Lightweight Charts), **desk-style quote strip**, **institutional-grade backtesting**, **watchlists** (browser storage; keyed by account when signed in), and **NextAuth** sign-in with **Google** and/or **GitHub**.
 
