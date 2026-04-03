@@ -52,7 +52,7 @@ export default function SectorCard({ sector, quote, signal }: SectorCardProps) {
         {/* Prominent hover glow effect */}
         <div
           className="absolute -inset-px opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none rounded-2xl"
-          style={{ boxShadow: `0 0 40px ${sector.color}30, inset 0 0 30px ${sector.color}10` }}
+          style={{ boxShadow: `0 0 50px ${sector.color}35, inset 0 0 30px ${sector.color}12` }}
         />
 
         {/* Header row */}
@@ -66,12 +66,12 @@ export default function SectorCard({ sector, quote, signal }: SectorCardProps) {
           </div>
           {signal && sigCfg && (
             <span className={`text-[10px] font-bold tracking-widest px-1.5 py-0.5 rounded ${sigCfg.bg} ${sigCfg.text}`}>
-              {session
+              {              session
                 ? signal.direction === 'BUY'
                   ? 'UP'
                   : signal.direction === 'SELL'
                     ? 'DOWN'
-                    : 'FLAT'
+                    : 'NEUTRAL'
                 : signal.direction}
             </span>
           )}

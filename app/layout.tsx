@@ -49,46 +49,66 @@ export default function RootLayout({
           <header className="sticky top-0 z-50 border-b border-slate-800/50 bg-slate-950/90 backdrop-blur-xl">
             <div className="max-w-7xl mx-auto px-4 min-h-14 flex flex-wrap items-center justify-between gap-y-2 py-2">
               <div className="flex items-center gap-4">
-                <a href="/" className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center text-xs font-bold">
+                <a href="/" className="flex items-center gap-2.5 group">
+                  <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center text-xs font-bold text-white shadow-lg shadow-amber-900/50 group-hover:shadow-amber-700/60 transition-shadow">
                     QU
                   </div>
-                  <span className="font-bold text-white text-sm">QUANTAN</span>
-                  <span className="text-slate-500 text-sm hidden sm:block">/ Sector Intelligence</span>
+                  <span className="font-bold text-white text-sm tracking-wide">QUANTAN</span>
+                  <span className="text-slate-500 text-xs hidden lg:block font-mono">/ Market Intelligence</span>
                 </a>
                 <Breadcrumbs />
               </div>
-              <nav className="flex flex-wrap items-center gap-x-4 gap-y-2 sm:gap-6">
-                <Link href="/" className="text-sm font-medium text-slate-400 hover:text-white transition-colors">Markets</Link>
-                <Link href="/desk" className="text-sm font-medium text-slate-400 hover:text-white transition-colors">Desk</Link>
-                <Link href="/commodities" className="text-sm font-medium text-slate-400 hover:text-white transition-colors">Commodities</Link>
-                <Link href="/crypto/btc" className="text-sm font-medium text-slate-400 hover:text-white transition-colors">Crypto</Link>
-                <Link href="/heatmap" className="text-sm font-medium text-slate-400 hover:text-white transition-colors">Heatmap</Link>
-                <Link href="/ma-deviation" className="text-sm font-medium text-slate-400 hover:text-white transition-colors flex items-center gap-1">
-                  <span className="hidden sm:inline">200MA</span>
-                  <span className="sm:hidden">MA</span>
-                  <span className="text-[9px] px-1 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-mono leading-none">NEW</span>
+              <nav className="flex flex-wrap items-center gap-x-3 gap-y-2 sm:gap-5">
+                <Link href="/" className="text-xs font-medium text-slate-400 hover:text-white transition-colors relative group">
+                  Markets
+                  <span className="absolute -bottom-0.5 left-0 w-0 h-px bg-amber-500 group-hover:w-full transition-all duration-200" />
                 </Link>
-                <Link href="/briefs" className="text-sm font-medium text-slate-400 hover:text-white transition-colors">Briefs</Link>
+                <Link href="/desk" className="text-xs font-medium text-slate-400 hover:text-white transition-colors relative group">
+                  Desk
+                  <span className="absolute -bottom-0.5 left-0 w-0 h-px bg-amber-500 group-hover:w-full transition-all duration-200" />
+                </Link>
+                <Link href="/commodities" className="text-xs font-medium text-slate-400 hover:text-white transition-colors relative group">
+                  Commodities
+                  <span className="absolute -bottom-0.5 left-0 w-0 h-px bg-amber-500 group-hover:w-full transition-all duration-200" />
+                </Link>
+                <Link href="/crypto/btc" className="text-xs font-medium text-slate-400 hover:text-white transition-colors relative group">
+                  Crypto
+                  <span className="absolute -bottom-0.5 left-0 w-0 h-px bg-amber-500 group-hover:w-full transition-all duration-200" />
+                </Link>
+                <Link href="/heatmap" className="text-xs font-medium text-slate-400 hover:text-white transition-colors relative group">
+                  Heatmap
+                  <span className="absolute -bottom-0.5 left-0 w-0 h-px bg-amber-500 group-hover:w-full transition-all duration-200" />
+                </Link>
+                <Link href="/ma-deviation" className="text-xs font-medium text-slate-400 hover:text-white transition-colors flex items-center gap-1">
+                  <span>200MA</span>
+                  <span className="text-[9px] px-1 py-0.5 rounded bg-amber-500/20 text-amber-400 font-mono leading-none">NEW</span>
+                </Link>
+                <Link href="/briefs" className="text-xs font-medium text-slate-400 hover:text-white transition-colors relative group">
+                  Briefs
+                  <span className="absolute -bottom-0.5 left-0 w-0 h-px bg-amber-500 group-hover:w-full transition-all duration-200" />
+                </Link>
                 <GlobalSearch />
                 <SafeAuth />
                 <MarketStatus />
-                <div className="flex items-center gap-1.5 bg-green-500/10 px-2 py-1 rounded-md border border-green-500/20">
-                  <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-                  LIVE
-                </div>
               </nav>
             </div>
           </header>
           <main>{children}</main>
           <KeyboardShortcuts />
           <ComplianceBanner />
-          <footer className="border-t border-slate-800 mt-12 py-10">
-            <div className="max-w-7xl mx-auto px-4 text-center text-xs text-slate-600">
-              <p>QUANTAN Market Intelligence · Research and visualization platform for sector & commodity ETFs</p>
-              <p className="mt-1">
-                Data for informational purposes only — not investment advice. Dark pool panels and some signals are simulated for demonstration; verify with licensed data vendors before trading.
-              </p>
+          <footer className="border-t border-slate-800/60 mt-12 py-8">
+            <div className="max-w-7xl mx-auto px-4">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-600">
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 rounded bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center text-[9px] font-bold text-white">QU</div>
+                  <span className="font-medium text-slate-500">QUANTAN</span>
+                  <span className="text-slate-700">·</span>
+                  <span>Market Intelligence Platform</span>
+                </div>
+                <p className="text-center sm:text-right max-w-lg">
+                  Data for informational purposes only — not investment advice. Dark pool panels and some signals are simulated for demonstration purposes.
+                </p>
+              </div>
             </div>
           </footer>
         </Providers>

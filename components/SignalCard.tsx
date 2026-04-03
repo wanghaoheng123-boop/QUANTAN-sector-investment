@@ -47,7 +47,10 @@ export default function SignalCard({ signal, color, compact = false }: SignalCar
 
   if (compact) {
     return (
-      <div className={`rounded-xl p-4 border ${config.bg} ${config.border} hover:brightness-110 transition-all animate-card-enter`}>
+      <div
+        className={`rounded-xl p-4 border ${config.bg} ${config.border} hover:brightness-110 transition-all animate-card-enter`}
+        style={{ boxShadow: `0 0 20px ${color}10` }}
+      >
         <div className="flex items-center justify-between mb-2">
           <span className={`text-xs font-bold ${config.text} tracking-widest`}>{headline}</span>
           <span className="text-xs text-slate-400 font-mono">{signal.etf}</span>

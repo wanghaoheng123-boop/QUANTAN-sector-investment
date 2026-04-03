@@ -6,6 +6,23 @@
   --bg: #08080f;
   --surface: #10101a;
   --border: #1e1e2e;
+  /* Lumina Invest amber palette */
+  --amber-50: #fffbeb;
+  --amber-100: #fef3c7;
+  --amber-200: #fde68a;
+  --amber-300: #fcd34d;
+  --amber-400: #fbbf24;
+  --amber-500: #f59e0b;
+  --amber-600: #d97706;
+  --amber-700: #b45309;
+  --amber-glow: rgba(245, 158, 11, 0.15);
+  --amber-glow-strong: rgba(245, 158, 11, 0.3);
+  /* Semantic colors */
+  --color-up: #00d084;
+  --color-down: #ff4757;
+  --color-accent-amber: #f59e0b;
+  --color-accent-blue: #3b82f6;
+  --color-accent-cyan: #06b6d4;
 }
 
 * {
@@ -133,3 +150,17 @@ body {
 .glow-green { box-shadow: 0 0 20px rgba(0, 208, 132, 0.15); }
 .glow-red { box-shadow: 0 0 20px rgba(255, 71, 87, 0.15); }
 .glow-blue { box-shadow: 0 0 20px rgba(59, 130, 246, 0.15); }
+.glow-amber { box-shadow: 0 0 20px rgba(245, 158, 11, 0.15); }
+
+/* Lumina-style amber card glow */
+.glow-amber-strong {
+  box-shadow: 0 0 30px rgba(245, 158, 11, 0.2), 0 0 60px rgba(245, 158, 11, 0.1), 0 4px 20px rgba(0,0,0,0.4);
+}
+
+/* Premium card hover */
+.card-hover {
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.card-hover:hover {
+  transform: translateY(-2px);
+}

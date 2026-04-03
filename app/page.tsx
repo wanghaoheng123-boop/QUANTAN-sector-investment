@@ -103,25 +103,25 @@ export default function HomePage() {
 
         {/* Hero */}
         <div className="text-center space-y-4 py-6">
-          <div className="inline-flex items-center gap-2 bg-blue-900/30 border border-blue-500/30 rounded-full px-4 py-1.5 text-xs text-blue-400 mb-2">
-            <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-pulse" />
+          <div className="inline-flex items-center gap-2.5 bg-amber-500/10 border border-amber-500/30 rounded-full px-4 py-1.5 text-xs text-amber-400 mb-2 shadow-lg shadow-amber-900/20">
+            <span className="w-1.5 h-1.5 bg-amber-400 rounded-full animate-pulse" />
             Live · {lastUpdate ? `Updated ${lastUpdate.toLocaleTimeString()}` : 'Connecting…'}
-            <span className="ml-1 text-blue-600 font-mono">↻ {countdown}s</span>
+            <span className="ml-1 text-amber-600 font-mono">↻ {countdown}s</span>
           </div>
           <h1 className="text-4xl sm:text-5xl font-bold tracking-tight">
             <span className="gradient-text">Sector Intelligence</span>
           </h1>
-          <p className="text-slate-400 text-lg max-w-xl mx-auto leading-relaxed">
-            Live sector & commodity ETF quotes with charts; desk-style monitor; simulated dark pool / signal cards for workflow demos — verify all data with your vendor feeds.
+          <p className="text-slate-400 text-base max-w-xl mx-auto leading-relaxed">
+            Institutional-grade market intelligence across all 11 GICS sectors — real-time prices, K-line charts, dark pool data, and curated signal briefs.
           </p>
         </div>
 
         {/* Backtest CTA */}
-        <section className="bg-gradient-to-r from-cyan-950/60 via-slate-900/80 to-cyan-950/40 rounded-2xl border border-cyan-800/30 p-6">
+        <section className="bg-gradient-to-r from-amber-950/40 via-slate-900/80 to-amber-950/30 rounded-2xl border border-amber-800/30 p-6">
           <div className="flex items-center justify-between flex-wrap gap-4">
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <span className="text-xs font-mono text-cyan-400 bg-cyan-500/10 border border-cyan-500/20 px-2 py-0.5 rounded">NEW</span>
+                <span className="text-xs font-mono text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded">NEW</span>
                 <h2 className="text-lg font-bold text-white">Institutional Backtest Dashboard</h2>
               </div>
               <p className="text-sm text-slate-400 max-w-lg">
@@ -130,7 +130,7 @@ export default function HomePage() {
             </div>
             <Link
               href="/backtest"
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-semibold rounded-xl transition-colors shadow-lg shadow-cyan-900/30"
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-amber-600 hover:bg-amber-500 text-white text-sm font-semibold rounded-xl transition-colors shadow-lg shadow-amber-900/40"
             >
               <span>View Backtest</span>
               <span>→</span>
@@ -162,14 +162,14 @@ export default function HomePage() {
         </section>
 
         {/* Market Overview Stats */}
-        <section className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <section className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
             { label: 'Sectors Bullish', value: signals.filter((s) => s.direction === 'BUY').length, of: 11, color: '#00d084' },
             { label: 'Sectors Bearish', value: signals.filter((s) => s.direction === 'SELL').length, of: 11, color: '#ff4757' },
-            { label: 'Neutral', value: signals.filter((s) => s.direction === 'HOLD').length, of: 11, color: '#eab308' },
-            { label: 'Avg Confidence', value: `${Math.round(signals.reduce((a, b) => a + b.confidence, 0) / (signals.length || 1))}%`, color: '#3b82f6', noOf: true },
+            { label: 'Neutral', value: signals.filter((s) => s.direction === 'HOLD').length, of: 11, color: '#f59e0b' },
+            { label: 'Avg Confidence', value: `${Math.round(signals.reduce((a, b) => a + b.confidence, 0) / (signals.length || 1))}%`, color: '#f59e0b', noOf: true },
           ].map((stat, i) => (
-            <div key={i} className="rounded-xl border border-slate-800 p-4 bg-slate-900/40">
+            <div key={i} className="rounded-xl border border-slate-800 p-4 bg-slate-900/60 hover:border-slate-700/80 transition-colors">
               <div className="text-2xl font-bold font-mono" style={{ color: stat.color }}>
                 {stat.value}
                 {stat.of && <span className="text-slate-600 text-base font-normal">/{stat.of}</span>}
@@ -196,8 +196,8 @@ export default function HomePage() {
                 <span className="text-slate-400">Down {signals.filter((s) => s.direction === 'SELL').length}</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <div className="w-2 h-2 rounded-full bg-yellow-400" />
-                <span className="text-slate-400">Flat {signals.filter((s) => s.direction === 'HOLD').length}</span>
+                <div className="w-2 h-2 rounded-full bg-amber-400" />
+                <span className="text-slate-400">Neutral {signals.filter((s) => s.direction === 'HOLD').length}</span>
               </div>
             </div>
           </div>
@@ -277,7 +277,7 @@ export default function HomePage() {
                   onClick={() => setActiveFilter(f)}
                   className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
                     activeFilter === f
-                      ? 'bg-blue-600 text-white'
+                      ? 'bg-amber-600 text-white'
                       : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
                   }`}
                 >
@@ -360,7 +360,7 @@ export default function HomePage() {
               { icon: '🔵', title: 'Dark Pool Intelligence', desc: 'Block prints, sweep orders, institutional flow sentiment, and VWAP premium/discount analysis.' },
               { icon: '⚡', title: 'Price Signals', desc: 'Entry, stop loss, and target levels with confidence scores and risk/reward ratios.' },
             ].map((item, i) => (
-              <div key={i} className="text-center space-y-2">
+              <div key={i} className="text-center space-y-2 p-4 rounded-xl border border-slate-800 hover:border-amber-800/40 hover:bg-amber-500/5 transition-all">
                 <div className="text-2xl">{item.icon}</div>
                 <div className="font-semibold text-white text-sm">{item.title}</div>
                 <div className="text-xs text-slate-500 leading-relaxed">{item.desc}</div>
