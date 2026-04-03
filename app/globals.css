@@ -6,23 +6,6 @@
   --bg: #08080f;
   --surface: #10101a;
   --border: #1e1e2e;
-
-  /* Semantic color tokens — used instead of hardcoded hex in components */
-  --color-up: #00d084;
-  --color-down: #ff4757;
-  --color-accent: #3b82f6;
-  --color-accent-cyan: #06b6d4;
-  --color-accent-violet: #8b5cf6;
-  --color-surface-2: #0a0a12;
-  --color-text-primary: #f8fafc;
-  --color-text-secondary: #94a3b8;
-  --color-text-muted: #64748b;
-  --color-border: #1e1e2e;
-
-  /* Glow variants */
-  --glow-green: rgba(0, 208, 132, 0.15);
-  --glow-red: rgba(255, 71, 87, 0.15);
-  --glow-blue: rgba(59, 130, 246, 0.15);
 }
 
 * {
@@ -147,6 +130,6 @@ body {
 }
 
 /* Glow effects */
-.glow-green { box-shadow: 0 0 20px var(--glow-green); }
-.glow-red { box-shadow: 0 0 20px var(--glow-red); }
-.glow-blue { box-shadow: 0 0 20px var(--glow-blue); }
+.glow-green { box-shadow: 0 0 20px rgba(0, 208, 132, 0.15); }
+.glow-red { box-shadow: 0 0 20px rgba(255, 71, 87, 0.15); }
+.glow-blue { box-shadow: 0 0 20px rgba(59, 130, 246, 0.15); }

@@ -988,7 +988,6 @@ export default function KLineChart({
           <div className="relative border-t border-slate-800">
             <div className="absolute left-3 top-1 z-10 text-[10px] text-slate-500 font-mono">
               ATR(14) {latestAtr14 != null ? `$${latestAtr14.toFixed(2)}` : '—'}
-              })()}
             </div>
             <div ref={atrRef} className="w-full rounded-b-lg overflow-hidden" />
           </div>

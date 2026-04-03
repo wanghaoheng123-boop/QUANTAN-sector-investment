@@ -231,18 +231,18 @@ export default function BacktestPage() {
             label="Portfolio Return"
             value={fmtPct(portfolio.avgReturn)}
             sub={`Ann: ${fmtPct(portfolio.avgAnnReturn)}`}
-            color={portfolio.avgReturn >= 0 ? 'var(--color-up)' : 'var(--color-down)'}
+            color={portfolio.avgReturn >= 0 ? 'text-emerald-400' : 'text-red-400'}
           />
           <MetricCard
             label="Alpha vs B&H"
             value={fmtPct(portfolio.alpha)}
             sub={`B&H avg: ${fmtPct(portfolio.bnhAvg)}`}
-            color={portfolio.alpha > 0 ? 'var(--color-accent-cyan)' : '#f97316'}
+            color={portfolio.alpha > 0 ? 'text-cyan-400' : 'text-orange-400'}
           />
           <MetricCard
-            label="Calmar Ratio"
+            label="Sharpe Ratio"
             value={fmtRatio(portfolio.avgAnnReturn > 0 && portfolio.maxPortfolioDd > 0 ? (portfolio.avgAnnReturn / (portfolio.maxPortfolioDd || 1)) : null)}
-            sub="Ann Return / Max DD"
+            sub="Risk-adj return"
             color={portfolio.alpha > 0 ? 'text-cyan-400' : 'text-slate-400'}
           />
           <MetricCard
@@ -398,7 +398,7 @@ function AnalysisTab({ results, sectorColors }: { results: BacktestResult[]; sec
                   </td>
                   <td className="px-4 py-3 font-mono text-slate-400">{row.avgTrades}</td>
                   <td className="px-4 py-3 font-mono text-cyan-400">
-                    {i === 0 ? 'TOP' : i === sectorRows.length - 1 ? 'BOT' : '—'}
+                    {i === 0 ? '🏆 Top' : i === sectorRows.length - 1 ? '📉 Bot' : '—'}
                   </td>
                   <td className="px-4 py-3">
                     <span className={`text-xs px-2 py-0.5 rounded font-bold ${i < 3 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-500'}`}>
@@ -591,7 +591,6 @@ function LiveSignalsPanel() {
   const [signals, setSignals] = useState<Record<string, unknown> | null>(null)
   const [loading, setLoading] = useState(true)
   const [lastFetched, setLastFetched] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
   const [sortKey, setSortKey] = useState<SortKey>('confidence')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [filterSector, setFilterSector] = useState<string>('All')
@@ -600,18 +599,12 @@ function LiveSignalsPanel() {
   const fetchLive = useCallback(async () => {
     try {
       const res = await fetch(apiUrl('/api/backtest/live'), { cache: 'no-store' })
-      if (!res.ok) {
-        setError(`Server error: ${res.status} ${res.statusText}`)
-        setLoading(false)
-        return
-      }
+      if (!res.ok) return
       const json = await res.json()
       setSignals(json)
       setLastFetched(new Date().toLocaleTimeString())
-      setError(null)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load live signals')
-    } finally { setLoading(false) }
+    } catch { /* ignore */ }
+    finally { setLoading(false) }
   }, [])
 
   useEffect(() => { void fetchLive() }, [fetchLive])
@@ -621,14 +614,6 @@ function LiveSignalsPanel() {
       <div className="flex items-center gap-3 text-slate-400 text-sm py-8 justify-center">
         <div className="w-5 h-5 border-2 border-slate-500 border-t-cyan-400 rounded-full animate-spin" />
         Loading live signals…
-      </div>
-    </div>
-  )
-  if (error) return (
-    <div className="space-y-4">
-      <div className="bg-red-950/30 border border-red-900/40 rounded-xl p-4 text-red-400 text-sm">
-        <div className="font-bold mb-1">Failed to load live signals</div>
-        <div className="text-red-300 text-xs">{error}</div>
       </div>
     </div>
   )
@@ -654,23 +639,23 @@ function LiveSignalsPanel() {
   const totalSectors = new Set(rawInsts.map(i => i.sector as string)).size
 
   let marketRegimeLabel = 'NEUTRAL'
-  let regimeIcon = 'NEUTRAL'
+  let regimeEmoji = '⚖️'
   let regimeColor = 'text-slate-400'
   let regimeDesc = ''
 
   if (buyPct !== '0' && Number(buyPct) > 40) {
     marketRegimeLabel = 'BULL REGIME'
-    regimeIcon = 'BULL'
+    regimeEmoji = '🟢'
     regimeColor = 'text-emerald-400'
     regimeDesc = `${sectorWithBuy}/${totalSectors} sectors showing BUY signals — selective buying in corrections.`
   } else if (sellCount > buyCount * 2) {
     marketRegimeLabel = 'BEAR REGIME'
-    regimeIcon = 'BEAR'
+    regimeEmoji = '🔴'
     regimeColor = 'text-red-400'
     regimeDesc = `Broad weakness: ${sellCount} instruments in sell regime. Risk-off environment.`
   } else if (holdCount > total * 0.7) {
     marketRegimeLabel = 'PAUSE / DISTRIBUTION'
-    regimeIcon = 'HOLD'
+    regimeEmoji = '⚠️'
     regimeColor = 'text-amber-400'
     regimeDesc = `Market in digestion phase — ${holdCount} instruments on hold. Awaiting setups.`
   } else {
@@ -733,7 +718,7 @@ function LiveSignalsPanel() {
         {/* Market regime badge */}
         <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-4">
           <div className="flex items-center gap-2 mb-2">
-            <span className={`text-xs font-bold px-2 py-1 rounded ${regimeColor} bg-current/10 border border-current/20`}>{regimeIcon}</span>
+            <span className="text-2xl">{regimeEmoji}</span>
             <span className={`text-lg font-bold ${regimeColor}`}>{marketRegimeLabel}</span>
           </div>
           <p className="text-xs text-slate-400 leading-relaxed">{regimeDesc}</p>
