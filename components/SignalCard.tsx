@@ -18,7 +18,7 @@ const DIRECTION_CONFIG = {
 function sessionDirectionLabel(direction: PriceSignal['direction']): string {
   if (direction === 'BUY') return 'UP'
   if (direction === 'SELL') return 'DOWN'
-  return 'FLAT'
+  return 'NEUTRAL'
 }
 
 function formatRiskReward(signal: PriceSignal): string {

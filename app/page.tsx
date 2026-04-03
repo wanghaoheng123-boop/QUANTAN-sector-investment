@@ -105,7 +105,23 @@ export default function HomePage() {
         <div className="text-center space-y-4 py-6">
           <div className="inline-flex items-center gap-2 bg-blue-900/30 border border-blue-500/30 rounded-full px-4 py-1.5 text-xs text-blue-400 mb-2">
             <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-pulse" />
-            Live · {lastUpdate ? `Updated ${lastUpdate.toLocaleTimeString()}` : 'Connecting...'}
+            {(() => {
+              const now = new Date()
+              const hour = now.getHours()
+              const isMarketHours = hour >= 9 && hour < 16
+              const isPreMarket = hour >= 4 && hour < 9
+              const marketLabel = isMarketHours ? 'MARKET OPEN' : isPreMarket ? 'PRE-MARKET' : 'AFTER-HOURS'
+              const latestQuote = quotes['SPY']?.quoteTime
+              const quoteDate = latestQuote ? new Date(latestQuote) : null
+              const dateStr = quoteDate ? quoteDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : null
+              return (
+                <>
+                  <span className="font-semibold tracking-wide">{marketLabel}</span>
+                  {dateStr && <span className="text-blue-600">· {dateStr}</span>}
+                  {lastUpdate && <span className="text-blue-600">· Refreshed {lastUpdate.toLocaleTimeString()}</span>}
+                </>
+              )
+            })()}
             <span className="ml-1 text-blue-600 font-mono">↻ {countdown}s</span>
           </div>
           <h1 className="text-4xl sm:text-5xl font-bold tracking-tight">
@@ -169,7 +185,7 @@ export default function HomePage() {
           {[
             { label: 'Sectors up (session)', value: signals.filter((s) => s.direction === 'BUY').length, of: 11, color: '#00d084' },
             { label: 'Sectors down (session)', value: signals.filter((s) => s.direction === 'SELL').length, of: 11, color: '#ff4757' },
-            { label: 'Flat (|Δ| ≤ 0.01%)', value: signals.filter((s) => s.direction === 'HOLD').length, of: 11, color: '#eab308' },
+            { label: 'Neutral (|Δ| ≤ 0.01%)', value: signals.filter((s) => s.direction === 'HOLD').length, of: 11, color: '#eab308' },
             { label: 'Median |move|', value: `${medianAbsMove.toFixed(2)}%`, color: '#3b82f6' },
           ].map((stat, i) => (
             <div key={i} className="rounded-xl border border-slate-800 p-4 bg-slate-900/40">

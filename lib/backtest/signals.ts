@@ -16,9 +16,11 @@ export function ema(values: number[], period: number): number[] {
   const k = 2 / (period + 1)
   const out: number[] = []
   if (values.length === 0) return out
-  let prev = values[0]
+  if (values.length < period) return values.map(v => NaN)
+  // Seed with SMA of first `period` values — standard Wilder/init method
+  let prev = values.slice(0, period).reduce((a, b) => a + b, 0) / period
   out.push(prev)
-  for (let i = 1; i < values.length; i++) {
+  for (let i = period; i < values.length; i++) {
     prev = values[i] * k + prev * (1 - k)
     out.push(prev)
   }
@@ -75,6 +77,7 @@ export function atr(bars: OhlcBar[], period = 14): number[] {
       Math.abs(bars[i].low - bars[i - 1].close),
     ))
   }
+  let avg = trs.slice(0, period).reduce((a, b) => a + b, 0) / period
   out[period - 1] = avg
   for (let i = period; i < trs.length; i++) {
     avg = (avg * (period - 1) + trs[i]) / period

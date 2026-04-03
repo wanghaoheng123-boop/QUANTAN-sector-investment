@@ -198,7 +198,7 @@ export function backtestInstrument(
         }
         // 4x ATR profit → tighten to lock in 1x ATR gain from entry price
         if (profitFromEntry >= fourAtrProfit) {
-          const lockStopPx = state.openTrade.entryPrice + atrAtEntryVal  // lock 1x ATR from entry
+          const lockStopPx = state.openTrade.entryPrice + atrAtEntryDollar  // lock 1x ATR from entry
           if (signalPrice <= lockStopPx) {
             const proceeds = state.position * signalPrice
             const txCost = proceeds * TX_COST_PCT_PER_SIDE
