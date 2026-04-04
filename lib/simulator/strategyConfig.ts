@@ -457,6 +457,17 @@ export const DEFAULT_TRANSACTION_COST_CONFIG: TransactionCostConfig = {
  */
 export type StrategyMode = 'regime' | 'momentum' | 'mean_reversion' | 'breakout'
 
+/**
+ * Human-readable labels for each strategy mode.
+ * Used in the UI strategy info bar and mode toggle.
+ */
+export const MODE_LABELS: Record<StrategyMode, string> = {
+  regime: '200EMA Deviation Regime + RSI/MACD/ATR/BB',
+  momentum: 'Momentum Breakout',
+  mean_reversion: 'Mean Reversion (Z-Score)',
+  breakout: 'Volume Confirmed Breakout',
+}
+
 export interface MomentumModeConfig {
   /** Number of bars over which to measure momentum (rate of price change). @default 20 */
   momentumLookback: number

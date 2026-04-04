@@ -231,12 +231,8 @@ export async function POST(request: Request) {
     const hasCustomTickers = tickers && tickers.length > 0
     const data = await runBacktest(tickers, config, lookbackDays, hasCustomTickers)
     if (!hasCustomTickers) cache = { data, timestamp: Date.now() }
-    return NextResponse.json({
-      status: 'ok',
-      computedAt: data.computedAt,
-      dataSource: data.dataSource,
-      totalInstruments: data.instruments.length,
-    })
+    // Return full BacktestData so the unified page can display results immediately
+    return NextResponse.json(data)
   } catch (e) {
     return NextResponse.json(
       { error: 'Recompute failed', message: e instanceof Error ? e.message : String(e) },
