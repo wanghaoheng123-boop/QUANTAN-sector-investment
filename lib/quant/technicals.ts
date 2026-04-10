@@ -1,20 +1,39 @@
-/** Price-based indicators from OHLC series (oldest → newest). */
+/**
+ * Price-based indicators from OHLC series (oldest → newest).
+ *
+ * Thin re-export layer over the canonical indicators.ts.
+ * These functions return single latest values (backward-compatible API).
+ */
 
-export interface OhlcBar {
-  open: number
-  high: number
-  low: number
-  close: number
-}
+// Re-export the OhlcBar type from canonical source
+export type { OhlcBar } from './indicators'
+
+import {
+  smaLatest,
+  ema as emaCanonical,
+  rsiLatest,
+  macdLatest,
+  bollingerLatest,
+  atrLatest,
+  maxDrawdown as maxDrawdownCanonical,
+  dailyReturns as dailyReturnsCanonical,
+  sharpeRatio as sharpeRatioCanonical,
+  sortinoRatio as sortinoRatioCanonical,
+} from './indicators'
+import type { OhlcBar } from './indicators'
 
 export function sma(values: number[], period: number): number | null {
-  if (values.length < period) return null
-  const slice = values.slice(-period)
-  const s = slice.reduce((a, b) => a + b, 0)
-  return s / period
+  return smaLatest(values, period)
 }
 
+/**
+ * EMA returning full array. Uses SMA-seeded initialization (Wilder standard).
+ * Note: This returns a shorter array than input (starts at period-1).
+ * For backward compatibility with code that expects input-length arrays,
+ * the original implementation is preserved here.
+ */
 export function ema(values: number[], period: number): number[] {
+  // Preserve original behavior: returns same-length array, seeded from first value
   const k = 2 / (period + 1)
   const out: number[] = []
   if (values.length === 0) return out
@@ -27,32 +46,8 @@ export function ema(values: number[], period: number): number[] {
   return out
 }
 
-/** Wilder RSI (14).
- * FIX H2: Properly uses FIRST `period` changes for initialization (not last),
- * and applies Wilder's recursive smoothing formula.
- * This matches the industry-standard Wilder RSI implementation.
- */
 export function rsi(closes: number[], period = 14): number | null {
-  if (closes.length < period + 1) return null
-  let avgGain = 0
-  let avgLoss = 0
-  // FIX: Use FIRST `period` changes (not last), initialized as simple average
-  for (let i = 1; i <= period; i++) {
-    const ch = closes[i] - closes[i - 1]
-    if (ch >= 0) avgGain += ch
-    else avgLoss -= ch
-  }
-  avgGain /= period
-  avgLoss /= period
-  // FIX: Apply Wilder smoothing for subsequent bars (recursive formula)
-  for (let i = period + 1; i < closes.length; i++) {
-    const ch = closes[i] - closes[i - 1]
-    avgGain = (avgGain * (period - 1) + Math.max(0, ch)) / period
-    avgLoss = (avgLoss * (period - 1) + Math.max(0, -ch)) / period
-  }
-  if (avgLoss === 0) return 100
-  const rs = avgGain / avgLoss
-  return 100 - 100 / (1 + rs)
+  return rsiLatest(closes, period)
 }
 
 export function macd(closes: number[]): {
@@ -60,19 +55,7 @@ export function macd(closes: number[]): {
   signal: number | null
   histogram: number | null
 } {
-  if (closes.length < 35) return { line: null, signal: null, histogram: null }
-  const ema12 = ema(closes, 12)
-  const ema26 = ema(closes, 26)
-  const lineSeries: number[] = []
-  for (let i = 0; i < closes.length; i++) {
-    lineSeries.push(ema12[i] - ema26[i])
-  }
-  const signalSeries = ema(lineSeries, 9)
-  const i = closes.length - 1
-  const line = lineSeries[i]
-  const signal = signalSeries[i]
-  if (line == null || signal == null) return { line: null, signal: null, histogram: null }
-  return { line, signal, histogram: line - signal }
+  return macdLatest(closes)
 }
 
 export function bollinger(closes: number[], period = 20, mult = 2): {
@@ -81,100 +64,30 @@ export function bollinger(closes: number[], period = 20, mult = 2): {
   lower: number | null
   pctB: number | null
 } {
-  if (closes.length < period) return { mid: null, upper: null, lower: null, pctB: null }
-  const slice = closes.slice(-period)
-  const mid = slice.reduce((a, b) => a + b, 0) / period
-  const varSample =
-    slice.reduce((s, x) => s + (x - mid) * (x - mid), 0) / Math.max(1, period - 1)
-  const sd = Math.sqrt(Math.max(varSample, 0))
-  const upper = mid + mult * sd
-  const lower = mid - mult * sd
-  const last = closes[closes.length - 1]
-  const pctB = upper !== lower ? (last - lower) / (upper - lower) : null
-  return { mid, upper, lower, pctB }
+  return bollingerLatest(closes, period, mult)
 }
 
-/** Wilder ATR (Average True Range).
- * FIX H1: Properly initializes from FIRST `period` TRs (not last),
- * and applies Wilder's recursive smoothing formula.
- *
- * Returns the most recent ATR value as a single number (backward compatible).
- * For full time series, use the parallel implementation in lib/backtest/signals.ts atr().
- */
 export function atr(bars: OhlcBar[], period = 14): number | null {
-  if (bars.length < period + 1) return null
-  const trs: number[] = []
-  for (let i = 1; i < bars.length; i++) {
-    trs.push(Math.max(
-      bars[i].high - bars[i].low,
-      Math.abs(bars[i].high - bars[i - 1].close),
-      Math.abs(bars[i].low - bars[i - 1].close),
-    ))
-  }
-  // FIX: Initialize from FIRST `period` TRs (not last), with Wilder smoothing
-  let avg = trs.slice(0, period).reduce((a, b) => a + b, 0) / period
-  for (let i = period; i < trs.length; i++) {
-    avg = (avg * (period - 1) + trs[i]) / period  // Wilder smoothing
-  }
-  return avg
+  return atrLatest(bars, period)
 }
 
 export function maxDrawdown(closes: number[]): { maxDd: number; maxDdPct: number } | null {
-  if (closes.length < 2) return null
-  let peak = closes[0]
-  let maxDd = 0
-  for (const c of closes) {
-    if (c > peak) peak = c
-    const dd = peak - c
-    if (dd > maxDd) maxDd = dd
-  }
-  const maxDdPct = peak > 0 ? maxDd / peak : 0
-  return { maxDd, maxDdPct }
+  return maxDrawdownCanonical(closes)
 }
 
 export function dailyReturns(closes: number[]): number[] {
-  const r: number[] = []
-  for (let i = 1; i < closes.length; i++) {
-    if (closes[i - 1] > 0) r.push(closes[i] / closes[i - 1] - 1)
-  }
-  return r
+  return dailyReturnsCanonical(closes)
 }
 
-/** Sample Sharpe (daily), annualized; rf annual default 4%. */
 export function sharpeRatio(dailyReturns: number[], rfAnnual = 0.04): number | null {
-  if (dailyReturns.length < 20) return null
-  const rfD = rfAnnual / 252
-  const excess = dailyReturns.map((x) => x - rfD)
-  const mean = excess.reduce((a, b) => a + b, 0) / excess.length
-  const v =
-    excess.reduce((s, x) => s + (x - mean) * (x - mean), 0) / Math.max(1, excess.length - 1)
-  const sd = Math.sqrt(Math.max(v, 0))
-  if (sd === 0) return null
-  return (mean / sd) * Math.sqrt(252)
+  return sharpeRatioCanonical(dailyReturns, rfAnnual)
 }
 
-/** Sortino using downside deviation vs MAR.
- * FIX C1: Denominator must be total observations N, not count of negative returns.
- * Correct formula: DSd = sqrt(sum(min(0, r_i - MAR)^2) / N)
- * where N = total number of daily return observations.
- */
 export function sortinoRatio(dailyReturns: number[], marDaily = 0): number | null {
-  if (dailyReturns.length < 20) return null
-  const n = dailyReturns.length
-  // Downside deviations: only negative excess returns over MAR
-  const downsideSq = dailyReturns.map((x) => {
-    const dev = Math.min(0, x - marDaily)
-    return dev * dev
-  })
-  // FIX: Use total N as denominator (not count of negative observations)
-  const downsideVariance = downsideSq.reduce((s, x) => s + x, 0) / n
-  const dsd = Math.sqrt(downsideVariance)
-  if (dsd === 0) return null
-  const mean = dailyReturns.reduce((a, b) => a + b, 0) / n
-  // Use excess return over MAR for numerator
-  const excessMean = mean - marDaily
-  return (excessMean / dsd) * Math.sqrt(252)
+  return sortinoRatioCanonical(dailyReturns, marDaily)
 }
+
+// ─── Functions that remain unique to technicals.ts ──────────────────────────
 
 export function trendLabel(sma50: number | null, sma200: number | null, price: number): string {
   if (sma50 == null || sma200 == null) return 'Insufficient history'
@@ -184,20 +97,11 @@ export function trendLabel(sma50: number | null, sma200: number | null, price: n
   return 'Death cross zone (SMA50 below SMA200)'
 }
 
-/**
- * Deviation of current price from the 200-day SMA as a percentage.
- * Positive = above, negative = below.
- */
 export function sma200DeviationPct(price: number, sma200: number): number | null {
   if (!Number.isFinite(sma200) || sma200 <= 0 || !Number.isFinite(price)) return null
   return ((price - sma200) / sma200) * 100
 }
 
-/**
- * Slope of the 200-day SMA: positive means rising, negative means declining.
- * Computed as (SMA200_last - SMA200_20bar_ago) / SMA200_20bar_ago
- * Requires closes array of at least 220 bars (200 + 20 lookback).
- */
 export function sma200Slope(closes: number[]): number | null {
   if (closes.length < 221) return null
   const sma200Now = sma(closes, 200)
@@ -207,43 +111,29 @@ export function sma200Slope(closes: number[]): number | null {
 }
 
 export type MA200Zone =
-  | 'EXTREME_BULL'    // > +20%
-  | 'EXTENDED_BULL'   // +10% to +20%
-  | 'HEALTHY_BULL'    // 0% to +10%
-  | 'FIRST_DIP'       // -0% to -10%
-  | 'DEEP_DIP'        // -10% to -20%
-  | 'BEAR_ALERT'      // -20% to -30%
-  | 'CRASH_ZONE'      // < -30%
+  | 'EXTREME_BULL'
+  | 'EXTENDED_BULL'
+  | 'HEALTHY_BULL'
+  | 'FIRST_DIP'
+  | 'DEEP_DIP'
+  | 'BEAR_ALERT'
+  | 'CRASH_ZONE'
   | 'INSUFFICIENT_DATA'
 
 export interface MA200Regime {
   zone: MA200Zone
   deviationPct: number | null
-  slopePositive: boolean | null       // true = 200MA rising, false = declining, null = unknown
-  /** Raw slope: (SMA200_now − SMA200_20bars_ago) / SMA200_20bars_ago — e.g. 0.00087 = +0.087%/bar */
+  slopePositive: boolean | null
   slopePct: number | null
   label: string
-  color: string                        // hex color for UI
+  color: string
   riskLevel: 'low' | 'medium' | 'high' | 'extreme'
   interpretation: string
-  /** Empirical median 12M forward return context (historical study basis, not a guarantee) */
   forwardReturnContext: string
-  /** Signal for buy-dip vs falling-knife logic */
   dipSignal: 'STRONG_DIP' | 'WATCH_DIP' | 'FALLING_KNIFE' | 'OVERBOUGHT' | 'IN_TREND' | 'INSUFFICIENT_DATA'
   dipSignalExplained: string
 }
 
-/**
- * Master 200-day MA deviation regime classifier.
- *
- * Combines deviation% + SMA200 slope to distinguish true buying opportunities
- * from falling-knife scenarios. Based on empirical S&P 500 / sector ETF backtests
- * (1990–2024 cross-section of historical daily data).
- *
- * @param price       Current price
- * @param closes      Full close series (oldest → newest, ≥ 220 bars ideal)
- * @param rsi14       Optional current RSI(14) for enhanced signal quality
- */
 export function ma200Regime(
   price: number,
   closes: number[],
@@ -272,7 +162,6 @@ export function ma200Regime(
   const slope = sma200Slope(closes)
   const slopePositive = slope != null ? slope > 0 : null
 
-  // --- Zone classification ---
   let zone: MA200Zone
   if (dev > 20) zone = 'EXTREME_BULL'
   else if (dev > 10) zone = 'EXTENDED_BULL'
@@ -282,7 +171,6 @@ export function ma200Regime(
   else if (dev >= -30) zone = 'BEAR_ALERT'
   else zone = 'CRASH_ZONE'
 
-  // --- Zone metadata ---
   const zoneData: Record<MA200Zone, {
     label: string; color: string; riskLevel: MA200Regime['riskLevel']
     interpretation: string; forwardReturnContext: string
@@ -347,7 +235,6 @@ export function ma200Regime(
 
   const meta = zoneData[zone]
 
-  // --- Falling knife vs true dip signal ---
   let dipSignal: MA200Regime['dipSignal']
   let dipSignalExplained: string
 
@@ -359,7 +246,7 @@ export function ma200Regime(
     dipSignalExplained = `Price is in a healthy uptrend, ${dev.toFixed(1)}% above the 200-day SMA. No dip signal — standard hold/accumulate-on-correction posture.`
   } else if (zone === 'FIRST_DIP') {
     if (slopePositive === true) {
-      dipSignal = rsi14 != null && rsi14 < 35 ? 'STRONG_DIP' : 'STRONG_DIP'
+      dipSignal = 'STRONG_DIP'
       dipSignalExplained = `First test of rising 200-day SMA (${dev.toFixed(1)}% below). 200MA slope is POSITIVE — this is a textbook high-probability buy zone. ${rsi14 != null ? `RSI(14) at ${rsi14.toFixed(0)} ${rsi14 < 40 ? '— oversold confirmation' : '— not yet oversold, consider scaling in'}.` : ''}`
     } else if (slopePositive === false) {
       dipSignal = 'WATCH_DIP'
@@ -398,7 +285,7 @@ export function ma200Regime(
     zone,
     deviationPct: dev,
     slopePositive,
-    slopePct: slope,        // raw numeric slope: e.g. 0.00087 = +0.087%/bar
+    slopePct: slope,
     label: meta.label,
     color: meta.color,
     riskLevel: meta.riskLevel,

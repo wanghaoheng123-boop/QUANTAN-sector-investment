@@ -1,108 +1,19 @@
 /**
  * Backtest signal generators — shared across API routes and scripts.
- * Mirrors lib/quant/technicals.ts but produces named signal objects for backtesting.
+ * Uses canonical indicators from lib/quant/indicators.ts.
  */
 
-import type { OhlcBar } from '@/lib/quant/technicals'
+import type { OhlcBar } from '@/lib/quant/indicators'
+import {
+  smaLatest as sma,
+  ema,
+  rsiArray as rsi,
+  macdArray as macdFn,
+  atrArray as atr,
+  bollingerArray as bollinger,
+} from '@/lib/quant/indicators'
 
-// ─── Core math helpers ───────────────────────────────────────────────────────
-
-export function sma(values: number[], period: number): number | null {
-  if (values.length < period) return null
-  return values.slice(-period).reduce((a, b) => a + b, 0) / period
-}
-
-export function ema(values: number[], period: number): number[] {
-  const k = 2 / (period + 1)
-  const out: number[] = []
-  if (values.length === 0) return out
-  if (values.length < period) return values.map(v => NaN)
-  // Seed with SMA of first `period` values — standard Wilder/init method
-  let prev = values.slice(0, period).reduce((a, b) => a + b, 0) / period
-  out.push(prev)
-  for (let i = period; i < values.length; i++) {
-    prev = values[i] * k + prev * (1 - k)
-    out.push(prev)
-  }
-  return out
-}
-
-export function rsi(closes: number[], period = 14): number[] {
-  const out: number[] = new Array(closes.length).fill(NaN)
-  if (closes.length < period + 1) return out
-  let avgGain = 0, avgLoss = 0
-  for (let i = 1; i <= period; i++) {
-    const d = closes[i] - closes[i - 1]
-    if (d >= 0) avgGain += d; else avgLoss -= d
-  }
-  avgGain /= period; avgLoss /= period
-  out[period] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss)
-  for (let i = period + 1; i < closes.length; i++) {
-    const d = closes[i] - closes[i - 1]
-    avgGain = (avgGain * (period - 1) + Math.max(0, d)) / period
-    avgLoss = (avgLoss * (period - 1) + Math.max(0, -d)) / period
-    out[i] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss)
-  }
-  return out
-}
-
-export function macdFn(closes: number[], fast = 12, slow = 26, signal = 9): {
-  line: number[]; signal: number[]; histogram: number[]
-} {
-  const outLine: number[] = new Array(closes.length).fill(NaN)
-  const outSig: number[] = new Array(closes.length).fill(NaN)
-  if (closes.length < slow) return { line: outLine, signal: outSig, histogram: new Array(closes.length).fill(NaN) }
-  const emaFast = ema(closes, fast)
-  const emaSlow = ema(closes, slow)
-  for (let i = 0; i < closes.length; i++) outLine[i] = emaFast[i] - emaSlow[i]
-  const validLine = outLine.slice(slow - 1)
-  const sigEma = ema(validLine, signal)
-  for (let i = 0; i < sigEma.length; i++) outSig[i + slow - 1] = sigEma[i]
-  const outHist = outLine.map((l, i) => {
-    const s = outSig[i]
-    if (!Number.isFinite(l) || !Number.isFinite(s)) return NaN
-    return l - s
-  })
-  return { line: outLine, signal: outSig, histogram: outHist }
-}
-
-export function atr(bars: OhlcBar[], period = 14): number[] {
-  const out: number[] = new Array(bars.length).fill(NaN)
-  if (bars.length < period + 1) return out
-  const trs: number[] = []
-  for (let i = 1; i < bars.length; i++) {
-    trs.push(Math.max(
-      bars[i].high - bars[i].low,
-      Math.abs(bars[i].high - bars[i - 1].close),
-      Math.abs(bars[i].low - bars[i - 1].close),
-    ))
-  }
-  let avg = trs.slice(0, period).reduce((a, b) => a + b, 0) / period
-  out[period - 1] = avg
-  for (let i = period; i < trs.length; i++) {
-    avg = (avg * (period - 1) + trs[i]) / period
-    out[i] = avg
-  }
-  return out
-}
-
-export function bollinger(closes: number[], period = 20, mult = 2): {
-  mid: number[]; upper: number[]; lower: number[]; pctB: number[]
-} {
-  const mid: number[] = new Array(closes.length).fill(NaN)
-  const upper: number[] = new Array(closes.length).fill(NaN)
-  const lower: number[] = new Array(closes.length).fill(NaN)
-  const pctB: number[] = new Array(closes.length).fill(NaN)
-  if (closes.length < period) return { mid, upper, lower, pctB }
-  for (let i = period - 1; i < closes.length; i++) {
-    const slice = closes.slice(i - period + 1, i + 1)
-    const m = slice.reduce((a, b) => a + b, 0) / period
-    const sd = Math.sqrt(slice.reduce((s, x) => s + (x - m) ** 2, 0) / (period - 1))
-    mid[i] = m; upper[i] = m + mult * sd; lower[i] = m - mult * sd
-    if (upper[i] !== lower[i]) pctB[i] = (closes[i] - lower[i]) / (upper[i] - lower[i])
-  }
-  return { mid, upper, lower, pctB }
-}
+export { sma, ema, rsi, macdFn, atr, bollinger }
 
 export function sma200DeviationPct(price: number, sma200: number): number | null {
   if (!Number.isFinite(sma200) || sma200 <= 0 || !Number.isFinite(price)) return null
