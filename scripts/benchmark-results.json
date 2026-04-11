@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-04-10T17:09:51.682Z",
+  "timestamp": "2026-04-11T00:59:29.068Z",
   "version": "v1.0-phase1-baseline",
   "strategy": "200SMA-regime + RSI + slope confirmation (simplified)",
   "aggregate": {

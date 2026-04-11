@@ -3,7 +3,7 @@
  * Uses canonical indicators from lib/quant/indicators.ts.
  */
 
-import type { OhlcBar } from '@/lib/quant/indicators'
+import type { OhlcBar, OhlcvBar } from '@/lib/quant/indicators'
 import {
   smaLatest as sma,
   ema,
@@ -12,6 +12,9 @@ import {
   atrArray as atr,
   bollingerArray as bollinger,
 } from '@/lib/quant/indicators'
+import { multiTimeframeSignal } from '@/lib/quant/multiTimeframe'
+import { detectRegime, type RegimeState as VolRegimeState } from '@/lib/quant/regimeDetection'
+import { volumeProfile, priceRelativeToPOC, type PriceZone } from '@/lib/quant/volumeProfile'
 
 export { sma, ema, rsi, macdFn, atr, bollinger }
 
@@ -297,4 +300,196 @@ function deviationLabel(dev: number | null): string {
   if (dev === null) return '?'
   if (dev >= 0) return `+${dev.toFixed(1)}%`
   return `${dev.toFixed(1)}%`
+}
+
+// ─── Enhanced weighted confluence signal ──────────────────────────────────────
+
+export interface WeightedConfirm extends ConfirmSignal {
+  weight: number         // 0.0-1.0
+  score: number          // -1 to +1
+  weightedScore: number  // weight * score
+}
+
+export interface EnhancedCombinedSignal extends CombinedSignal {
+  weightedConfirms: WeightedConfirm[]
+  volRegime: VolRegimeState
+  multiTfScore: number
+  volumeZone: PriceZone | null
+  totalWeightedScore: number
+}
+
+/** Clamp a value between min and max. */
+function clamp(val: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, val))
+}
+
+/**
+ * Default weight profiles. Weights must sum to 1.0.
+ * Adjusted based on regime: trend-following boosts MACD/Multi-TF,
+ * mean-reversion boosts RSI/BB%B.
+ */
+const WEIGHT_PROFILES: Record<string, { rsi: number; macd: number; atr: number; bb: number; vpoc: number; mtf: number; volReg: number }> = {
+  default:         { rsi: 0.20, macd: 0.15, atr: 0.10, bb: 0.15, vpoc: 0.10, mtf: 0.20, volReg: 0.10 },
+  trend_following: { rsi: 0.15, macd: 0.20, atr: 0.10, bb: 0.10, vpoc: 0.10, mtf: 0.25, volReg: 0.10 },
+  mean_reversion:  { rsi: 0.25, macd: 0.10, atr: 0.10, bb: 0.20, vpoc: 0.10, mtf: 0.15, volReg: 0.10 },
+  neutral:         { rsi: 0.20, macd: 0.15, atr: 0.10, bb: 0.15, vpoc: 0.10, mtf: 0.20, volReg: 0.10 },
+}
+
+/** Volume zone to score mapping. */
+function volumeZoneScore(zone: PriceZone | null): number {
+  if (zone === null) return 0
+  switch (zone) {
+    case 'below_va': return 0.8   // below value area = potential support = bullish
+    case 'at_poc':   return 0.3   // at POC = fair value
+    case 'in_va':    return 0.0   // inside value area = neutral
+    case 'above_va': return -0.5  // above value area = extended
+  }
+}
+
+/** Volatility regime to score mapping. */
+function volRegimeScore(regime: VolRegimeState): number {
+  switch (regime.volatilityRegime) {
+    case 'low':    return 0.5   // compression = potential breakout
+    case 'normal': return 0.2
+    case 'high':   return -0.3
+    case 'crisis': return -0.8
+  }
+}
+
+/**
+ * Enhanced signal using weighted multi-factor confluence.
+ *
+ * Replaces the simple bullishCount >= 2 with a weighted scoring system.
+ * Each indicator contributes a score from -1 (bearish) to +1 (bullish),
+ * multiplied by its regime-adaptive weight.
+ *
+ * BUY threshold: totalWeightedScore > 0.25
+ * SELL threshold: totalWeightedScore < -0.30
+ *
+ * @param ohlcvBars - Bars with volume (and optionally time) for volume profile & multi-TF
+ */
+export function enhancedCombinedSignal(
+  ticker: string,
+  date: string,
+  price: number,
+  closes: number[],
+  bars: OhlcBar[],
+  ohlcvBars: (OhlcvBar & { time?: number })[],
+  config: Partial<BacktestConfig> = {},
+): EnhancedCombinedSignal {
+  const cfg = { ...DEFAULT_CONFIG, ...config }
+
+  // Compute base indicators
+  const rsiVals = rsi(closes)
+  const macdVals = macdFn(closes)
+  const atrVals = atr(bars)
+  const bbVals = bollinger(closes)
+
+  const rsi14 = rsiVals[rsiVals.length - 1]
+  const macdHist = macdVals.histogram[macdVals.histogram.length - 1]
+  const atrLast = atrVals[atrVals.length - 1]
+  const bbPctB = bbVals.pctB[bbVals.pctB.length - 1]
+  const atrPct = Number.isFinite(atrLast) && Number.isFinite(price) && price > 0
+    ? (atrLast / price) * 100 : NaN
+
+  // Regime detection
+  const regime = regimeSignal(price, closes, rsi14)
+  const volRegime = detectRegime(closes, bars)
+
+  // Multi-timeframe alignment
+  const mtf = multiTimeframeSignal(ohlcvBars)
+
+  // Volume profile
+  const vp = volumeProfile(ohlcvBars)
+  const vpZone: PriceZone | null = vp ? priceRelativeToPOC(price, vp) : null
+
+  // Select weight profile based on strategy hint
+  const weights = WEIGHT_PROFILES[volRegime.strategyHint] ?? WEIGHT_PROFILES.default
+
+  // ── Compute per-indicator scores (-1 to +1) ──
+  const rsiScore = Number.isFinite(rsi14) ? (50 - rsi14) / 50 : 0
+  const macdScore = Number.isFinite(macdHist) && Number.isFinite(atrLast) && atrLast > 0
+    ? clamp(macdHist / (atrLast * 0.1), -1, 1) : 0
+  const atrScore = Number.isFinite(atrPct) ? clamp((atrPct - 1.5) / 2.0, -1, 1) : 0
+  const bbScore = Number.isFinite(bbPctB) ? 1 - 2 * bbPctB : 0
+  const vpocScore = volumeZoneScore(vpZone)
+  const mtfScore = mtf.alignmentScore / 3.0
+  const volRegScore = volRegimeScore(volRegime)
+
+  // ── Build weighted confirms ──
+  const weightedConfirms: WeightedConfirm[] = [
+    { name: 'RSI(14)', value: Number.isFinite(rsi14) ? rsi14 : null, bullish: rsiScore > 0.3, weight: weights.rsi, score: rsiScore, weightedScore: weights.rsi * rsiScore },
+    { name: 'MACD hist', value: Number.isFinite(macdHist) ? macdHist : null, bullish: macdScore > 0.3, weight: weights.macd, score: macdScore, weightedScore: weights.macd * macdScore },
+    { name: 'ATR%', value: Number.isFinite(atrPct) ? atrPct : null, bullish: atrScore > 0.3, weight: weights.atr, score: atrScore, weightedScore: weights.atr * atrScore },
+    { name: 'BB%', value: Number.isFinite(bbPctB) ? bbPctB : null, bullish: bbScore > 0.3, weight: weights.bb, score: bbScore, weightedScore: weights.bb * bbScore },
+    { name: 'Vol POC', value: vpZone ? vpocScore : null, bullish: vpocScore > 0.3, weight: weights.vpoc, score: vpocScore, weightedScore: weights.vpoc * vpocScore },
+    { name: 'Multi-TF', value: mtf.alignmentScore, bullish: mtfScore > 0.3, weight: weights.mtf, score: mtfScore, weightedScore: weights.mtf * mtfScore },
+    { name: 'Vol Regime', value: volRegime.volRatio, bullish: volRegScore > 0, weight: weights.volReg, score: volRegScore, weightedScore: weights.volReg * volRegScore },
+  ]
+
+  const totalWeightedScore = weightedConfirms.reduce((s, c) => s + c.weightedScore, 0)
+
+  // ── Action determination ──
+  let action: 'BUY' | 'HOLD' | 'SELL' = regime.action
+
+  // Use weighted score for confirmation instead of bullishCount
+  if (action === 'BUY' && totalWeightedScore <= 0.25) {
+    action = 'HOLD'
+  }
+  if (action === 'HOLD' && totalWeightedScore < -0.30) {
+    action = 'SELL'
+  }
+  // Overbought override
+  if (action === 'HOLD' && regime.zone === 'HEALTHY_BULL' && Number.isFinite(rsi14) && rsi14 > 70) {
+    action = 'SELL'
+  }
+
+  // Confidence: base from regime + weighted score contribution
+  const scoreBoost = Math.round(Math.max(0, totalWeightedScore) * 30)
+  const confidence = Math.min(100, regime.confidence + scoreBoost)
+
+  if (confidence < cfg.confidenceThreshold && action !== 'SELL') {
+    action = 'HOLD'
+  }
+
+  // ── Kelly fraction (same logic as original) ──
+  const bullishCount = weightedConfirms.filter(c => c.bullish).length
+  let kellyFrac = 0.10
+  if (action === 'BUY') {
+    if (regime.dipSignal === 'STRONG_DIP' && bullishCount >= 5) {
+      kellyFrac = cfg.halfKelly ? 0.25 : 0.50
+    } else if (regime.dipSignal === 'STRONG_DIP') {
+      kellyFrac = cfg.halfKelly ? 0.15 : 0.30
+    } else {
+      kellyFrac = cfg.halfKelly ? 0.10 : 0.20
+    }
+  } else if (action === 'SELL') {
+    kellyFrac = 1.0
+  }
+
+  // ── Backward-compatible confirms (first 4 for CombinedSignal interface) ──
+  const confirms: ConfirmSignal[] = weightedConfirms.map(c => ({
+    name: c.name, value: c.value, bullish: c.bullish,
+  }))
+
+  const confLabels = weightedConfirms
+    .filter(c => c.bullish)
+    .map(c => `${c.name} ${c.score.toFixed(2)}`)
+
+  const reason = action === 'BUY'
+    ? `${regime.zone} [${regime.dipSignal}]: wScore ${totalWeightedScore.toFixed(2)}. ${confLabels.join(', ') || 'no confirms'}. Kelly ${(kellyFrac * 100).toFixed(0)}%.`
+    : action === 'SELL'
+    ? `${regime.zone} [${regime.dipSignal}]: wScore ${totalWeightedScore.toFixed(2)}, exiting. ${confLabels.join(', ') || 'no confirms'}.`
+    : `${regime.zone} [${regime.dipSignal}]: wScore ${totalWeightedScore.toFixed(2)}, confidence ${confidence}%. Hold.`
+
+  return {
+    ticker, date, price, regime,
+    confirms,
+    action, confidence, KellyFraction: kellyFrac, reason,
+    weightedConfirms,
+    volRegime,
+    multiTfScore: mtf.alignmentScore,
+    volumeZone: vpZone,
+    totalWeightedScore,
+  }
 }
