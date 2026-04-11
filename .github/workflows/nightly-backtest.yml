@@ -1,0 +1,156 @@
+name: Nightly Backtest
+
+on:
+  # Run every night at 02:00 UTC (10pm ET, after US markets close)
+  schedule:
+    - cron: '0 2 * * *'
+  # Allow manual triggers from the Actions tab
+  workflow_dispatch:
+    inputs:
+      tickers:
+        description: 'Comma-separated list of tickers (leave blank for default set)'
+        required: false
+        default: ''
+
+concurrency:
+  group: nightly-backtest
+  cancel-in-progress: true
+
+jobs:
+  backtest:
+    name: Run Nightly Parameter Optimization
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      # ── Checkout ────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # ── Node.js setup ───────────────────────────────────────────
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # ── Restore price data cache ─────────────────────────────────
+      # The backtest relies on locally stored price data.
+      # Cache keyed on a weekly date so data refreshes weekly.
+      - name: Restore price data cache
+        id: cache-data
+        uses: actions/cache@v4
+        with:
+          path: |
+            scripts/backtestData/
+            quantan.db
+          key: price-data-${{ runner.os }}-${{ env.WEEK }}
+          restore-keys: |
+            price-data-${{ runner.os }}-
+        env:
+          WEEK: ${{ steps.date.outputs.week }}
+
+      - name: Get week number
+        id: date
+        run: echo "week=$(date +%Y-%W)" >> "$GITHUB_OUTPUT"
+
+      # ── Fetch fresh data if cache miss ───────────────────────────
+      - name: Fetch price data (cache miss)
+        if: steps.cache-data.outputs.cache-hit != 'true'
+        run: |
+          echo "Cache miss — fetching fresh price data"
+          node scripts/fetchBacktestData.mjs || true
+        env:
+          POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
+          ALPHAVANTAGE_API_KEY: ${{ secrets.ALPHAVANTAGE_API_KEY }}
+
+      # ── Run optimizer ────────────────────────────────────────────
+      - name: Run nightly backtest
+        run: |
+          TICKER_ARGS=""
+          if [ -n "${{ github.event.inputs.tickers }}" ]; then
+            TICKER_ARGS="--tickers ${{ github.event.inputs.tickers }}"
+          fi
+          npx tsx scripts/nightly-backtest.ts $TICKER_ARGS --output results/
+        env:
+          NODE_ENV: production
+
+      # ── Upload results artifact ──────────────────────────────────
+      - name: Upload backtest results
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-backtest-${{ github.run_id }}
+          path: results/
+          retention-days: 90
+          if-no-files-found: warn
+
+      # ── Commit performance log ───────────────────────────────────
+      - name: Commit performance log update
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: 'chore: nightly backtest results [${{ github.run_id }}]'
+          file_pattern: 'results/performance-log.jsonl'
+          commit_user_name: 'QUANTAN Bot'
+          commit_user_email: 'bot@quantan.internal'
+
+      # ── Post summary to Actions tab ──────────────────────────────
+      - name: Generate job summary
+        if: always()
+        run: |
+          echo "## 🌙 Nightly Backtest Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Run date:** $(date -u +%Y-%m-%d)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          # Find today's report and append its summary section
+          REPORT=$(find results/ -name "nightly-*.json" -newer /etc/hostname 2>/dev/null | head -1)
+          if [ -n "$REPORT" ]; then
+            echo "**Report:** \`$REPORT\`" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            # Extract summary metrics with jq
+            if command -v jq &> /dev/null; then
+              jq -r '"**Avg OOS Sharpe:** \(.summary.avgOosSharpe | . * 100 | round / 100)\n**Best ticker:** \(.summary.bestTicker // "n/a")\n**Best OOS Sharpe:** \(.summary.bestOosSharpe // "n/a")"' "$REPORT" >> $GITHUB_STEP_SUMMARY
+            fi
+          fi
+
+  # ── Regression alert ─────────────────────────────────────────────
+  alert-on-regression:
+    name: Alert on Performance Regression
+    runs-on: ubuntu-latest
+    needs: backtest
+    if: always()
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download results
+        uses: actions/download-artifact@v4
+        with:
+          name: nightly-backtest-${{ github.run_id }}
+          path: results/
+
+      - name: Check for regression
+        run: |
+          LOG=results/performance-log.jsonl
+          if [ ! -f "$LOG" ] || [ $(wc -l < "$LOG") -lt 2 ]; then
+            echo "Not enough history for regression check"
+            exit 0
+          fi
+          # Compare last two entries
+          PREV=$(tail -n 2 "$LOG" | head -n 1 | python3 -c "import sys,json; d=json.load(sys.stdin); print(float(d.get('avgOosSharpe',0)))")
+          CURR=$(tail -n 1 "$LOG" | python3 -c "import sys,json; d=json.load(sys.stdin); print(float(d.get('avgOosSharpe',0)))")
+          THRESH="-0.3"
+          DELTA=$(python3 -c "print($CURR - $PREV)")
+          echo "Previous avg OOS Sharpe: $PREV"
+          echo "Current  avg OOS Sharpe: $CURR"
+          echo "Delta: $DELTA"
+          if python3 -c "import sys; sys.exit(0 if float('$DELTA') < float('$THRESH') else 1)"; then
+            echo "::warning::Performance regression detected! Avg OOS Sharpe dropped by $DELTA"
+          else
+            echo "✓ No significant regression"
+          fi
