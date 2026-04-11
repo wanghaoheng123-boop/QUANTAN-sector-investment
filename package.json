@@ -28,6 +28,8 @@
   },
   "dependencies": {
     "@ducanh2912/next-pwa": "^10.2.9",
+    "@types/better-sqlite3": "^7.6.13",
+    "better-sqlite3": "^12.8.0",
     "date-fns": "^3.6.0",
     "framer-motion": "^11.3.8",
     "lightweight-charts": "^4.1.3",
