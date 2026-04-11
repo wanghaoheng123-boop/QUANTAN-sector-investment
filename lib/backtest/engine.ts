@@ -4,7 +4,7 @@
  */
 
 import type { OhlcBar } from '@/lib/quant/technicals'
-import { combinedSignal, DEFAULT_CONFIG, atr, type BacktestConfig } from './signals'
+import { combinedSignal, enhancedCombinedSignal, DEFAULT_CONFIG, atr, type BacktestConfig } from './signals'
 
 // ─── Transaction cost model ─────────────────────────────────────────────────────
 // Applied per side (entry OR exit) to reflect realistic execution costs.
@@ -262,7 +262,8 @@ export function backtestInstrument(
     }
 
     // ── Signal generation (uses today's close data, no look-ahead) ──
-    const signal = combinedSignal(ticker, signalDate, signalPrice, lookbackCloses, lookbackBars, cfg)
+    const lookbackOhlcv = rows.slice(0, i + 1)
+    const signal = enhancedCombinedSignal(ticker, signalDate, signalPrice, lookbackCloses, lookbackBars, lookbackOhlcv, cfg)
 
     if (signal.action === 'BUY' && !state.openTrade) {
       const kellyFrac = Math.min(signal.KellyFraction, 0.50)

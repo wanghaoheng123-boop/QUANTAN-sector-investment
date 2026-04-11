@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { regimeSignal, combinedSignal, DEFAULT_CONFIG } from '@/lib/backtest/signals'
-import type { OhlcBar } from '@/lib/quant/indicators'
+import { regimeSignal, combinedSignal, enhancedCombinedSignal, DEFAULT_CONFIG } from '@/lib/backtest/signals'
+import type { OhlcBar, OhlcvBar } from '@/lib/quant/indicators'
 
 // Generate synthetic close series for regime testing
 function generateCloses(basePrice: number, count: number, trend: number = 0): number[] {
@@ -14,6 +14,23 @@ function generateBars(closes: number[]): OhlcBar[] {
     low: c - 2,
     close: c,
   }))
+}
+
+function generateOhlcvBars(closes: number[], startDate = new Date('2020-01-02')): (OhlcvBar & { time: number })[] {
+  const date = new Date(startDate)
+  return closes.map((c, i) => {
+    while (date.getUTCDay() === 0 || date.getUTCDay() === 6) date.setUTCDate(date.getUTCDate() + 1)
+    const time = Math.floor(date.getTime() / 1000)
+    date.setUTCDate(date.getUTCDate() + 1)
+    return {
+      open: i === 0 ? c : closes[i - 1],
+      high: c + 2,
+      low: c - 2,
+      close: c,
+      volume: 1_000_000 + Math.sin(i) * 100_000,
+      time,
+    }
+  })
 }
 
 describe('Regime Signal', () => {
@@ -130,6 +147,103 @@ describe('Combined Signal', () => {
     const bars = generateBars(closes)
     const signal = combinedSignal('TEST', '2024-01-01', closes[249], closes, bars)
     expect(signal.reason.length).toBeGreaterThan(0)
+  })
+})
+
+describe('Enhanced Combined Signal', () => {
+  it('returns valid enhanced signal structure', () => {
+    const closes = generateCloses(100, 250, 0.1)
+    const bars = generateBars(closes)
+    const ohlcvBars = generateOhlcvBars(closes)
+    const price = closes[closes.length - 1]
+
+    const signal = enhancedCombinedSignal('TEST', '2024-01-01', price, closes, bars, ohlcvBars)
+    expect(signal.ticker).toBe('TEST')
+    expect(['BUY', 'HOLD', 'SELL']).toContain(signal.action)
+    expect(signal.confidence).toBeGreaterThanOrEqual(0)
+    expect(signal.confidence).toBeLessThanOrEqual(100)
+    expect(signal.totalWeightedScore).toBeDefined()
+    expect(signal.volRegime).toBeDefined()
+    expect(signal.multiTfScore).toBeDefined()
+  })
+
+  it('has 7 weighted confirmation signals', () => {
+    const closes = generateCloses(100, 250, 0.1)
+    const bars = generateBars(closes)
+    const ohlcvBars = generateOhlcvBars(closes)
+    const signal = enhancedCombinedSignal('TEST', '2024-01-01', closes[249], closes, bars, ohlcvBars)
+
+    expect(signal.weightedConfirms).toHaveLength(7)
+    expect(signal.weightedConfirms.map(c => c.name)).toEqual([
+      'RSI(14)', 'MACD hist', 'ATR%', 'BB%', 'Vol POC', 'Multi-TF', 'Vol Regime',
+    ])
+  })
+
+  it('weighted scores are in valid range', () => {
+    const closes = generateCloses(100, 250, 0.1)
+    const bars = generateBars(closes)
+    const ohlcvBars = generateOhlcvBars(closes)
+    const signal = enhancedCombinedSignal('TEST', '2024-01-01', closes[249], closes, bars, ohlcvBars)
+
+    for (const c of signal.weightedConfirms) {
+      expect(c.score).toBeGreaterThanOrEqual(-1)
+      expect(c.score).toBeLessThanOrEqual(1)
+      expect(c.weight).toBeGreaterThan(0)
+      expect(c.weight).toBeLessThanOrEqual(1)
+    }
+  })
+
+  it('weights sum to approximately 1.0', () => {
+    const closes = generateCloses(100, 250, 0.1)
+    const bars = generateBars(closes)
+    const ohlcvBars = generateOhlcvBars(closes)
+    const signal = enhancedCombinedSignal('TEST', '2024-01-01', closes[249], closes, bars, ohlcvBars)
+
+    const totalWeight = signal.weightedConfirms.reduce((s, c) => s + c.weight, 0)
+    expect(totalWeight).toBeCloseTo(1.0, 5)
+  })
+
+  it('totalWeightedScore matches sum of individual weighted scores', () => {
+    const closes = generateCloses(100, 250, 0.1)
+    const bars = generateBars(closes)
+    const ohlcvBars = generateOhlcvBars(closes)
+    const signal = enhancedCombinedSignal('TEST', '2024-01-01', closes[249], closes, bars, ohlcvBars)
+
+    const manualSum = signal.weightedConfirms.reduce((s, c) => s + c.weightedScore, 0)
+    expect(signal.totalWeightedScore).toBeCloseTo(manualSum, 10)
+  })
+
+  it('vol regime has valid structure', () => {
+    const closes = generateCloses(100, 250, 0.1)
+    const bars = generateBars(closes)
+    const ohlcvBars = generateOhlcvBars(closes)
+    const signal = enhancedCombinedSignal('TEST', '2024-01-01', closes[249], closes, bars, ohlcvBars)
+
+    expect(['low', 'normal', 'high', 'crisis']).toContain(signal.volRegime.volatilityRegime)
+    expect(['strong_trend', 'weak_trend', 'range_bound']).toContain(signal.volRegime.trendRegime)
+    expect(['trend_following', 'mean_reversion', 'neutral']).toContain(signal.volRegime.strategyHint)
+  })
+
+  it('SELL gets Kelly fraction of 1.0', () => {
+    const closes = generateCloses(100, 250, 0.1)
+    const bars = generateBars(closes)
+    const ohlcvBars = generateOhlcvBars(closes)
+    const signal = enhancedCombinedSignal('TEST', '2024-01-01', closes[249], closes, bars, ohlcvBars)
+    if (signal.action === 'SELL') {
+      expect(signal.KellyFraction).toBe(1.0)
+    }
+  })
+
+  it('backward-compatible confirms array matches weighted confirms', () => {
+    const closes = generateCloses(100, 250, 0.1)
+    const bars = generateBars(closes)
+    const ohlcvBars = generateOhlcvBars(closes)
+    const signal = enhancedCombinedSignal('TEST', '2024-01-01', closes[249], closes, bars, ohlcvBars)
+
+    expect(signal.confirms).toHaveLength(7)
+    for (let i = 0; i < 7; i++) {
+      expect(signal.confirms[i].name).toBe(signal.weightedConfirms[i].name)
+    }
   })
 })
 
