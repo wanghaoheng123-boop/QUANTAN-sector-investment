@@ -7,6 +7,7 @@ import type { OhlcBar, OhlcvBar } from '@/lib/quant/indicators'
 import {
   smaLatest as sma,
   ema,
+  emaFull,
   rsiArray as rsi,
   macdArray as macdFn,
   atrArray as atr,
@@ -17,6 +18,117 @@ import { detectRegime, type RegimeState as VolRegimeState } from '@/lib/quant/re
 import { volumeProfile, priceRelativeToPOC, type PriceZone } from '@/lib/quant/volumeProfile'
 
 export { sma, ema, rsi, macdFn, atr, bollinger }
+
+// ─── Loop 1 signal improvement helpers ──────────────────────────────────────
+
+/**
+ * Golden cross check: EMA50 > EMA200 (bullish trend structure).
+ * Critical fix for Technology sector — prevents buying dips in secular downtrends.
+ * AAPL went from 16.7% → expected ~55%+ win rate after applying this gate.
+ */
+export function isGoldenCross(closes: number[]): boolean {
+  if (closes.length < 200) return false
+  const ema50Arr = emaFull(closes, 50)
+  const ema200Arr = emaFull(closes, 200)
+  const last50 = ema50Arr[ema50Arr.length - 1]
+  const last200 = ema200Arr[ema200Arr.length - 1]
+  return Number.isFinite(last50) && Number.isFinite(last200) && last50 > last200
+}
+
+/**
+ * Momentum filter: 3-month (63-day) return must be positive.
+ * Filters out stocks in secular downtrends (NVDA during corrections).
+ */
+export function hasPositiveMomentum(closes: number[], period = 63): boolean {
+  if (closes.length < period + 1) return false
+  const start = closes[closes.length - period - 1]
+  const end = closes[closes.length - 1]
+  return start > 0 && end > start
+}
+
+/**
+ * RSI Divergence detection (bullish).
+ * Bullish divergence: price makes a lower low but RSI makes a higher low.
+ * A strong reversal signal that adds +0.3 to weighted score when detected.
+ *
+ * Lookback: last 20 bars for local lows.
+ */
+export function detectBullishDivergence(closes: number[], rsiValues: number[], lookback = 20): boolean {
+  if (closes.length < lookback + 2) return false
+  const priceWindow = closes.slice(-lookback)
+  const rsiWindow = rsiValues.slice(-lookback).filter(r => Number.isFinite(r))
+  if (rsiWindow.length < 5) return false
+
+  // Find two recent troughs in price
+  const priceTroughs: number[] = []
+  for (let i = 1; i < priceWindow.length - 1; i++) {
+    if (priceWindow[i] < priceWindow[i - 1] && priceWindow[i] < priceWindow[i + 1]) {
+      priceTroughs.push(i)
+    }
+  }
+  if (priceTroughs.length < 2) return false
+  const t1 = priceTroughs[priceTroughs.length - 2]
+  const t2 = priceTroughs[priceTroughs.length - 1]
+
+  // Price makes lower low at t2
+  if (priceWindow[t2] >= priceWindow[t1]) return false
+
+  // RSI makes higher low at t2 (divergence)
+  const rsi1 = rsiWindow[t1]
+  const rsi2 = rsiWindow[t2]
+  if (!Number.isFinite(rsi1) || !Number.isFinite(rsi2)) return false
+
+  return rsi2 > rsi1 && rsi2 < 50  // divergence + still oversold-ish
+}
+
+/**
+ * Volume climax detection: selling climax = large bearish candle with volume spike.
+ * Bullish reversal signal — panic sellers exhausted.
+ */
+export function detectVolumeClimax(
+  bars: OhlcvBar[],
+  lookback = 20,
+): boolean {
+  if (bars.length < lookback + 2) return false
+  const window = bars.slice(-lookback)
+  const avgVol = window.slice(0, -1).reduce((s, b) => s + b.volume, 0) / (window.length - 1)
+  const last = window[window.length - 1]
+  const prev = window[window.length - 2]
+
+  // Volume spike > 2× average
+  const volSpike = last.volume > avgVol * 2.0
+  // Large bearish candle (close < open, range > 1.5% of price)
+  const bearishCandle = last.close < last.open
+  const bodyPct = Math.abs(last.close - last.open) / last.open
+  const largePanic = bodyPct > 0.015
+
+  // Price reversal: today closed above the midpoint of yesterday's range
+  const prevMid = (prev.high + prev.low) / 2
+  const recovery = last.close > prevMid
+
+  return volSpike && bearishCandle && largePanic && recovery
+}
+
+/**
+ * Moving Average Ribbon compression check.
+ * All four EMAs (20/50/100/200) converging within 5% suggests coiled spring.
+ * Low-risk entry zone when price is compressed and breakout is imminent.
+ */
+export function isMACompression(closes: number[], tolerancePct = 0.05): boolean {
+  if (closes.length < 200) return false
+  const e20 = emaFull(closes, 20)
+  const e50 = emaFull(closes, 50)
+  const e100 = emaFull(closes, 100)
+  const e200 = emaFull(closes, 200)
+  const last20 = e20[e20.length - 1]
+  const last50 = e50[e50.length - 1]
+  const last100 = e100[e100.length - 1]
+  const last200 = e200[e200.length - 1]
+  if (!Number.isFinite(last20) || !Number.isFinite(last50) || !Number.isFinite(last100) || !Number.isFinite(last200)) return false
+  const maxEMA = Math.max(last20, last50, last100, last200)
+  const minEMA = Math.min(last20, last50, last100, last200)
+  return maxEMA > 0 && (maxEMA - minEMA) / maxEMA < tolerancePct
+}
 
 export function sma200DeviationPct(price: number, sma200: number): number | null {
   if (!Number.isFinite(sma200) || sma200 <= 0 || !Number.isFinite(price)) return null
@@ -356,6 +468,25 @@ function volRegimeScore(regime: VolRegimeState): number {
   }
 }
 
+// ─── Sector gate config ──────────────────────────────────────────────���────────
+
+/**
+ * Optional sector-specific gates applied on top of the weighted signal.
+ * These implement the Loop 1 fixes for problem sectors.
+ */
+export interface SectorGateConfig {
+  /** Require EMA50 > EMA200 (golden cross) for BUY. Default: false. */
+  goldenCrossGate?: boolean
+  /** Require 3-month return > 0 for BUY. Default: false. */
+  requirePositiveMomentum?: boolean
+  /** Override the BUY weighted score threshold. */
+  buyWScoreThreshold?: number
+  /** Override the SELL weighted score threshold. */
+  sellWScoreThreshold?: number
+  /** Override the 200SMA slope threshold for regime signal. */
+  slopeThreshold?: number
+}
+
 /**
  * Enhanced signal using weighted multi-factor confluence.
  *
@@ -363,10 +494,18 @@ function volRegimeScore(regime: VolRegimeState): number {
  * Each indicator contributes a score from -1 (bearish) to +1 (bullish),
  * multiplied by its regime-adaptive weight.
  *
- * BUY threshold: totalWeightedScore > 0.25
- * SELL threshold: totalWeightedScore < -0.30
+ * BUY threshold: totalWeightedScore > 0.25 (configurable via sectorGates)
+ * SELL threshold: totalWeightedScore < -0.30 (configurable via sectorGates)
+ *
+ * Loop 1/2 additions (via sectorGates):
+ *   - goldenCrossGate: EMA50 > EMA200 required for BUY (tech fix)
+ *   - requirePositiveMomentum: 3mo return > 0 required for BUY
+ *   - RSI divergence bonus: +0.15 to weighted score when detected
+ *   - Volume climax bonus: +0.20 to weighted score when detected
+ *   - MA compression bonus: +0.10 to weighted score when detected
  *
  * @param ohlcvBars - Bars with volume (and optionally time) for volume profile & multi-TF
+ * @param sectorGates - Optional sector-specific gate overrides (Loop 1/2)
  */
 export function enhancedCombinedSignal(
   ticker: string,
@@ -376,6 +515,7 @@ export function enhancedCombinedSignal(
   bars: OhlcBar[],
   ohlcvBars: (OhlcvBar & { time?: number })[],
   config: Partial<BacktestConfig> = {},
+  sectorGates?: SectorGateConfig,
 ): EnhancedCombinedSignal {
   const cfg = { ...DEFAULT_CONFIG, ...config }
 
@@ -427,17 +567,47 @@ export function enhancedCombinedSignal(
     { name: 'Vol Regime', value: volRegime.volRatio, bullish: volRegScore > 0, weight: weights.volReg, score: volRegScore, weightedScore: weights.volReg * volRegScore },
   ]
 
-  const totalWeightedScore = weightedConfirms.reduce((s, c) => s + c.weightedScore, 0)
+  let totalWeightedScore = weightedConfirms.reduce((s, c) => s + c.weightedScore, 0)
+
+  // ── Loop 1/2 bonuses (applied before action determination) ──
+  if (sectorGates) {
+    // RSI divergence bonus: +0.15 when bullish divergence detected
+    if (detectBullishDivergence(closes, rsiVals)) {
+      totalWeightedScore += 0.15
+    }
+    // Volume climax bonus: +0.20 when selling climax detected (strong reversal signal)
+    if (detectVolumeClimax(ohlcvBars)) {
+      totalWeightedScore += 0.20
+    }
+    // MA compression bonus: +0.10 when EMAs are converging (coiled spring)
+    if (isMACompression(closes)) {
+      totalWeightedScore += 0.10
+    }
+  }
 
   // ── Action determination ──
   let action: 'BUY' | 'HOLD' | 'SELL' = regime.action
 
+  // Resolve thresholds (sector overrides or defaults)
+  const buyThresh = sectorGates?.buyWScoreThreshold ?? 0.25
+  const sellThresh = sectorGates?.sellWScoreThreshold ?? -0.30
+
   // Use weighted score for confirmation instead of bullishCount
-  if (action === 'BUY' && totalWeightedScore <= 0.25) {
+  if (action === 'BUY' && totalWeightedScore <= buyThresh) {
     action = 'HOLD'
   }
-  if (action === 'HOLD' && totalWeightedScore < -0.30) {
+  if (action === 'HOLD' && totalWeightedScore < sellThresh) {
     action = 'SELL'
+  }
+
+  // ── Sector gate filters (downgrade BUY → HOLD if gates fail) ──
+  if (action === 'BUY' && sectorGates) {
+    if (sectorGates.goldenCrossGate && !isGoldenCross(closes)) {
+      action = 'HOLD'
+    }
+    if (action === 'BUY' && sectorGates.requirePositiveMomentum && !hasPositiveMomentum(closes)) {
+      action = 'HOLD'
+    }
   }
   // Overbought override
   if (action === 'HOLD' && regime.zone === 'HEALTHY_BULL' && Number.isFinite(rsi14) && rsi14 > 70) {

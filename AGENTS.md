@@ -24,9 +24,11 @@ Goal: >80% selective signal accuracy across all market conditions. Bloomberg-lik
 | 2 | Signal Engine Hardening | ✅ COMPLETE | merged via PR #3 |
 | 3 | Options & Flow Data | ✅ COMPLETE | branch `claude/pedantic-morse` |
 | 4 | Advanced Analytics | ✅ COMPLETE | branch `claude/pedantic-morse` |
-| 5 | Data Infrastructure | 🔲 NOT STARTED | — |
-| 6 | Portfolio & Risk Management | 🔲 NOT STARTED | — |
-| 7 | Continuous Optimization | 🔲 NOT STARTED | — |
+| 5 | Data Infrastructure | ✅ COMPLETE | branch `claude/loving-banach` |
+| 6 | Portfolio & Risk Management | ✅ COMPLETE | branch `claude/loving-banach` |
+| 7 | Continuous Optimization | ✅ COMPLETE | branch `claude/loving-banach` |
+| 8 | Benchmark Fix + Optimization Loops (1-3) | 🔲 INFRASTRUCTURE READY | Run scripts to execute |
+| 9 | Stock-by-Stock Analysis Report | ✅ COMPLETE | `QUANTAN_ANALYSIS_REPORT.md` |
 
 ---
 
@@ -70,7 +72,73 @@ Goal: >80% selective signal accuracy across all market conditions. Bloomberg-lik
 
 ---
 
-## What To Build Next: Phase 5 — Data Infrastructure
+## Phase 5–7 Complete — What Was Built in Branch `claude/loving-banach`
+
+### Phase 5 (Data Infrastructure) — Pre-existing + confirmed complete
+- `lib/data/providers/` — types.ts, yahoo.ts, polygon.ts, alphavantage.ts, fred.ts, index.ts
+- `lib/data/warehouse.ts` — SQLite warehouse with better-sqlite3
+
+### Phase 6 (Portfolio & Risk)
+- `lib/portfolio/tracker.ts` — position model, CRUD, localStorage persistence
+- `lib/portfolio/var.ts` — Historical VaR/CVaR (95%/99%, 1d/10d), Kupiec backtesting, marginal VaR
+- `lib/portfolio/riskParity.ts` — inverse-vol weighting, ERC (Maillard-Roncalli), correlation-adjusted Kelly
+- `lib/portfolio/diversification.ts` — correlation matrix, Herfindahl index, sector exposure
+- `lib/portfolio/stressTest.ts` — GFC 2008, COVID 2020, Rate Shock 2022, Dot-com 2000, Q4 2018
+
+### Phase 7 (Continuous Optimization)
+- `lib/optimize/gridSearch.ts` — walk-forward grid search (70% IS / 30% OOS), aggregation
+- `lib/optimize/parameterSets.ts` — Loop 1 (768 combos), Loop 2 (288 combos), Loop 3 exit params
+- `lib/optimize/sectorProfiles.ts` — 11 GICS sector profiles with differentiated gate configs
+- `lib/backtest/exitRules.ts` — ATR-adaptive stops, profit-taking, trailing stops, panic exit, time exit
+- `lib/backtest/portfolioBacktest.ts` — multi-instrument engine (max 10 positions, correlation-adjusted)
+- `scripts/benchmark-enhanced.ts` — TypeScript benchmark using actual `enhancedCombinedSignal()`
+
+### Signal Improvements (Optimization Loop 1/2 infrastructure)
+- `lib/backtest/signals.ts` — Added: `isGoldenCross()`, `hasPositiveMomentum()`, `detectBullishDivergence()`,
+  `detectVolumeClimax()`, `isMACompression()`, `SectorGateConfig` interface
+- `enhancedCombinedSignal()` updated to accept `sectorGates?: SectorGateConfig` (8th parameter)
+  with gate logic: golden cross filter, momentum filter, RSI divergence bonus (+0.15),
+  volume climax bonus (+0.20), MA compression bonus (+0.10), per-sector threshold overrides
+
+### Analysis Report
+- `QUANTAN_ANALYSIS_REPORT.md` — Complete per-stock analysis (55 stocks + BTC), 11 sector deep dives,
+  root cause analysis, market condition matrix, AI agent optimization directives JSON block
+
+### New npm scripts
+```bash
+npm run benchmark:enhanced    # scripts/benchmark-enhanced.ts (Phase 2 baseline)
+npm run optimize:grid         # scripts/optimize-grid.ts (Loop 1 — TO CREATE)
+npm run portfolio:backtest    # scripts/portfolio-backtest.ts (Loop 3 — TO CREATE)
+```
+
+## What To Build Next: Phase 8 — Run Optimization Loops
+
+### IMMEDIATE: Scripts to create for running the loops
+
+1. **`scripts/optimize-grid.ts`** — Runs Loop 1 grid search:
+   ```typescript
+   import { gridSearch, aggregateGridResults } from '../lib/optimize/gridSearch'
+   import { LOOP1_GRID } from '../lib/optimize/parameterSets'
+   // Load all 56 instruments, run gridSearch on each, aggregate results
+   // Save to scripts/optimization-results-loop1.json
+   ```
+
+2. **`scripts/portfolio-backtest.ts`** — Runs Loop 3 portfolio simulation:
+   ```typescript
+   import { runPortfolioBacktest } from '../lib/backtest/portfolioBacktest'
+   // Load instruments, run multi-stock portfolio backtest
+   // Save to scripts/portfolio-backtest-results.json
+   ```
+
+3. **Update `scripts/benchmark-enhanced.ts`** — Apply sector profiles (Loop 2):
+   ```typescript
+   import { getProfileForTicker } from '../lib/optimize/sectorProfiles'
+   // Pass profile as sectorGates argument to enhancedCombinedSignal()
+   ```
+
+## ── ORIGINAL Phase 5 Plan (for reference — now complete) ──
+
+### [ORIGINAL] Phase 5 — Data Infrastructure
 
 ### 5.1 Provider Abstraction (`lib/data/providers/`)
 ```
@@ -186,4 +254,4 @@ describe('myModule', () => {
 ---
 
 ## File Last Updated
-2026-04-11 · Branch: claude/pedantic-morse · Phases 3 & 4 complete
+2026-04-12 · Branch: claude/loving-banach · Phases 5–7 complete · Analysis report generated · Optimization infrastructure ready
