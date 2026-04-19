@@ -1,4 +1,4 @@
-import { newTraceId } from '@/lib/runAudit'
+import { newTraceId } from '@/lib/infra/runAudit'
 
 export type OptimizeJobStatus = 'completed' | 'error'
 

@@ -3,7 +3,7 @@
  * CI-friendly; keep under a few hundred ms.
  */
 
-import { mergeStrategyConfig } from '../lib/simulator/strategyConfig'
+import { mergeStrategyConfig } from '../lib/strategy/strategyConfig'
 import { boundedGridSearch, paretoFilter, paretoFilter3Objectives } from '../lib/optimize/gridSearch'
 import { boundedWalkForwardGridSearch } from '../lib/optimize/walkForwardGrid'
 import type { OhlcvRow } from '../lib/backtest/engine'

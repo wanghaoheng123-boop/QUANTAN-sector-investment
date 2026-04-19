@@ -2,9 +2,9 @@
  * Bounded parameter search for StrategyConfig — serverless-safe caps.
  */
 
-import type { StrategyConfig } from '@/lib/simulator/strategyConfig'
-import { mergeStrategyConfig, validateStrategyConfig } from '@/lib/simulator/strategyConfig'
-import { toBacktestConfig } from '@/lib/simulator/strategyConfig'
+import type { StrategyConfig } from '@/lib/strategy/strategyConfig'
+import { mergeStrategyConfig, validateStrategyConfig } from '@/lib/strategy/strategyConfig'
+import { toBacktestConfig } from '@/lib/strategy/strategyConfig'
 import { backtestInstrument } from '@/lib/backtest/engine'
 import type { OhlcvRow } from '@/lib/backtest/engine'
 

@@ -1,6 +1,6 @@
 import YahooFinance from 'yahoo-finance2'
 import type { OhlcvRow } from '@/lib/backtest/engine'
-import { mergeStrategyConfig, validateStrategyConfig, type StrategyConfig } from '@/lib/simulator/strategyConfig'
+import { mergeStrategyConfig, validateStrategyConfig, type StrategyConfig } from '@/lib/strategy/strategyConfig'
 import {
   boundedGridSearch,
   paretoFilter,
