@@ -15,7 +15,7 @@ import {
   getRainbowBand,
 } from '@/lib/crypto'
 import { ma200Regime, sma200DeviationPct } from '@/lib/quant/technicals'
-import { apiUrl } from '@/lib/apiBase'
+import { apiUrl } from '@/lib/infra/apiBase'
 
 interface Props { candles: BtcCandle[] }
 

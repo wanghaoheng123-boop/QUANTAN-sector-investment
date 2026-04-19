@@ -14,8 +14,8 @@ import {
   type StopLossMode,
   type KellyMode,
   type StrategyMode,
-} from '@/lib/simulator/strategyConfig'
-import { apiUrl } from '@/lib/apiBase'
+} from '@/lib/strategy/strategyConfig'
+import { apiUrl } from '@/lib/infra/apiBase'
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
 

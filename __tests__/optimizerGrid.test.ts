@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { mergeStrategyConfig } from '@/lib/simulator/strategyConfig'
+import { mergeStrategyConfig } from '@/lib/strategy/strategyConfig'
 import { boundedGridSearch, paretoFilter3Objectives } from '@/lib/optimize/gridSearch'
 import type { OhlcvRow } from '@/lib/backtest/engine'
 

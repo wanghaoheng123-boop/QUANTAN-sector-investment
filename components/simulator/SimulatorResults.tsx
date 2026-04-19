@@ -5,7 +5,7 @@ import EquityCurveChart from '@/components/backtest/EquityCurveChart'
 import InstrumentTable from '@/components/backtest/InstrumentTable'
 import TradeLog from '@/components/backtest/TradeLog'
 import type { BacktestResult, WalkForwardSummary } from '@/lib/backtest/engine'
-import { normalizedConfidenceScales, type StrategyConfig } from '@/lib/simulator/strategyConfig'
+import { normalizedConfidenceScales, type StrategyConfig } from '@/lib/strategy/strategyConfig'
 import type { EntryExitZonesPayload } from '@/lib/quant/entryExitZones'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────

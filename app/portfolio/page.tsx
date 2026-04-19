@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { apiUrl } from '@/lib/apiBase'
+import { apiUrl } from '@/lib/infra/apiBase'
 import {
   defaultSnapshot,
   loadSnapshot,

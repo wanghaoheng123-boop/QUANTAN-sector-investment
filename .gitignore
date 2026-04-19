@@ -49,3 +49,8 @@ yarn-error.log*
 # ─── Claude / Cursor agent artifacts ─────────────────────────────────────────
 .claude/
 .cursor/
+.clone/
+
+# Local SQLite / test DB artifacts (prefer QUANTAN_SQLITE_PATH on local disk)
+*.db
+*.db-journal

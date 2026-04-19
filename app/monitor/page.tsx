@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { apiUrl } from '@/lib/apiBase'
+import { apiUrl } from '@/lib/infra/apiBase'
 
 interface BacktestSummary {
   runId: string

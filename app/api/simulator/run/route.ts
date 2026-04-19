@@ -19,20 +19,20 @@ import type {
   ConfirmationConfig,
   StopLossConfig,
   PositionSizingConfig,
-} from '@/lib/simulator/strategyConfig'
-import { mergeStrategyConfig, validateStrategyConfig, toBacktestConfig } from '@/lib/simulator/strategyConfig'
+} from '@/lib/strategy/strategyConfig'
+import { mergeStrategyConfig, validateStrategyConfig, toBacktestConfig } from '@/lib/strategy/strategyConfig'
 import { walkForwardAnalysis, walkForwardSummary, type WalkForwardSummary } from '@/lib/backtest/engine'
 import {
   fetchOptionsMetrics,
   applyOptionsFilter,
   applyOptionsSignalFusion,
   type OptionsMetrics,
-} from '@/lib/simulator/optionsFilter'
+} from '@/lib/strategy/optionsFilter'
 import { deriveEntryExitZones, type EntryExitZonesPayload } from '@/lib/quant/entryExitZones'
 import { paperShortPremiumMark } from '@/lib/options/income/paperIncome'
 import type { OptionsIncomeLeg } from '@/lib/options/income/types'
-import { buildRunAudit, newTraceId, configHashFromObject, logRunEvent } from '@/lib/runAudit'
-import { clientKeyFromRequest, rateLimitHit } from '@/lib/api/simpleRateLimit'
+import { buildRunAudit, newTraceId, configHashFromObject, logRunEvent } from '@/lib/infra/runAudit'
+import { clientKeyFromRequest, rateLimitHit } from '@/lib/infra/rateLimit'
 
 // ─── Request / Response types ──────────────────────────────────────────────────
 

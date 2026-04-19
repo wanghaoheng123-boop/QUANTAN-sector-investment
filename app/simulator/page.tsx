@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { apiUrl } from '@/lib/apiBase'
+import { apiUrl } from '@/lib/infra/apiBase'
 import LiveQuoteCard from '@/components/simulator/LiveQuoteCard'
 import SimulatorResults, { WalkForwardPanel } from '@/components/simulator/SimulatorResults'
 import StrategyBuilder from '@/components/simulator/StrategyBuilder'
@@ -10,14 +10,14 @@ import EquityCurveChart from '@/components/backtest/EquityCurveChart'
 import InstrumentTable from '@/components/backtest/InstrumentTable'
 import TradeLog from '@/components/backtest/TradeLog'
 import type { BacktestResult, WalkForwardSummary } from '@/lib/backtest/engine'
-import type { StrategyConfig } from '@/lib/simulator/strategyConfig'
+import type { StrategyConfig } from '@/lib/strategy/strategyConfig'
 import {
   DEFAULT_STRATEGY_CONFIG,
   STRATEGY_PRESETS,
   MODE_LABELS,
   mergeStrategyConfig,
   type PresetName,
-} from '@/lib/simulator/strategyConfig'
+} from '@/lib/strategy/strategyConfig'
 
 const PRESET_NAMES = ['Conservative', 'Balanced', 'Aggressive', 'Momentum'] as const
 function isPresetName(s: string | null): s is PresetName {

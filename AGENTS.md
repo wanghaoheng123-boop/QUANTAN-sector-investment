@@ -116,8 +116,15 @@ app/portfolio/page.tsx — Portfolio dashboard
 ```
 scripts/nightly-backtest.ts      — Fetch latest data, run 56-instrument backtest, alert if win rate < 55%
 .github/workflows/nightly-backtest.yml — Scheduled CI
-lib/optimize/gridSearch.ts        — Walk-forward parameter grid search (70% in-sample, 30% OOS)
-app/monitor/page.tsx              — Rolling 30d win rate, signal heatmap, data quality scores
+lib/strategy/strategyConfig.ts   — Strategy DSL: merge/validate, presets, toBacktestConfig (shared by simulator, backtest, optimize)
+lib/strategy/optionsFilter.ts    — Options snapshot fetch + conservative filter/fusion for equity paths
+lib/optimize/gridSearch.ts       — Bounded grid search; walk-forward–scored variants
+lib/optimize/executeOptimize.ts  — Serverless-bounded optimize orchestration
+lib/infra/runAudit.ts            — traceId, audit blocks, structured run logging
+lib/infra/rateLimit.ts           — Client key + rate limits on simulator/backtest/optimize routes
+app/api/optimize/route.ts        — POST bounded parameter search
+app/api/optimize/job/route.ts    — Async job id + polling for long optimize runs
+app/monitor/page.tsx             — Rolling 30d win rate, signal heatmap, data quality scores
 ```
 
 ---
@@ -176,6 +183,12 @@ export async function GET(_req: Request, { params }: { params: { ticker: string 
 | `lib/options/greeks.ts` | `blackScholesPrice()`, `greeks()`, `impliedVolatility()` |
 | `lib/quant/sectorRotation.ts` | `sectorScores()`, `momentumScore()`, `meanReversionBoost()` |
 | `lib/quant/intermarket.ts` | `analyzeIntermarket()`, `classifyRegime()` |
+| `lib/strategy/strategyConfig.ts` | `StrategyConfig`, `mergeStrategyConfig`, `validateStrategyConfig`, `toBacktestConfig`, presets, schema version helpers |
+| `lib/strategy/optionsFilter.ts` | `fetchOptionsMetrics`, `applyOptionsFilter`, `applyOptionsSignalFusion` (simulator / backtest) |
+| `lib/infra/runAudit.ts` | `newTraceId`, `buildRunAudit`, `configHashFromObject`, `logRunEvent` |
+| `lib/infra/rateLimit.ts` | `clientKeyFromRequest`, `rateLimitHit` |
+| `lib/infra/apiBase.ts` | `apiUrl()` — browser-side base URL for `/api/*` calls |
+| `lib/auth.ts` | `getAuthOptions()` — NextAuth configuration (Google/GitHub when env set) |
 
 ### Test Pattern
 ```typescript

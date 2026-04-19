@@ -19,10 +19,10 @@ import {
   walkForwardSummary,
   type WalkForwardSummary,
 } from '@/lib/backtest/engine'
-import type { StrategyConfig } from '@/lib/simulator/strategyConfig'
-import { mergeStrategyConfig, toBacktestConfig } from '@/lib/simulator/strategyConfig'
-import { newTraceId, buildRunAudit, configHashFromObject, logRunEvent } from '@/lib/runAudit'
-import { clientKeyFromRequest, rateLimitHit } from '@/lib/api/simpleRateLimit'
+import type { StrategyConfig } from '@/lib/strategy/strategyConfig'
+import { mergeStrategyConfig, toBacktestConfig } from '@/lib/strategy/strategyConfig'
+import { newTraceId, buildRunAudit, configHashFromObject, logRunEvent } from '@/lib/infra/runAudit'
+import { clientKeyFromRequest, rateLimitHit } from '@/lib/infra/rateLimit'
 import YahooFinance from 'yahoo-finance2'
 import type { OhlcvRow } from '@/lib/backtest/engine'
 

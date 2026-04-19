@@ -4,12 +4,12 @@
  */
 
 import { NextResponse } from 'next/server'
-import { mergeStrategyConfig, validateStrategyConfig, type StrategyConfig } from '@/lib/simulator/strategyConfig'
+import { mergeStrategyConfig, validateStrategyConfig, type StrategyConfig } from '@/lib/strategy/strategyConfig'
 import type { GridAxis } from '@/lib/optimize/gridSearch'
 import { defaultAxesForPreset } from '@/lib/optimize/presetAxes'
 import { executeBoundedOptimize } from '@/lib/optimize/executeOptimize'
-import { buildRunAudit, newTraceId, configHashFromObject, logRunEvent } from '@/lib/runAudit'
-import { clientKeyFromRequest, rateLimitHit } from '@/lib/api/simpleRateLimit'
+import { buildRunAudit, newTraceId, configHashFromObject, logRunEvent } from '@/lib/infra/runAudit'
+import { clientKeyFromRequest, rateLimitHit } from '@/lib/infra/rateLimit'
 
 const ALLOWED_PATHS = new Set([
   'regime.smaPeriod',
