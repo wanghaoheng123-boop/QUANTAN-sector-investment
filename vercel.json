@@ -2,6 +2,6 @@
   "regions": ["iad1"],
   "buildCommand": "npm run build",
   "outputDirectory": ".next",
-  "installCommand": "npm install",
+  "installCommand": "npm ci",
   "framework": "nextjs"
 }
