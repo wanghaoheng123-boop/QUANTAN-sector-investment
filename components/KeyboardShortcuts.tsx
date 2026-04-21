@@ -14,7 +14,8 @@ const SHORTCUTS: Shortcut[] = [
   { keys: ['⌘', 'K'], description: 'Focus search', category: 'Search' },
   { keys: ['⌘', '\\'], description: 'Go to Markets', category: 'Navigation' },
   { keys: ['g', 'd'], description: 'Go to Desk', category: 'Navigation' },
-  { keys: ['g', 'b'], description: 'Go to Backtest', category: 'Navigation' },
+  { keys: ['g', 'b'], description: 'Go to Simulator Backtest', category: 'Navigation' },
+  { keys: ['g', 's'], description: 'Go to Simulator', category: 'Navigation' },
   { keys: ['Esc'], description: 'Close modal', category: 'General' },
 ]
 
@@ -76,7 +77,12 @@ export default function KeyboardShortcuts() {
         }
         if (e.key === 'b') {
           e.preventDefault()
-          router.push('/backtest')
+          router.push('/simulator?mode=backtest')
+          return
+        }
+        if (e.key === 's') {
+          e.preventDefault()
+          router.push('/simulator')
           return
         }
       }

@@ -9,6 +9,7 @@ import StrategyBuilder from '@/components/simulator/StrategyBuilder'
 import EquityCurveChart from '@/components/backtest/EquityCurveChart'
 import InstrumentTable from '@/components/backtest/InstrumentTable'
 import TradeLog from '@/components/backtest/TradeLog'
+import ContextualAnalyticsZone from '@/components/zones/ContextualAnalyticsZone'
 import type { BacktestResult, WalkForwardSummary } from '@/lib/backtest/engine'
 import type { StrategyConfig } from '@/lib/strategy/strategyConfig'
 import {
@@ -77,6 +78,22 @@ interface SimulatorApiResponse {
     regime?: string; action?: 'BUY' | 'HOLD' | 'SELL'; confidence?: number
   }>
   tickers: Array<{ ticker: string; success: boolean; error?: string }>
+}
+
+interface OptionsIntelligencePayload {
+  ticker: string
+  spotPrice: number
+  maxPainStrike: number
+  callWallStrike: number
+  putWallStrike: number
+  callWallStrength: number
+  putWallStrength: number
+  confidence: 'high' | 'medium' | 'low'
+  confidenceReason: string
+  entryBands: Array<{ tier: 'conservative' | 'balanced' | 'aggressive'; low: number; high: number; note: string }>
+  sellPutCandidates: Array<{ tier: 'conservative' | 'balanced' | 'aggressive'; strike: number; daysToExpiry: number; premiumYieldPct: number; distanceFromSpotPct: number; rationale: string }>
+  sellCallCandidates: Array<{ tier: 'conservative' | 'balanced' | 'aggressive'; strike: number; daysToExpiry: number; premiumYieldPct: number; distanceFromSpotPct: number; rationale: string }>
+  error?: string
 }
 
 type CommandMode = 'live' | 'backtest'
@@ -197,6 +214,8 @@ function SimulatorPageContent() {
   const [commandFullOpt, setCommandFullOpt] = useState<Record<string, unknown> | null>(null)
   const [commandWfOpt, setCommandWfOpt] = useState<Record<string, unknown> | null>(null)
   const [commandError, setCommandError] = useState<string | null>(null)
+  const [optionsIntel, setOptionsIntel] = useState<OptionsIntelligencePayload | null>(null)
+  const [optionsIntelLoading, setOptionsIntelLoading] = useState(false)
 
   // Shared refresh state
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null)
@@ -253,6 +272,20 @@ function SimulatorPageContent() {
       if (liveRefreshDebounceRef.current) clearTimeout(liveRefreshDebounceRef.current)
     }
   }, [watchlistKey, configFingerprint, scheduleLiveQuotesRefresh, watchlist.length])
+
+  useEffect(() => {
+    const primary = watchlist[0]
+    if (!primary) {
+      setOptionsIntel(null)
+      return
+    }
+    setOptionsIntelLoading(true)
+    fetch(apiUrl(`/api/options/intelligence/${encodeURIComponent(primary)}`))
+      .then((r) => r.json())
+      .then((json: OptionsIntelligencePayload) => setOptionsIntel(json))
+      .catch(() => setOptionsIntel({ ticker: primary, error: 'Failed to load options intelligence.' } as OptionsIntelligencePayload))
+      .finally(() => setOptionsIntelLoading(false))
+  }, [watchlistKey])
 
   // ── Run Live Simulation ─────────────────────────────────────────────────────
   const runLiveSimulation = async () => {
@@ -794,6 +827,15 @@ function SimulatorPageContent() {
                   Dismiss
                 </button>
               </div>
+            )}
+
+            {watchlist.length > 0 && (
+              <ContextualAnalyticsZone
+                title="Command-Center Analytics"
+                ticker={watchlist[0]}
+                data={optionsIntel}
+                loading={optionsIntelLoading}
+              />
             )}
           </div>
         </div>

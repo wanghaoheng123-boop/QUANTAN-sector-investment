@@ -25,6 +25,11 @@ function getBreadcrumbs(pathname: string): Crumb[] {
     return crumbs
   }
 
+  if (pathname.startsWith('/simulator')) {
+    crumbs.push({ label: 'Simulator', href: '/simulator' })
+    return crumbs
+  }
+
   if (pathname.startsWith('/sector/')) {
     crumbs.push({ label: 'Sector', href: '/' })
     const slug = pathname.replace('/sector/', '')
@@ -40,6 +45,13 @@ function getBreadcrumbs(pathname: string): Crumb[] {
     crumbs.push({ label: 'Markets', href: '/' })
     const ticker = decodeURIComponent(pathname.replace('/stock/', ''))
     crumbs.push({ label: ticker })
+    return crumbs
+  }
+
+  if (pathname.startsWith('/options/')) {
+    crumbs.push({ label: 'Markets', href: '/' })
+    const ticker = decodeURIComponent(pathname.replace('/options/', ''))
+    crumbs.push({ label: `${ticker.toUpperCase()} Options` })
     return crumbs
   }
 

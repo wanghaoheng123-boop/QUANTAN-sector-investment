@@ -35,8 +35,24 @@ last_updated: 2026-04-21
 1. Finish Phase 8 data ingestion completeness and validation.
 2. Complete Phase 9 integration + verification.
 3. Execute Phases 10-16 following `docs/MASTER_PLAN_PHASES_8_16.md`.
+4. Keep function-zone + contextual analytics rollout aligned with `docs/FUNCTION_ZONE_TAXONOMY.md`.
+5. Run institutional loop mission (`scripts/loop-mission.ts`) and update scorecard artifacts each cycle.
+6. Validate commercial handover gates in `docs/COMMERCIAL_READINESS_CHECKLIST.md`.
 
 ## Handoff rule
 
 When user says "continue", do not regenerate plans. Resume from the first unchecked item in this file and the phase table in `AGENTS.md`.
+
+## Latest implementation checkpoint
+
+- Added contextual analytics zone component and integrated it into:
+  - `/simulator`
+  - `/stock/[ticker]`
+- Added options intelligence API and computation layer:
+  - `/api/options/intelligence/[ticker]`
+  - `lib/options/intelligence.ts`
+- Added institutional automation artifacts:
+  - `scripts/backtest-matrix.ts`
+  - `scripts/scorecard-evaluate.ts`
+  - `scripts/loop-mission.ts`
 

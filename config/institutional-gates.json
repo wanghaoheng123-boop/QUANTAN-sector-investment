@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "policy": "return-first-with-risk-floors",
+  "thresholds": {
+    "A1_minAvgAnnReturn": 0.06,
+    "A2_minWinRate": 0.5,
+    "B1_maxPortfolioDrawdown": 0.35,
+    "B3_minSharpe": 0.4,
+    "B3_minSortino": 0.6,
+    "D3_minInstrumentsPerWindow": 8
+  }
+}

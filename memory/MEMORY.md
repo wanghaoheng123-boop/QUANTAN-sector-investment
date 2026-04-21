@@ -13,6 +13,10 @@
 - [Project Status](project_status.md) — current completion status and pending work queue
 - [Development Rules](development_rules.md) — coding rules and execution standards for all agents
 - [Agent Handoff Protocol](agent_handoff_protocol.md) — exact startup/resume workflow when user says "continue"
+- [Execution Scorecard Protocol](execution_scorecard_protocol.md) — mandatory scorecard and loop-mission reporting schema
+- [Phase Inspection Charter](../docs/PHASE_INSPECTION_CHARTER.md) — mandatory three-line governance with external expert sign-off
+- [GitHub PR Inspection Checklist](../docs/GITHUB_PR_INSPECTION_CHECKLIST.md) — merge gate checklist
+- [Vercel Promotion Checklist](../docs/VERCEL_PROMOTION_CHECKLIST.md) — deploy/promotion gate checklist
 
 ## Quick Links
 
@@ -28,5 +32,7 @@ Use only these shared in-repo locations for memory/plans:
 - `AGENTS.md`
 - `docs/MASTER_PLAN_PHASES_8_16.md`
 - `memory/`
+- `docs/FUNCTION_ZONE_TAXONOMY.md`
+- `docs/COMMERCIAL_READINESS_CHECKLIST.md`
 
 Any alternate memory folder is non-canonical and should not be used by agents.

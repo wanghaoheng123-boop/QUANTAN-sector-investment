@@ -29,7 +29,10 @@
     "migrate:warehouse": "node scripts/migrate-json-to-sqlite.mjs",
     "fetch:history": "tsx scripts/fetchLongHistory.ts",
     "fetch:macro": "tsx scripts/fetchMacroSeries.ts",
-    "verify:data:long": "tsx scripts/verify-long-data.ts"
+    "verify:data:long": "tsx scripts/verify-long-data.ts",
+    "backtest:matrix": "tsx scripts/backtest-matrix.ts",
+    "scorecard:evaluate": "tsx scripts/scorecard-evaluate.ts",
+    "loop:mission": "tsx scripts/loop-mission.ts"
   },
   "dependencies": {
     "@ducanh2912/next-pwa": "^10.2.9",
