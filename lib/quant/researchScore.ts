@@ -18,6 +18,9 @@ export interface ResearchScoreInput {
   excessVsSpy60d: number | null
   /** 0 = deep buy zone, 0.5 neutral, 1 = above sell zone heuristic */
   bandPosition: number | null
+  /** Optional Phase 9 macro overlay risk (0 benign, 1 recession-risky). */
+  macroRiskScore?: number | null
+  macroPhase?: 'recovery' | 'expansion' | 'late_cycle' | 'slowdown' | 'contraction' | 'recession' | null
 }
 
 export interface PillarScore {
@@ -136,6 +139,20 @@ function valuationBandScore(pos: number | null): PillarScore {
   }
 }
 
+function macroRegimeScore(
+  riskScore: number | null | undefined,
+  phase: ResearchScoreInput['macroPhase']
+): PillarScore {
+  const r = riskScore == null ? 0.5 : Math.max(0, Math.min(1, riskScore))
+  const score = clamp01(100 - r * 100)
+  const phaseText = phase ? `phase=${phase}` : 'phase unavailable'
+  return {
+    name: 'Macro regime',
+    score,
+    detail: `${phaseText} · risk ${(r * 100).toFixed(0)}%`,
+  }
+}
+
 export function computeResearchScore(i: ResearchScoreInput): {
   pillars: PillarScore[]
   total: number
@@ -154,9 +171,10 @@ export function computeResearchScore(i: ResearchScoreInput): {
   const r = rsScore(i.excessVsSpy60d)
   const b = valuationBandScore(i.bandPosition)
 
-  const pillars = [valuePillar, q, m, r, b]
-  const weights = '20% value · 25% quality · 20% momentum · 20% vs SPY · 15% band position'
-  const w = [0.2, 0.25, 0.2, 0.2, 0.15]
+  const macro = macroRegimeScore(i.macroRiskScore, i.macroPhase ?? null)
+  const pillars = [valuePillar, q, m, r, b, macro]
+  const weights = '18% value · 22% quality · 18% momentum · 17% vs SPY · 15% band position · 10% macro regime'
+  const w = [0.18, 0.22, 0.18, 0.17, 0.15, 0.1]
   const total = clamp01(pillars.reduce((s, p, idx) => s + p.score * w[idx], 0))
 
   const rubricLines = [

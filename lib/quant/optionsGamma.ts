@@ -240,6 +240,62 @@ export function normalizeYahooOptionsChain(
   })
 }
 
+// ─── OI-weighted implied volatility (descriptive chain summary) ─────────────
+
+/** OI-weighted mean IV (same numeric scale as `RawOptionContract.impliedVol`, typically 0–2+ as annualized decimal). */
+export interface OiWeightedIvSnapshot {
+  calls: number | null
+  puts: number | null
+  combined: number | null
+  /** Sum of open interest included in the calls leg weighting. */
+  oiWeightCalls: number
+  /** Sum of open interest included in the puts leg weighting. */
+  oiWeightPuts: number
+  /** Contracts with oi > 0 and finite impliedVol > 0. */
+  contractsUsedCalls: number
+  contractsUsedPuts: number
+}
+
+function accumulateOiIvLeg(
+  contracts: RawOptionContract[],
+  acc: { sumIvOi: number; sumOi: number; used: number }
+): void {
+  for (const c of contracts) {
+    const oi = c.oi
+    const iv = c.impliedVol
+    if (oi > 0 && Number.isFinite(iv) && iv > 0) {
+      acc.sumIvOi += iv * oi
+      acc.sumOi += oi
+      acc.used += 1
+    }
+  }
+}
+
+/**
+ * Open-interest-weighted average implied volatility by leg and combined,
+ * over one expiry slice or many (e.g. entire chain).
+ * Excludes contracts with zero OI or non-positive / non-finite IV.
+ */
+export function computeOiWeightedIvForExpiries(expiries: OptionExpiry[]): OiWeightedIvSnapshot {
+  const callsAcc = { sumIvOi: 0, sumOi: 0, used: 0 }
+  const putsAcc = { sumIvOi: 0, sumOi: 0, used: 0 }
+  for (const expiry of expiries) {
+    accumulateOiIvLeg(expiry.calls, callsAcc)
+    accumulateOiIvLeg(expiry.puts, putsAcc)
+  }
+  const combinedSumIvOi = callsAcc.sumIvOi + putsAcc.sumIvOi
+  const combinedSumOi = callsAcc.sumOi + putsAcc.sumOi
+  return {
+    calls: callsAcc.sumOi > 0 ? callsAcc.sumIvOi / callsAcc.sumOi : null,
+    puts: putsAcc.sumOi > 0 ? putsAcc.sumIvOi / putsAcc.sumOi : null,
+    combined: combinedSumOi > 0 ? combinedSumIvOi / combinedSumOi : null,
+    oiWeightCalls: callsAcc.sumOi,
+    oiWeightPuts: putsAcc.sumOi,
+    contractsUsedCalls: callsAcc.used,
+    contractsUsedPuts: putsAcc.used,
+  }
+}
+
 // ─── Core Gamma Analysis ─────────────────────────────────────────────────────
 
 const CONTRACT_MULTIPLIER = 100   // standard equity option = 100 shares

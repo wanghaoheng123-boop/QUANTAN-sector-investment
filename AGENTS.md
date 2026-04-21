@@ -30,7 +30,7 @@ Goal: >80% selective signal accuracy across all market conditions. Bloomberg-lik
 
 ---
 
-## 7-Phase Upgrade Plan — Status
+## Upgrade Plan — Status
 
 | Phase | Name | Status | Branch / Commit |
 |-------|------|--------|-----------------|
@@ -41,6 +41,32 @@ Goal: >80% selective signal accuracy across all market conditions. Bloomberg-lik
 | 5 | Data Infrastructure | ✅ COMPLETE | main / workspace |
 | 6 | Portfolio & Risk Management | ✅ IN PROGRESS (MVP shipped) | `lib/portfolio/*`, `/portfolio` |
 | 7 | Continuous Optimization | ✅ IN PROGRESS (MVP shipped) | `scripts/nightly-backtest.ts`, workflow, `/monitor`, `lib/optimize/gridSearch.ts`, `POST /api/optimize` |
+| 8 | Data Infrastructure 2.0 (30Y history) | 🔲 PENDING | see `docs/MASTER_PLAN_PHASES_8_16.md` |
+| 9 | Business Cycle Intelligence Engine | 🔲 PENDING | see `docs/MASTER_PLAN_PHASES_8_16.md` |
+| 10 | Advanced Valuation Suite (CAPE, reverseDCF, DDM, EPV, EVA) | 🔲 PENDING | see `docs/MASTER_PLAN_PHASES_8_16.md` |
+| 11 | Options Microstructure 2.0 + Strike Recommendation | 🔲 PENDING | see `docs/MASTER_PLAN_PHASES_8_16.md` |
+| 12 | Institutional Accumulation Detection (13F, COT, whales) | 🔲 PENDING | see `docs/MASTER_PLAN_PHASES_8_16.md` |
+| 13 | 30-Year Backtesting with Regime Attribution | 🔲 PENDING | see `docs/MASTER_PLAN_PHASES_8_16.md` |
+| 14 | OPUS-Orchestrated Self-Optimizing Feedback Loop | 🔲 PENDING | see `docs/MASTER_PLAN_PHASES_8_16.md` |
+| 15 | Institutional Output Layer (Buffet-style reports) | 🔲 PENDING | see `docs/MASTER_PLAN_PHASES_8_16.md` |
+| 16 | Verification / Testing / Inspection System | 🔲 PENDING (runs in parallel) | see `docs/MASTER_PLAN_PHASES_8_16.md` |
+
+### Phases 8–16 — Canonical Plan
+
+**Goal:** Upgrade QUANTAN to institutional-grade (Warren Buffet / Wall Street) level with an OPUS AI self-optimizing feedback loop.
+
+**Canonical plan document:** [`docs/MASTER_PLAN_PHASES_8_16.md`](docs/MASTER_PLAN_PHASES_8_16.md) — read this in full before starting any Phase 8+ task.
+
+**Memory bank:** [`memory/MEMORY.md`](memory/MEMORY.md) — shared cross-agent memory (plan summary, architecture, user profile).
+
+**Cross-agent resume protocol:** [`memory/agent_handoff_protocol.md`](memory/agent_handoff_protocol.md) + [`memory/project_status.md`](memory/project_status.md).
+
+When user says **"continue"**, agents should resume from the first pending item in `memory/project_status.md` and the phase table below without re-planning.
+
+**AI model hierarchy for Phases 8–16:**
+- **OPUS** (`claude-opus-4-7`) — brain / orchestrator (strategy, hypotheses, quality gates, report prose)
+- **Sonnet** (`claude-sonnet-4-6`) — executor (code generation, algorithm implementation)
+- **Haiku** (`claude-haiku-4-5`) — fast processor (data pipelines, validation, real-time signals)
 
 ---
 
@@ -230,4 +256,4 @@ When you complete a phase or significant milestone:
 ---
 
 ## File Last Updated
-2026-04-19 · Institutional backtest charter + optimizer/simulator QA extensions shipped · Phase 6 (Portfolio & Risk) continues
+2026-04-21 · Phases 8–16 plan committed: institutional-grade upgrade roadmap (30Y data, business cycle engine, advanced valuation, options 2.0, institutional accumulation, OPUS feedback loop, Buffet-style output). See `docs/MASTER_PLAN_PHASES_8_16.md` + `memory/` for canonical plan.

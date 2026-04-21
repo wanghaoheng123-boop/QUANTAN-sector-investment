@@ -5,6 +5,7 @@ import {
   computeGammaAnalysis,
   interpretGamma,
   calcPutCallRatio,
+  computeOiWeightedIvForExpiries,
 } from '@/lib/quant/optionsGamma'
 
 export const runtime = 'nodejs'
@@ -64,6 +65,11 @@ export async function GET(
       .filter(e => e.daysToExpiry <= 30)
       .sort((a, b) => a.daysToExpiry - b.daysToExpiry)[0]
 
+    const oiIvMethodology =
+      'OI-weighted mean of Yahoo chain impliedVolatility; descriptive only, not a trade signal or probability of profit.'
+    const oiWeightedNearTerm = nearTerm ? computeOiWeightedIvForExpiries([nearTerm]) : null
+    const oiWeightedAllExpiries = computeOiWeightedIvForExpiries(expiryChain)
+
     return NextResponse.json(
       {
         ticker,
@@ -85,6 +91,17 @@ export async function GET(
           : null,
         putCallRatio,
         putCallVolumeRatio,
+        oiWeightedImpliedVol: {
+          methodology: oiIvMethodology,
+          nearTermExpiry: nearTerm
+            ? {
+                date: nearTerm.date,
+                daysToExpiry: nearTerm.daysToExpiry,
+                ...oiWeightedNearTerm,
+              }
+            : null,
+          allExpiries: oiWeightedAllExpiries,
+        },
         gamma: {
           totalGammaExposure: gammaAnalysis.totalGammaExposure,
           netDelta: gammaAnalysis.netDelta,

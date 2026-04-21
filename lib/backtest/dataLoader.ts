@@ -7,7 +7,14 @@
 import { createRequire } from 'node:module'
 import { readFileSync, existsSync, readdirSync } from 'fs'
 import { join } from 'path'
-import { listWarehouseTickers, readCandles, warehouseTickerKey, WAREHOUSE_ENV_PATH } from '@/lib/data/warehouse'
+import {
+  listWarehouseTickers,
+  readCandles,
+  readMacroSeries,
+  readRecessionDates,
+  warehouseTickerKey,
+  WAREHOUSE_ENV_PATH,
+} from '@/lib/data/warehouse'
 import type { WarehouseDb } from '@/lib/data/warehouse'
 
 const nodeRequire = createRequire(join(process.cwd(), 'package.json'))
@@ -120,6 +127,45 @@ export function loadStockHistory(ticker: string): OhlcvRow[] {
     }
   }
   return out
+}
+
+export function loadLongHistory(ticker: string, years: number): OhlcvRow[] {
+  const rows = loadStockHistory(ticker)
+  if (years <= 0 || rows.length === 0) return rows
+  const maxTime = rows[rows.length - 1]?.time ?? 0
+  if (!Number.isFinite(maxTime) || maxTime <= 0) return rows
+  const cutoff = maxTime - Math.floor(years * 365.25 * 24 * 60 * 60)
+  return rows.filter((r) => r.time >= cutoff)
+}
+
+export function loadMacroSeries(seriesId: string): { date: string; value: number }[] {
+  const path = warehousePath()
+  if (!path) return []
+  let db: WarehouseDb | null = null
+  try {
+    db = openWarehouseDb(path)
+    if (!db) return []
+    return readMacroSeries(db, seriesId.trim().toUpperCase())
+  } catch {
+    return []
+  } finally {
+    db?.close()
+  }
+}
+
+export function loadRecessionDates(): { startDate: string; endDate: string }[] {
+  const path = warehousePath()
+  if (!path) return []
+  let db: WarehouseDb | null = null
+  try {
+    db = openWarehouseDb(path)
+    if (!db) return []
+    return readRecessionDates(db)
+  } catch {
+    return []
+  } finally {
+    db?.close()
+  }
 }
 
 /**

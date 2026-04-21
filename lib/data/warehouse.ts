@@ -42,6 +42,32 @@ export function initWarehouseSchema(db: WarehouseDb): void {
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS macro_series (
+      series_id TEXT NOT NULL,
+      date TEXT NOT NULL,
+      value REAL NOT NULL,
+      PRIMARY KEY (series_id, date)
+    );
+    CREATE TABLE IF NOT EXISTS institutional_holdings (
+      cik TEXT NOT NULL,
+      ticker TEXT NOT NULL,
+      quarter TEXT NOT NULL,
+      shares REAL NOT NULL,
+      value REAL NOT NULL,
+      PRIMARY KEY (cik, ticker, quarter)
+    );
+    CREATE TABLE IF NOT EXISTS recession_dates (
+      start_date TEXT NOT NULL,
+      end_date TEXT NOT NULL,
+      PRIMARY KEY (start_date, end_date)
+    );
+    CREATE TABLE IF NOT EXISTS vix_history (
+      date TEXT PRIMARY KEY,
+      open REAL NOT NULL,
+      high REAL NOT NULL,
+      low REAL NOT NULL,
+      close REAL NOT NULL
+    );
   `)
 }
 
@@ -64,4 +90,28 @@ export function readCandles(db: WarehouseDb, tickerKey: string): WarehouseCandle
 export function listWarehouseTickers(db: WarehouseDb): string[] {
   const rows = db.prepare(`SELECT DISTINCT ticker FROM candles ORDER BY ticker`).all() as { ticker: string }[]
   return rows.map((r) => r.ticker)
+}
+
+export type WarehouseMacroSeriesRow = {
+  date: string
+  value: number
+}
+
+export type WarehouseRecessionRange = {
+  startDate: string
+  endDate: string
+}
+
+export function readMacroSeries(db: WarehouseDb, seriesId: string): WarehouseMacroSeriesRow[] {
+  const stmt = db.prepare(
+    `SELECT date, value FROM macro_series WHERE series_id = ? ORDER BY date ASC`
+  )
+  return stmt.all(seriesId) as WarehouseMacroSeriesRow[]
+}
+
+export function readRecessionDates(db: WarehouseDb): WarehouseRecessionRange[] {
+  const rows = db
+    .prepare(`SELECT start_date, end_date FROM recession_dates ORDER BY start_date ASC`)
+    .all() as { start_date: string; end_date: string }[]
+  return rows.map((r) => ({ startDate: r.start_date, endDate: r.end_date }))
 }

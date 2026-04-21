@@ -1,5 +1,6 @@
 import { AlphaVantageProvider } from './alphavantage'
 import { PolygonProvider } from './polygon'
+import { StooqProvider } from './stooq'
 import type { DailyFetchOptions, DataProvider } from './types'
 import { YahooProvider } from './yahoo'
 
@@ -7,8 +8,16 @@ export type { ChartInterval, DailyFetchOptions, DataProvider, ProviderDailyBar, 
 export { YahooProvider } from './yahoo'
 export { PolygonProvider } from './polygon'
 export { AlphaVantageProvider } from './alphavantage'
+export { StooqProvider } from './stooq'
 export { fetchFredObservations, isFredConfigured } from './fred'
 export type { FredObservation } from './fred'
+export { fetchVixHistory } from './cboe'
+export type { VixHistoryRow } from './cboe'
+export { fetchRecessionRanges, isRecession } from './nber'
+export type { RecessionRange } from './nber'
+export { fetchRecent13FFilings, isEdgarConfigured } from './edgar'
+export type { Edgar13FFiling } from './edgar'
+export { cotLegacyFuturesUrl } from './cftc'
 
 /** Polygon → Alpha Vantage → Yahoo (paid providers optional; Yahoo always works). */
 class ChainedEquityProvider implements DataProvider {
