@@ -60,8 +60,9 @@ function deriveTimingScore(live?: LiveMicrostructureSnapshot): number {
   return clamp01(0.28 * dip + 0.26 * nearTrend + 0.24 * momentumTurn + 0.22 * volControl - chasePenalty)
 }
 
-function convictionFromScore(score: number): 'A' | 'B' | 'C' {
-  if (score >= 0.72) return 'A'
+function convictionFromScore(score: number, hasWalkForward: boolean): 'A' | 'B' | 'C' {
+  // Conviction A requires OOS evidence — without walk-forward, cap at B regardless of IS score
+  if (score >= 0.72 && hasWalkForward) return 'A'
   if (score >= 0.56) return 'B'
   return 'C'
 }
@@ -92,14 +93,17 @@ export function buildInstitutionalRanking(inputs: InstitutionalRankingInput[]): 
       0.25 * scaleRange(result.profitFactor === Infinity ? 3 : result.profitFactor, 0.8, 2.5),
     )
 
+    const hasWalkForward = walkForward != null && walkForward.windows.length > 0
     const oosReturn = walkForward?.avgOsReturn ?? 0
     const oosRatio = walkForward?.avgOosRatio ?? 0
     const overfit = walkForward?.overfittingIndex ?? 1
-    const robustnessScore = clamp01(
-      0.5 * scaleRange(oosReturn, -0.03, 0.18) +
-      0.25 * scaleRange(oosRatio, 0.25, 1) +
-      0.25 * (1 - scaleRange(overfit, 0.25, 0.9)),
-    )
+    const robustnessScore = hasWalkForward
+      ? clamp01(
+          0.5 * scaleRange(oosReturn, -0.03, 0.18) +
+          0.25 * scaleRange(oosRatio, 0.25, 1) +
+          0.25 * (1 - scaleRange(overfit, 0.25, 0.9)),
+        )
+      : 0  // no walk-forward data → robustness unknown; do not falsely score 0.5
 
     const timingScore = deriveTimingScore(live)
     const regime = regimeScore({
@@ -118,18 +122,23 @@ export function buildInstitutionalRanking(inputs: InstitutionalRankingInput[]): 
       changePct: live?.changePct,
     })
 
-    // Profit-first weights with institutional guardrails against fragile alpha.
+    // Profit-first weights. When walk-forward is unavailable, robustness weight (0.20)
+    // is redistributed to expectedReturn (+0.12) and riskControl (+0.08) so rankings
+    // remain meaningful rather than being penalised for missing data.
+    const wExpected   = hasWalkForward ? 0.34 : 0.46
+    const wRiskCtrl   = hasWalkForward ? 0.18 : 0.26
+    const wRobustness = hasWalkForward ? 0.20 : 0.00
     const rankScore = clamp01(
-      0.34 * expectedReturnScore +
-      0.18 * riskControlScore +
-      0.2 * robustnessScore +
+      wExpected   * expectedReturnScore +
+      wRiskCtrl   * riskControlScore +
+      wRobustness * robustnessScore +
       0.1 * timingScore +
       0.08 * regime +
       0.05 * persistence +
       0.05 * accumulation,
     )
 
-    const conviction = convictionFromScore(rankScore)
+    const conviction = convictionFromScore(rankScore, hasWalkForward)
     const actionBias = actionFromScore(rankScore)
     const thesis =
       actionBias === 'accumulate'

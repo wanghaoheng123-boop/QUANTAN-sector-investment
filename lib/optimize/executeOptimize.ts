@@ -20,14 +20,20 @@ export async function fetchYahooDailyForOptimize(ticker: string, lookbackDays: n
     interval: '1d',
   })
   if (!result?.quotes || result.quotes.length === 0) return []
-  return result.quotes.map((q) => ({
-    time: (q as { timestamp?: number }).timestamp ?? 0,
-    open: (q as { open?: number }).open ?? 0,
-    high: (q as { high?: number }).high ?? 0,
-    low: (q as { low?: number }).low ?? 0,
-    close: (q as { close?: number }).close ?? 0,
-    volume: (q as { volume?: number }).volume ?? 0,
-  }))
+  // FIX (2026-04-25): yahoo-finance2 chart() returns `date` (Date), not `timestamp`.
+  // Previous code read `q.timestamp` which was always undefined → every row had time=0.
+  return result.quotes.map((q) => {
+    const dateField = (q as { date?: Date | string }).date
+    const ts = dateField ? Math.floor(new Date(dateField).getTime() / 1000) : 0
+    return {
+      time: ts,
+      open: (q as { open?: number }).open ?? 0,
+      high: (q as { high?: number }).high ?? 0,
+      low: (q as { low?: number }).low ?? 0,
+      close: (q as { close?: number }).close ?? 0,
+      volume: (q as { volume?: number }).volume ?? 0,
+    }
+  }).filter(r => r.time > 0 && r.close > 0)
 }
 
 export interface OptimizeExecutionParams {
@@ -39,6 +45,27 @@ export interface OptimizeExecutionParams {
   maxIterations: number
   maxMs: number
   objective: 'full' | 'walk_forward'
+}
+
+export interface OptimizerTopConfig {
+  rank: number
+  params: Record<string, number>
+  /** For walk_forward objective: avg OOS annualised return. For full: Calmar ratio. */
+  primaryScore: number
+  oosReturn?: number
+  overfittingIndex?: number
+  calmar?: number
+  sharpe?: number | null
+  windows?: number
+}
+
+export interface OptimizerReport {
+  runAt: string
+  ticker: string
+  sector: string
+  objective: 'full' | 'walk_forward'
+  totalCandidates: number
+  topConfigs: OptimizerTopConfig[]
 }
 
 export interface OptimizeExecutionResult {
@@ -55,6 +82,8 @@ export interface OptimizeExecutionResult {
   paretoWf?: WalkForwardGridRow[]
   firstBar?: number
   lastBar?: number
+  /** Phase E1: structured top-3 summary for display in the UI optimizer tab. */
+  report?: OptimizerReport
 }
 
 export async function executeBoundedOptimize(p: OptimizeExecutionParams): Promise<OptimizeExecutionResult> {
@@ -68,6 +97,8 @@ export async function executeBoundedOptimize(p: OptimizeExecutionParams): Promis
   if (!validation.valid) {
     throw new Error('Invalid base config')
   }
+
+  const runAt = new Date().toISOString()
 
   if (p.objective === 'walk_forward') {
     const wfRows = boundedWalkForwardGridSearch(base, rows, p.ticker, p.sector, p.axes, {
@@ -84,6 +115,22 @@ export async function executeBoundedOptimize(p: OptimizeExecutionParams): Promis
             (b.scoreOosReturn > a.scoreOosReturn || b.overfittingIndex < a.overfittingIndex),
         ),
     )
+    const top3Wf: OptimizerTopConfig[] = wfRows.slice(0, 3).map((r, i) => ({
+      rank: i + 1,
+      params: r.params,
+      primaryScore: r.scoreOosReturn,
+      oosReturn: r.scoreOosReturn,
+      overfittingIndex: r.overfittingIndex,
+      windows: r.wf.windows.length,
+    }))
+    const report: OptimizerReport = {
+      runAt,
+      ticker: p.ticker,
+      sector: p.sector,
+      objective: 'walk_forward',
+      totalCandidates: wfRows.length,
+      topConfigs: top3Wf,
+    }
     return {
       ticker: p.ticker,
       sector: p.sector,
@@ -95,6 +142,7 @@ export async function executeBoundedOptimize(p: OptimizeExecutionParams): Promis
       paretoWf: paretoWf.slice(0, 24),
       firstBar: rows[0]?.time,
       lastBar: rows[rows.length - 1]?.time,
+      report,
     }
   }
 
@@ -104,6 +152,22 @@ export async function executeBoundedOptimize(p: OptimizeExecutionParams): Promis
   })
   const pareto = paretoFilter(results)
   const pareto3 = paretoFilter3Objectives(results)
+  const sortedFull = results.sort((a, b) => (b.calmar ?? -1e9) - (a.calmar ?? -1e9))
+  const top3Full: OptimizerTopConfig[] = sortedFull.slice(0, 3).map((r, i) => ({
+    rank: i + 1,
+    params: r.params,
+    primaryScore: r.calmar ?? 0,
+    calmar: r.calmar ?? undefined,
+    sharpe: r.sharpe ?? undefined,
+  }))
+  const report: OptimizerReport = {
+    runAt,
+    ticker: p.ticker,
+    sector: p.sector,
+    objective: 'full',
+    totalCandidates: results.length,
+    topConfigs: top3Full,
+  }
 
   return {
     ticker: p.ticker,
@@ -112,10 +176,11 @@ export async function executeBoundedOptimize(p: OptimizeExecutionParams): Promis
     bars: rows.length,
     objective: 'full',
     iterationsRun: results.length,
-    results: results.sort((a, b) => (b.calmar ?? -1e9) - (a.calmar ?? -1e9)).slice(0, 32),
+    results: sortedFull.slice(0, 32),
     pareto: pareto.sort((a, b) => (b.calmar ?? -1e9) - (a.calmar ?? -1e9)),
     pareto3: pareto3.sort((a, b) => (b.calmar ?? -1e9) - (a.calmar ?? -1e9)).slice(0, 24),
     firstBar: rows[0]?.time,
     lastBar: rows[rows.length - 1]?.time,
+    report,
   }
 }

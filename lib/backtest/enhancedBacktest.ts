@@ -174,12 +174,15 @@ function validateBacktest(
     warnings.push(`Sharpe stability (CV=${sharpeStability.toFixed(2)}) is high. Rolling Sharpe varies wildly — strategy may be unstable.`)
   }
 
-  // OOS/IS ratio estimate — requires full walk-forward implementation to compute properly.
-  // Placeholder value cannot fail the overfitting check.
-  const oosIsRatio = NaN  // TODO: implement walk-forward OOS/IS computation
-  if (false && oosIsRatio < 0.3) {  // TODO: implement walk-forward OOS/IS computation
+  // OOS/IS ratio from walk-forward analysis: avgOosRatio is the per-window ratio of
+  // out-of-sample return to in-sample return. < 0.3 indicates likely overfitting.
+  const oosIsRatio = walkForward != null ? walkForward.avgOosRatio : NaN
+  if (Number.isFinite(oosIsRatio) && oosIsRatio < 0.3) {
     overfittingRisk = 'high'
-    errors.push(`OOS/IS ratio (${oosIsRatio.toFixed(2)}) is below 0.5. Strategy likely overfitted to in-sample data.`)
+    errors.push(`OOS/IS ratio (${oosIsRatio.toFixed(2)}) is below 0.3. Out-of-sample returns are far below in-sample — strategy likely overfitted.`)
+  } else if (Number.isFinite(oosIsRatio) && oosIsRatio < 0.5) {
+    if (overfittingRisk === 'low') overfittingRisk = 'medium'
+    warnings.push(`OOS/IS ratio (${oosIsRatio.toFixed(2)}) is below 0.5. Out-of-sample return is materially weaker than in-sample — review parameter stability.`)
   }
 
   // ── 5. Max drawdown realism ───────────────────────────────────────────
