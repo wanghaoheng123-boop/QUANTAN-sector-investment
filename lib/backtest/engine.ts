@@ -43,6 +43,8 @@ export interface Trade {
   reason: string
   atrAtrPctAtEntry?: number
   highestPriceAfterEntry?: number
+  /** Bar index i at which the trade was opened. Used for time-based exit cap. */
+  entryBarIndex?: number
 }
 
 export interface BacktestResult {
@@ -101,8 +103,11 @@ function newPortfolio(initialCapital: number): PortfolioState {
   }
 }
 
-function currentEquity(state: PortfolioState): number {
-  return state.capital + state.position * state.avgCost
+// Mark-to-market: open positions valued at the latest observed close price,
+// not entry/avgCost. Without this, equityHistory is piecewise-flat between
+// trade events, suppressing daily volatility and producing absurd Sharpe.
+function currentEquity(state: PortfolioState, markPrice: number): number {
+  return state.capital + state.position * markPrice
 }
 
 /** Walk-forward backtest for a single instrument. */
@@ -158,7 +163,8 @@ export function backtestInstrument(
 
       // ── ATR-adaptive stop-loss + two-stage trailing stop ──
     if (state.openTrade) {
-      const atrAtEntryPct = state.openTrade.atrAtrPctAtEntry ?? 0.10
+      // atrAtEntryPct is a FRACTION (0.02 = 2% ATR), not a percentage.
+      const atrAtEntryPct = state.openTrade.atrAtrPctAtEntry ?? 0.02
       // Config-driven ATR parameters: floor 3%, ceiling 15%, multiplier 1.5×
       const atrStopPct = Math.max(0.03, Math.min(0.15, 1.5 * atrAtEntryPct))
       const stopPx = state.openTrade.action === 'BUY'
@@ -172,15 +178,16 @@ export function backtestInstrument(
         const peak = state.openTrade.highestPriceAfterEntry!
 
         // Dollar ATR at entry
-        const atrAtEntryDollar = (atrAtEntryPct / 100) * state.openTrade.entryPrice
+        // Dollar ATR = fraction × entry price (atrAtEntryPct is already a fraction).
+        const atrAtEntryDollar = atrAtEntryPct * state.openTrade.entryPrice
         // Profit measured from the running peak (not from entry)
         const profitFromPeak = peak > 0 ? (peak - state.openTrade.entryPrice) / state.openTrade.entryPrice : 0
 
-        // Stage 2 (4× ATR profit): exit if peak − 1× ATR is violated
+        // Stage 2 (6× ATR profit): exit if peak − 1.5× ATR is violated
         // More profitable exit — checked FIRST so it takes priority
-        // Config-driven trail lock: 1.0× ATR (from stopLoss.trailLockMultiplier)
-        const trailLockMultiplier = 1.0
-        if (profitFromPeak >= 4 * atrAtEntryPct) {
+        // Widened from 4×/1× to 6×/1.5× to let winners run through normal pullbacks.
+        const trailLockMultiplier = 1.5
+        if (profitFromPeak >= 6 * atrAtEntryPct) {
           const lockStopPx = peak - trailLockMultiplier * atrAtEntryDollar
           if (signalPrice <= lockStopPx) {
             const proceeds = state.position * signalPrice
@@ -194,16 +201,15 @@ export function backtestInstrument(
             state.openTrade.pnlPct = pnlPct
             state.closedTrades.push({ ...state.openTrade })
             state.position = 0; state.avgCost = 0; state.openTrade = null
-            state.equityHistory.push(currentEquity(state))
+            state.equityHistory.push(currentEquity(state, signalPrice))
             continue
           }
         }
 
-        // Stage 1 (2× ATR profit): raise stop to break-even + 0.5% buffer
-        // Config-driven trail buffer: 0.005 (0.5%)
-        const trailBufferMultiplier = 0.005
-        if (profitFromPeak >= 2 * atrAtEntryPct) {
-          const trailStopPx = state.openTrade.entryPrice * (1 + trailBufferMultiplier)
+        // Stage 1 (3× ATR profit): raise stop to entry + 1× ATR (lock 1R profit)
+        // Widened from 2×ATR/break-even to 3×ATR/+1ATR: survives normal pullbacks.
+        if (profitFromPeak >= 3 * atrAtEntryPct) {
+          const trailStopPx = state.openTrade.entryPrice + atrAtEntryDollar
           if (signalPrice <= trailStopPx) {
             const proceeds = state.position * signalPrice
             const txCost = proceeds * TX_COST_PCT_PER_SIDE
@@ -216,11 +222,16 @@ export function backtestInstrument(
             state.openTrade.pnlPct = pnlPct
             state.closedTrades.push({ ...state.openTrade })
             state.position = 0; state.avgCost = 0; state.openTrade = null
-            state.equityHistory.push(currentEquity(state))
+            state.equityHistory.push(currentEquity(state, signalPrice))
             continue
           }
         }
       }
+
+      // NOTE: Time-based exit cap (60 bars, +1×ATR threshold) was tested
+      // 2026-04-25 and slightly hurt OOS Sharpe (−0.115 → −0.138) despite
+      // raising win-rate. Kept the entryBarIndex field for future experiments.
+      // See docs/SESSION_PROGRESS_2026-04-25.md Priority 2.
 
       // Primary stop-loss check (exits at today's close)
       if ((state.openTrade.action === 'BUY' && signalPrice <= stopPx) ||
@@ -238,14 +249,14 @@ export function backtestInstrument(
         state.openTrade.pnlPct = pnlPct
         state.closedTrades.push({ ...state.openTrade })
         state.position = 0; state.avgCost = 0; state.openTrade = null
-        const eq = currentEquity(state)
+        const eq = currentEquity(state, signalPrice)
         state.equityHistory.push(eq)
         continue
       }
     }
 
     // ── Portfolio max-drawdown circuit breaker ──
-    const eq = currentEquity(state)
+    const eq = currentEquity(state, signalPrice)
     if (eq > state.peakEquity) state.peakEquity = eq
     const dd = (state.peakEquity - eq) / state.peakEquity
     if (dd >= cfg.maxDrawdownCap && state.openTrade) {
@@ -262,7 +273,7 @@ export function backtestInstrument(
       state.openTrade.pnlPct = pnlPct
       state.closedTrades.push({ ...state.openTrade })
       state.position = 0; state.avgCost = 0; state.openTrade = null
-      state.equityHistory.push(currentEquity(state))
+      state.equityHistory.push(currentEquity(state, signalPrice))
       continue
     }
 
@@ -276,7 +287,7 @@ export function backtestInstrument(
       const entryPrice = nextOpen * (1 + ENTRY_SLIPPAGE_BPS / 10000)
       const shares = Math.floor(allocation / entryPrice)
       if (shares <= 0) {
-        state.equityHistory.push(currentEquity(state))
+        state.equityHistory.push(currentEquity(state, signalPrice))
         continue
       }
       const costBasis = shares * entryPrice
@@ -292,12 +303,15 @@ export function backtestInstrument(
         shares, value: costBasis,
         regime: signal.regime.label, dipSignal: signal.regime.dipSignal,
         confidence: signal.confidence, pnlPct: null, reason: signal.reason,
-        atrAtrPctAtEntry: Number.isFinite(atrVals[i]) ? (atrVals[i] / signalPrice) * 100 : 0.10,
+        // Store as FRACTION (e.g. 0.02 = 2% ATR). All downstream exit math
+        // (atrStopPct cap, trail triggers) assumes fraction units.
+        atrAtrPctAtEntry: Number.isFinite(atrVals[i]) && signalPrice > 0 ? atrVals[i] / signalPrice : 0.02,
         highestPriceAfterEntry: entryPrice,
+        entryBarIndex: i,
       }
       state.confidenceSum += signal.confidence
       state.confidenceCount++
-      state.equityHistory.push(currentEquity(state))
+      state.equityHistory.push(currentEquity(state, signalPrice))
 
     } else if (signal.action === 'SELL' && state.openTrade) {
       // SELL exits at today's close (signal price) — realistic same-day exit on regime shift
@@ -312,10 +326,10 @@ export function backtestInstrument(
       state.openTrade.pnlPct = pnlPct
       state.closedTrades.push({ ...state.openTrade })
       state.position = 0; state.avgCost = 0; state.openTrade = null
-      state.equityHistory.push(currentEquity(state))
+      state.equityHistory.push(currentEquity(state, signalPrice))
 
     } else {
-      state.equityHistory.push(currentEquity(state))
+      state.equityHistory.push(currentEquity(state, signalPrice))
     }
   }
 
@@ -532,25 +546,37 @@ export function aggregatePortfolio(results: BacktestResult[], initialCapital: nu
       const years = (lastValid - firstValid) / 252
       truePortfolioAnnReturn = years > 0 ? ((1 + truePortfolioReturn) ** (1 / years) - 1) : 0
 
-      // Compute daily returns from combined equity (for Sharpe/Sortino)
+      // ── Daily returns from MTM combined equity ─────────────────────────
+      // After the MTM fix in `currentEquity`, the combined equity curve already
+      // reflects market-value moves on open positions, so raw daily diffs are
+      // honest. The previous "credit rfD on idle days" kludge was masking the
+      // MTM bug (it was essentially never firing once equity moved daily, and
+      // when it did fire it inflated mean returns). Removed — daily returns are
+      // computed directly from MTM equity.
+      const rfD = 0.04 / 252
       const portfolioDailyReturns: number[] = []
+      let idleDays = 0
       for (let i = firstValid + 1; i <= lastValid; i++) {
         if (combinedEquity[i - 1] > 0) {
-          const ret = (combinedEquity[i] - combinedEquity[i - 1]) / combinedEquity[i - 1]
-          if (Number.isFinite(ret)) portfolioDailyReturns.push(ret)
+          const rawRet = (combinedEquity[i] - combinedEquity[i - 1]) / combinedEquity[i - 1]
+          if (!Number.isFinite(rawRet)) continue
+          if (Math.abs(rawRet) < 1e-9) idleDays++
+          portfolioDailyReturns.push(rawRet)
         }
       }
+      const utilization = portfolioDailyReturns.length > 0
+        ? 1 - idleDays / portfolioDailyReturns.length
+        : 0
 
       if (portfolioDailyReturns.length > 30) {
         const n = portfolioDailyReturns.length
         const mean = portfolioDailyReturns.reduce((a, b) => a + b, 0) / n
         const variance = portfolioDailyReturns.reduce((s, x) => s + (x - mean) ** 2, 0) / Math.max(1, n - 1)
         const sd = Math.sqrt(Math.max(variance, 0))
-        const rfD = 0.04 / 252
         if (sd > 1e-10) {
           sharpe = ((mean - rfD) / sd) * Math.sqrt(252)
         }
-        // FIX C1: Sortino denominator must be N (total observations), not neg.length
+        // Sortino: use downside deviation relative to rfD
         const downsideDevs = portfolioDailyReturns.map(r => Math.min(0, r - rfD))
         const negDevs = downsideDevs.filter(x => x < 0)
         if (negDevs.length > 0) {
@@ -561,7 +587,8 @@ export function aggregatePortfolio(results: BacktestResult[], initialCapital: nu
           }
         }
 
-        // Very small daily σ on a slowly drifting book makes Sharpe/Sortino ill-scaled; use weekly blocks.
+        // Low-vol fallback: use weekly blocks if annual vol < 3%
+        // (cash-adjusted returns reduce this, but keep for safety)
         const annVolDaily = sd * Math.sqrt(252)
         if (annVolDaily < 0.03 && sd > 1e-10) {
           const weekly = dailyReturnsToWeeklyBlocks(portfolioDailyReturns)
@@ -584,6 +611,7 @@ export function aggregatePortfolio(results: BacktestResult[], initialCapital: nu
           }
         }
       }
+      void utilization  // available for future portfolio-level utilization reporting
     }
   }
 

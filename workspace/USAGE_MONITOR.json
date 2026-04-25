@@ -1,0 +1,9 @@
+{
+  "schema_version": "1.0",
+  "action_count": 22,
+  "thresholds": {"warning":0.60,"checkpoint":0.80,"handoff":0.90},
+  "events": [
+    {"timestamp":"2026-04-23T00:00:00Z","level":"INFO","context_pct":0.0,"message":"Initialised"},
+    {"timestamp":"2026-04-25T11:45:00Z","level":"INFO","context_pct":0.22,"message":"Implemented autonomous wave loop + DeepSeek provider config; verification partially blocked by local toolchain"}
+  ]
+}

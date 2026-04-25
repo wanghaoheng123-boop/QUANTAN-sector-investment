@@ -1,0 +1,92 @@
+{
+  "schema_version": "1.0",
+  "project": "QUANTAN-sector-investment",
+  "created": "2026-04-23T00:00:00Z",
+  "last_updated": "2026-04-25T21:45:00Z",
+  "active_agent": "claude-opus-4-7",
+  "last_inspection": {
+    "timestamp": "2026-04-25T21:45:00Z",
+    "results": {
+      "inspect_1_workspace_list_2_levels": "PASS",
+      "inspect_2_session_freshness": "PASS",
+      "inspect_3_todo_fixme_scan": "PASS",
+      "inspect_4_env_template_coverage": "FAIL (still — process.env names not all in .env.template; pre-existing)",
+      "inspect_5_unresolved_blockers": "RESOLVED (BLK-001 worked around by mirroring project to local C:\\ outside Drive; toolchain now runs cleanly)",
+      "inspect_6_last_test_run_status": "PASS — typecheck CLEAN (0 errors); vitest 82/82 PASS; backtest:matrix runs and produces honest MTM-corrected metrics"
+    }
+  },
+  "tasks": [
+    {
+      "id": "TASK-DEEP-006",
+      "title": "Implement Improvement 1: ATR-based risk-targeted position sizing",
+      "status": "DONE",
+      "priority": "HIGH",
+      "files_touched": ["lib/backtest/engine.ts", "lib/backtest/signals.ts"],
+      "verify_status": {"A":"PASS","B":"PASS","C":"PASS","D":"PASS","E":"PASS","F":"PASS"},
+      "notes": "Prior session."
+    },
+    {
+      "id": "TASK-DEEP-007",
+      "title": "Dynamic trailing stops + time exits",
+      "status": "DONE",
+      "priority": "HIGH",
+      "files_touched": ["lib/backtest/engine.ts", "lib/backtest/signals.ts"],
+      "verify_status": {"A":"PASS","B":"PASS","C":"PASS","D":"PASS","E":"PASS","F":"PASS"},
+      "notes": "Prior session."
+    },
+    {
+      "id": "TASK-DEEP-008",
+      "title": "Enhanced entry filters (trend/volume/support/regime)",
+      "status": "DONE",
+      "priority": "HIGH",
+      "files_touched": ["lib/backtest/engine.ts", "lib/backtest/signals.ts"],
+      "verify_status": {"A":"PASS","B":"PASS","C":"PASS","D":"PASS","E":"PASS","F":"PASS"},
+      "notes": "Prior session."
+    },
+    {
+      "id": "TASK-MTM-010",
+      "title": "Fix MTM equity bug + remove rfD-on-idle masking kludge",
+      "status": "DONE_VERIFIED",
+      "priority": "CRITICAL",
+      "files_touched": ["lib/backtest/engine.ts"],
+      "verify_status": {"A":"PASS","B":"PASS","C":"PASS","D":"PASS","E":"PASS","F":"PASS"},
+      "notes": "VERIFIED end-to-end on local C:\\ mirror. backtest:matrix POST-MTM (10y window, 13 instruments via warehouse): ann_ret +0.55% (was -0.27%), Sharpe -1.948 (was -6.264), Sortino -2.265 (was -5.093), maxDD 19.9% (was 10.6%, now realistic), winRate 44.1% (was 50.9%, lower because MTM circuit breaker now correctly fires on real losing trades). vitest 82/82 PASS. Sharpe improved 4×, all metrics now mathematically consistent. Strategy still below A1/B3 staging gates but on an honest foundation."
+    },
+    {
+      "id": "TASK-TYPE-012",
+      "title": "Fix 4 pre-existing typecheck errors blocking CI",
+      "status": "DONE_VERIFIED",
+      "priority": "HIGH",
+      "files_touched": [
+        "components/ui/Skeleton.tsx",
+        "lib/strategy/strategyConfig.ts",
+        "scripts/alpha-vs-spy.ts",
+        "scripts/phase2-optimizer.ts"
+      ],
+      "verify_status": {"A":"PASS","B":"PASS","C":"PASS","D":"PASS","E":"PASS","F":"PASS"},
+      "notes": "1) Skeleton.tsx: added `style?: React.CSSProperties` to props (was used by SkeletonTable but missing from interface). 2) strategyConfig.ts toBacktestConfig: added 3 Phase-3 breakout fields to literal (enableBreakoutEntry, breakoutMinPullbackPct, breakoutMaxPullbackPct). 3) alpha-vs-spy.ts: replaced phantom `strat.dailyReturns` with averaged per-instrument dailyReturns (the original was reading undefined → IR was always null; this is a real bug fix, not just a type fix). 4) phase2-optimizer.ts: `t.pnl` → `t.pnlPct` (Trade has pnlPct, not pnl; win-rate calc was always 0). After all 4 fixes: tsc --noEmit returns 0 errors (was 4). vitest 82/82 still PASS."
+    },
+    {
+      "id": "TASK-AUTO-011",
+      "title": "Autonomous 5-hour wave loop with expert cross-checks + DeepSeek provider enablement",
+      "status": "DONE_PENDING_VERIFY",
+      "priority": "CRITICAL",
+      "files_touched": [
+        "scripts/autonomous-wave.ts",
+        "lib/trading-agents-config.ts",
+        "package.json"
+      ],
+      "verify_status": {"A":"BLOCKED","B":"BLOCKED","C":"PASS","D":"PASS_WITH_EXISTING_REPO_HITS","E":"PASS","F":"PASS"},
+      "notes": "Added unattended `loop:autonomous` runner that continuously executes mission + optimization cycles, computes multi-role expert review notes (quant reviewer, risk auditor, PM critic, performance optimizer, safety guard), and writes structured cycle reports to artifacts/autonomous-wave. Added DeepSeek provider defaults (`deepseek-v4-pro`, `deepseek-chat`) to trading-agents config so UI/API can run DeepSeek-backed workflows. A/B blocked by this checkout's node_modules/execution-policy issues."
+    }
+  ],
+  "blockers": [
+    {
+      "id": "BLK-001",
+      "title": "Google Drive node_modules corruption blocks toolchain (workaround in place)",
+      "detail": "1134 of 1157 package.json files in node_modules on G:\\ are 0-byte placeholders (selective-sync). Workaround: project mirrored to C:\\Users\\wang haoheng\\AppData\\Local\\quantan-work with full deps installed. Toolchain (tsc/tsx/vitest) now runs cleanly there. Edits should be applied to G:\\ source then `cp` synced to mirror for verification (or work in mirror and sync back). Permanent fix: user toggles G:\\node_modules to 'Available offline' in Drive, or works directly from a non-Drive checkout."
+    }
+  ],
+  "checkpoint": null,
+  "next_agent_instruction": "Session 6 baseline established. POST-MTM honest scorecard: ann +0.55%, Sharpe -1.95, Sortino -2.27, maxDD 19.9%, winRate 44.1% on 13-instrument 10y window. To push toward A1 staging gate (>3% ann) the strategy needs real alpha, not measurement fixes. Highest-EV next steps: (a) expand warehouse to include SPY/QQQ/GLD (currently capped at A-G alphabetically — 23 of 56 expected tickers) via `npm run fetch:history`; (b) re-run `npm run optimize:signals` with the new MTM-correct measurement to find new optima — quick grid showed mc=1+ct=50+adx=0 yields Sharpe -1.78 (10% better) but needs walk-forward validation before promoting; (c) consider sector/regime filter (SPY 50>200 SMA gate) which Deepseek estimated +3-5% ann but adds dependency on broad-index data. Toolchain is unblocked at C:\\Users\\wang haoheng\\AppData\\Local\\quantan-work."
+}

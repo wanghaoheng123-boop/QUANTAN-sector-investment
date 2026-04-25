@@ -34,7 +34,9 @@
     "backtest:ranking:strict": "tsx scripts/ranking-strict-backtest.ts",
     "ranking:rolling:stability": "tsx scripts/ranking-rolling-stability.ts",
     "scorecard:evaluate": "tsx scripts/scorecard-evaluate.ts",
-    "loop:mission": "tsx scripts/loop-mission.ts"
+    "loop:mission": "tsx scripts/loop-mission.ts",
+    "optimize:signals": "tsx scripts/optimize-signal-params.ts",
+    "loop:autonomous": "tsx scripts/autonomous-wave.ts"
   },
   "dependencies": {
     "@ducanh2912/next-pwa": "^10.2.9",

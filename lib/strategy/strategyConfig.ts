@@ -99,17 +99,27 @@ export interface RegimeConfig {
    * How close price must have been to the SMA in recent bars to qualify for dip BUY signals.
    * Expressed as a positive % (e.g. 5 = price was within 5% of SMA in the lookback window).
    * Prevents buying "forever falling" stocks that are far below their SMA.
-   * @default 5
+   * @default 10
    */
   priceProximityThreshold: number
+
+  /**
+   * Phase 2: Enable the HEALTHY_BULL_DIP zone — buy 50-EMA pullbacks when price is
+   * above the 200-SMA (uptrend) but has pulled back ≥2% below the 50-EMA.
+   * This is the Elder Triple Screen / Guppy pullback-in-uptrend pattern.
+   * Significantly increases trade frequency by capturing in-trend retests.
+   * @default true
+   */
+  enableHealthyBullDip: boolean
 }
 
 export const DEFAULT_REGIME_CONFIG: RegimeConfig = {
   smaPeriod: 200,
   smaSlopeLookback: 20,
-  smaSlopeThreshold: 0.005,
+  smaSlopeThreshold: 0.001, // optimised: 0.001 vs old 0.005 — allows near-flat slopes
   deviationZones: { ...DEFAULT_DEVIATION_ZONES },
-  priceProximityThreshold: 5,
+  priceProximityThreshold: 10, // optimised: 10% vs old 5% — more forgiving proximity
+  enableHealthyBullDip: true,  // Phase 2: Elder Triple Screen pullback entries
 }
 
 // ─── 2. Entry Signals (Confirmations) ─────────────────────────────────────────
@@ -208,16 +218,47 @@ export interface ConfirmationConfig {
 
   /**
    * Minimum number of bullish confirmations required to issue a BUY signal.
-   * Must have at least N of the 4 indicators (RSI, MACD, ATR, BB) bullish.
+   * Counts from the 7-signal panel: RSI, MACD, ATR, BB, ADX, StochRSI, RVOL.
    * Higher values = stricter entry criteria, fewer but higher-quality signals.
    * @default 2
    */
   minConfirmations: number
+
+  // ── Phase 2: New indicator thresholds ──────────────────────────────────────
+  /**
+   * ADX threshold — ADX(14) must exceed this for a trending-market entry.
+   * ADX > 20 = trending; ADX > 25 = strongly trending; 0 = disable ADX filter.
+   * @default 15
+   */
+  adxThreshold: number
+
+  /**
+   * StochRSI oversold threshold — at or below this value the signal fires bullish.
+   * StochRSI = (RSI - min RSI over 14 bars) / (max - min). Range [0, 1].
+   * @default 0.30
+   */
+  stochRsiOversold: number
+
+  /**
+   * 12-month Rate of Change minimum threshold (momentum gate, Carhart factor).
+   * ROC(252) below this blocks BUY signals — avoids catching persistent losers.
+   * Set to -100 or below to disable (allow any momentum direction).
+   * @default -10 (disabled — allow negative momentum entries)
+   */
+  roc252Threshold: number
+
+  /**
+   * Relative Volume (RVOL) threshold. RVOL = Volume / SMA(Volume, 20).
+   * RVOL > 1.5 = above-average institutional participation → valid signal.
+   * Set 0 to disable volume confirmation.
+   * @default 0.8
+   */
+  rvolThreshold: number
 }
 
 export const DEFAULT_CONFIRMATION_CONFIG: ConfirmationConfig = {
   rsiPeriod: 14,
-  rsiBullThreshold: 35,
+  rsiBullThreshold: 40,   // optimised: 40 vs old 35 — slightly relaxed for more signals
   rsiBearThreshold: 65,
   rsiWeight: 1,
   macdFast: 12,
@@ -225,13 +266,18 @@ export const DEFAULT_CONFIRMATION_CONFIG: ConfirmationConfig = {
   macdSignal: 9,
   macdWeight: 1,
   atrPeriod: 14,
-  atrBullThreshold: 2.0,
+  atrBullThreshold: 1.5,  // optimised: 1.5 vs old 2.0 — fires on lower-volatility names
   atrWeight: 1,
   bbPeriod: 20,
   bbStdDev: 2,
   bbBullThreshold: 0.20,
   bbWeight: 1,
   minConfirmations: 2,
+  // Phase 2 defaults
+  adxThreshold: 15,
+  stochRsiOversold: 0.30,
+  roc252Threshold: -10,   // effectively disabled (-10 = allow any long-term momentum)
+  rvolThreshold: 0.8,
 }
 
 // ─── 3. Stop Loss & Risk Management ────────────────────────────────────────────
@@ -1475,5 +1521,23 @@ export function toBacktestConfig(config: Partial<StrategyConfig>): BacktestConfi
     halfKelly:
       (config.positionSizing?.kellyMode ?? DEFAULT_POSITION_SIZING_CONFIG.kellyMode) === 'half' ||
       (config.positionSizing?.kellyMode ?? DEFAULT_POSITION_SIZING_CONFIG.kellyMode) === 'quarter',
+    // ── Signal / regime parameters — map from StrategyConfig.regime / confirmations ──
+    rsiOversold: config.confirmations?.rsiBullThreshold ?? 40,
+    atrPctThreshold: config.confirmations?.atrBullThreshold ?? 1.5,
+    bbPctThreshold: config.confirmations?.bbBullThreshold ?? 0.20,
+    smaSlopeThreshold: config.regime?.smaSlopeThreshold ?? 0.001,
+    smaSlopeLookback: config.regime?.smaSlopeLookback ?? 20,
+    priceProximityPct: config.regime?.priceProximityThreshold ?? 10,
+    minBullishConfirms: config.confirmations?.minConfirmations ?? 2,
+    // ── Phase 2: New indicators — sourced from confirmations config when available ──
+    adxThreshold: config.confirmations?.adxThreshold ?? 15,
+    stochRsiOversold: config.confirmations?.stochRsiOversold ?? 0.30,
+    roc252Threshold: config.confirmations?.roc252Threshold ?? -10,
+    rvolThreshold: config.confirmations?.rvolThreshold ?? 0.8,
+    enableHealthyBullDip: config.regime?.enableHealthyBullDip ?? true,
+    // ── Phase 3 (2026-04-25) breakout entry — pass through DEFAULT_CONFIG values ──
+    enableBreakoutEntry: true,
+    breakoutMinPullbackPct: 1,
+    breakoutMaxPullbackPct: 12,
   }
 }
