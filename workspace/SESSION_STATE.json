@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "project": "QUANTAN-sector-investment",
   "created": "2026-04-23T00:00:00Z",
-  "last_updated": "2026-04-25T22:05:00Z",
+  "last_updated": "2026-04-25T23:05:00Z",
   "active_agent": "claude-opus-4-7",
   "last_inspection": {
     "timestamp": "2026-04-25T21:45:00Z",
@@ -88,5 +88,5 @@
     }
   ],
   "checkpoint": null,
-  "next_agent_instruction": "Session 7 shipped commit b902105 to origin/cursor/trading-simulator (MTM fix + typecheck cleanup). Vercel auto-deploys via linked project. Next: (1) verify Vercel deploy at https://vercel.com/team_TXgmnu4Bwg2rqPJupexBjrU9/quantan-sector-investment — commit b902105 should be 'Ready' within 5 min; (2) the optimize:signals run on C:\\Users\\wang haoheng\\AppData\\Local\\quantan-work was still in progress at session end — check `artifacts/signal-param-optimization.json` mtime, inspect top configs under MTM-correct measurement, walk-forward validate before promoting any to DEFAULT_CONFIG; (3) DeepSeek UI/UX recs from session 7 (saved in MEMORY_LOG): start with #4 (Desk alert blotter conditional formatting) which is lowest-risk and needs no backend changes; (4) refresh warehouse via `npm run fetch:history` — currently capped at A-G (23 tickers, missing SPY/QQQ/GLD). Toolchain is unblocked at the C:\\ mirror — work there and `cp` deltas back to G:\\ for commits."
+  "next_agent_instruction": "Session 8 status: Vercel preview deploy is GREEN at https://quantan-sector-investment-i53kzdzz6.vercel.app (commit 9aedfd6 — Phase-2/3 rollforward + MTM fix). Production still on gbguguaa2 (3d old). Open work: (1) **Promote to production**: `vercel promote https://quantan-sector-investment-i53kzdzz6.vercel.app --scope wanghaoheng123-7549s-projects` OR merge cursor/trading-simulator → main via PR. User decision. (2) **Optimize:signals**: 4 stuck processes were killed (running for hours, no output — script doesn't print progress). Re-run with `--prefer-offline` or limit grid; consider parallelizing per-ticker. (3) **UI/UX queue** (DeepSeek session 7 recs in MEMORY_LOG): now that Preview is live, validate against the URL before merging any. Start with Desk alert blotter conditional formatting. (4) **Warehouse refresh** (A-G only currently). (5) **Workflow discipline**: HARD rule now in `~/.claude/projects/.../memory/delegation_workflow.md` — Deepseek-first for any Read >100 lines, code audit, or new-script draft. Audit Deepseek balance at session start (currently 98.00 CNY)."
 }
