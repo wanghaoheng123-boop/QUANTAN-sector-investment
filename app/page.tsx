@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import Link from 'next/link'
 import SectorCard from '@/components/SectorCard'
 import SignalCard from '@/components/SignalCard'
@@ -53,6 +53,8 @@ export default function HomePage() {
   const [newsBriefs, setNewsBriefs] = useState<NewsBrief[]>([])
   const [newsLoading, setNewsLoading] = useState(true)
   const [activeFilter, setActiveFilter] = useState<string>('ALL')
+  const priceHistoryRef = useRef<Record<string, number[]>>({})
+  const [historyTick, setHistoryTick] = useState(0)
 
   const fetchPrices = useCallback(async () => {
     try {
@@ -63,6 +65,16 @@ export default function HomePage() {
         data.quotes.forEach((q: Quote) => { map[q.ticker] = q })
         setQuotes(map)
         setLastUpdate(new Date())
+
+        for (const ticker in map) {
+          const price = map[ticker].price
+          if (!Number.isFinite(price) || price <= 0) continue
+          const arr = priceHistoryRef.current[ticker] ?? []
+          arr.push(price)
+          if (arr.length > 30) arr.shift()
+          priceHistoryRef.current[ticker] = arr
+        }
+        setHistoryTick((n) => n + 1)
       }
     } catch {}
   }, [])
@@ -120,12 +132,17 @@ export default function HomePage() {
     return xs.length % 2 ? xs[m] : (xs[m - 1] + xs[m]) / 2
   }, [signals])
 
-  const tickerItems = SECTORS.map(s => ({
-    ticker: s.etf,
-    name: s.name,
-    price: quotes[s.etf]?.price ?? 0,
-    changePct: quotes[s.etf]?.changePct ?? 0,
-  })).filter(t => t.price > 0)
+  const tickerItems = useMemo(
+    () =>
+      SECTORS.map((s) => ({
+        ticker: s.etf,
+        name: s.name,
+        price: quotes[s.etf]?.price ?? 0,
+        changePct: quotes[s.etf]?.changePct ?? 0,
+        history: priceHistoryRef.current[s.etf] ? [...priceHistoryRef.current[s.etf]] : [],
+      })).filter((t) => t.price > 0),
+    [quotes, historyTick],
+  )
 
   const filteredSectors = activeFilter === 'ALL'
     ? SECTORS

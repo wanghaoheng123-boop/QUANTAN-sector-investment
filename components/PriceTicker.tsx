@@ -1,12 +1,14 @@
 'use client'
 
 import { useState } from 'react'
+import Sparkline from './Sparkline'
 
 interface TickerItem {
   ticker: string
   name: string
   price: number
   changePct: number
+  history?: number[]
 }
 
 interface PriceTickerProps {
@@ -55,6 +57,9 @@ export default function PriceTicker({ items }: PriceTickerProps) {
               <span className={`text-[11px] font-mono font-medium ${item.changePct >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                 {item.changePct >= 0 ? '▲' : '▼'}{Math.abs(item.changePct).toFixed(2)}%
               </span>
+              {item.history && item.history.length >= 2 && (
+                <Sparkline data={item.history} color={item.changePct >= 0 ? '#00d084' : '#ff4757'} width={48} height={16} />
+              )}
             </div>
             {i < doubled.length - 1 && (
               <span className="text-slate-700 mx-0.5">|</span>
