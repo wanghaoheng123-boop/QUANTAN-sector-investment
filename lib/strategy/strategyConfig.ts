@@ -1535,9 +1535,9 @@ export function toBacktestConfig(config: Partial<StrategyConfig>): BacktestConfi
     roc252Threshold: config.confirmations?.roc252Threshold ?? -10,
     rvolThreshold: config.confirmations?.rvolThreshold ?? 0.8,
     enableHealthyBullDip: config.regime?.enableHealthyBullDip ?? true,
-    // ── Phase 3 (2026-04-25) breakout entry — pass through DEFAULT_CONFIG values ──
-    enableBreakoutEntry: true,
-    breakoutMinPullbackPct: 1,
-    breakoutMaxPullbackPct: 12,
+    // Phase 3 breakout entry mapping
+    enableBreakoutEntry: config.confirmations?.enableBreakoutEntry ?? true,
+    breakoutMinPullbackPct: config.confirmations?.breakoutMinPullbackPct ?? 1,
+    breakoutMaxPullbackPct: config.confirmations?.breakoutMaxPullbackPct ?? 12,
   }
 }
