@@ -11,7 +11,7 @@
  *   Grid: exit timing, profit-taking levels, stop multipliers.
  */
 
-import type { ParamGrid } from './gridSearch'
+type ParamGrid = Record<string, number[]>
 
 /**
  * Loop 1: Wide grid search to find baseline best parameters.
