@@ -1,7 +1,7 @@
 /**
  * scripts/benchmark-enhanced.ts
  *
- * Institutional-grade benchmark using Phase 2's enhancedCombinedSignal.
+ * Institutional-grade benchmark using Phase 2's combinedSignal.
  * Replaces the simplified inline signal in benchmark-signals.mjs.
  *
  * Usage: npm run benchmark:enhanced
@@ -25,7 +25,7 @@ import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 
 // Use relative imports to avoid @/ alias issues with tsx
-import { enhancedCombinedSignal, DEFAULT_CONFIG } from '../lib/backtest/signals'
+import { combinedSignal, DEFAULT_CONFIG } from '../lib/backtest/signals'
 import type { OhlcvRow } from './backtest/dataLoader'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -88,13 +88,6 @@ function barsFromRows(rows: OhlcvRow[]): { open: number; high: number; low: numb
   return rows.map(({ open, high, low, close }) => ({ open, high, low, close }))
 }
 
-function ohlcvBarsFromRows(rows: OhlcvRow[]): { open: number; high: number; low: number; close: number; volume: number; time: number }[] {
-  return rows.map(r => ({
-    open: r.open, high: r.high, low: r.low, close: r.close,
-    volume: r.volume ?? 0, time: r.time,
-  }))
-}
-
 // ─── Per-instrument benchmark ─────────────────────────────────────────────────
 
 interface InstrumentResult {
@@ -122,8 +115,6 @@ interface InstrumentResult {
 function runInstrument(ticker: string, sector: string, rows: OhlcvRow[]): InstrumentResult {
   const closes = closesFromRows(rows)
   const bars = barsFromRows(rows)
-  const ohlcv = ohlcvBarsFromRows(rows)
-
   const bnhReturn = closes.length > 0 ? (closes[closes.length - 1] - closes[0]) / closes[0] : 0
 
   // Walk-forward split
@@ -144,7 +135,6 @@ function runInstrument(ticker: string, sector: string, rows: OhlcvRow[]): Instru
   for (let i = 220; i < rows.length - 21; i++) {
     const lookback = closes.slice(0, i + 1)
     const barLookback = bars.slice(0, i + 1)
-    const ohlcvLookback = ohlcv.slice(0, i + 1)
     const price = closes[i]
     const date = new Date(rows[i].time * 1000).toISOString().split('T')[0]
 
@@ -156,7 +146,7 @@ function runInstrument(ticker: string, sector: string, rows: OhlcvRow[]): Instru
       openPos = null
     }
 
-    const sig = enhancedCombinedSignal(ticker, date, price, lookback, barLookback, ohlcvLookback, DEFAULT_CONFIG)
+    const sig = combinedSignal(ticker, date, price, lookback, barLookback, DEFAULT_CONFIG)
 
     if (sig.action === 'BUY' && !openPos) {
       const entryPrice = closes[i + 1] // next-day execution
