@@ -2,20 +2,34 @@
   "schema_version": "1.0",
   "project": "QUANTAN-sector-investment",
   "created": "2026-04-23T00:00:00Z",
-  "last_updated": "2026-04-27T15:12:00Z",
+  "last_updated": "2026-04-27T15:21:30Z",
   "active_agent": "claude-opus-4-7",
   "last_inspection": {
-    "timestamp": "2026-04-27T15:10:00Z",
+    "timestamp": "2026-04-27T15:21:00Z",
     "results": {
       "inspect_1_workspace_list_2_levels": "PASS",
       "inspect_2_session_freshness": "PASS",
       "inspect_3_todo_fixme_scan": "PASS",
       "inspect_4_env_template_coverage": "PASS",
       "inspect_5_unresolved_blockers": "RESOLVED (BLK-001 worked around via /tmp/quantan_verify)",
-      "inspect_6_last_test_run_status": "PASS — benchmark verify:data ALL PASS; typecheck remains blocked on Drive node_modules permission (known BLK-001 pattern)"
+      "inspect_6_last_test_run_status": "PASS — benchmark verify:data ALL PASS; Vercel production deployment READY (dpl_DLGGRuTRaQKUa1DLxHkhFePeRpve); local typecheck remains blocked on Drive node_modules permission"
     }
   },
   "tasks": [
+    {
+      "id": "TASK-R02-DEPLOY",
+      "title": "Round 2: push to GitHub + deploy to Vercel production",
+      "status": "DONE_VERIFIED",
+      "priority": "CRITICAL",
+      "files_touched": [
+        "lib/strategy/strategyConfig.ts",
+        "workspace/SESSION_STATE.json",
+        "workspace/MEMORY_LOG.md",
+        "workspace/USAGE_MONITOR.json"
+      ],
+      "verify_status": {"A":"PASS","B":"BLOCKED","C":"PASS","D":"PASS","E":"PASS","F":"PASS"},
+      "notes": "GitHub pushes successful: d2ebca2, e1806cc, 62bacbd on cursor/trading-simulator. Vercel production deployment READY: https://quantan-sector-investment.vercel.app (id dpl_DLGGRuTRaQKUa1DLxHkhFePeRpve). First two deploy attempts failed on strategyConfig BacktestConfig/ConfirmationConfig breakout field mismatch; fixed and redeployed successfully."
+    },
     {
       "id": "TASK-R02-SIGNALS-OPT",
       "title": "Round 2: optimize signals path (O(n) CMO/StochRSI) + confidence/Kelly correctness",
