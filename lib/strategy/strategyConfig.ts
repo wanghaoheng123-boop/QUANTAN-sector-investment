@@ -254,6 +254,24 @@ export interface ConfirmationConfig {
    * @default 0.8
    */
   rvolThreshold: number
+
+  /**
+   * Enable breakout entry confirmation (Minervini-style near 252-bar highs).
+   * @default true
+   */
+  enableBreakoutEntry: boolean
+
+  /**
+   * Minimum pullback percentage from 252-bar high to qualify breakout entry.
+   * @default 1
+   */
+  breakoutMinPullbackPct: number
+
+  /**
+   * Maximum pullback percentage from 252-bar high to qualify breakout entry.
+   * @default 12
+   */
+  breakoutMaxPullbackPct: number
 }
 
 export const DEFAULT_CONFIRMATION_CONFIG: ConfirmationConfig = {
@@ -278,6 +296,9 @@ export const DEFAULT_CONFIRMATION_CONFIG: ConfirmationConfig = {
   stochRsiOversold: 0.30,
   roc252Threshold: -10,   // effectively disabled (-10 = allow any long-term momentum)
   rvolThreshold: 0.8,
+  enableBreakoutEntry: true,
+  breakoutMinPullbackPct: 1,
+  breakoutMaxPullbackPct: 12,
 }
 
 // ─── 3. Stop Loss & Risk Management ────────────────────────────────────────────
@@ -1102,11 +1123,11 @@ export function validateStrategyConfig(config: Partial<StrategyConfig>): Strateg
 
   if (
     confirmations.minConfirmations != null &&
-    (confirmations.minConfirmations < 1 || confirmations.minConfirmations > 4)
+    (confirmations.minConfirmations < 1 || confirmations.minConfirmations > 8)
   ) {
     pushError(
       'confirmations.minConfirmations',
-      `minConfirmations must be between 1 and 4 (total available indicators), got ${confirmations.minConfirmations}`,
+      `minConfirmations must be between 1 and 8 (total available indicators), got ${confirmations.minConfirmations}`,
     )
   }
 
