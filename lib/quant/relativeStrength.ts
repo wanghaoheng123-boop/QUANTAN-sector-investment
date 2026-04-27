@@ -71,3 +71,60 @@ export function excessReturn(
   if (rs == null || rb == null) return null
   return rs - rb
 }
+
+export interface RelativeStrengthRow {
+  ticker: string
+  ratio: number              // last close / SPY last close, raw scale
+  ratio1mAgo: number | null  // ratio 21 trading days ago
+  pct1m: number | null       // % change in ratio over 1m (positive = outperforming)
+  pct3m: number | null       // % change in ratio over 3m (~63 trading days)
+  pct6m: number | null       // % change in ratio over 6m (~126 trading days)
+  rank: number
+}
+
+/**
+ * Compute relative-strength rows for each ticker vs SPY (the benchmark).
+ * Uses ratio = price / SPY_price; positive % change in ratio = outperformance.
+ *
+ * @param tickerCloses  Map of ticker → daily closes (oldest → newest)
+ * @param spyCloses     SPY daily closes (oldest → newest), same date alignment expected
+ * @returns Sorted by 1-month relative strength descending, with rank assigned
+ */
+export function relativeStrengthVsBenchmark(
+  tickerCloses: Record<string, number[]>,
+  spyCloses: number[],
+): RelativeStrengthRow[] {
+  if (spyCloses.length < 22) return []
+
+  const spyLast = spyCloses[spyCloses.length - 1]
+  const spy1mAgo = spyCloses[spyCloses.length - 22] ?? null
+  const spy3mAgo = spyCloses[spyCloses.length - 64] ?? null
+  const spy6mAgo = spyCloses[spyCloses.length - 127] ?? null
+
+  if (!(spyLast > 0)) return []
+
+  const rows: Omit<RelativeStrengthRow, 'rank'>[] = []
+  for (const [ticker, closes] of Object.entries(tickerCloses)) {
+    if (!closes || closes.length < 22) continue
+    const last = closes[closes.length - 1]
+    if (!(last > 0)) continue
+
+    const ratio = last / spyLast
+
+    const computeRatio = (priceAgo: number | null | undefined, spyAgo: number | null) =>
+      priceAgo != null && priceAgo > 0 && spyAgo != null && spyAgo > 0 ? priceAgo / spyAgo : null
+
+    const ratio1m = computeRatio(closes[closes.length - 22], spy1mAgo)
+    const ratio3m = computeRatio(closes[closes.length - 64], spy3mAgo)
+    const ratio6m = computeRatio(closes[closes.length - 127], spy6mAgo)
+
+    const pct1m = ratio1m != null ? (ratio - ratio1m) / ratio1m : null
+    const pct3m = ratio3m != null ? (ratio - ratio3m) / ratio3m : null
+    const pct6m = ratio6m != null ? (ratio - ratio6m) / ratio6m : null
+
+    rows.push({ ticker, ratio, ratio1mAgo: ratio1m, pct1m, pct3m, pct6m })
+  }
+
+  rows.sort((a, b) => (b.pct1m ?? -Infinity) - (a.pct1m ?? -Infinity))
+  return rows.map((r, i) => ({ ...r, rank: i + 1 }))
+}

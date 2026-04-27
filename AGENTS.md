@@ -28,7 +28,28 @@ Goal: >80% selective signal accuracy across all market conditions. Bloomberg-lik
 | 6 | Portfolio & Risk Management | ✅ COMPLETE | branch `claude/loving-banach` |
 | 7 | Continuous Optimization | ✅ COMPLETE | branch `claude/loving-banach` |
 | 8 | Benchmark Fix + Optimization Loops (1-3) | 🔲 INFRASTRUCTURE READY | Run scripts to execute |
-| 9 | Stock-by-Stock Analysis Report | ✅ COMPLETE | `QUANTAN_ANALYSIS_REPORT.md` |
+| 9 | Stock-by-Stock Analysis Report | ✅ COMPLETE | `docs/archive/QUANTAN_ANALYSIS_REPORT.md` |
+| 10 | Cleanup + P1 Audit | ✅ COMPLETE | merged via PR #6, PR for branch `fix/dead-ema-and-progress-audit` |
+
+---
+
+## Phase 10 — Cleanup, Audit & P1 Closure (April 2026)
+
+### What was done
+- **PR #6 (cleanup):** removed 9 dead files, archived 6 historical specs to `docs/archive/`
+- **Audit pass:** reviewed every "remaining bug" claim in the now-archived `progress.md`. Result:
+  - ❌ "Split-adjusted prices" — **stale claim, not a bug**. yahoo-finance2's `chart()` returns split-adjusted close in `q.close` by default. Verified by sampling NVDA (10:1 split 2024-06-10) and TSLA (3:1 split 2022-08-25) — prices show smooth continuity across splits, not raw $1200→$120 jumps.
+  - ❌ "Kelly formula is dead code" — **stale claim, not dead**. `lib/quant/kelly.ts` is imported in 8 places (live route, QuantLab, signals, engine, scripts, tests).
+  - ✅ "EMA seeding bug in technicals.ts" — was real but in dead code (the `ema` named export in technicals.ts had zero callers). Fixed by **deleting** the dead buggy function (commit `7fc76ff`); canonical `ema`/`emaFull` from `indicators.ts` remain the source of truth.
+  - ✅ "BTC regime classification missing" — was real. Added `btcRegime()` in `lib/quant/btc-indicators.ts` returning STRONG_BULL / BULL / NEUTRAL / BEAR / STRONG_BEAR / EUPHORIA / CAPITULATION with confidence derived from ATR%. 7 unit tests.
+  - ✅ "SPY relative strength missing" — was real. Added `relativeStrengthVsBenchmark()` in `lib/quant/relativeStrength.ts` computing ratio (ticker/SPY) over 1m/3m/6m windows. 6 unit tests.
+  - ✅ "No automated data refresh" — was real. Added `.github/workflows/refresh-data.yml` running weekly Sunday 22:00 UTC.
+
+### Standing notes for future agents
+- **Trust the code, not `progress.md`.** That file (now in `docs/archive/`) had multiple stale claims about "remaining bugs" that turned out to be already-fixed or already-handled. Always grep before fixing.
+- **DeepSeek v4 Pro** is wired via MCP (`mcp__deepseek__chat_completion`). A user-level hook at `~/.claude/settings.json` enforces `model: "deepseek-v4-pro"` only — Flash fallback is hard-blocked at the harness level. Use Pro for analysis offload; Opus for architecture and final code review.
+- **CI deploys automatically:** push to `main` → Vercel auto-deploys to https://quantan.vercel.app
+- **Weekly data refresh** runs automatically; if you need a manual refresh, trigger `Weekly Data Refresh` workflow via GitHub Actions UI.
 
 ---
 

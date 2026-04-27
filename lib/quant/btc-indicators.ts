@@ -288,3 +288,117 @@ export function generateSignals(candles: BtcCandle[], fundingRate?: number, fear
 
   return signals
 }
+
+// ─── Regime classification ───────────────────────────────────────────────────
+
+export type BtcRegimeLabel =
+  | 'STRONG_BULL'
+  | 'BULL'
+  | 'NEUTRAL'
+  | 'BEAR'
+  | 'STRONG_BEAR'
+  | 'CAPITULATION'
+  | 'EUPHORIA'
+
+export interface BtcRegime {
+  regime: BtcRegimeLabel
+  confidence: number
+  reasons: string[]
+  metrics: {
+    pctVsEma200: number | null
+    ema50: number | null
+    ema200: number | null
+    rsi14: number | null
+    atrPct: number | null
+  }
+}
+
+export interface BtcRegimeOptions {
+  fastPeriod?: number
+  slowPeriod?: number
+  rsiPeriod?: number
+  atrPeriod?: number
+}
+
+/**
+ * Classify Bitcoin into a regime. Pure function over candles (oldest → newest).
+ * Trend axis: % distance of close from EMA-slow (default 200).
+ * EUPHORIA / CAPITULATION are end-of-trend exhaustion states gated by RSI extremes.
+ */
+export function btcRegime(candles: BtcCandle[], opts: BtcRegimeOptions = {}): BtcRegime {
+  const fast = opts.fastPeriod ?? 50
+  const slow = opts.slowPeriod ?? 200
+  const rsiP = opts.rsiPeriod ?? 14
+  const atrP = opts.atrPeriod ?? 14
+
+  const empty: BtcRegime = {
+    regime: 'NEUTRAL',
+    confidence: 0,
+    reasons: ['insufficient data'],
+    metrics: { pctVsEma200: null, ema50: null, ema200: null, rsi14: null, atrPct: null },
+  }
+  if (candles.length < slow) return empty
+
+  const closes = candles.map((c) => c.close)
+  const last = closes[closes.length - 1]
+  if (!Number.isFinite(last) || last <= 0) return empty
+
+  const emaFast = calcEMA(closes, fast)
+  const emaSlow = calcEMA(closes, slow)
+  const rsiArr = calcRSI(closes, rsiP)
+  const atrArr = calcATR(candles, atrP)
+
+  const ema50 = emaFast[emaFast.length - 1]
+  const ema200 = emaSlow[emaSlow.length - 1]
+  const rsi14 = rsiArr[rsiArr.length - 1]
+  const atr = atrArr[atrArr.length - 1]
+
+  if (!Number.isFinite(ema200) || ema200 <= 0) return empty
+
+  const pct = (last - ema200) / ema200
+  const atrPct = Number.isFinite(atr) && atr > 0 ? atr / last : null
+  const reasons: string[] = []
+
+  let regime: BtcRegimeLabel = 'NEUTRAL'
+
+  if (pct > 0.20 && Number.isFinite(rsi14) && rsi14 > 80) {
+    regime = 'EUPHORIA'
+    reasons.push(`Price ${(pct * 100).toFixed(1)}% above 200EMA + RSI ${rsi14.toFixed(0)} > 80`)
+  } else if (pct < -0.20 && Number.isFinite(rsi14) && rsi14 < 20) {
+    regime = 'CAPITULATION'
+    reasons.push(`Price ${(pct * 100).toFixed(1)}% below 200EMA + RSI ${rsi14.toFixed(0)} < 20`)
+  } else if (pct > 0.10) {
+    regime = 'STRONG_BULL'
+    reasons.push(`Price ${(pct * 100).toFixed(1)}% above 200EMA`)
+  } else if (pct < -0.10) {
+    regime = 'STRONG_BEAR'
+    reasons.push(`Price ${(pct * 100).toFixed(1)}% below 200EMA`)
+  } else if (pct > 0 && Number.isFinite(ema50) && ema50 > ema200) {
+    regime = 'BULL'
+    reasons.push(`Price above 200EMA, 50EMA > 200EMA`)
+  } else if (pct < 0 && Number.isFinite(ema50) && ema50 < ema200) {
+    regime = 'BEAR'
+    reasons.push(`Price below 200EMA, 50EMA < 200EMA`)
+  } else {
+    reasons.push(`Price within ±10% of 200EMA, no strong cross signal`)
+  }
+
+  // Confidence: calmer markets give higher confidence in the regime label.
+  // 0% ATR = 100% conf, 8% daily ATR = 0% conf (linearly).
+  const confidence = atrPct != null
+    ? Math.max(0, Math.min(100, Math.round(100 - 100 * (atrPct / 0.08))))
+    : 50
+
+  return {
+    regime,
+    confidence,
+    reasons,
+    metrics: {
+      pctVsEma200: pct,
+      ema50: Number.isFinite(ema50) ? ema50 : null,
+      ema200: Number.isFinite(ema200) ? ema200 : null,
+      rsi14: Number.isFinite(rsi14) ? rsi14 : null,
+      atrPct,
+    },
+  }
+}

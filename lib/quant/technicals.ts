@@ -10,7 +10,6 @@ export type { OhlcBar } from './indicators'
 
 import {
   smaLatest,
-  ema as emaCanonical,
   rsiLatest,
   macdLatest,
   bollingerLatest,
@@ -24,26 +23,6 @@ import type { OhlcBar } from './indicators'
 
 export function sma(values: number[], period: number): number | null {
   return smaLatest(values, period)
-}
-
-/**
- * EMA returning full array. Uses SMA-seeded initialization (Wilder standard).
- * Note: This returns a shorter array than input (starts at period-1).
- * For backward compatibility with code that expects input-length arrays,
- * the original implementation is preserved here.
- */
-export function ema(values: number[], period: number): number[] {
-  // Preserve original behavior: returns same-length array, seeded from first value
-  const k = 2 / (period + 1)
-  const out: number[] = []
-  if (values.length === 0) return out
-  let prev = values[0]
-  out.push(prev)
-  for (let i = 1; i < values.length; i++) {
-    prev = values[i] * k + prev * (1 - k)
-    out.push(prev)
-  }
-  return out
 }
 
 export function rsi(closes: number[], period = 14): number | null {
