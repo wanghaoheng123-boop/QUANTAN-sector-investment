@@ -30,6 +30,31 @@ Goal: >80% selective signal accuracy across all market conditions. Bloomberg-lik
 | 8 | Benchmark Fix + Optimization Loops (1-3) | 🔲 INFRASTRUCTURE READY | Run scripts to execute |
 | 9 | Stock-by-Stock Analysis Report | ✅ COMPLETE | `docs/archive/QUANTAN_ANALYSIS_REPORT.md` |
 | 10 | Cleanup + P1 Audit | ✅ COMPLETE | merged via PR #6, PR for branch `fix/dead-ema-and-progress-audit` |
+| 11 | Bug Fixes + Macro Gates + Optimization Loops | ✅ COMPLETE | branch `fix/dead-ema-and-progress-audit` (4 commits `da88032..fe5b803`) — see `docs/archive/PHASE_11_PLAN.md` |
+
+---
+
+## Phase 11 — Bug Fixes, Macro Gates & Optimization Loops (April 2026)
+
+### What was done
+- **Phase A (commit `da88032`):** three div-by-zero guards in `lib/backtest/engine.ts` (bnhReturn, drawdown, dailyReturns); LLM backend hardening (`server_trading_agents.py`: `_ApiKeyEnvGuard.__exit__` key-leak fix, `contextvars.copy_context()` executor propagation, `_failures` TTL cache so error results don't poison `/latest`); BTC regime FP-drift epsilon (flat series no longer mislabeled BEAR); QuantLabPanel detects HTTP-200 error responses and warns when `sessionStorage` is unavailable. **+6 engine-divzero tests, +9 btcRegime tests** (was 7, now 9 with calibration fixes).
+- **Phase B (commit `d4f04e0`):** new `GET /smoke` endpoint that exercises asyncio + contextvars without burning LLM credits; `/api/trading-agents/health?deep=1` now calls `/smoke`; `docs/DEPLOY_TRADING_AGENTS.md` walks through Railway and Render deployment with troubleshooting matrix; **+13 proxy-route tests**.
+- **Phase C (commit `aa8921a`):** ran all three optimization loops. Wired `getProfileForTicker` into `scripts/benchmark-enhanced.ts` (Loop 2 — trades 1393 → 184 with sector profiles). Created `scripts/optimize-grid.ts` (Loop 1) and `scripts/portfolio-backtest.ts` (Loop 3 — 60.36% WR, 11.28% return, profit factor 2.56). DeepSeek v4 Pro audit flagged a **HIGH** concurrency hole: `os.environ` is process-global so two simultaneous users with different keys could race; fixed with per-provider `threading.Lock` around `_ApiKeyEnvGuard`.
+- **Phase D (commit `fe5b803`):** four DeepSeek-researched macro gates with academic citations live in `lib/backtest/gates.ts`:
+  - **TLT-rising** (Bekaert/Hoerova/LoDuca 2013) → REITs, Utilities
+  - **Parkinson vol-spike** (Parkinson 1980) → Materials
+  - **DXY-rising suppressor** (Pukthuangthong/Roll 2011) → gold names (NEM)
+  - **Yield-curve gate** (Estrella/Mishkin 1998) → banks (BAC)
+  Each gate **fails closed** on missing/insufficient/non-finite data. Extended `SectorGateConfig` and wired enabled flags into `lib/optimize/sectorProfiles.ts`. Extended `scripts/fetchBacktestData.mjs` to download TLT, UUP, ^TNX, ^IRX. Macro-aware slicing in `scripts/benchmark-enhanced.ts` keeps signals from peeking ahead. **+21 gates tests.** With gates and fresh data the portfolio backtest improved to **WR 61.74%, return 16.14%, profit factor 3.07, drawdown 10.69%**.
+
+### DeepSeek v4 Pro contributions
+- HIGH-severity audit finding: `os.environ` race between concurrent users → fix landed in Phase C.
+- Drafted academic-citation specs and TS pseudocode for all four Phase D gates (Bekaert/Hoerova/LoDuca, Parkinson, Pukthuangthong/Roll, Estrella/Mishkin).
+- Drafted the `docs/archive/PHASE_11_PLAN.md` closure document; Opus reviewed and edited.
+
+### Standing notes for future agents
+- **Macro filter**: `scripts/backtestData/{TLT,UUP,TNX,IRX}.json` are tagged `sector: "Macro"`. The 56-instrument benchmarks all skip these explicitly — do not remove that filter.
+- **Phase 12 follow-ups** (see `docs/archive/PHASE_11_PLAN.md` "Open Follow-ups"): wire macro gates into `portfolioBacktest.ts`; re-run `optimize-grid.ts` against the enhanced signal (current grid uses a fast inline backtest); A/B GARCH(1,1) / Hurst / OBV-divergence as candidate indicators (ship only if Sharpe lift ≥ 0.1, overfit gap < 8pp); deploy `server_trading_agents.py` to Railway and verify `/api/trading-agents/health?deep=1` shows green.
 
 ---
 
@@ -275,4 +300,4 @@ describe('myModule', () => {
 ---
 
 ## File Last Updated
-2026-04-12 · Branch: claude/loving-banach · Phases 5–7 complete · Analysis report generated · Optimization infrastructure ready
+2026-04-28 · Branch: `fix/dead-ema-and-progress-audit` · Phase 11 complete (bug fixes + macro gates + all three optimization loops run) · 321/321 tests, typecheck clean, legacy benchmark 56.58% (floor 55%), portfolio WR 61.74%

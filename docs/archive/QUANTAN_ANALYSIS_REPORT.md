@@ -1344,3 +1344,19 @@ npm run portfolio:backtest    # scripts/portfolio-backtest.ts → Loop 3 portfol
 *Branch: claude/loving-banach*  
 *Baseline data: scripts/benchmark-results.json (timestamp: 2026-04-11)*  
 *For questions or updates to this report, modify Section 11 JSON block and re-run optimization loops*
+
+---
+
+## Phase 11 Status (2026-04-28)
+
+The optimization directives in Section 10–11 of this report are now wired and partially actioned:
+
+- **Sector profiles** in `lib/optimize/sectorProfiles.ts` are honored end-to-end through `scripts/benchmark-enhanced.ts` (Loop 2 wiring shipped in Phase C, commit `aa8921a`).
+- **Macro gates with academic basis** (Phase D, commit `fe5b803`): TLT-rising for REITs/Utilities, Parkinson vol-spike for Materials, DXY-rising for gold, yield-curve for banks. Fail closed on missing data.
+- **All three optimization loops have been run end-to-end:**
+  - Loop 1 — `scripts/optimize-grid.ts` → `scripts/optimization-grid-results.json` + `docs/archive/PHASE_11_GRID_RESULTS.md`
+  - Loop 2 — `scripts/benchmark-enhanced.ts` → `scripts/benchmark-results-enhanced.json`
+  - Loop 3 — `scripts/portfolio-backtest.ts` → `scripts/portfolio-backtest-results.json` + `docs/archive/PHASE_11_PORTFOLIO_REPORT.md`
+- **Portfolio result post-Phase D:** total return 16.14% · win rate 61.74% · profit factor 3.07 · max drawdown 10.69% (cap 20%) · 115 trades.
+
+Open follow-ups tracked in `docs/archive/PHASE_11_PLAN.md`: thread macro gates into `portfolioBacktest.ts`, replace the inline backtest in `gridSearch.ts` with `enhancedCombinedSignal`, A/B test GARCH/Hurst/OBV-div, and deploy the LLM backend on Railway.
