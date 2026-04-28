@@ -29,7 +29,9 @@ export async function GET(request: NextRequest) {
   try {
     const [results, bbMap] = await Promise.all([
       withRetry(() => yahooFinance.quote(tickers) as Promise<any[]>, { attempts: 2, timeoutMs: 7000, retryLabel: 'yahoo quote' }),
-      isBloombergBridgeConfigured() ? fetchBloombergQuotesViaBridge(tickers) : Promise.resolve(null),
+      isBloombergBridgeConfigured()
+        ? fetchBloombergQuotesViaBridge(tickers).catch(() => null)
+        : Promise.resolve(null),
     ])
 
     const yahooQuotes = results.map((q: any) => ({

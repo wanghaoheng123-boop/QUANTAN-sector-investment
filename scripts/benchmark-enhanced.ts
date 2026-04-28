@@ -25,7 +25,7 @@ import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 
 // Use relative imports to avoid @/ alias issues with tsx
-import { enhancedCombinedSignal, DEFAULT_CONFIG } from '../lib/backtest/signals'
+import { combinedSignal, DEFAULT_CONFIG } from '../lib/backtest/signals'
 import type { OhlcvRow } from './backtest/dataLoader'
 import { getProfileForTicker } from '../lib/optimize/sectorProfiles'
 
@@ -130,14 +130,6 @@ function runInstrument(ticker: string, sector: string, rows: OhlcvRow[]): Instru
   const cfg = {
     ...DEFAULT_CONFIG,
     confidenceThreshold: profile.confidenceThreshold,
-    atrStopMultiplier: profile.atrStopMultiplier,
-  }
-  const sectorGates = {
-    buyWScoreThreshold: profile.buyWScoreThreshold,
-    sellWScoreThreshold: profile.sellWScoreThreshold,
-    slopeThreshold: profile.slopeThreshold,
-    goldenCrossGate: profile.goldenCrossGate,
-    requirePositiveMomentum: profile.requirePositiveMomentum,
   }
 
   // Walk-forward split
@@ -158,7 +150,6 @@ function runInstrument(ticker: string, sector: string, rows: OhlcvRow[]): Instru
   for (let i = 220; i < rows.length - 21; i++) {
     const lookback = closes.slice(0, i + 1)
     const barLookback = bars.slice(0, i + 1)
-    const ohlcvLookback = ohlcv.slice(0, i + 1)
     const price = closes[i]
     const date = new Date(rows[i].time * 1000).toISOString().split('T')[0]
 
@@ -170,7 +161,7 @@ function runInstrument(ticker: string, sector: string, rows: OhlcvRow[]): Instru
       openPos = null
     }
 
-    const sig = enhancedCombinedSignal(ticker, date, price, lookback, barLookback, ohlcvLookback, cfg, sectorGates)
+    const sig = combinedSignal(ticker, date, price, lookback, barLookback, cfg)
 
     if (sig.action === 'BUY' && !openPos) {
       const entryPrice = closes[i + 1] // next-day execution

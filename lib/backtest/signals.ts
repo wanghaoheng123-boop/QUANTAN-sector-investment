@@ -16,6 +16,7 @@ import {
 import { multiTimeframeSignal } from '@/lib/quant/multiTimeframe'
 import { detectRegime, type RegimeState as VolRegimeState } from '@/lib/quant/regimeDetection'
 import { volumeProfile, priceRelativeToPOC, type PriceZone } from '@/lib/quant/volumeProfile'
+import { halfKelly } from '@/lib/quant/kelly'
 
 export { sma, ema, rsi, macdFn, atr, bollinger }
 
@@ -54,10 +55,10 @@ export function hasPositiveMomentum(closes: number[], period = 63): boolean {
  * Lookback: last 20 bars for local lows.
  */
 export function detectBullishDivergence(closes: number[], rsiValues: number[], lookback = 20): boolean {
-  if (closes.length < lookback + 2) return false
+  if (closes.length < lookback + 2 || rsiValues.length < lookback + 2) return false
   const priceWindow = closes.slice(-lookback)
-  const rsiWindow = rsiValues.slice(-lookback).filter(r => Number.isFinite(r))
-  if (rsiWindow.length < 5) return false
+  const rsiWindow = rsiValues.slice(-lookback)  // keep alignment with priceWindow
+  if (rsiWindow.filter(r => Number.isFinite(r)).length < 5) return false
 
   // Find two recent troughs in price
   const priceTroughs: number[] = []
@@ -73,7 +74,7 @@ export function detectBullishDivergence(closes: number[], rsiValues: number[], l
   // Price makes lower low at t2
   if (priceWindow[t2] >= priceWindow[t1]) return false
 
-  // RSI makes higher low at t2 (divergence)
+  // RSI makes higher low at t2 (divergence) — check finiteness at comparison time
   const rsi1 = rsiWindow[t1]
   const rsi2 = rsiWindow[t2]
   if (!Number.isFinite(rsi1) || !Number.isFinite(rsi2)) return false
@@ -278,7 +279,7 @@ export const DEFAULT_CONFIG: BacktestConfig = {
   // stopLossPct is now ATR-adaptive in the engine (1.5x ATR, capped 5-15%).
   // This config value serves as the floor for the ATR formula.
   stopLossPct: 0.10,
-  confidenceThreshold: 55,  // Lowered from 65 to allow more signals through
+  confidenceThreshold: 50,  // Lowered from 55 — weighted scoring is inherently more selective
   maxDrawdownCap: 0.25,
   halfKelly: true,
 }
@@ -371,12 +372,18 @@ export function combinedSignal(
   // ── Kelly fraction sizing ──────────────────────────────────────────────
   let kellyFrac = 0.10
   if (action === 'BUY') {
-    if (regime.dipSignal === 'STRONG_DIP' && bullishCount >= 3) {
-      kellyFrac = cfg.halfKelly ? 0.25 : 0.50  // Maximum conviction
+    // Use pure Kelly formula with confidence as win probability proxy.
+    // avgWin: deeper dips = higher expected returns. avgLoss: ~3% with ATR stops.
+    const winProb = confidence / 100
+    const avgWin = regime.dipSignal === 'STRONG_DIP' ? 0.06 : 0.04
+    const avgLoss = 0.03
+    const computed = halfKelly(winProb, avgWin, avgLoss)
+    if (computed != null && computed > 0) {
+      kellyFrac = cfg.halfKelly ? Math.min(computed, 0.25) : Math.min(computed * 2, 0.50)
+    } else if (regime.dipSignal === 'STRONG_DIP' && bullishCount >= 3) {
+      kellyFrac = cfg.halfKelly ? 0.25 : 0.50  // Maximum conviction (fallback)
     } else if (regime.dipSignal === 'STRONG_DIP') {
-      kellyFrac = cfg.halfKelly ? 0.15 : 0.30  // Strong signal
-    } else {
-      kellyFrac = cfg.halfKelly ? 0.10 : 0.20   // Normal signal
+      kellyFrac = cfg.halfKelly ? 0.15 : 0.30  // Strong signal (fallback)
     }
   } else if (action === 'SELL') {
     kellyFrac = 1.0  // Exit full position
@@ -589,7 +596,7 @@ export function enhancedCombinedSignal(
   let action: 'BUY' | 'HOLD' | 'SELL' = regime.action
 
   // Resolve thresholds (sector overrides or defaults)
-  const buyThresh = sectorGates?.buyWScoreThreshold ?? 0.25
+  const buyThresh = sectorGates?.buyWScoreThreshold ?? 0.15
   const sellThresh = sectorGates?.sellWScoreThreshold ?? -0.30
 
   // Use weighted score for confirmation instead of bullishCount
@@ -622,16 +629,20 @@ export function enhancedCombinedSignal(
     action = 'HOLD'
   }
 
-  // ── Kelly fraction (same logic as original) ──
+  // ── Kelly fraction (pure formula with heuristic fallback) ──
   const bullishCount = weightedConfirms.filter(c => c.bullish).length
   let kellyFrac = 0.10
   if (action === 'BUY') {
-    if (regime.dipSignal === 'STRONG_DIP' && bullishCount >= 5) {
+    const winProb = confidence / 100
+    const avgWin = regime.dipSignal === 'STRONG_DIP' ? 0.06 : 0.04
+    const avgLoss = 0.03
+    const computed = halfKelly(winProb, avgWin, avgLoss)
+    if (computed != null && computed > 0) {
+      kellyFrac = cfg.halfKelly ? Math.min(computed, 0.25) : Math.min(computed * 2, 0.50)
+    } else if (regime.dipSignal === 'STRONG_DIP' && bullishCount >= 5) {
       kellyFrac = cfg.halfKelly ? 0.25 : 0.50
     } else if (regime.dipSignal === 'STRONG_DIP') {
       kellyFrac = cfg.halfKelly ? 0.15 : 0.30
-    } else {
-      kellyFrac = cfg.halfKelly ? 0.10 : 0.20
     }
   } else if (action === 'SELL') {
     kellyFrac = 1.0

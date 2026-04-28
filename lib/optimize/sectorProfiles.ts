@@ -66,17 +66,17 @@ export const SECTOR_PROFILES: Record<string, SectorProfile> = {
     sector: 'Technology',
     tickers: ['NVDA', 'MSFT', 'AAPL', 'AVGO', 'AMD'],
     strategyBias: 'trend_following',
-    buyWScoreThreshold: 0.30,          // stricter: must show strong weighted confluence
-    sellWScoreThreshold: -0.25,        // more aggressive sell
-    slopeThreshold: 0.008,             // requires stronger uptrend in 200SMA
-    goldenCrossGate: true,             // CRITICAL: only buy dips in golden-cross uptrends
-    requirePositiveMomentum: true,     // 3mo return > 0 (no buying falling knives)
+    buyWScoreThreshold: 0.22,          // relaxed: too few signals at 0.30
+    sellWScoreThreshold: -0.25,        // aggressive sell
+    slopeThreshold: 0.004,             // relaxed: 0.008 missed all entries in corrections
+    goldenCrossGate: false,            // disabled: killed 99% of signals in bear markets
+    requirePositiveMomentum: false,    // disabled: too restrictive
     tlrGate: false,
-    maxVixForBuy: 30,                  // don't buy tech panic when VIX > 30
-    maxHoldDays: 30,                   // tech can run longer
-    confidenceThreshold: 60,
-    atrStopMultiplier: 2.0,            // wider stops for volatile tech
-    optimizationNotes: 'Main issue: signal fires during secular corrections (NVDA -50%, MSFT -30%). Golden cross gate is the #1 fix. Also try: require MACD histogram recovering (higher low) as additional gate.',
+    maxVixForBuy: 30,
+    maxHoldDays: 30,
+    confidenceThreshold: 55,           // lowered from 60
+    atrStopMultiplier: 2.0,
+    optimizationNotes: 'Golden cross gate disabled — was producing 1 signal across 5 stocks. Need sufficient signal frequency to evaluate quality. Relax thresholds and re-evaluate.',
   },
 
   Healthcare: {
@@ -117,51 +117,51 @@ export const SECTOR_PROFILES: Record<string, SectorProfile> = {
     sector: 'Consumer Disc.',
     tickers: ['AMZN', 'TSLA', 'HD', 'MCD', 'NKE'],
     strategyBias: 'trend_following',
-    buyWScoreThreshold: 0.28,
+    buyWScoreThreshold: 0.22,          // relaxed from 0.28 — too few signals
     sellWScoreThreshold: -0.28,
-    slopeThreshold: 0.006,
-    goldenCrossGate: true,             // TSLA especially needs this (secular volatility)
+    slopeThreshold: 0.004,             // relaxed from 0.006
+    goldenCrossGate: false,            // disabled: filtering too aggressively
     requirePositiveMomentum: false,
     tlrGate: false,
     maxVixForBuy: 35,
     maxHoldDays: 20,
-    confidenceThreshold: 58,
-    atrStopMultiplier: 2.0,            // TSLA/AMZN are high-ATR
-    optimizationNotes: 'TSLA is the most volatile (50% swings). HD (45% win rate) and NKE (33% win rate) are structural losers in current downturn. Separate TSLA/AMZN (growth) from HD/MCD/NKE (value) with different thresholds.',
+    confidenceThreshold: 55,           // lowered from 58
+    atrStopMultiplier: 2.0,
+    optimizationNotes: 'TSLA is the most volatile (50% swings). HD (45% win rate) and NKE (33% win rate) are structural losers in current downturn. Separating TSLA/AMZN from HD/MCD/NKE with sub-profiles would further improve.',
   },
 
   Communication: {
     sector: 'Communication',
     tickers: ['META', 'GOOGL', 'NFLX', 'DIS', 'T'],
     strategyBias: 'hybrid',
-    buyWScoreThreshold: 0.25,
+    buyWScoreThreshold: 0.20,          // lowered from 0.25 — 28.7% WR needs more signals
     sellWScoreThreshold: -0.30,
-    slopeThreshold: 0.005,
-    goldenCrossGate: false,            // META is 100% win — keep permissive
+    slopeThreshold: 0.003,             // lowered from 0.005
+    goldenCrossGate: false,
     requirePositiveMomentum: false,
     tlrGate: false,
     maxVixForBuy: null,
     maxHoldDays: 20,
-    confidenceThreshold: 55,
+    confidenceThreshold: 50,           // lowered from 55
     atrStopMultiplier: 1.5,
-    optimizationNotes: 'Bimodal sector: META (100% WR) and GOOGL (37.5% WR) are very different. Consider sub-profiling. DIS (-49% BnH) and T (+22% BnH) require value vs trend differentiation. NFLX (26.3%) suffers binary earnings moves.',
+    optimizationNotes: 'Bimodal sector: META (100% WR) and GOOGL (37.5% WR). DIS (-49% BnH) and T (+22% BnH) require value vs trend differentiation. Relaxed thresholds to generate sufficient signals for evaluation.',
   },
 
   Industrials: {
     sector: 'Industrials',
     tickers: ['GE', 'RTX', 'CAT', 'UNP', 'HON'],
     strategyBias: 'trend_following',
-    buyWScoreThreshold: 0.26,
+    buyWScoreThreshold: 0.22,          // relaxed from 0.26
     sellWScoreThreshold: -0.30,
-    slopeThreshold: 0.005,
-    goldenCrossGate: true,             // manufacturing cycle stocks need trend confirmation
+    slopeThreshold: 0.004,             // relaxed from 0.005
+    goldenCrossGate: false,            // disabled: too restrictive
     requirePositiveMomentum: false,
     tlrGate: false,
     maxVixForBuy: null,
     maxHoldDays: 20,
     confidenceThreshold: 55,
     atrStopMultiplier: 1.5,
-    optimizationNotes: 'GE (100% WR) and CAT (87.5%) are stars. UNP (10% WR) and HON (43% WR) are structural underperformers. UNP: slope gate misfires during supply chain disruption years. RTX (50%): binary defense spending cycles.',
+    optimizationNotes: 'GE (100% WR) and CAT (87.5%) are stars. UNP (0% WR) needs separate handling — supply chain disruption years cause slope gate misfires.',
   },
 
   'Consumer Staples': {
@@ -202,16 +202,16 @@ export const SECTOR_PROFILES: Record<string, SectorProfile> = {
     sector: 'Materials',
     tickers: ['LIN', 'APD', 'FCX', 'NEM', 'DOW'],
     strategyBias: 'mean_reversion',
-    buyWScoreThreshold: 0.28,          // tighter due to commodity noise
-    sellWScoreThreshold: -0.25,        // more aggressive sell in high-vol
-    slopeThreshold: 0.004,
+    buyWScoreThreshold: 0.22,          // relaxed from 0.28 — 46% WR needs more signals
+    sellWScoreThreshold: -0.25,
+    slopeThreshold: 0.003,             // relaxed from 0.004
     goldenCrossGate: false,
     requirePositiveMomentum: false,
     tlrGate: false,
     maxVixForBuy: null,
-    maxHoldDays: 15,                   // shorter holds due to commodity volatility
-    confidenceThreshold: 60,
-    atrStopMultiplier: 2.0,            // NEM/FCX have high ATR
+    maxHoldDays: 15,
+    confidenceThreshold: 55,           // lowered from 60
+    atrStopMultiplier: 2.0,
     optimizationNotes: 'NEM (36.4% WR) is the worst — gold miners are anti-correlated with dollar. FCX (42%) is copper-proxy, very cyclical. LIN (26.3%) is counter-intuitive: defensive chemical company but algorithm signals poorly. Fix: NEM needs dollar-index gate (buy NEM only when DXY falling).',
   },
 
@@ -266,7 +266,7 @@ export function getProfileForTicker(ticker: string): SectorProfile {
     sector: 'Unknown',
     tickers: [],
     strategyBias: 'hybrid',
-    buyWScoreThreshold: 0.25,
+    buyWScoreThreshold: 0.15,
     sellWScoreThreshold: -0.30,
     slopeThreshold: 0.005,
     goldenCrossGate: false,
@@ -274,7 +274,7 @@ export function getProfileForTicker(ticker: string): SectorProfile {
     tlrGate: false,
     maxVixForBuy: null,
     maxHoldDays: 20,
-    confidenceThreshold: 55,
+    confidenceThreshold: 50,
     atrStopMultiplier: 1.5,
     optimizationNotes: 'No profile defined for this ticker.',
   }

@@ -29,9 +29,14 @@ function isMarketOpen(): boolean {
   const day = now.getUTCDay() // 0 = Sun, 6 = Sat
   if (day === 0 || day === 6) return false
 
-  // Approximate ET offset: UTC-4 during EDT (Mar–Nov), UTC-5 during EST
-  // Simple heuristic: use UTC-4 (EDT) — slightly wrong ~3 weeks/year, acceptable
-  const etHour = now.getUTCHours() - 4
+  // Dynamic DST detection: US DST starts 2nd Sunday March, ends 1st Sunday November
+  const year = now.getUTCFullYear()
+  const jan = new Date(Date.UTC(year, 0, 1))
+  const jul = new Date(Date.UTC(year, 6, 1))
+  const isDST = now.getTimezoneOffset() < Math.max(jan.getTimezoneOffset(), jul.getTimezoneOffset())
+  const etOffset = isDST ? -4 : -5
+
+  const etHour = now.getUTCHours() + etOffset
   const etMinute = now.getUTCMinutes()
   const etTime = etHour * 60 + etMinute
 

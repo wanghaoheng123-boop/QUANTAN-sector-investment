@@ -250,7 +250,7 @@ describe('Enhanced Combined Signal', () => {
 describe('DEFAULT_CONFIG', () => {
   it('has expected default values', () => {
     expect(DEFAULT_CONFIG.initialCapital).toBe(100_000)
-    expect(DEFAULT_CONFIG.confidenceThreshold).toBe(55)
+    expect(DEFAULT_CONFIG.confidenceThreshold).toBe(50)
     expect(DEFAULT_CONFIG.maxDrawdownCap).toBe(0.25)
     expect(DEFAULT_CONFIG.halfKelly).toBe(true)
   })

@@ -73,7 +73,7 @@ export function calcBollingerBands(prices: number[], period = 20, stdDev = 2) {
   for (let i = period - 1; i < prices.length; i++) {
     const slice = prices.slice(i - period + 1, i + 1)
     const mean = slice.reduce((a, b) => a + b, 0) / period
-    const variance = slice.reduce((a, b) => a + (b - mean) ** 2, 0) / period
+    const variance = slice.reduce((a, b) => a + (b - mean) ** 2, 0) / (period - 1)  // sample variance
     result[i] = { mid: mean, upper: mean + stdDev * Math.sqrt(variance), lower: mean - stdDev * Math.sqrt(variance) }
   }
   return result
@@ -156,15 +156,21 @@ export function calcADX(candles: BtcCandle[], period = 14) {
   const trSmooth = calcEMA(tr, period)
   const plusDISmooth = calcEMA(plusDM, period)
   const minusDISmooth = calcEMA(minusDM, period)
+  // Build normalized DI arrays (DI% = smoothed DM / smoothed TR × 100)
+  const normPlusDI: number[] = new Array(candles.length).fill(NaN)
+  const normMinusDI: number[] = new Array(candles.length).fill(NaN)
   const adx: number[] = new Array(candles.length).fill(NaN)
   for (let i = period; i < candles.length; i++) {
-    const plusDI = trSmooth[i] > 0 ? (plusDISmooth[i] / trSmooth[i]) * 100 : 0
-    const minusDI = trSmooth[i] > 0 ? (minusDISmooth[i] / trSmooth[i]) * 100 : 0
+    const trVal = trSmooth[i - 1]  // correct index: TR/DM arrays start at bar 1
+    const plusDI = trVal > 0 ? (plusDISmooth[i - 1] / trVal) * 100 : 0
+    const minusDI = trVal > 0 ? (minusDISmooth[i - 1] / trVal) * 100 : 0
+    normPlusDI[i] = plusDI
+    normMinusDI[i] = minusDI
     const dx = plusDI + minusDI > 0 ? Math.abs(plusDI - minusDI) / (plusDI + minusDI) * 100 : 0
     adx[i] = dx
   }
   const adxSmooth = calcEMA(adx, period)
-  return { adx: adxSmooth, plusDI: plusDISmooth, minusDI: minusDISmooth }
+  return { adx: adxSmooth, plusDI: normPlusDI, minusDI: normMinusDI }
 }
 
 // ─── On-chain / model indicators ─────────────────────────────────────────────
@@ -386,9 +392,10 @@ export function btcRegime(candles: BtcCandle[], opts: BtcRegimeOptions = {}): Bt
   }
 
   // Confidence: calmer markets give higher confidence in the regime label.
-  // 0% ATR = 100% conf, 8% daily ATR = 0% conf (linearly).
+  // Non-linear scaling: confidence saturates at low ATR%, drops faster at high ATR%.
+  // atrPct=0.5% → ~95, atrPct=1% → 88, atrPct=2% → 75, atrPct=5% → 35, atrPct=8% → 0.
   const confidence = atrPct != null
-    ? Math.max(0, Math.min(100, Math.round(100 - 100 * (atrPct / 0.08))))
+    ? Math.round(100 * Math.pow(Math.max(0, 1 - atrPct / 0.08), 1.3))
     : 50
 
   return {

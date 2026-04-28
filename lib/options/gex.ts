@@ -40,18 +40,18 @@ export function computeGex(
   spot: number,
 ): GexResult {
   // Build per-strike map
-  const strikeMap = new Map<number, { callOI: number; putOI: number; gamma: number }>()
+  const strikeMap = new Map<number, { callOI: number; putOI: number; gammaSum: number; gammaCount: number }>()
 
   function upsert(strike: number, oi: number, gamma: number, side: 'call' | 'put') {
     let entry = strikeMap.get(strike)
     if (!entry) {
-      entry = { callOI: 0, putOI: 0, gamma }
+      entry = { callOI: 0, putOI: 0, gammaSum: 0, gammaCount: 0 }
       strikeMap.set(strike, entry)
     }
     if (side === 'call') entry.callOI += oi
     else entry.putOI += oi
-    // Use the gamma from whichever contract we encounter last (they should be ~equal)
-    entry.gamma = gamma
+    entry.gammaSum += gamma
+    entry.gammaCount++
   }
 
   for (const c of calls) upsert(c.strike, c.openInterest ?? 0, c.gamma, 'call')
@@ -60,7 +60,10 @@ export function computeGex(
   const strikes = Array.from(strikeMap.keys()).sort((a, b) => a - b)
 
   const strikeGex: StrikeGex[] = strikes.map((strike) => {
-    const { callOI, putOI, gamma } = strikeMap.get(strike)!
+    const entry = strikeMap.get(strike)!
+    const gamma = entry.gammaCount > 0 ? entry.gammaSum / entry.gammaCount : 0
+    const callOI = entry.callOI
+    const putOI = entry.putOI
     const gex = (callOI - putOI) * gamma * 100 * spot * spot * 0.01
     return { strike, gex }
   })

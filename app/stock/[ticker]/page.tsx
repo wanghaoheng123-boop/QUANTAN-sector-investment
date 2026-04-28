@@ -13,7 +13,7 @@ import GexChart from '@/components/options/GexChart'
 import MaxPainGauge from '@/components/options/MaxPainGauge'
 import FlowScanner from '@/components/options/FlowScanner'
 import { getNewsForSector, generateDarkPoolPrints } from '@/lib/mockData'
-import { DarkPoolPrint } from '@/lib/sectors'
+import { DarkPoolPrint, SECTORS } from '@/lib/sectors'
 import type { DarkPoolAnalysis } from '@/lib/darkpool'
 import { CHART_EMA_PERIODS, tradingDefaultEmaFlags, type ChartEmaKey } from '@/lib/chartEma'
 import { STOCK_CHART_RANGES, isStockIntradayPollRange } from '@/lib/chartYahoo'
@@ -104,7 +104,16 @@ export default function StockPage({ params }: { params: { ticker: string } }) {
     setVis(newVis)
   }, [])
 
-  const color = '#3b82f6'
+  const tickerSector = useMemo(() => {
+    for (const s of SECTORS) {
+      if (s.topHoldings.some(h => h.toUpperCase() === ticker || h.replace('.', '-').toUpperCase() === ticker)) {
+        return s
+      }
+    }
+    return null
+  }, [ticker])
+
+  const color = tickerSector?.color ?? '#3b82f6'
 
   // Stable callbacks — defined with useCallback to avoid stale closures
   const fetchChartData = useCallback((range: string) => {
@@ -205,7 +214,7 @@ export default function StockPage({ params }: { params: { ticker: string } }) {
       .catch(() => setOptionsLoading(false))
   }, [ticker, activeTab, optionsChain])
 
-  const news = getNewsForSector('technology')
+  const news = getNewsForSector(tickerSector?.slug ?? 'technology')
   const newsMarkers = news.slice(0, 3).map((n, i) => {
     if (candles.length === 0) return null
     const idx = Math.max(0, candles.length - 15 - i * 10)

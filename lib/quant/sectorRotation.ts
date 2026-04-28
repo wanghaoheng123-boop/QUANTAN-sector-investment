@@ -30,18 +30,19 @@ export interface SectorScore {
 
 /**
  * Returns the percentage return of `closes` over the last `days` trading days.
- * Returns 0 if there aren't enough bars.
+ * Returns null if there aren't enough bars (distinguishes from a valid zero return).
  */
-function periodReturn(closes: number[], days: number): number {
-  if (closes.length < days + 1) return 0
+function periodReturn(closes: number[], days: number): number | null {
+  if (closes.length < days + 1) return null
   const start = closes[closes.length - days - 1]
   const end   = closes[closes.length - 1]
-  return start > 0 ? (end - start) / start : 0
+  return start > 0 ? (end - start) / start : null
 }
 
 /**
  * Momentum score = 40% × 3mo + 30% × 6mo + 30% × 12mo − 1mo crash filter.
  * Trading-day approximate periods: 63d, 126d, 252d, 21d.
+ * Null components contribute 0 (treated as neutral), preventing downward bias.
  */
 export function momentumScore(closes: number[]): number {
   const ret3mo  = periodReturn(closes, 63)
@@ -49,7 +50,7 @@ export function momentumScore(closes: number[]): number {
   const ret12mo = periodReturn(closes, 252)
   const ret1mo  = periodReturn(closes, 21)
 
-  return 0.40 * ret3mo + 0.30 * ret6mo + 0.30 * ret12mo - ret1mo
+  return 0.40 * (ret3mo ?? 0) + 0.30 * (ret6mo ?? 0) + 0.30 * (ret12mo ?? 0) - (ret1mo ?? 0)
 }
 
 /**

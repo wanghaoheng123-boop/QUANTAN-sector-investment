@@ -197,7 +197,7 @@ export async function GET(
     const trends = (recTrend as Record<string, unknown>).trend as Array<Record<string, unknown>> | undefined
     if (Array.isArray(trends) && trends.length > 0) {
       const current = trends[0] as Record<string, unknown>
-      analystCount = safeNum(current.strongBuy as number) ?? 0 + (safeNum(current.buy as number) ?? 0) + (safeNum(current.hold as number) ?? 0) + (safeNum(current.sell as number) ?? 0) + (safeNum(current.strongSell as number) ?? 0)
+      analystCount = (safeNum(current.strongBuy as number) ?? 0) + (safeNum(current.buy as number) ?? 0) + (safeNum(current.hold as number) ?? 0) + (safeNum(current.sell as number) ?? 0) + (safeNum(current.strongSell as number) ?? 0)
       const strongBuy = safeNum(current.strongBuy as number) ?? 0
       const buy = safeNum(current.buy as number) ?? 0
       const hold = safeNum(current.hold as number) ?? 0

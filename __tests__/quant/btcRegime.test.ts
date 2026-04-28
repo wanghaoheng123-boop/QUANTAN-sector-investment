@@ -1,19 +1,19 @@
 import { describe, it, expect } from 'vitest'
 import { btcRegime, type BtcCandle } from '@/lib/quant/btc-indicators'
 
-function makeCandles(closes: number[], baseTime = 1700000000): BtcCandle[] {
+function makeCandles(closes: number[], baseTime = 1700000000, range = 0.01): BtcCandle[] {
   return closes.map((c, i) => ({
     time: baseTime + i * 86400,
     open: c,
-    high: c * 1.01,
-    low: c * 0.99,
+    high: c * (1 + range),
+    low: c * (1 - range),
     close: c,
     volume: 1000,
   }))
 }
 
-function makeFlatCandles(n: number, price = 50000): BtcCandle[] {
-  return makeCandles(Array.from({ length: n }, () => price))
+function makeFlatCandles(n: number, price = 50000, range = 0.01): BtcCandle[] {
+  return makeCandles(Array.from({ length: n }, () => price), 1700000000, range)
 }
 
 function makeTrendCandles(n: number, start: number, dailyReturn: number): BtcCandle[] {
@@ -60,7 +60,8 @@ describe('btcRegime', () => {
   })
 
   it('confidence scales inversely with volatility (calmer = higher)', () => {
-    const calm = btcRegime(makeFlatCandles(250))
+    // Use candles with tiny range (0.1%) for calm market — ATR should be minimal
+    const calm = btcRegime(makeFlatCandles(250, 50000, 0.001))
     expect(calm.confidence).toBeGreaterThan(80)
   })
 
