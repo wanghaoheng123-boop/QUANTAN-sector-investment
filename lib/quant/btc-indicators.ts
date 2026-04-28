@@ -355,7 +355,9 @@ export function btcRegime(candles: BtcCandle[], opts: BtcRegimeOptions = {}): Bt
 
   if (!Number.isFinite(ema200) || ema200 <= 0) return empty
 
-  const pct = (last - ema200) / ema200
+  // Use epsilon tolerance to avoid floating-point artefacts (e.g. -2.9e-16 for flat series)
+  const pctRaw = (last - ema200) / ema200
+  const pct = Math.abs(pctRaw) < 1e-10 ? 0 : pctRaw
   const atrPct = Number.isFinite(atr) && atr > 0 ? atr / last : null
   const reasons: string[] = []
 

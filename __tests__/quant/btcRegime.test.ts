@@ -37,15 +37,18 @@ describe('btcRegime', () => {
     expect(Math.abs(r.metrics.pctVsEma200!)).toBeLessThan(0.01)
   })
 
-  it('classifies steady uptrend (≥+10% above EMA200) as STRONG_BULL', () => {
+  it('classifies steady uptrend (≥+10% above EMA200) as a bull regime (STRONG_BULL or EUPHORIA)', () => {
     const r = btcRegime(makeTrendCandles(250, 30000, 0.003))
-    expect(r.regime).toBe('STRONG_BULL')
+    // Extreme 250-bar uptrend triggers EUPHORIA (pct>20% + RSI>80); STRONG_BULL for milder moves.
+    // Both are valid bullish regimes — Phase 12 extended the classification with EUPHORIA/CAPITULATION.
+    expect(['STRONG_BULL', 'EUPHORIA']).toContain(r.regime)
     expect(r.metrics.pctVsEma200).toBeGreaterThan(0.10)
   })
 
-  it('classifies steady downtrend (≥-10% below EMA200) as STRONG_BEAR', () => {
+  it('classifies steady downtrend (≥-10% below EMA200) as a bear regime (STRONG_BEAR or CAPITULATION)', () => {
     const r = btcRegime(makeTrendCandles(250, 60000, -0.003))
-    expect(r.regime).toBe('STRONG_BEAR')
+    // Extreme 250-bar downtrend triggers CAPITULATION (pct<-20% + RSI<20); STRONG_BEAR for milder.
+    expect(['STRONG_BEAR', 'CAPITULATION']).toContain(r.regime)
     expect(r.metrics.pctVsEma200).toBeLessThan(-0.10)
   })
 
