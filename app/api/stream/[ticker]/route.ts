@@ -82,10 +82,14 @@ function sseMessage(event: string, data: unknown): string {
 }
 
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: { ticker: string } }
 ): Promise<Response> {
   const symbol = yahooSymbolFromParam(params.ticker)
+
+  // Capture the request's AbortSignal so we can clean up when the client disconnects.
+  // `req.signal` is aborted when the HTTP connection is dropped by the client.
+  const clientSignal = req.signal
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -98,13 +102,20 @@ export async function GET(
       function close() {
         if (closed) return
         closed = true
-        if (quoteTimer) clearInterval(quoteTimer)
-        if (heartbeatTimer) clearInterval(heartbeatTimer)
+        if (quoteTimer) { clearInterval(quoteTimer); quoteTimer = null }
+        if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null }
         try { controller.close() } catch { /* already closed */ }
+      }
+
+      // Stop all timers when the client disconnects (request AbortSignal).
+      // Without this, setInterval callbacks keep running after the client drops.
+      if (clientSignal) {
+        clientSignal.addEventListener('abort', () => close(), { once: true })
       }
 
       // Emit initial quote immediately
       const initial = await fetchQuote(symbol)
+      if (closed) return
       if (initial) {
         try {
           controller.enqueue(encode(sseMessage('quote', initial)))
@@ -134,6 +145,7 @@ export async function GET(
             return
           }
           const q = await fetchQuote(symbol)
+          if (closed) return
           if (q) {
             try { controller.enqueue(encode(sseMessage('quote', q))) }
             catch { close() }

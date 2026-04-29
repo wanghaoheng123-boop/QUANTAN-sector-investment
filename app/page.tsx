@@ -109,14 +109,14 @@ export default function HomePage() {
 
   const signals = useMemo(() => buildSessionSignalsFromQuotes(quotes), [quotes])
 
-  const topBuy = signals.filter((s) => s.direction === 'BUY').sort((a, b) => Math.abs(b.sessionChangePct ?? 0) - Math.abs(a.sessionChangePct ?? 0)).slice(0, 3)
-  const topSell = signals.filter((s) => s.direction === 'SELL').sort((a, b) => Math.abs(b.sessionChangePct ?? 0) - Math.abs(a.sessionChangePct ?? 0)).slice(0, 2)
-  const topSignals = [...topBuy, ...topSell]
+  const topBuy = useMemo(() => buySignals.sort((a, b) => Math.abs(b.sessionChangePct ?? 0) - Math.abs(a.sessionChangePct ?? 0)).slice(0, 3), [signals])
+  const topSell = useMemo(() => sellSignals.sort((a, b) => Math.abs(b.sessionChangePct ?? 0) - Math.abs(a.sessionChangePct ?? 0)).slice(0, 2), [signals])
+  const topSignals = useMemo(() => [...topBuy, ...topSell], [topBuy, topSell])
 
-  const signalMap = signals.reduce<Record<string, PriceSignal>>((acc, s) => {
+  const signalMap = useMemo(() => signals.reduce<Record<string, PriceSignal>>((acc, s) => {
     acc[s.etf] = s
     return acc
-  }, {})
+  }, {}), [signals])
 
   const medianAbsMove = useMemo(() => {
     const xs = signals.map((s) => Math.abs(s.sessionChangePct ?? 0)).sort((a, b) => a - b)
@@ -125,16 +125,22 @@ export default function HomePage() {
     return xs.length % 2 ? xs[m] : (xs[m - 1] + xs[m]) / 2
   }, [signals])
 
-  const tickerItems = SECTORS.map(s => ({
+  const buySignals = useMemo(() => signals.filter((s) => s.direction === 'BUY'), [signals])
+  const sellSignals = useMemo(() => signals.filter((s) => s.direction === 'SELL'), [signals])
+  const holdSignals = useMemo(() => signals.filter((s) => s.direction === 'HOLD'), [signals])
+  const avgConfidence = useMemo(() => Math.round(signals.reduce((a, b) => a + b.confidence, 0) / (signals.length || 1)), [signals])
+  const sortedSignals = useMemo(() => [...signals].sort((a, b) => (b.sessionChangePct ?? 0) - (a.sessionChangePct ?? 0)), [signals])
+
+  const tickerItems = useMemo(() => SECTORS.map(s => ({
     ticker: s.etf,
     name: s.name,
     price: quotes[s.etf]?.price ?? 0,
     changePct: quotes[s.etf]?.changePct ?? 0,
-  })).filter(t => t.price > 0)
+  })).filter(t => t.price > 0), [quotes])
 
-  const filteredSectors = activeFilter === 'ALL'
+  const filteredSectors = useMemo(() => activeFilter === 'ALL'
     ? SECTORS
-    : SECTORS.filter(s => signalMap[s.etf]?.direction === activeFilter)
+    : SECTORS.filter(s => signalMap[s.etf]?.direction === activeFilter), [activeFilter, signalMap])
 
   return (
     <div className="min-h-screen">
@@ -196,7 +202,8 @@ export default function HomePage() {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
             {topSignals.map((signal, i) => {
-              const sector = SECTORS.find(s => s.etf === signal.etf)!
+              const sector = SECTORS.find(s => s.etf === signal.etf)
+              if (!sector) return null
               return (
                 <Link key={i} href={`/sector/${sector.slug}`}>
                   <SignalCard signal={signal} color={sector.color} compact />
@@ -209,10 +216,10 @@ export default function HomePage() {
         {/* Market Overview Stats */}
         <section className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
-            { label: 'Sectors Bullish', value: signals.filter((s) => s.direction === 'BUY').length, of: 11, color: '#00d084' },
-            { label: 'Sectors Bearish', value: signals.filter((s) => s.direction === 'SELL').length, of: 11, color: '#ff4757' },
-            { label: 'Neutral', value: signals.filter((s) => s.direction === 'HOLD').length, of: 11, color: '#f59e0b' },
-            { label: 'Avg Confidence', value: `${Math.round(signals.reduce((a, b) => a + b.confidence, 0) / (signals.length || 1))}%`, color: '#f59e0b', noOf: true },
+            { label: 'Sectors Bullish', value: buySignals.length, of: 11, color: '#00d084' },
+            { label: 'Sectors Bearish', value: sellSignals.length, of: 11, color: '#ff4757' },
+            { label: 'Neutral', value: holdSignals.length, of: 11, color: '#f59e0b' },
+            { label: 'Avg Confidence', value: `${avgConfidence}%`, color: '#f59e0b', noOf: true },
           ].map((stat, i) => (
             <div key={i} className="rounded-xl border border-slate-800 p-4 bg-slate-900/60 hover:border-slate-700/80 transition-colors">
               <div className="text-2xl font-bold font-mono" style={{ color: stat.color }}>
@@ -234,48 +241,48 @@ export default function HomePage() {
             <div className="flex items-center gap-4 text-[10px] font-mono">
               <div className="flex items-center gap-1.5">
                 <div className="w-2 h-2 rounded-full bg-green-400" />
-                <span className="text-slate-400">Up {signals.filter((s) => s.direction === 'BUY').length}</span>
+                <span className="text-slate-400">Up {buySignals.length}</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <div className="w-2 h-2 rounded-full bg-red-400" />
-                <span className="text-slate-400">Down {signals.filter((s) => s.direction === 'SELL').length}</span>
+                <span className="text-slate-400">Down {sellSignals.length}</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <div className="w-2 h-2 rounded-full bg-amber-400" />
-                <span className="text-slate-400">Neutral {signals.filter((s) => s.direction === 'HOLD').length}</span>
+                <span className="text-slate-400">Neutral {holdSignals.length}</span>
               </div>
             </div>
           </div>
 
           {/* Horizontal stacked bar */}
           <div className="w-full h-6 bg-slate-800 rounded-lg overflow-hidden flex">
-            {signals.filter((s) => s.direction === 'BUY').length > 0 && (
+            {buySignals.length > 0 && (
               <div
                 className="h-full bg-gradient-to-r from-green-500 to-green-400 flex items-center justify-center transition-all duration-700"
-                style={{ width: `${(signals.filter((s) => s.direction === 'BUY').length / 11) * 100}%` }}
+                style={{ width: `${(buySignals.length / 11) * 100}%` }}
               >
-                {signals.filter((s) => s.direction === 'BUY').length >= 3 && (
-                  <span className="text-[10px] font-bold text-white font-mono">{signals.filter((s) => s.direction === 'BUY').length}</span>
+                {buySignals.length >= 3 && (
+                  <span className="text-[10px] font-bold text-white font-mono">{buySignals.length}</span>
                 )}
               </div>
             )}
-            {signals.filter((s) => s.direction === 'HOLD').length > 0 && (
+            {holdSignals.length > 0 && (
               <div
                 className="h-full bg-gradient-to-r from-yellow-600 to-yellow-400 flex items-center justify-center transition-all duration-700"
-                style={{ width: `${(signals.filter((s) => s.direction === 'HOLD').length / 11) * 100}%` }}
+                style={{ width: `${(holdSignals.length / 11) * 100}%` }}
               >
-                {signals.filter((s) => s.direction === 'HOLD').length >= 2 && (
-                  <span className="text-[10px] font-bold text-white font-mono">{signals.filter((s) => s.direction === 'HOLD').length}</span>
+                {holdSignals.length >= 2 && (
+                  <span className="text-[10px] font-bold text-white font-mono">{holdSignals.length}</span>
                 )}
               </div>
             )}
-            {signals.filter((s) => s.direction === 'SELL').length > 0 && (
+            {sellSignals.length > 0 && (
               <div
                 className="h-full bg-gradient-to-r from-red-400 to-red-500 flex items-center justify-center transition-all duration-700"
-                style={{ width: `${(signals.filter((s) => s.direction === 'SELL').length / 11) * 100}%` }}
+                style={{ width: `${(sellSignals.length / 11) * 100}%` }}
               >
-                {signals.filter((s) => s.direction === 'SELL').length >= 3 && (
-                  <span className="text-[10px] font-bold text-white font-mono">{signals.filter((s) => s.direction === 'SELL').length}</span>
+                {sellSignals.length >= 3 && (
+                  <span className="text-[10px] font-bold text-white font-mono">{sellSignals.length}</span>
                 )}
               </div>
             )}
@@ -283,8 +290,7 @@ export default function HomePage() {
 
           {/* Sector list below bar */}
           <div className="mt-4 flex flex-wrap gap-2">
-            {signals
-              .sort((a, b) => (b.sessionChangePct ?? 0) - (a.sessionChangePct ?? 0))
+            {sortedSignals
               .map((signal) => {
                 const sector = SECTORS.find((s) => s.etf === signal.etf)
                 const isUp = signal.direction === 'BUY'

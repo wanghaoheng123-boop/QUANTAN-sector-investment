@@ -69,7 +69,7 @@ export const SECTOR_PROFILES: Record<string, SectorProfile> = {
     buyWScoreThreshold: 0.22,          // relaxed: too few signals at 0.30
     sellWScoreThreshold: -0.25,        // aggressive sell
     slopeThreshold: 0.004,             // relaxed: 0.008 missed all entries in corrections
-    goldenCrossGate: false,            // disabled: killed 99% of signals in bear markets
+    goldenCrossGate: true,             // re-enabled: tech trends need EMA confirmation
     requirePositiveMomentum: false,    // disabled: too restrictive
     tlrGate: false,
     maxVixForBuy: 30,

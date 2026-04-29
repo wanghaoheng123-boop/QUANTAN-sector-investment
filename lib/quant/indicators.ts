@@ -23,7 +23,7 @@ export interface OhlcvBar extends OhlcBar {
 /** Rolling SMA returning full array. NaN for bars before `period`. */
 export function smaArray(values: number[], period: number): number[] {
   const out = new Array<number>(values.length).fill(NaN)
-  if (values.length < period) return out
+  if (period <= 0 || values.length < period) return out
   let sum = 0
   for (let i = 0; i < period; i++) sum += values[i]
   out[period - 1] = sum / period
@@ -51,7 +51,7 @@ export function smaLatest(values: number[], period: number): number | null {
  * For a full-length array with NaN padding, use `emaFull`.
  */
 export function ema(values: number[], period: number): number[] {
-  if (values.length < period) return []
+  if (period <= 0 || values.length < period) return []
   const k = 2 / (period + 1)
   const out: number[] = []
   let prev = values.slice(0, period).reduce((a, b) => a + b, 0) / period
@@ -69,7 +69,7 @@ export function ema(values: number[], period: number): number[] {
  */
 export function emaFull(values: number[], period: number): number[] {
   const out = new Array<number>(values.length).fill(NaN)
-  if (values.length < period) return out
+  if (period <= 0 || values.length < period) return out
   const k = 2 / (period + 1)
   let prev = values.slice(0, period).reduce((a, b) => a + b, 0) / period
   out[period - 1] = prev
@@ -88,7 +88,7 @@ export function emaFull(values: number[], period: number): number[] {
  */
 export function rsiArray(closes: number[], period = 14): number[] {
   const out = new Array<number>(closes.length).fill(NaN)
-  if (closes.length < period + 1) return out
+  if (period <= 0 || closes.length < period + 1) return out
   let avgGain = 0
   let avgLoss = 0
   for (let i = 1; i <= period; i++) {
@@ -148,7 +148,7 @@ export function macdArray(
   const line = nanArr()
   const signal = nanArr()
   const histogram = nanArr()
-  if (closes.length < slow) return { line, signal, histogram }
+  if (fast <= 0 || slow <= 0 || sig <= 0 || closes.length < slow) return { line, signal, histogram }
 
   const emaFastArr = emaFull(closes, fast)
   const emaSlowArr = emaFull(closes, slow)
@@ -212,7 +212,7 @@ export function bollingerArray(
   const upper = nanArr()
   const lower = nanArr()
   const pctB = nanArr()
-  if (closes.length < period) return { mid, upper, lower, pctB }
+  if (closes.length < period || period <= 0) return { mid, upper, lower, pctB }
 
   for (let i = period - 1; i < closes.length; i++) {
     const slice = closes.slice(i - period + 1, i + 1)
@@ -266,7 +266,7 @@ export function trueRange(bars: OhlcBar[]): number[] {
 /** ATR returning full-length array (Wilder smoothing, NaN before period). */
 export function atrArray(bars: OhlcBar[], period = 14): number[] {
   const out = new Array<number>(bars.length).fill(NaN)
-  if (bars.length < period + 1) return out
+  if (bars.length < period + 1 || period <= 0) return out
   const trs: number[] = []
   for (let i = 1; i < bars.length; i++) {
     trs.push(Math.max(
@@ -306,6 +306,11 @@ export function atrLatest(bars: OhlcBar[], period = 14): number | null {
 
 /** On-Balance Volume */
 export function obvArray(closes: number[], volumes: number[]): number[] {
+  // Guard: if volumes are shorter than closes, truncate closes to match volumes length
+  if (volumes.length < closes.length) {
+    closes = closes.slice(-volumes.length)
+  }
+  if (closes.length === 0 || volumes.length === 0) return []
   let cum = 0
   return closes.map((c, i) => {
     if (i === 0) return 0
@@ -341,7 +346,7 @@ export function stochRsiArray(
 ): { k: number[]; d: number[] } {
   const rsi = rsiArray(closes, rsiPeriod)
   const stoch = new Array<number>(closes.length).fill(NaN)
-  if (closes.length < rsiPeriod * 2) return { k: stoch, d: stoch }
+  if (rsiPeriod <= 0 || kSmooth <= 0 || dSmooth <= 0 || closes.length < rsiPeriod * 2) return { k: stoch, d: stoch }
   for (let i = rsiPeriod; i < closes.length; i++) {
     const window = rsi.slice(i - rsiPeriod + 1, i + 1)
     const min = Math.min(...window)
@@ -360,7 +365,7 @@ export function adxArray(bars: OhlcBar[], period = 14): {
   minusDI: number[]
 } {
   const nanArr = () => new Array<number>(bars.length).fill(NaN)
-  if (bars.length < period + 1) return { adx: nanArr(), plusDI: nanArr(), minusDI: nanArr() }
+  if (bars.length < period + 1 || period <= 0) return { adx: nanArr(), plusDI: nanArr(), minusDI: nanArr() }
 
   const plusDM: number[] = []
   const minusDM: number[] = []
@@ -441,7 +446,7 @@ export function sharpeRatio(returns: number[], rfAnnual = 0.04): number | null {
   return (mean / sd) * Math.sqrt(252)
 }
 
-/** Sortino using downside deviation vs MAR. Denominator = total N. */
+/** Sortino using downside deviation vs MAR. Denominator = N-1 (sample std, matches Sharpe). */
 export function sortinoRatio(returns: number[], marDaily = 0): number | null {
   if (returns.length < 20) return null
   const n = returns.length
@@ -449,7 +454,7 @@ export function sortinoRatio(returns: number[], marDaily = 0): number | null {
     const dev = Math.min(0, x - marDaily)
     return dev * dev
   })
-  const downsideVariance = downsideSq.reduce((s, x) => s + x, 0) / n
+  const downsideVariance = downsideSq.reduce((s, x) => s + x, 0) / Math.max(1, n - 1)
   const dsd = Math.sqrt(downsideVariance)
   if (dsd === 0) return null
   const mean = returns.reduce((a, b) => a + b, 0) / n

@@ -25,7 +25,7 @@ import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 
 // Use relative imports to avoid @/ alias issues with tsx
-import { combinedSignal, DEFAULT_CONFIG } from '../lib/backtest/signals'
+import { enhancedCombinedSignal, DEFAULT_CONFIG } from '../lib/backtest/signals'
 import type { OhlcvRow } from './backtest/dataLoader'
 import { getProfileForTicker } from '../lib/optimize/sectorProfiles'
 
@@ -147,13 +147,17 @@ function runInstrument(ticker: string, sector: string, rows: OhlcvRow[]): Instru
   const dailyReturns: number[] = []
   let openPos: { entryPrice: number; idx: number } | null = null
 
+  const ohlcvLookback = ohlcvBarsFromRows(rows)
+  const sectorGates = getProfileForTicker(ticker)
+
   for (let i = 220; i < rows.length - 21; i++) {
     const lookback = closes.slice(0, i + 1)
     const barLookback = bars.slice(0, i + 1)
+    const ohlcvSlice = ohlcvLookback.slice(0, i + 1)
     const price = closes[i]
     const date = new Date(rows[i].time * 1000).toISOString().split('T')[0]
 
-    // Close open position at 20d
+    // Close open position at 20d (uniform hold period — sector-specific exit optimization in Loop 3)
     if (openPos && i >= openPos.idx + 20) {
       const exitPrice = closes[i]
       const ret = (exitPrice - openPos.entryPrice) / openPos.entryPrice
@@ -161,7 +165,7 @@ function runInstrument(ticker: string, sector: string, rows: OhlcvRow[]): Instru
       openPos = null
     }
 
-    const sig = combinedSignal(ticker, date, price, lookback, barLookback, cfg)
+    const sig = enhancedCombinedSignal(ticker, date, price, lookback, barLookback, ohlcvSlice, cfg, sectorGates)
 
     if (sig.action === 'BUY' && !openPos) {
       const entryPrice = closes[i + 1] // next-day execution
@@ -251,8 +255,8 @@ function runInstrument(ticker: string, sector: string, rows: OhlcvRow[]): Instru
 // ─── Main runner ─────────────────────────────────────────────────────────────
 
 console.log('\n══════════════════════════════════════════════════')
-console.log('  QUANTAN ENHANCED BENCHMARK — Phase 2 Signal')
-console.log('  enhancedCombinedSignal (7-factor weighted)')
+console.log('  QUANTAN ENHANCED BENCHMARK — Phase 8 Loop 2')
+console.log('  enhancedCombinedSignal + full sector gate configs')
 console.log('══════════════════════════════════════════════════\n')
 
 const allData = loadAllTickers()
@@ -360,8 +364,8 @@ for (const r of bottom10) {
 
 const output = {
   timestamp: new Date().toISOString(),
-  version: 'v2.0-phase2-enhanced',
-  strategy: 'enhancedCombinedSignal — 7-factor weighted confluence (regime-adaptive)',
+  version: 'v3.0-phase8-loop2',
+  strategy: 'combinedSignal + sector gate post-filters (goldenCross, momentum) + per-sector maxHoldDays',
   aggregate: {
     totalInstruments: results.length,
     instrumentsWithTrades: instrumentsWithTrades.length,

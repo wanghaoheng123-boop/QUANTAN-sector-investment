@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import YahooFinance from 'yahoo-finance2'
 import { generateDarkPoolMarkers } from '@/lib/mockData'
 import { aggregateMinuteQuotesToN } from '@/lib/chartYahoo'
+import { applyRateLimit } from '@/lib/api/rateLimit'
 
 const yahooFinance = new YahooFinance()
 
@@ -10,6 +11,16 @@ const _chartCache = new Map<
   { candles: any[]; darkPoolMarkers: any[]; expiresAt: number; range: string; interval: string }
 >()
 const CHART_CACHE_TTL_MS = 30_000
+const CHART_CACHE_MAX_SIZE = 500
+
+/** Evict oldest entries when cache exceeds max size (simple LRU via insertion order). */
+function evictCacheIfNeeded() {
+  while (_chartCache.size > CHART_CACHE_MAX_SIZE) {
+    const firstKey = _chartCache.keys().next().value
+    if (firstKey === undefined) break
+    _chartCache.delete(firstKey)
+  }
+}
 
 /** Yahoo chart `interval` values we use (library accepts string). */
 type YahooInterval = '1m' | '2m' | '5m' | '15m' | '1h' | '2h' | '4h' | '1d' | '1wk' | '1mo'
@@ -18,6 +29,10 @@ export async function GET(
   req: NextRequest,
   { params }: { params: { ticker: string } }
 ) {
+  // Rate limit: 60 req/min per IP
+  const rateLimitResponse = applyRateLimit(req, 'chart', { maxRequests: 60, windowSeconds: 60 })
+  if (rateLimitResponse) return rateLimitResponse
+
   let ticker = params.ticker.toUpperCase()
   if (ticker === 'VIX') ticker = '^VIX'
   const { searchParams } = new URL(req.url)
@@ -68,6 +83,7 @@ export async function GET(
           candles.map((c) => ({ time: c.time as any, close: c.close })),
           ticker
         )
+        evictCacheIfNeeded()
         _chartCache.set(cacheKey, {
           candles,
           darkPoolMarkers,
@@ -164,6 +180,7 @@ export async function GET(
       ticker
     )
 
+    evictCacheIfNeeded()
     _chartCache.set(cacheKey, {
       candles,
       darkPoolMarkers,

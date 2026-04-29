@@ -5,6 +5,7 @@ import { fetchBloombergQuotesViaBridge, isBloombergBridgeConfigured } from '@/li
 import { mergeYahooAndBloomberg } from '@/lib/data/mergeQuotes'
 import { normalizedChangePercent } from '@/lib/yahooQuoteFields'
 import { errorResponse, withRetry } from '@/lib/api/reliability'
+import { applyRateLimit } from '@/lib/api/rateLimit'
 
 const yahooFinance = new YahooFinance()
 
@@ -16,6 +17,10 @@ function isoQuoteTime(q: { regularMarketTime?: unknown }): string | null {
 }
 
 export async function GET(request: NextRequest) {
+  // Rate limit: 60 req/min per IP (prices poll frequently)
+  const rateLimitResponse = applyRateLimit(request, 'prices', { maxRequests: 60, windowSeconds: 60 })
+  if (rateLimitResponse) return rateLimitResponse
+
   const url = new URL(request.url)
   const queryTickers = url.searchParams.get('tickers')
 
@@ -27,12 +32,15 @@ export async function GET(request: NextRequest) {
     : [...SECTORS.map((s) => s.etf), 'SPY', 'QQQ']
 
   try {
-    const [results, bbMap] = await Promise.all([
-      withRetry(() => yahooFinance.quote(tickers) as Promise<any[]>, { attempts: 2, timeoutMs: 7000, retryLabel: 'yahoo quote' }),
+    const [raw, bbMap] = await Promise.all([
+      withRetry(() => yahooFinance.quote(tickers), { attempts: 2, timeoutMs: 7000, retryLabel: 'yahoo quote' }),
       isBloombergBridgeConfigured()
         ? fetchBloombergQuotesViaBridge(tickers).catch(() => null)
         : Promise.resolve(null),
     ])
+
+    // yahooFinance.quote() returns a single object for one ticker, array for multiple.
+    const results = Array.isArray(raw) ? raw : [raw]
 
     const yahooQuotes = results.map((q: any) => ({
       ticker: q.symbol,

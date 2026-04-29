@@ -129,6 +129,7 @@ export function aggregateToMonthly(daily: TimedBar[]): AggregatedBar[] {
 function classifyTimeframe(
   closes: number[],
   timeframe: 'daily' | 'weekly' | 'monthly',
+  strategyHint?: string,
 ): TimeframeSignal | null {
   // Need at least 26 bars for MACD(12,26,9) + some lookback
   if (closes.length < 35) return null
@@ -166,9 +167,16 @@ function classifyTimeframe(
   let score = 0
   if (trend === 'bullish') score++
   else if (trend === 'bearish') score--
-  // RSI oversold = bullish (contrarian), overbought = bearish
-  if (rsiZone === 'oversold') score += 0.5
-  else if (rsiZone === 'overbought') score -= 0.5
+  // RSI scoring: mean_reversion (default) → contrarian; trend_following → momentum
+  if (strategyHint === 'trend_following') {
+    // Trend following: overbought = trend strength (bullish), oversold = trend breakdown (bearish)
+    if (rsiZone === 'oversold') score -= 0.5
+    else if (rsiZone === 'overbought') score += 0.5
+  } else {
+    // Mean reversion (default): oversold = bullish reversal, overbought = bearish reversal
+    if (rsiZone === 'oversold') score += 0.5
+    else if (rsiZone === 'overbought') score -= 0.5
+  }
   if (macdDirection === 'positive') score += 0.5
   else if (macdDirection === 'negative') score -= 0.5
 
@@ -188,9 +196,10 @@ function classifyTimeframe(
  */
 export function multiTimeframeSignal(
   dailyBars: (OhlcvBar & { time?: number })[],
+  strategyHint?: string,
 ): MultiTimeframeResult {
   const dailyCloses = dailyBars.map(b => b.close)
-  const daily = classifyTimeframe(dailyCloses, 'daily') ?? {
+  const daily = classifyTimeframe(dailyCloses, 'daily', strategyHint) ?? {
     timeframe: 'daily' as const,
     trend: 'neutral' as const,
     rsiZone: 'neutral' as const,
@@ -204,7 +213,7 @@ export function multiTimeframeSignal(
   if (hasTime && dailyBars.length >= 200) {
     const weeklyBars = aggregateToWeekly(dailyBars as TimedBar[])
     if (weeklyBars.length >= 35) {
-      weekly = classifyTimeframe(weeklyBars.map(b => b.close), 'weekly')
+      weekly = classifyTimeframe(weeklyBars.map(b => b.close), 'weekly', strategyHint)
     }
   }
 
@@ -213,7 +222,7 @@ export function multiTimeframeSignal(
   if (hasTime && dailyBars.length >= 300) {
     const monthlyBars = aggregateToMonthly(dailyBars as TimedBar[])
     if (monthlyBars.length >= 24) {
-      monthly = classifyTimeframe(monthlyBars.map(b => b.close), 'monthly')
+      monthly = classifyTimeframe(monthlyBars.map(b => b.close), 'monthly', strategyHint)
     }
   }
 

@@ -11,6 +11,7 @@ import { NextResponse } from 'next/server'
 import { SECTORS } from '@/lib/sectors'
 import { loadStockHistory, loadBtcHistory, availableTickers } from '@/lib/backtest/dataLoader'
 import { backtestInstrument, aggregatePortfolio } from '@/lib/backtest/engine'
+import { applyRateLimit } from '@/lib/api/rateLimit'
 
 // ─── In-memory cache ──────────────────────────────────────────────────────────
 
@@ -110,6 +111,10 @@ async function runBacktest(filterTickers?: string[]): Promise<{
 // ─── Route handlers ───────────────────────────────────────────────────────────
 
 export async function GET(request: Request) {
+  // Rate limit: 30 req/min per IP
+  const rateLimitResponse = applyRateLimit(request, 'backtest', { maxRequests: 30, windowSeconds: 60 })
+  if (rateLimitResponse) return rateLimitResponse
+
   const { searchParams } = new URL(request.url)
   const tickersParam = searchParams.get('tickers')
   const filterTickers = tickersParam

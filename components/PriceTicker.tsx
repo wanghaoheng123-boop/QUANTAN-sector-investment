@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { formatCurrency } from '@/lib/format'
 
 interface TickerItem {
   ticker: string
@@ -11,6 +12,11 @@ interface TickerItem {
 
 interface PriceTickerProps {
   items: TickerItem[]
+}
+
+function safeToFixed(value: number | null | undefined, digits: number): string {
+  if (value == null || !Number.isFinite(value)) return '—'
+  return value.toFixed(digits)
 }
 
 export default function PriceTicker({ items }: PriceTickerProps) {
@@ -51,9 +57,9 @@ export default function PriceTicker({ items }: PriceTickerProps) {
             )}
             <div className="flex items-center gap-1.5">
               <span className="text-[11px] font-bold font-mono text-white tracking-wide">{item.ticker}</span>
-              <span className="text-[11px] font-mono text-slate-300">${item.price.toFixed(2)}</span>
+              <span className="text-[11px] font-mono text-slate-300">{formatCurrency(item.price)}</span>
               <span className={`text-[11px] font-mono font-medium ${item.changePct >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {item.changePct >= 0 ? '▲' : '▼'}{Math.abs(item.changePct).toFixed(2)}%
+                {item.changePct >= 0 ? '▲' : '▼'}{safeToFixed(Math.abs(item.changePct), 2)}%
               </span>
             </div>
             {i < doubled.length - 1 && (

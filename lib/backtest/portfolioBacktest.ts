@@ -185,8 +185,9 @@ export function runPortfolioBacktest(
         const pnlPct = (exitPrice - pos.entryPrice) / pos.entryPrice
         const pnlDollar = exitShares * (exitPrice - pos.entryPrice)
 
-        capital += exitShares * exitPrice
-        dayPnl += pnlDollar
+        const exitTxCost = exitShares * exitPrice * 0.0011  // 11bps exit cost
+        capital += (exitShares * exitPrice - exitTxCost)
+        dayPnl += (pnlDollar - exitTxCost)
 
         closedTrades.push({
           ticker, sector: sectorMap[ticker] ?? 'Unknown',
@@ -256,10 +257,10 @@ export function runPortfolioBacktest(
         const dd = (peakEquity - currentEquity) / peakEquity
         if (dd >= cfg.maxDrawdownCap) continue
 
-        // Max single-position sizing
+        // Max single-position sizing (Kelly applied to total equity, not just cash)
         const maxAllocation = Math.min(
-          capital * sig.KellyFraction,
-          (capital + currentEquity - capital) * cfg.maxSinglePositionPct,
+          currentEquity * sig.KellyFraction,
+          currentEquity * cfg.maxSinglePositionPct,
         )
         if (maxAllocation < price) continue
 
@@ -267,7 +268,8 @@ export function runPortfolioBacktest(
         const shares = Math.floor(maxAllocation / price)
         if (shares <= 0) continue
 
-        capital -= shares * price
+        const txCost = shares * price * 0.0011  // 11bps entry cost
+        capital -= (shares * price + txCost)
         openPositions.set(ticker, {
           ticker,
           sector: sectorMap[ticker] ?? 'Unknown',
@@ -304,7 +306,7 @@ export function runPortfolioBacktest(
         const pidx = priceIndex[ticker]?.get(currentTime)
         const prow = pidx != null ? instrumentData[ticker][pidx] : null
         const exitPrice = prow?.close ?? pos.entryPrice
-        capital += pos.currentShares * exitPrice
+        capital += pos.currentShares * exitPrice * (1 - 0.0011)  // 11bps exit cost
         closedTrades.push({
           ticker, sector: sectorMap[ticker] ?? 'Unknown',
           entryDate: pos.entryDate, exitDate: currentDate,
@@ -341,7 +343,7 @@ export function runPortfolioBacktest(
     const rows = instrumentData[ticker]
     const lastRow = rows[rows.length - 1]
     const exitPrice = lastRow.close
-    capital += pos.currentShares * exitPrice
+    capital += pos.currentShares * exitPrice * (1 - 0.0011)  // 11bps exit cost
     closedTrades.push({
       ticker, sector: sectorMap[ticker] ?? 'Unknown',
       entryDate: pos.entryDate, exitDate: finalDate,

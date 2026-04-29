@@ -1,60 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { SUPPORTED_PROVIDERS, DEFAULT_MODELS, type LLMProvider } from '@/lib/trading-agents-config'
+import { getServerSession } from 'next-auth'
+import { getAuthOptions } from '@/lib/auth'
+import { SUPPORTED_PROVIDERS, DEFAULT_MODELS, type LLMProvider, resolveTradingAgentsBase, type TradingAgentsResolved } from '@/lib/trading-agents-config'
+import { applyRateLimit } from '@/lib/api/rateLimit'
 
 const TIMEOUT_MS = 5 * 60 * 1000 // 5 minutes — TradingAgents can be slow
+const TA_RATE_LIMIT = { maxRequests: 10, windowSeconds: 60 }
 
 const DEPLOY_HINT =
   'Recommended: deploy `server_trading_agents.py` on Railway using the included Procfile, then set ' +
   '`TRADING_AGENTS_BASE` in Vercel to the public https:// URL (no trailing slash). See README: LLM Multi-Agent Analysis.'
-
-type TradingAgentsResolved =
-  | { ok: true; base: string; source: 'project' | 'managed_fallback' | 'local_dev' }
-  | { ok: false; reason: 'missing' | 'invalid_url' | 'insecure_base' }
-
-/**
- * Prefer TRADING_AGENTS_BASE (validated). Local dev falls back to localhost.
- * Production requires https:// to protect API keys in transit to your backend.
- */
-function resolveTradingAgentsBase(): TradingAgentsResolved {
-  const parseBase = (
-    raw: string | undefined,
-    source: 'project' | 'managed_fallback'
-  ): TradingAgentsResolved => {
-    if (!raw?.trim()) return { ok: false, reason: 'missing' }
-    const normalized = raw.trim().replace(/\/$/, '')
-    let u: URL
-    try {
-      u = new URL(normalized)
-    } catch {
-      return { ok: false, reason: 'invalid_url' }
-    }
-    if (u.protocol !== 'http:' && u.protocol !== 'https:') {
-      return { ok: false, reason: 'invalid_url' }
-    }
-    if (u.username || u.password) {
-      return { ok: false, reason: 'invalid_url' }
-    }
-    const base = u.origin
-    if (process.env.NODE_ENV === 'production' && u.protocol !== 'https:') {
-      return { ok: false, reason: 'insecure_base' }
-    }
-    return { ok: true, base, source }
-  }
-
-  const primary = parseBase(process.env.TRADING_AGENTS_BASE, 'project')
-  if (primary.ok) return primary
-  if (primary.reason !== 'missing') return primary
-
-  const fallback = parseBase(process.env.TRADING_AGENTS_FALLBACK_BASE, 'managed_fallback')
-  if (fallback.ok) return fallback
-  if (fallback.reason !== 'missing') return fallback
-
-  if (process.env.NODE_ENV === 'development') {
-    return { ok: true, base: 'http://127.0.0.1:3001', source: 'local_dev' }
-  }
-
-  return { ok: false, reason: 'missing' }
-}
 
 function tradingAgentsConfigErrorResponse(resolved: Extract<TradingAgentsResolved, { ok: false }>) {
   if (resolved.reason === 'missing') {
@@ -96,9 +51,12 @@ function tradingAgentsConfigErrorResponse(resolved: Extract<TradingAgentsResolve
 export const runtime = 'nodejs'
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: { ticker: string } }
 ) {
+  // Rate limit: 10 req/min per IP
+  const rateLimitResponse = applyRateLimit(req, 'trading-agents', TA_RATE_LIMIT)
+  if (rateLimitResponse) return rateLimitResponse
   const ticker = params.ticker?.trim().toUpperCase()
   if (!ticker) {
     return NextResponse.json({ error: 'ticker is required' }, { status: 400 })
@@ -182,6 +140,20 @@ export async function POST(
   req: NextRequest,
   { params }: { params: { ticker: string } }
 ) {
+  // Rate limit: 10 req/min per IP
+  const rateLimitResponse = applyRateLimit(req, 'trading-agents', TA_RATE_LIMIT)
+  if (rateLimitResponse) return rateLimitResponse
+
+  // Auth check: require valid session OR API key header (X-API-Key)
+  const session = await getServerSession(getAuthOptions())
+  const apiKeyHeader = req.headers.get('x-api-key')
+  if (!session?.user && !apiKeyHeader) {
+    return NextResponse.json(
+      { error: 'unauthorized', message: 'Authentication required. Sign in or provide X-API-Key header.' },
+      { status: 401 }
+    )
+  }
+
   const ticker = params.ticker?.trim().toUpperCase()
   if (!ticker) {
     return NextResponse.json({ error: 'ticker is required' }, { status: 400 })

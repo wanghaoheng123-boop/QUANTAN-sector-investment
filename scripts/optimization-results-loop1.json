@@ -1,0 +1,3561 @@
+{
+  "timestamp": "2026-04-29T02:38:50.278Z",
+  "version": "v1.0-phase8-loop1-loop2",
+  "elapsed_seconds": 92.8,
+  "loop1": {
+    "grid": {
+      "slopeThreshold": [
+        0.003,
+        0.005,
+        0.008,
+        0.01
+      ],
+      "buyWScoreThreshold": [
+        0.2,
+        0.25,
+        0.3,
+        0.35
+      ],
+      "sellWScoreThreshold": [
+        -0.25,
+        -0.3,
+        -0.35,
+        -0.4
+      ],
+      "confidenceThreshold": [
+        50,
+        55,
+        60,
+        65
+      ],
+      "atrStopMultiplier": [
+        1.2,
+        1.5,
+        2,
+        2.5
+      ]
+    },
+    "aggregate": {
+      "avgOOSWinRate": 25.73,
+      "avgOverfitGap": -9.72,
+      "noValidCombos": [
+        "AMD",
+        "AMZN",
+        "APD",
+        "BTC",
+        "CAT",
+        "COP",
+        "CVX",
+        "DIS",
+        "DOW",
+        "EQIX",
+        "FCX",
+        "GE",
+        "GOOGL",
+        "JNJ",
+        "JPM",
+        "LLY",
+        "MA",
+        "MRK",
+        "MSFT",
+        "NFLX",
+        "NKE",
+        "NVDA",
+        "PCG",
+        "PEP",
+        "PLD",
+        "RTX",
+        "SLB",
+        "UNP",
+        "V",
+        "WELL",
+        "WMT",
+        "XOM"
+      ],
+      "below40pctOOS": [
+        {
+          "ticker": "AAPL",
+          "oosWinRate": 18.2
+        },
+        {
+          "ticker": "BAC",
+          "oosWinRate": 18.8
+        },
+        {
+          "ticker": "HD",
+          "oosWinRate": 36.4
+        },
+        {
+          "ticker": "LIN",
+          "oosWinRate": 19.4
+        },
+        {
+          "ticker": "NEE",
+          "oosWinRate": 20
+        },
+        {
+          "ticker": "NEM",
+          "oosWinRate": 24.1
+        },
+        {
+          "ticker": "SPG",
+          "oosWinRate": 33.3
+        }
+      ],
+      "globalBestParams": {
+        "slopeThreshold": 0.003,
+        "buyWScoreThreshold": 0.2,
+        "sellWScoreThreshold": -0.25,
+        "confidenceThreshold": 50,
+        "atrStopMultiplier": 1.2
+      },
+      "vsBaseline": {
+        "slopeThreshold": 0.005,
+        "buyWScoreThreshold": 0.25,
+        "sellWScoreThreshold": -0.3,
+        "confidenceThreshold": 55,
+        "atrStopMultiplier": 1.5
+      }
+    },
+    "byInstrument": [
+      {
+        "ticker": "AAPL",
+        "sector": "Technology",
+        "totalCombinations": 1024,
+        "validCombinations": 576,
+        "splitDate": "2024-09-30",
+        "best": {
+          "params": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 50,
+            "atrStopMultiplier": 2.5
+          },
+          "isWinRate": 17.1,
+          "oosWinRate": 18.2,
+          "overfitGap": -1,
+          "oosTrades": 11,
+          "isTrades": 35,
+          "oosSharpe": -1.0281061505887699,
+          "score": -1.1181
+        },
+        "top3": [
+          {
+            "params": {
+              "slopeThreshold": 0.003,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 50,
+              "atrStopMultiplier": 2.5
+            },
+            "oosWinRate": 18.2,
+            "oosSharpe": -1.0281061505887699,
+            "overfitGap": -1
+          },
+          {
+            "params": {
+              "slopeThreshold": 0.003,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 55,
+              "atrStopMultiplier": 2.5
+            },
+            "oosWinRate": 18.2,
+            "oosSharpe": -1.0281061505887699,
+            "overfitGap": -1
+          },
+          {
+            "params": {
+              "slopeThreshold": 0.003,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 60,
+              "atrStopMultiplier": 2.5
+            },
+            "oosWinRate": 18.2,
+            "oosSharpe": -1.0281061505887699,
+            "overfitGap": -1
+          }
+        ],
+        "robustParams": {
+          "atrStopMultiplier": 2.5
+        }
+      },
+      {
+        "ticker": "ABBV",
+        "sector": "Healthcare",
+        "totalCombinations": 1024,
+        "validCombinations": 1024,
+        "splitDate": "2024-09-30",
+        "best": {
+          "params": {
+            "slopeThreshold": 0.005,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 50,
+            "atrStopMultiplier": 1.5
+          },
+          "isWinRate": 56,
+          "oosWinRate": 95.7,
+          "overfitGap": -39.7,
+          "oosTrades": 23,
+          "isTrades": 25,
+          "oosSharpe": 1.1566745652693815,
+          "score": 0.7902
+        },
+        "top3": [
+          {
+            "params": {
+              "slopeThreshold": 0.005,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 50,
+              "atrStopMultiplier": 1.5
+            },
+            "oosWinRate": 95.7,
+            "oosSharpe": 1.1566745652693815,
+            "overfitGap": -39.7
+          },
+          {
+            "params": {
+              "slopeThreshold": 0.005,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 55,
+              "atrStopMultiplier": 1.5
+            },
+            "oosWinRate": 95.7,
+            "oosSharpe": 1.1566745652693815,
+            "overfitGap": -39.7
+          },
+          {
+            "params": {
+              "slopeThreshold": 0.005,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 60,
+              "atrStopMultiplier": 1.5
+            },
+            "oosWinRate": 95.7,
+            "oosSharpe": 1.1566745652693815,
+            "overfitGap": -39.7
+          }
+        ],
+        "robustParams": {
+          "atrStopMultiplier": 1.5
+        }
+      },
+      {
+        "ticker": "AEP",
+        "sector": "Utilities",
+        "totalCombinations": 1024,
+        "validCombinations": 1024,
+        "splitDate": "2024-09-30",
+        "best": {
+          "params": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 50,
+            "atrStopMultiplier": 2.5
+          },
+          "isWinRate": 72.2,
+          "oosWinRate": 100,
+          "overfitGap": -27.8,
+          "oosTrades": 16,
+          "isTrades": 18,
+          "oosSharpe": 2.603693794870526,
+          "score": 2.3159
+        },
+        "top3": [
+          {
+            "params": {
+              "slopeThreshold": 0.003,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 50,
+              "atrStopMultiplier": 2.5
+            },
+            "oosWinRate": 100,
+            "oosSharpe": 2.603693794870526,
+            "overfitGap": -27.8
+          },
+          {
+            "params": {
+              "slopeThreshold": 0.003,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 55,
+              "atrStopMultiplier": 2.5
+            },
+            "oosWinRate": 100,
+            "oosSharpe": 2.603693794870526,
+            "overfitGap": -27.8
+          },
+          {
+            "params": {
+              "slopeThreshold": 0.003,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 60,
+              "atrStopMultiplier": 2.5
+            },
+            "oosWinRate": 100,
+            "oosSharpe": 2.603693794870526,
+            "overfitGap": -27.8
+          }
+        ],
+        "robustParams": {
+          "atrStopMultiplier": 2.5
+        }
+      },
+      {
+        "ticker": "AMD",
+        "sector": "Technology",
+        "totalCombinations": 1024,
+        "validCombinations": 0,
+        "splitDate": "2024-09-30",
+        "best": {
+          "params": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 50,
+            "atrStopMultiplier": 1.2
+          },
+          "isWinRate": 0,
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0,
+          "isTrades": 0,
+          "oosSharpe": null,
+          "score": 0
+        },
+        "top3": [],
+        "robustParams": {}
+      },
+      {
+        "ticker": "AMT",
+        "sector": "Real Estate",
+        "totalCombinations": 1024,
+        "validCombinations": 256,
+        "splitDate": "2024-09-30",
+        "best": {
+          "params": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 50,
+            "atrStopMultiplier": 1.2
+          },
+          "isWinRate": 0,
+          "oosWinRate": 53.8,
+          "overfitGap": -53.8,
+          "oosTrades": 13,
+          "isTrades": 2,
+          "oosSharpe": -0.265832283585862,
+          "score": -0.8443
+        },
+        "top3": [
+          {
+            "params": {
+              "slopeThreshold": 0.003,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 50,
+              "atrStopMultiplier": 1.2
+            },
+            "oosWinRate": 53.8,
+            "oosSharpe": -0.265832283585862,
+            "overfitGap": -53.8
+          },
+          {
+            "params": {
+              "slopeThreshold": 0.003,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 50,
+              "atrStopMultiplier": 1.5
+            },
+            "oosWinRate": 53.8,
+            "oosSharpe": -0.265832283585862,
+            "overfitGap": -53.8
+          },
+          {
+            "params": {
+              "slopeThreshold": 0.003,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 50,
+              "atrStopMultiplier": 2
+            },
+            "oosWinRate": 53.8,
+            "oosSharpe": -0.265832283585862,
+            "overfitGap": -53.8
+          }
+        ],
+        "robustParams": {
+          "slopeThreshold": 0.003,
+          "buyWScoreThreshold": 0.2
+        }
+      },
+      {
+        "ticker": "AMZN",
+        "sector": "Consumer Disc.",
+        "totalCombinations": 1024,
+        "validCombinations": 0,
+        "splitDate": "2024-09-30",
+        "best": {
+          "params": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 50,
+            "atrStopMultiplier": 1.2
+          },
+          "isWinRate": 0,
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0,
+          "isTrades": 0,
+          "oosSharpe": null,
+          "score": 0
+        },
+        "top3": [],
+        "robustParams": {}
+      },
+      {
+        "ticker": "APD",
+        "sector": "Materials",
+        "totalCombinations": 1024,
+        "validCombinations": 0,
+        "splitDate": "2024-09-30",
+        "best": {
+          "params": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 50,
+            "atrStopMultiplier": 1.2
+          },
+          "isWinRate": 0,
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0,
+          "isTrades": 0,
+          "oosSharpe": null,
+          "score": 0
+        },
+        "top3": [],
+        "robustParams": {}
+      },
+      {
+        "ticker": "AVGO",
+        "sector": "Technology",
+        "totalCombinations": 1024,
+        "validCombinations": 832,
+        "splitDate": "2024-09-30",
+        "best": {
+          "params": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 50,
+            "atrStopMultiplier": 2.5
+          },
+          "isWinRate": 50,
+          "oosWinRate": 54.5,
+          "overfitGap": -4.5,
+          "oosTrades": 11,
+          "isTrades": 14,
+          "oosSharpe": 0.32373286302796617,
+          "score": 0.2183
+        },
+        "top3": [
+          {
+            "params": {
+              "slopeThreshold": 0.003,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 50,
+              "atrStopMultiplier": 2.5
+            },
+            "oosWinRate": 54.5,
+            "oosSharpe": 0.32373286302796617,
+            "overfitGap": -4.5
+          },
+          {
+            "params": {
+              "slopeThreshold": 0.003,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 55,
+              "atrStopMultiplier": 2.5
+            },
+            "oosWinRate": 54.5,
+            "oosSharpe": 0.32373286302796617,
+            "overfitGap": -4.5
+          },
+          {
+            "params": {
+              "slopeThreshold": 0.003,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 60,
+              "atrStopMultiplier": 2.5
+            },
+            "oosWinRate": 54.5,
+            "oosSharpe": 0.32373286302796617,
+            "overfitGap": -4.5
+          }
+        ],
+        "robustParams": {
+          "atrStopMultiplier": 2.5
+        }
+      },
+      {
+        "ticker": "BAC",
+        "sector": "Financials",
+        "totalCombinations": 1024,
+        "validCombinations": 256,
+        "splitDate": "2024-09-30",
+        "best": {
+          "params": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 50,
+            "atrStopMultiplier": 1.2
+          },
+          "isWinRate": 22.2,
+          "oosWinRate": 18.8,
+          "overfitGap": 3.5,
+          "oosTrades": 16,
+          "isTrades": 9,
+          "oosSharpe": -0.3186126938703213,
+          "score": -0.3633
+        },
+        "top3": [
+          {
+            "params": {
+              "slopeThreshold": 0.003,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 50,
+              "atrStopMultiplier": 1.2
+            },
+            "oosWinRate": 18.8,
+            "oosSharpe": -0.3186126938703213,
+            "overfitGap": 3.5
+          },
+          {
+            "params": {
+              "slopeThreshold": 0.003,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 50,
+              "atrStopMultiplier": 1.5
+            },
+            "oosWinRate": 18.8,
+            "oosSharpe": -0.3186126938703213,
+            "overfitGap": 3.5
+          },
+          {
+            "params": {
+              "slopeThreshold": 0.003,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 55,
+              "atrStopMultiplier": 1.2
+            },
+            "oosWinRate": 18.8,
+            "oosSharpe": -0.3186126938703213,
+            "overfitGap": 3.5
+          }
+        ],
+        "robustParams": {
+          "slopeThreshold": 0.003,
+          "buyWScoreThreshold": 0.2
+        }
+      },
+      {
+        "ticker": "BRK.B",
+        "sector": "Financials",
+        "totalCombinations": 1024,
+        "validCombinations": 512,
+        "splitDate": "2024-09-30",
+        "best": {
+          "params": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 50,
+            "atrStopMultiplier": 1.2
+          },
+          "isWinRate": 45.5,
+          "oosWinRate": 73.9,
+          "overfitGap": -28.5,
+          "oosTrades": 23,
+          "isTrades": 11,
+          "oosSharpe": 0.5716372149666779,
+          "score": 0.3171
+        },
+        "top3": [
+          {
+            "params": {
+              "slopeThreshold": 0.003,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 50,
+              "atrStopMultiplier": 1.2
+            },
+            "oosWinRate": 73.9,
+            "oosSharpe": 0.5716372149666779,
+            "overfitGap": -28.5
+          },
+          {
+            "params": {
+              "slopeThreshold": 0.003,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 50,
+              "atrStopMultiplier": 1.5
+            },
+            "oosWinRate": 73.9,
+            "oosSharpe": 0.5716372149666779,
+            "overfitGap": -28.5
+          },
+          {
+            "params": {
+              "slopeThreshold": 0.003,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 50,
+              "atrStopMultiplier": 2
+            },
+            "oosWinRate": 73.9,
+            "oosSharpe": 0.5716372149666779,
+            "overfitGap": -28.5
+          }
+        ],
+        "robustParams": {
+          "slopeThreshold": 0.003,
+          "buyWScoreThreshold": 0.2
+        }
+      },
+      {
+        "ticker": "BTC",
+        "sector": "Crypto",
+        "totalCombinations": 1024,
+        "validCombinations": 0,
+        "splitDate": "2024-10-01",
+        "best": {
+          "params": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 50,
+            "atrStopMultiplier": 1.2
+          },
+          "isWinRate": 0,
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0,
+          "isTrades": 0,
+          "oosSharpe": null,
+          "score": 0
+        },
+        "top3": [],
+        "robustParams": {}
+      },
+      {
+        "ticker": "CAT",
+        "sector": "Industrials",
+        "totalCombinations": 1024,
+        "validCombinations": 0,
+        "splitDate": "2024-09-30",
+        "best": {
+          "params": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 50,
+            "atrStopMultiplier": 1.2
+          },
+          "isWinRate": 0,
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0,
+          "isTrades": 0,
+          "oosSharpe": null,
+          "score": 0
+        },
+        "top3": [],
+        "robustParams": {}
+      },
+      {
+        "ticker": "COP",
+        "sector": "Energy",
+        "totalCombinations": 1024,
+        "validCombinations": 0,
+        "splitDate": "2024-09-30",
+        "best": {
+          "params": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 50,
+            "atrStopMultiplier": 1.2
+          },
+          "isWinRate": 0,
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0,
+          "isTrades": 0,
+          "oosSharpe": null,
+          "score": 0
+        },
+        "top3": [],
+        "robustParams": {}
+      },
+      {
+        "ticker": "COST",
+        "sector": "Consumer Staples",
+        "totalCombinations": 1024,
+        "validCombinations": 768,
+        "splitDate": "2024-09-30",
+        "best": {
+          "params": {
+            "slopeThreshold": 0.008,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 50,
+            "atrStopMultiplier": 1.2
+          },
+          "isWinRate": 50,
+          "oosWinRate": 100,
+          "overfitGap": -50,
+          "oosTrades": 13,
+          "isTrades": 14,
+          "oosSharpe": 2.091888295003745,
+          "score": 1.5519
+        },
+        "top3": [
+          {
+            "params": {
+              "slopeThreshold": 0.008,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 50,
+              "atrStopMultiplier": 1.2
+            },
+            "oosWinRate": 100,
+            "oosSharpe": 2.091888295003745,
+            "overfitGap": -50
+          },
+          {
+            "params": {
+              "slopeThreshold": 0.008,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 50,
+              "atrStopMultiplier": 1.5
+            },
+            "oosWinRate": 100,
+            "oosSharpe": 2.091888295003745,
+            "overfitGap": -50
+          },
+          {
+            "params": {
+              "slopeThreshold": 0.008,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 50,
+              "atrStopMultiplier": 2
+            },
+            "oosWinRate": 100,
+            "oosSharpe": 2.091888295003745,
+            "overfitGap": -50
+          }
+        ],
+        "robustParams": {
+          "slopeThreshold": 0.008
+        }
+      },
+      {
+        "ticker": "CVX",
+        "sector": "Energy",
+        "totalCombinations": 1024,
+        "validCombinations": 0,
+        "splitDate": "2024-09-30",
+        "best": {
+          "params": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 50,
+            "atrStopMultiplier": 1.2
+          },
+          "isWinRate": 0,
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0,
+          "isTrades": 0,
+          "oosSharpe": null,
+          "score": 0
+        },
+        "top3": [],
+        "robustParams": {}
+      },
+      {
+        "ticker": "DIS",
+        "sector": "Communication",
+        "totalCombinations": 1024,
+        "validCombinations": 0,
+        "splitDate": "2024-09-30",
+        "best": {
+          "params": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 50,
+            "atrStopMultiplier": 1.2
+          },
+          "isWinRate": 0,
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0,
+          "isTrades": 0,
+          "oosSharpe": null,
+          "score": 0
+        },
+        "top3": [],
+        "robustParams": {}
+      },
+      {
+        "ticker": "DOW",
+        "sector": "Materials",
+        "totalCombinations": 1024,
+        "validCombinations": 0,
+        "splitDate": "2024-09-30",
+        "best": {
+          "params": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 50,
+            "atrStopMultiplier": 1.2
+          },
+          "isWinRate": 0,
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0,
+          "isTrades": 0,
+          "oosSharpe": null,
+          "score": 0
+        },
+        "top3": [],
+        "robustParams": {}
+      },
+      {
+        "ticker": "DUK",
+        "sector": "Utilities",
+        "totalCombinations": 1024,
+        "validCombinations": 1024,
+        "splitDate": "2024-09-30",
+        "best": {
+          "params": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 50,
+            "atrStopMultiplier": 1.2
+          },
+          "isWinRate": 46.2,
+          "oosWinRate": 90.9,
+          "overfitGap": -44.8,
+          "oosTrades": 22,
+          "isTrades": 13,
+          "oosSharpe": 0.9729430785648723,
+          "score": 0.5554
+        },
+        "top3": [
+          {
+            "params": {
+              "slopeThreshold": 0.003,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 50,
+              "atrStopMultiplier": 1.2
+            },
+            "oosWinRate": 90.9,
+            "oosSharpe": 0.9729430785648723,
+            "overfitGap": -44.8
+          },
+          {
+            "params": {
+              "slopeThreshold": 0.003,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 50,
+              "atrStopMultiplier": 1.5
+            },
+            "oosWinRate": 90.9,
+            "oosSharpe": 0.9729430785648723,
+            "overfitGap": -44.8
+          },
+          {
+            "params": {
+              "slopeThreshold": 0.003,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 50,
+              "atrStopMultiplier": 2
+            },
+            "oosWinRate": 90.9,
+            "oosSharpe": 0.9729430785648723,
+            "overfitGap": -44.8
+          }
+        ],
+        "robustParams": {
+          "slopeThreshold": 0.003
+        }
+      },
+      {
+        "ticker": "EOG",
+        "sector": "Energy",
+        "totalCombinations": 1024,
+        "validCombinations": 512,
+        "splitDate": "2024-09-30",
+        "best": {
+          "params": {
+            "slopeThreshold": 0.005,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 50,
+            "atrStopMultiplier": 2
+          },
+          "isWinRate": 65,
+          "oosWinRate": 94.1,
+          "overfitGap": -29.1,
+          "oosTrades": 17,
+          "isTrades": 20,
+          "oosSharpe": 1.8443414648967078,
+          "score": 1.5532
+        },
+        "top3": [
+          {
+            "params": {
+              "slopeThreshold": 0.005,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 50,
+              "atrStopMultiplier": 2
+            },
+            "oosWinRate": 94.1,
+            "oosSharpe": 1.8443414648967078,
+            "overfitGap": -29.1
+          },
+          {
+            "params": {
+              "slopeThreshold": 0.005,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 50,
+              "atrStopMultiplier": 2.5
+            },
+            "oosWinRate": 94.1,
+            "oosSharpe": 1.8443414648967078,
+            "overfitGap": -29.1
+          },
+          {
+            "params": {
+              "slopeThreshold": 0.005,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 55,
+              "atrStopMultiplier": 2
+            },
+            "oosWinRate": 94.1,
+            "oosSharpe": 1.8443414648967078,
+            "overfitGap": -29.1
+          }
+        ],
+        "robustParams": {
+          "slopeThreshold": 0.005
+        }
+      },
+      {
+        "ticker": "EQIX",
+        "sector": "Real Estate",
+        "totalCombinations": 1024,
+        "validCombinations": 0,
+        "splitDate": "2024-09-30",
+        "best": {
+          "params": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 50,
+            "atrStopMultiplier": 1.2
+          },
+          "isWinRate": 0,
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0,
+          "isTrades": 0,
+          "oosSharpe": null,
+          "score": 0
+        },
+        "top3": [],
+        "robustParams": {}
+      },
+      {
+        "ticker": "FCX",
+        "sector": "Materials",
+        "totalCombinations": 1024,
+        "validCombinations": 0,
+        "splitDate": "2024-09-30",
+        "best": {
+          "params": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 50,
+            "atrStopMultiplier": 1.2
+          },
+          "isWinRate": 0,
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0,
+          "isTrades": 0,
+          "oosSharpe": null,
+          "score": 0
+        },
+        "top3": [],
+        "robustParams": {}
+      },
+      {
+        "ticker": "GE",
+        "sector": "Industrials",
+        "totalCombinations": 1024,
+        "validCombinations": 0,
+        "splitDate": "2024-09-30",
+        "best": {
+          "params": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 50,
+            "atrStopMultiplier": 1.2
+          },
+          "isWinRate": 0,
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0,
+          "isTrades": 0,
+          "oosSharpe": null,
+          "score": 0
+        },
+        "top3": [],
+        "robustParams": {}
+      },
+      {
+        "ticker": "GOOGL",
+        "sector": "Communication",
+        "totalCombinations": 1024,
+        "validCombinations": 0,
+        "splitDate": "2024-09-30",
+        "best": {
+          "params": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 50,
+            "atrStopMultiplier": 1.2
+          },
+          "isWinRate": 0,
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0,
+          "isTrades": 0,
+          "oosSharpe": null,
+          "score": 0
+        },
+        "top3": [],
+        "robustParams": {}
+      },
+      {
+        "ticker": "HD",
+        "sector": "Consumer Disc.",
+        "totalCombinations": 1024,
+        "validCombinations": 640,
+        "splitDate": "2024-09-30",
+        "best": {
+          "params": {
+            "slopeThreshold": 0.01,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 50,
+            "atrStopMultiplier": 2.5
+          },
+          "isWinRate": 28.6,
+          "oosWinRate": 36.4,
+          "overfitGap": -7.8,
+          "oosTrades": 11,
+          "isTrades": 7,
+          "oosSharpe": -0.7383037664089077,
+          "score": -0.8762
+        },
+        "top3": [
+          {
+            "params": {
+              "slopeThreshold": 0.01,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 50,
+              "atrStopMultiplier": 2.5
+            },
+            "oosWinRate": 36.4,
+            "oosSharpe": -0.7383037664089077,
+            "overfitGap": -7.8
+          },
+          {
+            "params": {
+              "slopeThreshold": 0.01,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 55,
+              "atrStopMultiplier": 2.5
+            },
+            "oosWinRate": 36.4,
+            "oosSharpe": -0.7383037664089077,
+            "overfitGap": -7.8
+          },
+          {
+            "params": {
+              "slopeThreshold": 0.01,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 60,
+              "atrStopMultiplier": 2.5
+            },
+            "oosWinRate": 36.4,
+            "oosSharpe": -0.7383037664089077,
+            "overfitGap": -7.8
+          }
+        ],
+        "robustParams": {
+          "atrStopMultiplier": 2.5
+        }
+      },
+      {
+        "ticker": "HON",
+        "sector": "Industrials",
+        "totalCombinations": 1024,
+        "validCombinations": 512,
+        "splitDate": "2024-09-30",
+        "best": {
+          "params": {
+            "slopeThreshold": 0.008,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 50,
+            "atrStopMultiplier": 1.2
+          },
+          "isWinRate": 45.5,
+          "oosWinRate": 54.5,
+          "overfitGap": -9.1,
+          "oosTrades": 11,
+          "isTrades": 22,
+          "oosSharpe": 0.33194986249297526,
+          "score": 0.181
+        },
+        "top3": [
+          {
+            "params": {
+              "slopeThreshold": 0.008,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 50,
+              "atrStopMultiplier": 1.2
+            },
+            "oosWinRate": 54.5,
+            "oosSharpe": 0.33194986249297526,
+            "overfitGap": -9.1
+          },
+          {
+            "params": {
+              "slopeThreshold": 0.008,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 50,
+              "atrStopMultiplier": 1.5
+            },
+            "oosWinRate": 54.5,
+            "oosSharpe": 0.33194986249297526,
+            "overfitGap": -9.1
+          },
+          {
+            "params": {
+              "slopeThreshold": 0.008,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 50,
+              "atrStopMultiplier": 2
+            },
+            "oosWinRate": 54.5,
+            "oosSharpe": 0.33194986249297526,
+            "overfitGap": -9.1
+          }
+        ],
+        "robustParams": {
+          "slopeThreshold": 0.008,
+          "buyWScoreThreshold": 0.2
+        }
+      },
+      {
+        "ticker": "JNJ",
+        "sector": "Healthcare",
+        "totalCombinations": 1024,
+        "validCombinations": 0,
+        "splitDate": "2024-09-30",
+        "best": {
+          "params": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 50,
+            "atrStopMultiplier": 1.2
+          },
+          "isWinRate": 0,
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0,
+          "isTrades": 0,
+          "oosSharpe": null,
+          "score": 0
+        },
+        "top3": [],
+        "robustParams": {}
+      },
+      {
+        "ticker": "JPM",
+        "sector": "Financials",
+        "totalCombinations": 1024,
+        "validCombinations": 0,
+        "splitDate": "2024-09-30",
+        "best": {
+          "params": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 50,
+            "atrStopMultiplier": 1.2
+          },
+          "isWinRate": 0,
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0,
+          "isTrades": 0,
+          "oosSharpe": null,
+          "score": 0
+        },
+        "top3": [],
+        "robustParams": {}
+      },
+      {
+        "ticker": "KO",
+        "sector": "Consumer Staples",
+        "totalCombinations": 1024,
+        "validCombinations": 512,
+        "splitDate": "2024-09-30",
+        "best": {
+          "params": {
+            "slopeThreshold": 0.005,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 50,
+            "atrStopMultiplier": 1.2
+          },
+          "isWinRate": 38.9,
+          "oosWinRate": 51.7,
+          "overfitGap": -12.8,
+          "oosTrades": 29,
+          "isTrades": 18,
+          "oosSharpe": 0.10293447537004662,
+          "score": 0.0046
+        },
+        "top3": [
+          {
+            "params": {
+              "slopeThreshold": 0.005,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 50,
+              "atrStopMultiplier": 1.2
+            },
+            "oosWinRate": 51.7,
+            "oosSharpe": 0.10293447537004662,
+            "overfitGap": -12.8
+          },
+          {
+            "params": {
+              "slopeThreshold": 0.005,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 50,
+              "atrStopMultiplier": 1.5
+            },
+            "oosWinRate": 51.7,
+            "oosSharpe": 0.10293447537004662,
+            "overfitGap": -12.8
+          },
+          {
+            "params": {
+              "slopeThreshold": 0.005,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 50,
+              "atrStopMultiplier": 2
+            },
+            "oosWinRate": 51.7,
+            "oosSharpe": 0.10293447537004662,
+            "overfitGap": -12.8
+          }
+        ],
+        "robustParams": {
+          "slopeThreshold": 0.005,
+          "buyWScoreThreshold": 0.2
+        }
+      },
+      {
+        "ticker": "LIN",
+        "sector": "Materials",
+        "totalCombinations": 1024,
+        "validCombinations": 384,
+        "splitDate": "2024-09-30",
+        "best": {
+          "params": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 50,
+            "atrStopMultiplier": 1.2
+          },
+          "isWinRate": 14.3,
+          "oosWinRate": 19.4,
+          "overfitGap": -5.1,
+          "oosTrades": 31,
+          "isTrades": 7,
+          "oosSharpe": -0.9707706178363289,
+          "score": -0.9915
+        },
+        "top3": [
+          {
+            "params": {
+              "slopeThreshold": 0.003,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 50,
+              "atrStopMultiplier": 1.2
+            },
+            "oosWinRate": 19.4,
+            "oosSharpe": -0.9707706178363289,
+            "overfitGap": -5.1
+          },
+          {
+            "params": {
+              "slopeThreshold": 0.003,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 50,
+              "atrStopMultiplier": 1.5
+            },
+            "oosWinRate": 19.4,
+            "oosSharpe": -0.9707706178363289,
+            "overfitGap": -5.1
+          },
+          {
+            "params": {
+              "slopeThreshold": 0.003,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 50,
+              "atrStopMultiplier": 2
+            },
+            "oosWinRate": 19.4,
+            "oosSharpe": -0.9707706178363289,
+            "overfitGap": -5.1
+          }
+        ],
+        "robustParams": {
+          "slopeThreshold": 0.003,
+          "buyWScoreThreshold": 0.2
+        }
+      },
+      {
+        "ticker": "LLY",
+        "sector": "Healthcare",
+        "totalCombinations": 1024,
+        "validCombinations": 0,
+        "splitDate": "2024-09-30",
+        "best": {
+          "params": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 50,
+            "atrStopMultiplier": 1.2
+          },
+          "isWinRate": 0,
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0,
+          "isTrades": 0,
+          "oosSharpe": null,
+          "score": 0
+        },
+        "top3": [],
+        "robustParams": {}
+      },
+      {
+        "ticker": "MA",
+        "sector": "Financials",
+        "totalCombinations": 1024,
+        "validCombinations": 0,
+        "splitDate": "2024-09-30",
+        "best": {
+          "params": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 50,
+            "atrStopMultiplier": 1.2
+          },
+          "isWinRate": 0,
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0,
+          "isTrades": 0,
+          "oosSharpe": null,
+          "score": 0
+        },
+        "top3": [],
+        "robustParams": {}
+      },
+      {
+        "ticker": "MCD",
+        "sector": "Consumer Disc.",
+        "totalCombinations": 1024,
+        "validCombinations": 512,
+        "splitDate": "2024-09-30",
+        "best": {
+          "params": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 50,
+            "atrStopMultiplier": 1.2
+          },
+          "isWinRate": 47.1,
+          "oosWinRate": 86.7,
+          "overfitGap": -39.6,
+          "oosTrades": 15,
+          "isTrades": 17,
+          "oosSharpe": 0.8028299704004898,
+          "score": 0.3868
+        },
+        "top3": [
+          {
+            "params": {
+              "slopeThreshold": 0.003,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 50,
+              "atrStopMultiplier": 1.2
+            },
+            "oosWinRate": 86.7,
+            "oosSharpe": 0.8028299704004898,
+            "overfitGap": -39.6
+          },
+          {
+            "params": {
+              "slopeThreshold": 0.003,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 50,
+              "atrStopMultiplier": 1.5
+            },
+            "oosWinRate": 86.7,
+            "oosSharpe": 0.8028299704004898,
+            "overfitGap": -39.6
+          },
+          {
+            "params": {
+              "slopeThreshold": 0.003,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 50,
+              "atrStopMultiplier": 2
+            },
+            "oosWinRate": 86.7,
+            "oosSharpe": 0.8028299704004898,
+            "overfitGap": -39.6
+          }
+        ],
+        "robustParams": {
+          "slopeThreshold": 0.003,
+          "buyWScoreThreshold": 0.2
+        }
+      },
+      {
+        "ticker": "META",
+        "sector": "Communication",
+        "totalCombinations": 1024,
+        "validCombinations": 1024,
+        "splitDate": "2024-09-30",
+        "best": {
+          "params": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 50,
+            "atrStopMultiplier": 1.2
+          },
+          "isWinRate": 0,
+          "oosWinRate": 62.5,
+          "overfitGap": -62.5,
+          "oosTrades": 24,
+          "isTrades": 0,
+          "oosSharpe": 0.5958199384930637,
+          "score": 0.0008
+        },
+        "top3": [
+          {
+            "params": {
+              "slopeThreshold": 0.003,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 50,
+              "atrStopMultiplier": 1.2
+            },
+            "oosWinRate": 62.5,
+            "oosSharpe": 0.5958199384930637,
+            "overfitGap": -62.5
+          },
+          {
+            "params": {
+              "slopeThreshold": 0.003,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 55,
+              "atrStopMultiplier": 1.2
+            },
+            "oosWinRate": 62.5,
+            "oosSharpe": 0.5958199384930637,
+            "overfitGap": -62.5
+          },
+          {
+            "params": {
+              "slopeThreshold": 0.003,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 60,
+              "atrStopMultiplier": 1.2
+            },
+            "oosWinRate": 62.5,
+            "oosSharpe": 0.5958199384930637,
+            "overfitGap": -62.5
+          }
+        ],
+        "robustParams": {
+          "slopeThreshold": 0.003,
+          "atrStopMultiplier": 1.2
+        }
+      },
+      {
+        "ticker": "MRK",
+        "sector": "Healthcare",
+        "totalCombinations": 1024,
+        "validCombinations": 0,
+        "splitDate": "2024-09-30",
+        "best": {
+          "params": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 50,
+            "atrStopMultiplier": 1.2
+          },
+          "isWinRate": 0,
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0,
+          "isTrades": 0,
+          "oosSharpe": null,
+          "score": 0
+        },
+        "top3": [],
+        "robustParams": {}
+      },
+      {
+        "ticker": "MSFT",
+        "sector": "Technology",
+        "totalCombinations": 1024,
+        "validCombinations": 0,
+        "splitDate": "2024-09-30",
+        "best": {
+          "params": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 50,
+            "atrStopMultiplier": 1.2
+          },
+          "isWinRate": 0,
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0,
+          "isTrades": 0,
+          "oosSharpe": null,
+          "score": 0
+        },
+        "top3": [],
+        "robustParams": {}
+      },
+      {
+        "ticker": "NEE",
+        "sector": "Utilities",
+        "totalCombinations": 1024,
+        "validCombinations": 832,
+        "splitDate": "2024-09-30",
+        "best": {
+          "params": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 50,
+            "atrStopMultiplier": 1.2
+          },
+          "isWinRate": 16.7,
+          "oosWinRate": 20,
+          "overfitGap": -3.3,
+          "oosTrades": 20,
+          "isTrades": 6,
+          "oosSharpe": -0.8692938100142102,
+          "score": -0.8726
+        },
+        "top3": [
+          {
+            "params": {
+              "slopeThreshold": 0.003,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 50,
+              "atrStopMultiplier": 1.2
+            },
+            "oosWinRate": 20,
+            "oosSharpe": -0.8692938100142102,
+            "overfitGap": -3.3
+          },
+          {
+            "params": {
+              "slopeThreshold": 0.003,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 50,
+              "atrStopMultiplier": 1.5
+            },
+            "oosWinRate": 20,
+            "oosSharpe": -0.8692938100142102,
+            "overfitGap": -3.3
+          },
+          {
+            "params": {
+              "slopeThreshold": 0.003,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 50,
+              "atrStopMultiplier": 2
+            },
+            "oosWinRate": 20,
+            "oosSharpe": -0.8692938100142102,
+            "overfitGap": -3.3
+          }
+        ],
+        "robustParams": {
+          "slopeThreshold": 0.003
+        }
+      },
+      {
+        "ticker": "NEM",
+        "sector": "Materials",
+        "totalCombinations": 1024,
+        "validCombinations": 1024,
+        "splitDate": "2024-09-30",
+        "best": {
+          "params": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 50,
+            "atrStopMultiplier": 1.2
+          },
+          "isWinRate": 0,
+          "oosWinRate": 24.1,
+          "overfitGap": -24.1,
+          "oosTrades": 29,
+          "isTrades": 9,
+          "oosSharpe": -0.29556333227646303,
+          "score": -0.5069
+        },
+        "top3": [
+          {
+            "params": {
+              "slopeThreshold": 0.003,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 50,
+              "atrStopMultiplier": 1.2
+            },
+            "oosWinRate": 24.1,
+            "oosSharpe": -0.29556333227646303,
+            "overfitGap": -24.1
+          },
+          {
+            "params": {
+              "slopeThreshold": 0.003,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 55,
+              "atrStopMultiplier": 1.2
+            },
+            "oosWinRate": 24.1,
+            "oosSharpe": -0.29556333227646303,
+            "overfitGap": -24.1
+          },
+          {
+            "params": {
+              "slopeThreshold": 0.003,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 60,
+              "atrStopMultiplier": 1.2
+            },
+            "oosWinRate": 24.1,
+            "oosSharpe": -0.29556333227646303,
+            "overfitGap": -24.1
+          }
+        ],
+        "robustParams": {
+          "atrStopMultiplier": 1.2
+        }
+      },
+      {
+        "ticker": "NFLX",
+        "sector": "Communication",
+        "totalCombinations": 1024,
+        "validCombinations": 0,
+        "splitDate": "2024-09-30",
+        "best": {
+          "params": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 50,
+            "atrStopMultiplier": 1.2
+          },
+          "isWinRate": 0,
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0,
+          "isTrades": 0,
+          "oosSharpe": null,
+          "score": 0
+        },
+        "top3": [],
+        "robustParams": {}
+      },
+      {
+        "ticker": "NKE",
+        "sector": "Consumer Disc.",
+        "totalCombinations": 1024,
+        "validCombinations": 0,
+        "splitDate": "2024-09-30",
+        "best": {
+          "params": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 50,
+            "atrStopMultiplier": 1.2
+          },
+          "isWinRate": 0,
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0,
+          "isTrades": 0,
+          "oosSharpe": null,
+          "score": 0
+        },
+        "top3": [],
+        "robustParams": {}
+      },
+      {
+        "ticker": "NVDA",
+        "sector": "Technology",
+        "totalCombinations": 1024,
+        "validCombinations": 0,
+        "splitDate": "2024-09-30",
+        "best": {
+          "params": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 50,
+            "atrStopMultiplier": 1.2
+          },
+          "isWinRate": 0,
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0,
+          "isTrades": 0,
+          "oosSharpe": null,
+          "score": 0
+        },
+        "top3": [],
+        "robustParams": {}
+      },
+      {
+        "ticker": "PCG",
+        "sector": "Utilities",
+        "totalCombinations": 1024,
+        "validCombinations": 0,
+        "splitDate": "2024-09-30",
+        "best": {
+          "params": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 50,
+            "atrStopMultiplier": 1.2
+          },
+          "isWinRate": 0,
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0,
+          "isTrades": 0,
+          "oosSharpe": null,
+          "score": 0
+        },
+        "top3": [],
+        "robustParams": {}
+      },
+      {
+        "ticker": "PEP",
+        "sector": "Consumer Staples",
+        "totalCombinations": 1024,
+        "validCombinations": 0,
+        "splitDate": "2024-09-30",
+        "best": {
+          "params": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 50,
+            "atrStopMultiplier": 1.2
+          },
+          "isWinRate": 0,
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0,
+          "isTrades": 0,
+          "oosSharpe": null,
+          "score": 0
+        },
+        "top3": [],
+        "robustParams": {}
+      },
+      {
+        "ticker": "PG",
+        "sector": "Consumer Staples",
+        "totalCombinations": 1024,
+        "validCombinations": 256,
+        "splitDate": "2024-09-30",
+        "best": {
+          "params": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 50,
+            "atrStopMultiplier": 1.2
+          },
+          "isWinRate": 76.2,
+          "oosWinRate": 91.7,
+          "overfitGap": -15.5,
+          "oosTrades": 12,
+          "isTrades": 21,
+          "oosSharpe": 1.1849266740941307,
+          "score": 0.9802
+        },
+        "top3": [
+          {
+            "params": {
+              "slopeThreshold": 0.003,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 50,
+              "atrStopMultiplier": 1.2
+            },
+            "oosWinRate": 91.7,
+            "oosSharpe": 1.1849266740941307,
+            "overfitGap": -15.5
+          },
+          {
+            "params": {
+              "slopeThreshold": 0.003,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 50,
+              "atrStopMultiplier": 1.5
+            },
+            "oosWinRate": 91.7,
+            "oosSharpe": 1.1849266740941307,
+            "overfitGap": -15.5
+          },
+          {
+            "params": {
+              "slopeThreshold": 0.003,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 50,
+              "atrStopMultiplier": 2
+            },
+            "oosWinRate": 91.7,
+            "oosSharpe": 1.1849266740941307,
+            "overfitGap": -15.5
+          }
+        ],
+        "robustParams": {
+          "slopeThreshold": 0.003,
+          "buyWScoreThreshold": 0.2
+        }
+      },
+      {
+        "ticker": "PLD",
+        "sector": "Real Estate",
+        "totalCombinations": 1024,
+        "validCombinations": 0,
+        "splitDate": "2024-09-30",
+        "best": {
+          "params": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 50,
+            "atrStopMultiplier": 1.2
+          },
+          "isWinRate": 0,
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0,
+          "isTrades": 0,
+          "oosSharpe": null,
+          "score": 0
+        },
+        "top3": [],
+        "robustParams": {}
+      },
+      {
+        "ticker": "RTX",
+        "sector": "Industrials",
+        "totalCombinations": 1024,
+        "validCombinations": 0,
+        "splitDate": "2024-09-30",
+        "best": {
+          "params": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 50,
+            "atrStopMultiplier": 1.2
+          },
+          "isWinRate": 0,
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0,
+          "isTrades": 0,
+          "oosSharpe": null,
+          "score": 0
+        },
+        "top3": [],
+        "robustParams": {}
+      },
+      {
+        "ticker": "SLB",
+        "sector": "Energy",
+        "totalCombinations": 1024,
+        "validCombinations": 0,
+        "splitDate": "2024-09-30",
+        "best": {
+          "params": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 50,
+            "atrStopMultiplier": 1.2
+          },
+          "isWinRate": 0,
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0,
+          "isTrades": 0,
+          "oosSharpe": null,
+          "score": 0
+        },
+        "top3": [],
+        "robustParams": {}
+      },
+      {
+        "ticker": "SO",
+        "sector": "Utilities",
+        "totalCombinations": 1024,
+        "validCombinations": 256,
+        "splitDate": "2024-09-30",
+        "best": {
+          "params": {
+            "slopeThreshold": 0.01,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 50,
+            "atrStopMultiplier": 1.2
+          },
+          "isWinRate": 46.2,
+          "oosWinRate": 50,
+          "overfitGap": -3.8,
+          "oosTrades": 18,
+          "isTrades": 13,
+          "oosSharpe": -0.2049495221049719,
+          "score": -0.2334
+        },
+        "top3": [
+          {
+            "params": {
+              "slopeThreshold": 0.01,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 50,
+              "atrStopMultiplier": 1.2
+            },
+            "oosWinRate": 50,
+            "oosSharpe": -0.2049495221049719,
+            "overfitGap": -3.8
+          },
+          {
+            "params": {
+              "slopeThreshold": 0.01,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 50,
+              "atrStopMultiplier": 1.5
+            },
+            "oosWinRate": 50,
+            "oosSharpe": -0.2049495221049719,
+            "overfitGap": -3.8
+          },
+          {
+            "params": {
+              "slopeThreshold": 0.01,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 50,
+              "atrStopMultiplier": 2
+            },
+            "oosWinRate": 50,
+            "oosSharpe": -0.2049495221049719,
+            "overfitGap": -3.8
+          }
+        ],
+        "robustParams": {
+          "slopeThreshold": 0.01,
+          "buyWScoreThreshold": 0.2
+        }
+      },
+      {
+        "ticker": "SPG",
+        "sector": "Real Estate",
+        "totalCombinations": 1024,
+        "validCombinations": 512,
+        "splitDate": "2024-09-30",
+        "best": {
+          "params": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 50,
+            "atrStopMultiplier": 1.2
+          },
+          "isWinRate": 29.2,
+          "oosWinRate": 33.3,
+          "overfitGap": -4.2,
+          "oosTrades": 15,
+          "isTrades": 24,
+          "oosSharpe": -0.1050657832301538,
+          "score": -0.1667
+        },
+        "top3": [
+          {
+            "params": {
+              "slopeThreshold": 0.003,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 50,
+              "atrStopMultiplier": 1.2
+            },
+            "oosWinRate": 33.3,
+            "oosSharpe": -0.1050657832301538,
+            "overfitGap": -4.2
+          },
+          {
+            "params": {
+              "slopeThreshold": 0.003,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 50,
+              "atrStopMultiplier": 1.5
+            },
+            "oosWinRate": 33.3,
+            "oosSharpe": -0.1050657832301538,
+            "overfitGap": -4.2
+          },
+          {
+            "params": {
+              "slopeThreshold": 0.003,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 50,
+              "atrStopMultiplier": 2
+            },
+            "oosWinRate": 33.3,
+            "oosSharpe": -0.1050657832301538,
+            "overfitGap": -4.2
+          }
+        ],
+        "robustParams": {
+          "slopeThreshold": 0.003
+        }
+      },
+      {
+        "ticker": "T",
+        "sector": "Communication",
+        "totalCombinations": 1024,
+        "validCombinations": 1024,
+        "splitDate": "2024-09-30",
+        "best": {
+          "params": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 50,
+            "atrStopMultiplier": 1.2
+          },
+          "isWinRate": 0,
+          "oosWinRate": 44,
+          "overfitGap": -44,
+          "oosTrades": 25,
+          "isTrades": 0,
+          "oosSharpe": -0.3411299793491301,
+          "score": -0.7511
+        },
+        "top3": [
+          {
+            "params": {
+              "slopeThreshold": 0.003,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 50,
+              "atrStopMultiplier": 1.2
+            },
+            "oosWinRate": 44,
+            "oosSharpe": -0.3411299793491301,
+            "overfitGap": -44
+          },
+          {
+            "params": {
+              "slopeThreshold": 0.003,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 50,
+              "atrStopMultiplier": 1.5
+            },
+            "oosWinRate": 44,
+            "oosSharpe": -0.3411299793491301,
+            "overfitGap": -44
+          },
+          {
+            "params": {
+              "slopeThreshold": 0.003,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 50,
+              "atrStopMultiplier": 2
+            },
+            "oosWinRate": 44,
+            "oosSharpe": -0.3411299793491301,
+            "overfitGap": -44
+          }
+        ],
+        "robustParams": {
+          "slopeThreshold": 0.003
+        }
+      },
+      {
+        "ticker": "TSLA",
+        "sector": "Consumer Disc.",
+        "totalCombinations": 1024,
+        "validCombinations": 1024,
+        "splitDate": "2024-09-30",
+        "best": {
+          "params": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 50,
+            "atrStopMultiplier": 2
+          },
+          "isWinRate": 45.5,
+          "oosWinRate": 66.7,
+          "overfitGap": -21.2,
+          "oosTrades": 15,
+          "isTrades": 33,
+          "oosSharpe": 0.04338206861579526,
+          "score": -0.1887
+        },
+        "top3": [
+          {
+            "params": {
+              "slopeThreshold": 0.003,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 50,
+              "atrStopMultiplier": 2
+            },
+            "oosWinRate": 66.7,
+            "oosSharpe": 0.04338206861579526,
+            "overfitGap": -21.2
+          },
+          {
+            "params": {
+              "slopeThreshold": 0.003,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 50,
+              "atrStopMultiplier": 2.5
+            },
+            "oosWinRate": 66.7,
+            "oosSharpe": 0.04338206861579526,
+            "overfitGap": -21.2
+          },
+          {
+            "params": {
+              "slopeThreshold": 0.003,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 55,
+              "atrStopMultiplier": 2
+            },
+            "oosWinRate": 66.7,
+            "oosSharpe": 0.04338206861579526,
+            "overfitGap": -21.2
+          }
+        ],
+        "robustParams": {
+          "slopeThreshold": 0.003
+        }
+      },
+      {
+        "ticker": "UNH",
+        "sector": "Healthcare",
+        "totalCombinations": 1024,
+        "validCombinations": 768,
+        "splitDate": "2024-09-30",
+        "best": {
+          "params": {
+            "slopeThreshold": 0.008,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 50,
+            "atrStopMultiplier": 2
+          },
+          "isWinRate": 84.6,
+          "oosWinRate": 100,
+          "overfitGap": -15.4,
+          "oosTrades": 10,
+          "isTrades": 13,
+          "oosSharpe": 4.041147403970158,
+          "score": 3.8173
+        },
+        "top3": [
+          {
+            "params": {
+              "slopeThreshold": 0.008,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 50,
+              "atrStopMultiplier": 2
+            },
+            "oosWinRate": 100,
+            "oosSharpe": 4.041147403970158,
+            "overfitGap": -15.4
+          },
+          {
+            "params": {
+              "slopeThreshold": 0.008,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 50,
+              "atrStopMultiplier": 2.5
+            },
+            "oosWinRate": 100,
+            "oosSharpe": 4.041147403970158,
+            "overfitGap": -15.4
+          },
+          {
+            "params": {
+              "slopeThreshold": 0.008,
+              "buyWScoreThreshold": 0.2,
+              "sellWScoreThreshold": -0.25,
+              "confidenceThreshold": 55,
+              "atrStopMultiplier": 2
+            },
+            "oosWinRate": 100,
+            "oosSharpe": 4.041147403970158,
+            "overfitGap": -15.4
+          }
+        ],
+        "robustParams": {
+          "slopeThreshold": 0.008
+        }
+      },
+      {
+        "ticker": "UNP",
+        "sector": "Industrials",
+        "totalCombinations": 1024,
+        "validCombinations": 0,
+        "splitDate": "2024-09-30",
+        "best": {
+          "params": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 50,
+            "atrStopMultiplier": 1.2
+          },
+          "isWinRate": 0,
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0,
+          "isTrades": 0,
+          "oosSharpe": null,
+          "score": 0
+        },
+        "top3": [],
+        "robustParams": {}
+      },
+      {
+        "ticker": "V",
+        "sector": "Financials",
+        "totalCombinations": 1024,
+        "validCombinations": 0,
+        "splitDate": "2024-09-30",
+        "best": {
+          "params": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 50,
+            "atrStopMultiplier": 1.2
+          },
+          "isWinRate": 0,
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0,
+          "isTrades": 0,
+          "oosSharpe": null,
+          "score": 0
+        },
+        "top3": [],
+        "robustParams": {}
+      },
+      {
+        "ticker": "WELL",
+        "sector": "Real Estate",
+        "totalCombinations": 1024,
+        "validCombinations": 0,
+        "splitDate": "2024-09-30",
+        "best": {
+          "params": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 50,
+            "atrStopMultiplier": 1.2
+          },
+          "isWinRate": 0,
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0,
+          "isTrades": 0,
+          "oosSharpe": null,
+          "score": 0
+        },
+        "top3": [],
+        "robustParams": {}
+      },
+      {
+        "ticker": "WMT",
+        "sector": "Consumer Staples",
+        "totalCombinations": 1024,
+        "validCombinations": 0,
+        "splitDate": "2024-09-30",
+        "best": {
+          "params": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 50,
+            "atrStopMultiplier": 1.2
+          },
+          "isWinRate": 0,
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0,
+          "isTrades": 0,
+          "oosSharpe": null,
+          "score": 0
+        },
+        "top3": [],
+        "robustParams": {}
+      },
+      {
+        "ticker": "XOM",
+        "sector": "Energy",
+        "totalCombinations": 1024,
+        "validCombinations": 0,
+        "splitDate": "2024-09-30",
+        "best": {
+          "params": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 50,
+            "atrStopMultiplier": 1.2
+          },
+          "isWinRate": 0,
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0,
+          "isTrades": 0,
+          "oosSharpe": null,
+          "score": 0
+        },
+        "top3": [],
+        "robustParams": {}
+      }
+    ]
+  },
+  "loop2": {
+    "grid": {
+      "slopeThreshold": [
+        0.003,
+        0.005,
+        0.007,
+        0.01
+      ],
+      "buyWScoreThreshold": [
+        0.2,
+        0.25,
+        0.28,
+        0.32
+      ],
+      "sellWScoreThreshold": [
+        -0.25,
+        -0.3,
+        -0.35
+      ],
+      "confidenceThreshold": [
+        55,
+        60
+      ],
+      "atrStopMultiplier": [
+        1.5,
+        2,
+        2.5
+      ]
+    },
+    "bySector": {
+      "Technology": [
+        {
+          "ticker": "AAPL",
+          "bestParams": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 55,
+            "atrStopMultiplier": 2.5
+          },
+          "oosWinRate": 18.2,
+          "overfitGap": -1,
+          "oosTrades": 11
+        },
+        {
+          "ticker": "AMD",
+          "bestParams": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 55,
+            "atrStopMultiplier": 1.5
+          },
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0
+        },
+        {
+          "ticker": "AVGO",
+          "bestParams": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 55,
+            "atrStopMultiplier": 2.5
+          },
+          "oosWinRate": 54.5,
+          "overfitGap": -4.5,
+          "oosTrades": 11
+        },
+        {
+          "ticker": "MSFT",
+          "bestParams": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 55,
+            "atrStopMultiplier": 1.5
+          },
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0
+        },
+        {
+          "ticker": "NVDA",
+          "bestParams": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 55,
+            "atrStopMultiplier": 1.5
+          },
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0
+        }
+      ],
+      "Healthcare": [
+        {
+          "ticker": "ABBV",
+          "bestParams": {
+            "slopeThreshold": 0.007,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 55,
+            "atrStopMultiplier": 1.5
+          },
+          "oosWinRate": 95.7,
+          "overfitGap": -37.3,
+          "oosTrades": 23
+        },
+        {
+          "ticker": "JNJ",
+          "bestParams": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 55,
+            "atrStopMultiplier": 1.5
+          },
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0
+        },
+        {
+          "ticker": "LLY",
+          "bestParams": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 55,
+            "atrStopMultiplier": 1.5
+          },
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0
+        },
+        {
+          "ticker": "MRK",
+          "bestParams": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 55,
+            "atrStopMultiplier": 1.5
+          },
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0
+        },
+        {
+          "ticker": "UNH",
+          "bestParams": {
+            "slopeThreshold": 0.007,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 55,
+            "atrStopMultiplier": 2
+          },
+          "oosWinRate": 100,
+          "overfitGap": -25,
+          "oosTrades": 11
+        }
+      ],
+      "Utilities": [
+        {
+          "ticker": "AEP",
+          "bestParams": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 55,
+            "atrStopMultiplier": 2.5
+          },
+          "oosWinRate": 100,
+          "overfitGap": -27.8,
+          "oosTrades": 16
+        },
+        {
+          "ticker": "DUK",
+          "bestParams": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 55,
+            "atrStopMultiplier": 1.5
+          },
+          "oosWinRate": 90.9,
+          "overfitGap": -44.8,
+          "oosTrades": 22
+        },
+        {
+          "ticker": "NEE",
+          "bestParams": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 55,
+            "atrStopMultiplier": 1.5
+          },
+          "oosWinRate": 20,
+          "overfitGap": -3.3,
+          "oosTrades": 20
+        },
+        {
+          "ticker": "PCG",
+          "bestParams": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 55,
+            "atrStopMultiplier": 1.5
+          },
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0
+        },
+        {
+          "ticker": "SO",
+          "bestParams": {
+            "slopeThreshold": 0.01,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 55,
+            "atrStopMultiplier": 1.5
+          },
+          "oosWinRate": 50,
+          "overfitGap": -3.8,
+          "oosTrades": 18
+        }
+      ],
+      "Real Estate": [
+        {
+          "ticker": "AMT",
+          "bestParams": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 55,
+            "atrStopMultiplier": 1.5
+          },
+          "oosWinRate": 53.8,
+          "overfitGap": -53.8,
+          "oosTrades": 13
+        },
+        {
+          "ticker": "EQIX",
+          "bestParams": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 55,
+            "atrStopMultiplier": 1.5
+          },
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0
+        },
+        {
+          "ticker": "PLD",
+          "bestParams": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 55,
+            "atrStopMultiplier": 1.5
+          },
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0
+        },
+        {
+          "ticker": "SPG",
+          "bestParams": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 55,
+            "atrStopMultiplier": 1.5
+          },
+          "oosWinRate": 33.3,
+          "overfitGap": -4.2,
+          "oosTrades": 15
+        },
+        {
+          "ticker": "WELL",
+          "bestParams": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 55,
+            "atrStopMultiplier": 1.5
+          },
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0
+        }
+      ],
+      "Consumer Disc.": [
+        {
+          "ticker": "AMZN",
+          "bestParams": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 55,
+            "atrStopMultiplier": 1.5
+          },
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0
+        },
+        {
+          "ticker": "HD",
+          "bestParams": {
+            "slopeThreshold": 0.01,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 55,
+            "atrStopMultiplier": 2.5
+          },
+          "oosWinRate": 36.4,
+          "overfitGap": -7.8,
+          "oosTrades": 11
+        },
+        {
+          "ticker": "MCD",
+          "bestParams": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 55,
+            "atrStopMultiplier": 1.5
+          },
+          "oosWinRate": 86.7,
+          "overfitGap": -39.6,
+          "oosTrades": 15
+        },
+        {
+          "ticker": "NKE",
+          "bestParams": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 55,
+            "atrStopMultiplier": 1.5
+          },
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0
+        },
+        {
+          "ticker": "TSLA",
+          "bestParams": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 55,
+            "atrStopMultiplier": 2
+          },
+          "oosWinRate": 66.7,
+          "overfitGap": -21.2,
+          "oosTrades": 15
+        }
+      ],
+      "Materials": [
+        {
+          "ticker": "APD",
+          "bestParams": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 55,
+            "atrStopMultiplier": 1.5
+          },
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0
+        },
+        {
+          "ticker": "DOW",
+          "bestParams": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 55,
+            "atrStopMultiplier": 1.5
+          },
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0
+        },
+        {
+          "ticker": "FCX",
+          "bestParams": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 55,
+            "atrStopMultiplier": 1.5
+          },
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0
+        },
+        {
+          "ticker": "LIN",
+          "bestParams": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 55,
+            "atrStopMultiplier": 1.5
+          },
+          "oosWinRate": 19.4,
+          "overfitGap": -5.1,
+          "oosTrades": 31
+        },
+        {
+          "ticker": "NEM",
+          "bestParams": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 55,
+            "atrStopMultiplier": 1.5
+          },
+          "oosWinRate": 24.1,
+          "overfitGap": -24.1,
+          "oosTrades": 29
+        }
+      ],
+      "Financials": [
+        {
+          "ticker": "BAC",
+          "bestParams": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 55,
+            "atrStopMultiplier": 1.5
+          },
+          "oosWinRate": 18.8,
+          "overfitGap": 3.5,
+          "oosTrades": 16
+        },
+        {
+          "ticker": "BRK.B",
+          "bestParams": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 55,
+            "atrStopMultiplier": 1.5
+          },
+          "oosWinRate": 73.9,
+          "overfitGap": -28.5,
+          "oosTrades": 23
+        },
+        {
+          "ticker": "JPM",
+          "bestParams": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 55,
+            "atrStopMultiplier": 1.5
+          },
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0
+        },
+        {
+          "ticker": "MA",
+          "bestParams": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 55,
+            "atrStopMultiplier": 1.5
+          },
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0
+        },
+        {
+          "ticker": "V",
+          "bestParams": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 55,
+            "atrStopMultiplier": 1.5
+          },
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0
+        }
+      ],
+      "Crypto": [
+        {
+          "ticker": "BTC",
+          "bestParams": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 55,
+            "atrStopMultiplier": 1.5
+          },
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0
+        }
+      ],
+      "Industrials": [
+        {
+          "ticker": "CAT",
+          "bestParams": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 55,
+            "atrStopMultiplier": 1.5
+          },
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0
+        },
+        {
+          "ticker": "GE",
+          "bestParams": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 55,
+            "atrStopMultiplier": 1.5
+          },
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0
+        },
+        {
+          "ticker": "HON",
+          "bestParams": {
+            "slopeThreshold": 0.007,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 55,
+            "atrStopMultiplier": 1.5
+          },
+          "oosWinRate": 46.2,
+          "overfitGap": -0.7,
+          "oosTrades": 13
+        },
+        {
+          "ticker": "RTX",
+          "bestParams": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 55,
+            "atrStopMultiplier": 1.5
+          },
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0
+        },
+        {
+          "ticker": "UNP",
+          "bestParams": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 55,
+            "atrStopMultiplier": 1.5
+          },
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0
+        }
+      ],
+      "Energy": [
+        {
+          "ticker": "COP",
+          "bestParams": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 55,
+            "atrStopMultiplier": 1.5
+          },
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0
+        },
+        {
+          "ticker": "CVX",
+          "bestParams": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 55,
+            "atrStopMultiplier": 1.5
+          },
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0
+        },
+        {
+          "ticker": "EOG",
+          "bestParams": {
+            "slopeThreshold": 0.005,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 55,
+            "atrStopMultiplier": 2
+          },
+          "oosWinRate": 94.1,
+          "overfitGap": -29.1,
+          "oosTrades": 17
+        },
+        {
+          "ticker": "SLB",
+          "bestParams": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 55,
+            "atrStopMultiplier": 1.5
+          },
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0
+        },
+        {
+          "ticker": "XOM",
+          "bestParams": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 55,
+            "atrStopMultiplier": 1.5
+          },
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0
+        }
+      ],
+      "Consumer Staples": [
+        {
+          "ticker": "COST",
+          "bestParams": {
+            "slopeThreshold": 0.007,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 55,
+            "atrStopMultiplier": 1.5
+          },
+          "oosWinRate": 90,
+          "overfitGap": -43.3,
+          "oosTrades": 20
+        },
+        {
+          "ticker": "KO",
+          "bestParams": {
+            "slopeThreshold": 0.005,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 55,
+            "atrStopMultiplier": 1.5
+          },
+          "oosWinRate": 51.7,
+          "overfitGap": -12.8,
+          "oosTrades": 29
+        },
+        {
+          "ticker": "PEP",
+          "bestParams": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 55,
+            "atrStopMultiplier": 1.5
+          },
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0
+        },
+        {
+          "ticker": "PG",
+          "bestParams": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 55,
+            "atrStopMultiplier": 1.5
+          },
+          "oosWinRate": 91.7,
+          "overfitGap": -15.5,
+          "oosTrades": 12
+        },
+        {
+          "ticker": "WMT",
+          "bestParams": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 55,
+            "atrStopMultiplier": 1.5
+          },
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0
+        }
+      ],
+      "Communication": [
+        {
+          "ticker": "DIS",
+          "bestParams": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 55,
+            "atrStopMultiplier": 1.5
+          },
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0
+        },
+        {
+          "ticker": "GOOGL",
+          "bestParams": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 55,
+            "atrStopMultiplier": 1.5
+          },
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0
+        },
+        {
+          "ticker": "META",
+          "bestParams": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 55,
+            "atrStopMultiplier": 1.5
+          },
+          "oosWinRate": 62.5,
+          "overfitGap": -62.5,
+          "oosTrades": 24
+        },
+        {
+          "ticker": "NFLX",
+          "bestParams": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 55,
+            "atrStopMultiplier": 1.5
+          },
+          "oosWinRate": 0,
+          "overfitGap": 0,
+          "oosTrades": 0
+        },
+        {
+          "ticker": "T",
+          "bestParams": {
+            "slopeThreshold": 0.003,
+            "buyWScoreThreshold": 0.2,
+            "sellWScoreThreshold": -0.25,
+            "confidenceThreshold": 55,
+            "atrStopMultiplier": 1.5
+          },
+          "oosWinRate": 44,
+          "overfitGap": -44,
+          "oosTrades": 25
+        }
+      ]
+    }
+  },
+  "sectorRecommendations": [
+    {
+      "sector": "Crypto",
+      "tickers": [
+        "BTC"
+      ],
+      "avgOOSWinRate": 0,
+      "avgOverfitGap": 0,
+      "avgOOSTrades": 0,
+      "bestGlobalParams": {
+        "slopeThreshold": 0.003,
+        "confidenceThreshold": 55,
+        "atrStopMultiplier": 1.5,
+        "buyWScoreThreshold": 0.2
+      },
+      "worstTickers": [
+        "BTC(0%)"
+      ],
+      "recommendation": "CRITICAL: avg OOS WR 0.0% — structural signal failure. Needs intermarket gate."
+    },
+    {
+      "sector": "Materials",
+      "tickers": [
+        "APD",
+        "DOW",
+        "FCX",
+        "LIN",
+        "NEM"
+      ],
+      "avgOOSWinRate": 0.08698553948832036,
+      "avgOverfitGap": -0.05841411091689179,
+      "avgOOSTrades": 12,
+      "bestGlobalParams": {
+        "slopeThreshold": 0.003,
+        "confidenceThreshold": 55,
+        "atrStopMultiplier": 1.5,
+        "buyWScoreThreshold": 0.2
+      },
+      "worstTickers": [
+        "APD(0%)",
+        "DOW(0%)",
+        "FCX(0%)",
+        "LIN(19%)",
+        "NEM(24%)"
+      ],
+      "recommendation": "CRITICAL: avg OOS WR 8.7% — structural signal failure. Needs intermarket gate."
+    },
+    {
+      "sector": "Industrials",
+      "tickers": [
+        "CAT",
+        "GE",
+        "HON",
+        "RTX",
+        "UNP"
+      ],
+      "avgOOSWinRate": 0.10909090909090909,
+      "avgOverfitGap": -0.018181818181818177,
+      "avgOOSTrades": 2.2,
+      "bestGlobalParams": {
+        "slopeThreshold": 0.003,
+        "confidenceThreshold": 55,
+        "atrStopMultiplier": 1.5,
+        "buyWScoreThreshold": 0.2
+      },
+      "worstTickers": [
+        "CAT(0%)",
+        "GE(0%)",
+        "RTX(0%)",
+        "UNP(0%)"
+      ],
+      "recommendation": "CRITICAL: avg OOS WR 10.9% — structural signal failure. Needs intermarket gate."
+    },
+    {
+      "sector": "Technology",
+      "tickers": [
+        "AAPL",
+        "AMD",
+        "AVGO",
+        "MSFT",
+        "NVDA"
+      ],
+      "avgOOSWinRate": 0.14545454545454545,
+      "avgOverfitGap": -0.011168831168831161,
+      "avgOOSTrades": 4.4,
+      "bestGlobalParams": {
+        "slopeThreshold": 0.003,
+        "confidenceThreshold": 55,
+        "atrStopMultiplier": 1.5,
+        "buyWScoreThreshold": 0.2
+      },
+      "worstTickers": [
+        "AMD(0%)",
+        "MSFT(0%)",
+        "NVDA(0%)",
+        "AAPL(18%)"
+      ],
+      "recommendation": "CRITICAL: avg OOS WR 14.5% — structural signal failure. Needs intermarket gate."
+    },
+    {
+      "sector": "Real Estate",
+      "tickers": [
+        "AMT",
+        "EQIX",
+        "PLD",
+        "SPG",
+        "WELL"
+      ],
+      "avgOOSWinRate": 0.17435897435897435,
+      "avgOverfitGap": -0.11602564102564102,
+      "avgOOSTrades": 5.6,
+      "bestGlobalParams": {
+        "slopeThreshold": 0.003,
+        "confidenceThreshold": 55,
+        "atrStopMultiplier": 1.5,
+        "buyWScoreThreshold": 0.2
+      },
+      "worstTickers": [
+        "EQIX(0%)",
+        "PLD(0%)",
+        "WELL(0%)",
+        "SPG(33%)"
+      ],
+      "recommendation": "CRITICAL: avg OOS WR 17.4% — structural signal failure. Needs intermarket gate."
+    },
+    {
+      "sector": "Financials",
+      "tickers": [
+        "BAC",
+        "BRK.B",
+        "JPM",
+        "MA",
+        "V"
+      ],
+      "avgOOSWinRate": 0.18532608695652172,
+      "avgOverfitGap": -0.04997255160298638,
+      "avgOOSTrades": 7.8,
+      "bestGlobalParams": {
+        "slopeThreshold": 0.003,
+        "confidenceThreshold": 55,
+        "atrStopMultiplier": 1.5,
+        "buyWScoreThreshold": 0.2
+      },
+      "worstTickers": [
+        "JPM(0%)",
+        "MA(0%)",
+        "V(0%)",
+        "BAC(19%)"
+      ],
+      "recommendation": "CRITICAL: avg OOS WR 18.5% — structural signal failure. Needs intermarket gate."
+    },
+    {
+      "sector": "Energy",
+      "tickers": [
+        "COP",
+        "CVX",
+        "EOG",
+        "SLB",
+        "XOM"
+      ],
+      "avgOOSWinRate": 0.18823529411764706,
+      "avgOverfitGap": -0.05823529411764705,
+      "avgOOSTrades": 3.4,
+      "bestGlobalParams": {
+        "slopeThreshold": 0.003,
+        "confidenceThreshold": 55,
+        "atrStopMultiplier": 1.5,
+        "buyWScoreThreshold": 0.2
+      },
+      "worstTickers": [
+        "COP(0%)",
+        "CVX(0%)",
+        "SLB(0%)",
+        "XOM(0%)"
+      ],
+      "recommendation": "CRITICAL: avg OOS WR 18.8% — structural signal failure. Needs intermarket gate."
+    },
+    {
+      "sector": "Communication",
+      "tickers": [
+        "DIS",
+        "GOOGL",
+        "META",
+        "NFLX",
+        "T"
+      ],
+      "avgOOSWinRate": 0.213,
+      "avgOverfitGap": -0.213,
+      "avgOOSTrades": 9.8,
+      "bestGlobalParams": {
+        "slopeThreshold": 0.003,
+        "confidenceThreshold": 55,
+        "atrStopMultiplier": 1.5,
+        "buyWScoreThreshold": 0.2
+      },
+      "worstTickers": [
+        "DIS(0%)",
+        "GOOGL(0%)",
+        "NFLX(0%)"
+      ],
+      "recommendation": "CRITICAL: avg OOS WR 21.3% — structural signal failure. Needs intermarket gate."
+    },
+    {
+      "sector": "Consumer Disc.",
+      "tickers": [
+        "AMZN",
+        "HD",
+        "MCD",
+        "NKE",
+        "TSLA"
+      ],
+      "avgOOSWinRate": 0.3793939393939394,
+      "avgOverfitGap": -0.13722434428316782,
+      "avgOOSTrades": 8.2,
+      "bestGlobalParams": {
+        "slopeThreshold": 0.003,
+        "confidenceThreshold": 55,
+        "atrStopMultiplier": 1.5,
+        "buyWScoreThreshold": 0.2
+      },
+      "worstTickers": [
+        "AMZN(0%)",
+        "NKE(0%)",
+        "HD(36%)"
+      ],
+      "recommendation": "CRITICAL: avg OOS WR 37.9% — structural signal failure. Needs intermarket gate."
+    },
+    {
+      "sector": "Healthcare",
+      "tickers": [
+        "ABBV",
+        "JNJ",
+        "LLY",
+        "MRK",
+        "UNH"
+      ],
+      "avgOOSWinRate": 0.391304347826087,
+      "avgOverfitGap": -0.11007357859531772,
+      "avgOOSTrades": 6.6,
+      "bestGlobalParams": {
+        "slopeThreshold": 0.003,
+        "confidenceThreshold": 55,
+        "atrStopMultiplier": 1.5,
+        "buyWScoreThreshold": 0.2
+      },
+      "worstTickers": [
+        "JNJ(0%)",
+        "LLY(0%)",
+        "MRK(0%)"
+      ],
+      "recommendation": "CRITICAL: avg OOS WR 39.1% — structural signal failure. Needs intermarket gate."
+    },
+    {
+      "sector": "Consumer Staples",
+      "tickers": [
+        "COST",
+        "KO",
+        "PEP",
+        "PG",
+        "WMT"
+      ],
+      "avgOOSWinRate": 0.48678160919540225,
+      "avgOverfitGap": -0.15662287903667213,
+      "avgOOSTrades": 10.8,
+      "bestGlobalParams": {
+        "slopeThreshold": 0.003,
+        "confidenceThreshold": 55,
+        "atrStopMultiplier": 1.5,
+        "buyWScoreThreshold": 0.2
+      },
+      "worstTickers": [
+        "PEP(0%)",
+        "WMT(0%)"
+      ],
+      "recommendation": "CRITICAL: avg OOS WR 48.7% — structural signal failure. Needs intermarket gate."
+    },
+    {
+      "sector": "Utilities",
+      "tickers": [
+        "AEP",
+        "DUK",
+        "NEE",
+        "PCG",
+        "SO"
+      ],
+      "avgOOSWinRate": 0.5218181818181818,
+      "avgOverfitGap": -0.1594250194250194,
+      "avgOOSTrades": 15.2,
+      "bestGlobalParams": {
+        "slopeThreshold": 0.003,
+        "confidenceThreshold": 55,
+        "atrStopMultiplier": 1.5,
+        "buyWScoreThreshold": 0.2
+      },
+      "worstTickers": [
+        "PCG(0%)",
+        "NEE(20%)"
+      ],
+      "recommendation": "OOS WR 52.2% below 58% target — apply Loop 2 narrow params."
+    }
+  ],
+  "targets": {
+    "minAggregateWinRate": 0.6,
+    "maxInstrumentsBelow40pct": 3,
+    "minProfitFactor": 1.3,
+    "maxOSISGap": 0.08,
+    "minOOSTrades": 10
+  }
+}

@@ -26,7 +26,11 @@ export interface GexResult {
   totalGex: number
   /**
    * The spot price at which cumulative GEX (from lowest to highest strike)
-   * changes sign from positive to negative.  Null if no sign change exists.
+   * changes sign (either positive → negative or negative → positive).
+   * In options markets, cumulative GEX typically transitions from negative
+   * (puts dominate at low strikes) to positive (calls dominate at high strikes).
+   * Returns the first flip point found regardless of direction.
+   * Null if no sign change exists.
    */
   flipPoint: number | null
 }
@@ -70,14 +74,17 @@ export function computeGex(
 
   const totalGex = strikeGex.reduce((s, x) => s + x.gex, 0)
 
-  // Find flip point: strike where cumulative GEX transitions positive → negative
+  // Find flip point: strike where cumulative GEX changes sign (either direction).
+  // In options markets the typical pattern is negative (puts dominate low strikes)
+  // → positive (calls dominate high strikes), but both directions are checked.
   let cumulative = 0
   let flipPoint: number | null = null
 
   for (let i = 0; i < strikeGex.length; i++) {
     const prev = cumulative
     cumulative += strikeGex[i].gex
-    if (prev > 0 && cumulative <= 0) {
+    // Check both sign-change directions: positive→negative OR negative→positive
+    if ((prev > 0 && cumulative <= 0) || (prev < 0 && cumulative >= 0)) {
       // Linear interpolation between strikes[i-1] and strikes[i]
       const s0 = i > 0 ? strikeGex[i - 1].strike : strikeGex[i].strike
       const s1 = strikeGex[i].strike

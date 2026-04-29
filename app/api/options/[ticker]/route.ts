@@ -4,8 +4,12 @@ import { fetchOptionsChain } from '@/lib/options/chain'
 import { putCallRatio, maxPain } from '@/lib/options/sentiment'
 import { computeGex } from '@/lib/options/gex'
 import { unusualFlow, flowSentiment } from '@/lib/options/flow'
+import { applyRateLimit } from '@/lib/api/rateLimit'
 
-export async function GET(_req: Request, { params }: { params: { ticker: string } }) {
+export async function GET(req: Request, { params }: { params: { ticker: string } }) {
+  // Rate limit: 30 req/min per IP
+  const rateLimitResponse = applyRateLimit(req, 'options', { maxRequests: 30, windowSeconds: 60 })
+  if (rateLimitResponse) return rateLimitResponse
   const symbol = yahooSymbolFromParam(params.ticker)
 
   // Options data is only meaningful for equities/ETFs

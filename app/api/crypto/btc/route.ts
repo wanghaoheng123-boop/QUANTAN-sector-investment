@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { applyRateLimit } from '@/lib/api/rateLimit'
 
 const KRAKEN_OHLC = 'https://api.kraken.com/0/public/OHLC'
 const COINBASE_CANDLES = 'https://api.exchange.coinbase.com/products/BTC-USD/candles'
@@ -208,6 +209,10 @@ const INTERVAL_MAP: Record<string, string> = {
 export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {
+  // Rate limit: 30 req/min per IP
+  const rateLimitResponse = applyRateLimit(req, 'crypto-btc', { maxRequests: 30, windowSeconds: 60 })
+  if (rateLimitResponse) return rateLimitResponse
+
   const { searchParams } = new URL(req.url)
   const interval = searchParams.get('interval') || '1d'
   const rawLimit = parseInt(searchParams.get('limit') || '500', 10)

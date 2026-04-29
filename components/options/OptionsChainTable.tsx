@@ -56,10 +56,13 @@ function ContractCell({
   )
 }
 
+const MAX_VISIBLE_EXPIRIES = 8
+
 export default function OptionsChainTable({ chain }: Props) {
   const [selectedExpiry, setSelectedExpiry] = useState<string>(
     chain.currentExpiry ? chain.currentExpiry.toISOString().slice(0, 10) : '',
   )
+  const [showAllExpiries, setShowAllExpiries] = useState(false)
 
   const expiryStr = selectedExpiry || (chain.currentExpiry ? chain.currentExpiry.toISOString().slice(0, 10) : '')
   const calls = chain.calls.filter(
@@ -88,7 +91,7 @@ export default function OptionsChainTable({ chain }: Props) {
       {/* Expiry selector */}
       <div className="flex items-center gap-2 flex-wrap">
         <span className="text-xs text-gray-400 uppercase tracking-wide">Expiry:</span>
-        {chain.expirationDates.slice(0, 8).map((d) => {
+        {(showAllExpiries ? chain.expirationDates : chain.expirationDates.slice(0, MAX_VISIBLE_EXPIRIES)).map((d) => {
           const str = d instanceof Date ? d.toISOString().slice(0, 10) : new Date(d).toISOString().slice(0, 10)
           return (
             <button
@@ -104,6 +107,14 @@ export default function OptionsChainTable({ chain }: Props) {
             </button>
           )
         })}
+        {chain.expirationDates.length > MAX_VISIBLE_EXPIRIES && (
+          <button
+            onClick={() => setShowAllExpiries((v) => !v)}
+            className="text-xs px-2 py-0.5 rounded border border-gray-600 text-gray-400 hover:border-gray-400 hover:text-gray-200"
+          >
+            {showAllExpiries ? 'Show less' : `+${chain.expirationDates.length - MAX_VISIBLE_EXPIRIES} more`}
+          </button>
+        )}
       </div>
 
       {/* Chain table */}

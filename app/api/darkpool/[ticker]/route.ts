@@ -19,6 +19,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import YahooFinance from 'yahoo-finance2'
+import { parseQuoteTime } from '@/lib/format'
 
 const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] })
 
@@ -184,20 +185,6 @@ export async function GET(
     const rawChangePct = safeNum(
       (q as Record<string, unknown>).regularMarketChangePercent
     )
-
-    const parseQuoteTime = (ts: unknown): string | null => {
-      if (ts == null) return null
-      if (ts instanceof Date) return ts.toISOString()
-      if (typeof ts === 'string') {
-        const d = new Date(ts)
-        return Number.isFinite(d.getTime()) ? d.toISOString() : null
-      }
-      if (typeof ts === 'number') {
-        const ms = ts > 1e12 ? ts : ts * 1000
-        return Number.isFinite(ms) ? new Date(ms).toISOString() : null
-      }
-      return null
-    }
 
     const price: PricePoint =
       rawPrice != null && rawPrice > 0

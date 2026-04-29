@@ -18,6 +18,7 @@
 const YahooFinance = require('yahoo-finance2').default
 import { NextRequest, NextResponse } from 'next/server'
 import { SECTORS } from '@/lib/sectors'
+import { parseQuoteTime } from '@/lib/format'
 
 const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] })
 
@@ -97,20 +98,6 @@ export interface SectorBrief {
 
 function safeNum(v: unknown): number | null {
   if (typeof v === 'number' && Number.isFinite(v)) return v
-  return null
-}
-
-function parseQuoteTime(ts: unknown): string | null {
-  if (ts == null) return null
-  if (ts instanceof Date) return ts.toISOString()
-  if (typeof ts === 'string') {
-    const d = new Date(ts)
-    return Number.isFinite(d.getTime()) ? d.toISOString() : null
-  }
-  if (typeof ts === 'number') {
-    const ms = ts > 1e12 ? ts : ts * 1000
-    return Number.isFinite(ms) ? new Date(ms).toISOString() : null
-  }
   return null
 }
 

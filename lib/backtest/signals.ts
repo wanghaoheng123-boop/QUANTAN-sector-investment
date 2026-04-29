@@ -492,6 +492,10 @@ export interface SectorGateConfig {
   sellWScoreThreshold?: number
   /** Override the 200SMA slope threshold for regime signal. */
   slopeThreshold?: number
+  /** If true, apply rate-sensitivity penalty for REITs/Utilities (TLT proxy). */
+  tlrGate?: boolean
+  /** If true, apply yield-curve penalty for Financials (rate-cycle proxy). */
+  yieldCurveGate?: boolean
 }
 
 /**
@@ -543,8 +547,8 @@ export function enhancedCombinedSignal(
   const regime = regimeSignal(price, closes, rsi14)
   const volRegime = detectRegime(closes, bars)
 
-  // Multi-timeframe alignment
-  const mtf = multiTimeframeSignal(ohlcvBars)
+  // Multi-timeframe alignment (pass strategy hint for RSI mode)
+  const mtf = multiTimeframeSignal(ohlcvBars, volRegime.strategyHint)
 
   // Volume profile
   const vp = volumeProfile(ohlcvBars)
@@ -615,6 +619,17 @@ export function enhancedCombinedSignal(
     if (action === 'BUY' && sectorGates.requirePositiveMomentum && !hasPositiveMomentum(closes)) {
       action = 'HOLD'
     }
+    // tlrGate: rate-sensitivity penalty for REITs/Utilities — downgrade BUY→HOLD and penalize score
+    if (sectorGates.tlrGate) {
+      totalWeightedScore -= 0.10
+      if (action === 'BUY' && totalWeightedScore <= buyThresh) {
+        action = 'HOLD'
+      }
+    }
+  }
+  // After gate downgrade BUY → HOLD, re-check if score warrants a SELL
+  if (action === 'HOLD' && totalWeightedScore < sellThresh) {
+    action = 'SELL'
   }
   // Overbought override
   if (action === 'HOLD' && regime.zone === 'HEALTHY_BULL' && Number.isFinite(rsi14) && rsi14 > 70) {

@@ -105,6 +105,19 @@ export function calcStochRSI(prices: number[], period = 14, k = 3, d = 3) {
   return { k: kLine, d: dLine }
 }
 
+/** Wilder EMA with alpha = 1/period (used for ATR smoothing). */
+function calcWilderEMA(prices: number[], period: number): number[] {
+  const ema: number[] = new Array(prices.length).fill(NaN)
+  if (period <= 0 || prices.length < period) return ema
+  let prev = prices.slice(0, period).reduce((a, b) => a + b, 0) / period
+  ema[period - 1] = prev
+  for (let i = period; i < prices.length; i++) {
+    prev = prices[i] / period + prev * (1 - 1 / period)
+    ema[i] = prev
+  }
+  return ema
+}
+
 export function calcATR(candles: BtcCandle[], period = 14): number[] {
   const tr: number[] = candles.map((c, i) => {
     if (i === 0) return c.high - c.low
@@ -113,7 +126,8 @@ export function calcATR(candles: BtcCandle[], period = 14): number[] {
     const lC = Math.abs(c.low - candles[i - 1].close)
     return Math.max(hl, hC, lC)
   })
-  return calcEMA(tr, period)
+  // Wilder smoothing (alpha = 1/period) to match indicators.ts atrArray
+  return calcWilderEMA(tr, period)
 }
 
 // ─── Volume analysis ───────────────────────────────────────────────────────────
@@ -251,9 +265,15 @@ export function generateSignals(candles: BtcCandle[], fundingRate?: number, fear
     else if (hist < 0) signals.push({ indicator: 'MACD', signal: 'SELL', strength: 60, description: 'MACD histogram negative' })
   }
 
-  // EMA Cross
-  if (latestEMA20 > latestEMA50) signals.push({ indicator: 'EMA Cross', signal: 'BUY', strength: 70, description: `EMA20 ($${latestEMA20.toFixed(0)}) > EMA50 ($${latestEMA50.toFixed(0)})` })
-  else signals.push({ indicator: 'EMA Cross', signal: 'SELL', strength: 70, description: `EMA20 ($${latestEMA20.toFixed(0)}) < EMA50 ($${latestEMA50.toFixed(0)})` })
+  // EMA Cross with minimum threshold (1%) to avoid noise
+  const emaCrossPct = ((latestEMA20 - latestEMA50) / latestEMA50) * 100
+  if (emaCrossPct > 1) {
+    signals.push({ indicator: 'EMA Cross', signal: 'BUY', strength: 70, description: `EMA20 ($${latestEMA20.toFixed(0)}) > EMA50 ($${latestEMA50.toFixed(0)}) by ${emaCrossPct.toFixed(1)}%` })
+  } else if (emaCrossPct < -1) {
+    signals.push({ indicator: 'EMA Cross', signal: 'SELL', strength: 70, description: `EMA20 ($${latestEMA20.toFixed(0)}) < EMA50 ($${latestEMA50.toFixed(0)}) by ${Math.abs(emaCrossPct).toFixed(1)}%` })
+  } else {
+    signals.push({ indicator: 'EMA Cross', signal: 'HOLD', strength: 30, description: `EMA20 ($${latestEMA20.toFixed(0)}) and EMA50 ($${latestEMA50.toFixed(0)}) within 1% — no clear cross` })
+  }
 
   // Bollinger Bands
   if (

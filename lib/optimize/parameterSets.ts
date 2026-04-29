@@ -15,7 +15,7 @@ import type { ParamGrid } from './gridSearch'
 
 /**
  * Loop 1: Wide grid search to find baseline best parameters.
- * Tests 4 × 4 × 4 × 3 × 4 = 768 combinations per instrument.
+ * Tests 4 × 4 × 4 × 4 × 4 = 1024 combinations per instrument.
  */
 export const LOOP1_GRID: ParamGrid = {
   slopeThreshold:       [0.003, 0.005, 0.008, 0.010],

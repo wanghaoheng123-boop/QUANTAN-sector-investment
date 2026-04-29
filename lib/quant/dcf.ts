@@ -11,6 +11,8 @@ export interface DcfInputs {
   /** Year 1–5 growth rate (constant for simplicity). */
   explicitGrowth: number
   explicitYears?: number
+  /** Net debt (total debt minus cash). Defaults to 0 if not provided. */
+  netDebt?: number
 }
 
 export interface DcfResult {
@@ -23,7 +25,7 @@ export interface DcfResult {
 }
 
 export function runDcf(input: DcfInputs): DcfResult | null {
-  const { fcf0, shares, wacc, terminalGrowth, explicitGrowth } = input
+  const { fcf0, shares, wacc, terminalGrowth, explicitGrowth, netDebt } = input
   const n = input.explicitYears ?? 5
   if (!Number.isFinite(fcf0) || !Number.isFinite(shares) || shares <= 0) return null
   if (wacc <= terminalGrowth || wacc <= 0 || wacc >= 0.5) return null
@@ -42,7 +44,8 @@ export function runDcf(input: DcfInputs): DcfResult | null {
   const pvTerminal = terminalValueRaw / Math.pow(1 + wacc, n)
 
   const enterpriseValue = pvExplicit + pvTerminal
-  const equityValue = enterpriseValue
+  const netDebtValue = Number.isFinite(netDebt ?? 0) ? (netDebt ?? 0) : 0
+  const equityValue = enterpriseValue - netDebtValue
   const valuePerShare = equityValue / shares
 
   if (!Number.isFinite(valuePerShare) || valuePerShare <= 0) return null

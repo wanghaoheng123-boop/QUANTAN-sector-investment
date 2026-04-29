@@ -87,6 +87,7 @@ export default function GlobalSearch() {
   }, [])
 
   useEffect(() => {
+    const abortController = new AbortController()
     const fetchResults = async () => {
       if (query.trim().length === 0) {
         setResults([])
@@ -96,9 +97,11 @@ export default function GlobalSearch() {
       setFetchError(null)
       try {
         const res = await fetch(
-          `/api/search?q=${encodeURIComponent(query)}&limit=${SEARCH_LIMIT}`
+          `/api/search?q=${encodeURIComponent(query)}&limit=${SEARCH_LIMIT}`,
+          { signal: abortController.signal }
         )
         const data = await res.json()
+        if (abortController.signal.aborted) return
         if (!res.ok) {
           setFetchError(typeof data.error === 'string' ? data.error : 'Search request failed')
           setResults([])
@@ -108,16 +111,21 @@ export default function GlobalSearch() {
         if ((data.quotes || []).length === 0 && data.error) {
           setFetchError(String(data.error))
         }
-      } catch {
+      } catch (err: unknown) {
+        if (err instanceof DOMException && err.name === 'AbortError') return
+        if (abortController.signal.aborted) return
         setFetchError('Network error — try again')
         setResults([])
       } finally {
-        setLoading(false)
+        if (!abortController.signal.aborted) setLoading(false)
       }
     }
 
     const timeoutId = setTimeout(fetchResults, 280)
-    return () => clearTimeout(timeoutId)
+    return () => {
+      clearTimeout(timeoutId)
+      abortController.abort()
+    }
   }, [query])
 
   const goToStock = useCallback(

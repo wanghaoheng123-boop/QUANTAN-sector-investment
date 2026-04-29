@@ -313,7 +313,7 @@ export default function KLineChart({
   const [chartReadyGen, setChartReadyGen] = useState(0)
   const [selectedTimeframe, setSelectedTimeframe] = useState<Timeframe>('3M')
 
-  const indicators = useMemo(() => indicatorsProp, [indicatorsProp])
+  const indicators = indicatorsProp
 
   const [vis, setVis] = useState<Record<VisKey, boolean>>(() => buildVisFromProps(indicatorsProp))
 
@@ -328,7 +328,13 @@ export default function KLineChart({
   } | null>(null)
 
   useEffect(() => {
-    setVis(buildVisFromProps(indicatorsProp))
+    const next = buildVisFromProps(indicatorsProp)
+    setVis((prev) => {
+      // Only update if values actually changed — prevents cascading re-renders
+      // when indicatorsProp reference changes but content is identical
+      if (JSON.stringify(prev) === JSON.stringify(next)) return prev
+      return next
+    })
   }, [indicatorsProp])
 
   // Keep series visibility in sync when parent indicator preset changes (refs exist after mount).
@@ -820,7 +826,7 @@ export default function KLineChart({
         /* ignore */
       }
     }
-  }, [candles, darkPoolMarkers, newsMarkers, showRSI, indicatorsProp, vis, chartReadyGen])
+  }, [candles, darkPoolMarkers, newsMarkers, showRSI, indicatorsProp, JSON.stringify(vis), chartReadyGen])
 
   const toggleIndicator = useCallback((key: VisKey) => {
     let next = {} as Record<VisKey, boolean>
@@ -871,19 +877,19 @@ export default function KLineChart({
 
   // Memoize last RSI and ATR to avoid recomputing on every render (e.g., crosshair move)
   const latestRsi = useMemo<number | null>(() => {
-    if (!latestCandle || candles.length < 15) return null
+    if (candles.length < 15) return null
     const closes = candles.map(c => c.close)
     const vals = calcRSI(closes, 14)
     const last = vals[vals.length - 1]
     return Number.isFinite(last) ? last : null
-  }, [candles, latestCandle])
+  }, [candles])
 
   const latestAtr14 = useMemo<number | null>(() => {
-    if (!latestCandle || candles.length < 15) return null
+    if (candles.length < 15) return null
     const vals = calcATR(candles, 14)
     const last = vals[vals.length - 1]
     return Number.isFinite(last) ? last : null
-  }, [candles, latestCandle])
+  }, [candles])
 
   return (
     <div className="relative select-none">

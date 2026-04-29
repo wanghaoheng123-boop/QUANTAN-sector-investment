@@ -108,8 +108,11 @@ export function sectorScores(
   return scored.map((s, i) => {
     const rank = i + 1
     let signal: SectorSignal = 'NEUTRAL'
-    if (rank <= topN) signal = 'OVERWEIGHT'
-    else if (rank > scored.length - bottomN) signal = 'UNDERWEIGHT'
+    if (rank <= topN) {
+      signal = 'OVERWEIGHT'
+    } else if (rank > scored.length - bottomN) {
+      signal = 'UNDERWEIGHT'
+    }
     return { ...s, rank, signal }
   })
 }

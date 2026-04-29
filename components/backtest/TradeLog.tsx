@@ -29,6 +29,13 @@ export default function TradeLog({ trades, sectorColors }: Props) {
   const winningTrades = filtered.filter(t => (t.pnlPct ?? 0) > 0)
   const losingTrades = filtered.filter(t => (t.pnlPct ?? 0) < 0)
 
+  const avgWinPct = winningTrades.length > 0
+    ? (winningTrades.reduce((s, t) => s + (t.pnlPct ?? 0), 0) / winningTrades.length * 100).toFixed(2)
+    : '0.00'
+  const avgLossPct = losingTrades.length > 0
+    ? Math.abs(losingTrades.reduce((s, t) => s + (t.pnlPct ?? 0), 0) / losingTrades.length * 100).toFixed(2)
+    : '0.00'
+
   return (
     <div className="space-y-3">
       {/* Summary */}
@@ -37,14 +44,14 @@ export default function TradeLog({ trades, sectorColors }: Props) {
           <div className="text-xs text-emerald-500 mb-1">Winning Trades</div>
           <div className="text-xl font-bold font-mono text-emerald-400">{winningTrades.length}</div>
           <div className="text-[10px] text-emerald-600 mt-1">
-            avg +{(winningTrades.reduce((s, t) => s + (t.pnlPct ?? 0), 0) / Math.max(winningTrades.length, 1) * 100).toFixed(2)}%
+            avg +{avgWinPct}%
           </div>
         </div>
         <div className="bg-red-950/30 rounded-xl p-4 border border-red-800/30">
           <div className="text-xs text-red-500 mb-1">Losing Trades</div>
           <div className="text-xl font-bold font-mono text-red-400">{losingTrades.length}</div>
           <div className="text-[10px] text-red-600 mt-1">
-            avg −{Math.abs(losingTrades.reduce((s, t) => s + (t.pnlPct ?? 0), 0) / Math.max(losingTrades.length, 1) * 100).toFixed(2)}%
+            avg −{avgLossPct}%
           </div>
         </div>
         <div className="bg-slate-900/60 rounded-xl p-4 border border-slate-800">

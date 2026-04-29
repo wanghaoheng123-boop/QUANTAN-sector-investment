@@ -1,6 +1,7 @@
 import type { NextAuthOptions } from 'next-auth'
 import GoogleProvider from 'next-auth/providers/google'
 import GitHubProvider from 'next-auth/providers/github'
+import crypto from 'crypto'
 
 const providers: NextAuthOptions['providers'] = []
 
@@ -22,19 +23,42 @@ if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
   )
 }
 
-// Returns the secret. Throws in production if not configured to prevent session forgery.
+// Cached per-process random secret so repeated calls to getSecret() return the
+// same value (NextAuth calls this multiple times during config resolution).
+let _generatedSecret: string | null = null
+
+// Returns the secret. In production, generates a cryptographically random secret
+// if NEXTAUTH_SECRET is not configured, and logs a warning. The generated secret
+// will persist for the lifetime of the serverless function instance, so sessions
+// signed before a cold start will be invalidated — this is intentional to prevent
+// silent session forgery when the env var is missing.
 function getSecret(): string {
   const secret = process.env.NEXTAUTH_SECRET
-  if (!secret || secret === 'NOT-CONFIGURED-BUILD-TIME-PLACEHOLDER') {
-    // During build (NODE_ENV=production via `next build`), allow placeholder
-    // so builds don't fail before env vars are injected on Vercel.
-    // In the actual Vercel runtime, NEXTAUTH_SECRET will be set as an env var.
-    if (process.env.VERCEL === '1' || process.env.NODE_ENV === 'production') {
-      return 'build-time-placeholder-replace-in-vercel-env'
-    }
-    return 'dev-only-insecure-placeholder-do-not-use-in-production'
+  if (secret && secret !== 'NOT-CONFIGURED-BUILD-TIME-PLACEHOLDER') {
+    return secret
   }
-  return secret
+
+  const isBuildTime = process.env.NEXT_PHASE === 'phase-production-build'
+  if (isBuildTime) {
+    // next build needs any non-empty string to avoid crashing; real secret is
+    // injected at runtime via Vercel env vars.
+    return 'build-time-placeholder-replaced-at-runtime'
+  }
+
+  if (process.env.VERCEL === '1' || process.env.NODE_ENV === 'production') {
+    if (!_generatedSecret) {
+      _generatedSecret = crypto.randomBytes(32).toString('hex')
+      console.warn(
+        '[auth] NEXTAUTH_SECRET is not configured. Generated a random per-instance secret. ' +
+        'Sessions will be invalidated on cold starts. Set NEXTAUTH_SECRET in your Vercel ' +
+        'environment variables to persist sessions across deployments.'
+      )
+    }
+    return _generatedSecret
+  }
+
+  // Development fallback — acceptable for local use only.
+  return 'dev-only-insecure-placeholder-do-not-use-in-production'
 }
 
 export function getAuthOptions(): NextAuthOptions {
