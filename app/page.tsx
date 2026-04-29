@@ -109,8 +109,12 @@ export default function HomePage() {
 
   const signals = useMemo(() => buildSessionSignalsFromQuotes(quotes), [quotes])
 
-  const topBuy = useMemo(() => buySignals.sort((a, b) => Math.abs(b.sessionChangePct ?? 0) - Math.abs(a.sessionChangePct ?? 0)).slice(0, 3), [signals])
-  const topSell = useMemo(() => sellSignals.sort((a, b) => Math.abs(b.sessionChangePct ?? 0) - Math.abs(a.sessionChangePct ?? 0)).slice(0, 2), [signals])
+  const buySignals = useMemo(() => signals.filter((s) => s.direction === 'BUY'), [signals])
+  const sellSignals = useMemo(() => signals.filter((s) => s.direction === 'SELL'), [signals])
+  const holdSignals = useMemo(() => signals.filter((s) => s.direction === 'HOLD'), [signals])
+
+  const topBuy = useMemo(() => buySignals.sort((a, b) => Math.abs(b.sessionChangePct ?? 0) - Math.abs(a.sessionChangePct ?? 0)).slice(0, 3), [buySignals])
+  const topSell = useMemo(() => sellSignals.sort((a, b) => Math.abs(b.sessionChangePct ?? 0) - Math.abs(a.sessionChangePct ?? 0)).slice(0, 2), [sellSignals])
   const topSignals = useMemo(() => [...topBuy, ...topSell], [topBuy, topSell])
 
   const signalMap = useMemo(() => signals.reduce<Record<string, PriceSignal>>((acc, s) => {
@@ -125,9 +129,6 @@ export default function HomePage() {
     return xs.length % 2 ? xs[m] : (xs[m - 1] + xs[m]) / 2
   }, [signals])
 
-  const buySignals = useMemo(() => signals.filter((s) => s.direction === 'BUY'), [signals])
-  const sellSignals = useMemo(() => signals.filter((s) => s.direction === 'SELL'), [signals])
-  const holdSignals = useMemo(() => signals.filter((s) => s.direction === 'HOLD'), [signals])
   const avgConfidence = useMemo(() => Math.round(signals.reduce((a, b) => a + b.confidence, 0) / (signals.length || 1)), [signals])
   const sortedSignals = useMemo(() => [...signals].sort((a, b) => (b.sessionChangePct ?? 0) - (a.sessionChangePct ?? 0)), [signals])
 
