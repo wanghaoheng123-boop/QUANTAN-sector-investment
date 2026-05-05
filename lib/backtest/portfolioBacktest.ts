@@ -15,13 +15,14 @@
 
 import type { OhlcvRow } from '@/scripts/backtest/dataLoader'
 import { enhancedCombinedSignal, DEFAULT_CONFIG } from '@/lib/backtest/signals'
-import type { BacktestConfig } from '@/lib/backtest/signals'
-import { atrArray } from '@/lib/quant/indicators'
+import type { BacktestConfig, SectorGateConfig } from '@/lib/backtest/signals'
+import { atrArray, sortinoRatio } from '@/lib/quant/indicators'
 import {
   checkExitConditions, updatePosition, atrAdaptiveStop,
   DEFAULT_EXIT_CONFIG,
 } from '@/lib/backtest/exitRules'
 import type { OpenPosition, ExitConfig, ExitReason } from '@/lib/backtest/exitRules'
+import { SECTOR_PROFILES } from '@/lib/optimize/sectorProfiles'
 
 export interface PortfolioConfig extends BacktestConfig {
   maxPositions: number        // max concurrent positions (default 10)
@@ -29,6 +30,13 @@ export interface PortfolioConfig extends BacktestConfig {
   monthlyRebalance: boolean   // rebalance based on sector rotation monthly
   correlationGate: number     // max correlation increase before reducing Kelly
   exit: ExitConfig
+  /**
+   * Per-ticker macro gate overrides. Phase 12-A: wires SECTOR_PROFILES into
+   * enhancedCombinedSignal so per-sector gates (golden cross, TLT/yield curve,
+   * threshold overrides) apply during portfolio backtests. Default: derived from
+   * SECTOR_PROFILES on first call.
+   */
+  tickerSectorGates?: Record<string, SectorGateConfig>
 }
 
 export const DEFAULT_PORTFOLIO_CONFIG: PortfolioConfig = {
@@ -128,6 +136,31 @@ export function runPortfolioBacktest(
   const tickerDailyReturns: Record<string, number[]> = {}
   for (const ticker of tickers) tickerDailyReturns[ticker] = []
 
+  // Phase 12-A: Build per-ticker sector-gate map.
+  // Resolution order:
+  //   1) explicit cfg.tickerSectorGates override (per-ticker)
+  //   2) SECTOR_PROFILES lookup by ticker membership (extracts gate-relevant subset)
+  //   3) fallback: undefined (signal uses DEFAULT_CONFIG)
+  const sectorGateByTicker: Record<string, SectorGateConfig> = (() => {
+    const map: Record<string, SectorGateConfig> = {}
+    for (const profile of Object.values(SECTOR_PROFILES)) {
+      for (const t of profile.tickers) {
+        map[t] = {
+          goldenCrossGate: profile.goldenCrossGate,
+          requirePositiveMomentum: profile.requirePositiveMomentum,
+          buyWScoreThreshold: profile.buyWScoreThreshold,
+          sellWScoreThreshold: profile.sellWScoreThreshold,
+          slopeThreshold: profile.slopeThreshold,
+          tlrGate: profile.tlrGate,
+          // SectorProfile doesn't expose yieldCurveGate explicitly — Financials inherits
+          // via a reasonable default at the call site if needed.
+        }
+      }
+    }
+    // Per-ticker overrides win.
+    return { ...map, ...(cfg.tickerSectorGates ?? {}) }
+  })()
+
   for (let di = 220; di < dates.length; di++) {
     const currentTime = dates[di]
     const currentDate = new Date(currentTime * 1000).toISOString().split('T')[0]
@@ -167,7 +200,11 @@ export function runPortfolioBacktest(
 
       let signalAction: 'BUY' | 'HOLD' | 'SELL' = 'HOLD'
       try {
-        const sig = enhancedCombinedSignal(ticker, currentDate, price, closes, bars, ohlcv, cfg)
+        // Phase 12-A: pass per-ticker sector gate
+        const sig = enhancedCombinedSignal(
+          ticker, currentDate, price, closes, bars, ohlcv, cfg,
+          sectorGateByTicker[ticker],
+        )
         signalAction = sig.action
       } catch { /* keep HOLD on error */ }
 
@@ -240,7 +277,11 @@ export function runPortfolioBacktest(
 
         let sig
         try {
-          sig = enhancedCombinedSignal(ticker, currentDate, price, closes, bars, ohlcv, cfg)
+          // Phase 12-A: pass per-ticker sector gate
+          sig = enhancedCombinedSignal(
+            ticker, currentDate, price, closes, bars, ohlcv, cfg,
+            sectorGateByTicker[ticker],
+          )
         } catch { continue }
 
         if (sig.action !== 'BUY') continue
@@ -377,18 +418,17 @@ export function runPortfolioBacktest(
   const avgTradeReturn = closedTrades.length > 0
     ? closedTrades.reduce((s, t) => s + t.pnlPct, 0) / closedTrades.length : 0
 
-  let sharpe: number | null = null, sortino: number | null = null
+  // Phase 13 S2 fix (F1.16): Sortino delegated to canonical indicators.ts impl.
+  // Sharpe stays inline (no SSOT divergence to fix).
+  let sharpe: number | null = null
+  const rfD = 0.04 / 252  // TODO Phase 13 F1.4: replace with FRED-fetched rate
   if (dailyReturns.length > 30) {
     const mean = dailyReturns.reduce((a, b) => a + b, 0) / dailyReturns.length
     const variance = dailyReturns.reduce((s, x) => s + (x - mean) ** 2, 0) / Math.max(1, dailyReturns.length - 1)
     const sd = Math.sqrt(Math.max(variance, 0))
-    if (sd > 0) { const rfD = 0.04 / 252; sharpe = ((mean - rfD) / sd) * Math.sqrt(252) }
-    const neg = dailyReturns.filter(x => x < 0)
-    if (neg.length > 0) {
-      const dSd = Math.sqrt(neg.reduce((s, x) => s + x * x, 0) / neg.length)
-      if (dSd > 0) { const rfD = 0.04 / 252; sortino = ((mean - rfD) / dSd) * Math.sqrt(252) }
-    }
+    if (sd > 0) sharpe = ((mean - rfD) / sd) * Math.sqrt(252)
   }
+  const sortino = sortinoRatio(dailyReturns, rfD, 252)
 
   // Sector attribution
   const sectorAttr: Record<string, { trades: number; wins: number; totalReturn: number }> = {}

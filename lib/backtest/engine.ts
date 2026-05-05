@@ -5,6 +5,7 @@
 
 import type { OhlcBar } from '@/lib/quant/technicals'
 import { combinedSignal, enhancedCombinedSignal, DEFAULT_CONFIG, atr, type BacktestConfig } from './signals'
+import { sortinoRatio } from '@/lib/quant/indicators'
 
 // ─── Transaction cost model ─────────────────────────────────────────────────────
 // Applied per side (entry OR exit) to reflect realistic execution costs.
@@ -375,28 +376,13 @@ export function backtestInstrument(
     }
   }
 
-  // Sortino: downside deviation uses n_d (count of negative-return periods only) as denominator.
-  // FIX P12-H1: Corrected from N (total observations) to n_d per Sortino & van der Meer (1991).
-  // The original Sortino formula: DSd = sqrt(sum(min(0, r_i - MAR)^2) / n_d)
-  // Using N instead of n_d understates downside deviation, inflating Sortino by sqrt(N/n_d).
-  // For a 5Y daily backtest with 40% negative days: overstatement factor ≈ sqrt(2.5) ≈ 1.58×.
-  let sortino: number | null = null
-  if (dailyReturns.length > 30) {
-    const rfD = 0.04 / 252
-    // Compute downside deviations: only negative excess returns count
-    const downsideDevs = dailyReturns.map(r => Math.min(0, r - rfD))
-    const negDevs = downsideDevs.filter(x => x < 0)
-    if (negDevs.length >= 3) {
-      // Use n_d (count of negative periods) as denominator — Sortino & van der Meer (1991)
-      const nd = negDevs.length
-      const downsideVariance = negDevs.reduce((s, x) => s + x * x, 0) / nd
-      const dsd = Math.sqrt(downsideVariance)
-      if (dsd > 1e-10) {
-        const mean = dailyReturns.reduce((a, b) => a + b, 0) / dailyReturns.length
-        sortino = ((mean - rfD) / dsd) * Math.sqrt(252)
-      }
-    }
-  }
+  // Sortino: delegated to canonical lib/quant/indicators.ts:sortinoRatio.
+  // Phase 13 S2 fix (F2.1 + F1.16): consolidated three divergent implementations
+  // (engine.ts, portfolioBacktest.ts, indicators.ts) into the single canonical impl.
+  // Uses MAR = rfDaily, n_d denominator (Sortino & van der Meer 1991),
+  // and minimum n_d ≥ 30 (Bacon 2008 p107).
+  const rfDaily = 0.04 / 252  // TODO Phase 13 F1.4: replace with FRED-fetched rate
+  const sortino = sortinoRatio(dailyReturns, rfDaily, 252)
 
   return {
     ticker, sector,
@@ -526,17 +512,8 @@ export function aggregatePortfolio(results: BacktestResult[], initialCapital: nu
         if (sd > 1e-10) {
           sharpe = ((mean - rfD) / sd) * Math.sqrt(252)
         }
-        // FIX P12-H1: Sortino denominator uses n_d (negative periods), not N — Sortino & van der Meer (1991)
-        const downsideDevs = portfolioDailyReturns.map(r => Math.min(0, r - rfD))
-        const negDevs = downsideDevs.filter(x => x < 0)
-        if (negDevs.length >= 3) {
-          const nd = negDevs.length  // use n_d, not n (total observations)
-          const downsideVariance = negDevs.reduce((s, x) => s + x * x, 0) / nd
-          const dsd = Math.sqrt(downsideVariance)
-          if (dsd > 1e-10) {
-            sortino = ((mean - rfD) / dsd) * Math.sqrt(252)
-          }
-        }
+        // Phase 13 S2: portfolio Sortino delegated to canonical impl in indicators.ts
+        sortino = sortinoRatio(portfolioDailyReturns, rfD, 252)
       }
     }
   }

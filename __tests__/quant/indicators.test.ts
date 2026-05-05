@@ -287,18 +287,81 @@ describe('Sharpe Ratio', () => {
 })
 
 describe('Sortino Ratio', () => {
-  it('returns null for insufficient data', () => {
+  it('returns null for insufficient data (< 30 returns)', () => {
     expect(sortinoRatio([0.01])).toBeNull()
+    expect(sortinoRatio(Array.from({ length: 29 }, () => 0.001))).toBeNull()
+  })
+
+  it('returns null when negative-deviation count < 30', () => {
+    // 100 returns, only 5 negative — n_d = 5 < 30 → null
+    const returns = Array.from({ length: 100 }, (_, i) =>
+      i < 5 ? -0.01 : 0.01
+    )
+    expect(sortinoRatio(returns, 0)).toBeNull()
   })
 
   it('higher than Sharpe for positively skewed returns', () => {
+    // 100 returns: 40 negative (n_d threshold met)
     const returns = Array.from({ length: 100 }, (_, i) =>
-      i % 3 === 0 ? 0.03 : 0.001
+      i % 5 < 3 ? 0.02 : -0.01
     )
     const sharpe = sharpeRatio(returns)
     const sortino = sortinoRatio(returns)
+    expect(sharpe).not.toBeNull()
+    expect(sortino).not.toBeNull()
     if (sharpe != null && sortino != null) {
       expect(sortino).toBeGreaterThan(sharpe)
+    }
+  })
+
+  // F2.1 / F1.16 acceptance test: canonical n_d denominator (Sortino & van der
+  // Meer 1991), not N-1.  Hand-computed value below should hold.
+  it('uses n_d (negative-period count) denominator, not N', () => {
+    // 30 returns of -0.01 + 70 returns of +0.005, MAR = 0:
+    //   n = 100, n_d = 30
+    //   sum(min(0,r)^2) = 30 * 1e-4 = 3e-3
+    //   downsideVariance = 3e-3 / 30 = 1e-4 → dsd = 0.01
+    //   mean = (-0.30 + 0.35) / 100 = 0.0005
+    //   sortino = 0.0005 / 0.01 * sqrt(252) = 0.05 * sqrt(252) ≈ 0.7937
+    const returns = [
+      ...Array.from({ length: 30 }, () => -0.01),
+      ...Array.from({ length: 70 }, () => 0.005),
+    ]
+    const sortino = sortinoRatio(returns, 0)
+    expect(sortino).not.toBeNull()
+    if (sortino != null) {
+      expect(sortino).toBeCloseTo(0.05 * Math.sqrt(252), 4)
+      // If denom were (N-1)=99 (the old bug), sortino ≈ 1.443. We must NOT match.
+      expect(Math.abs(sortino - 1.443)).toBeGreaterThan(0.5)
+    }
+  })
+
+  it('respects custom MAR — higher MAR shrinks excess and Sortino', () => {
+    // 100 returns: 40 negative (-0.005), 60 positive (+0.005)
+    const returns = [
+      ...Array.from({ length: 40 }, () => -0.005),
+      ...Array.from({ length: 60 }, () => 0.005),
+    ]
+    const sortinoMar0 = sortinoRatio(returns, 0)
+    const sortinoMarPos = sortinoRatio(returns, 0.001)
+    expect(sortinoMar0).not.toBeNull()
+    expect(sortinoMarPos).not.toBeNull()
+    if (sortinoMar0 != null && sortinoMarPos != null) {
+      expect(sortinoMarPos).toBeLessThan(sortinoMar0)
+    }
+  })
+
+  it('respects custom annualization (365 for crypto vs 252 for equities)', () => {
+    const returns = [
+      ...Array.from({ length: 40 }, () => -0.001),
+      ...Array.from({ length: 60 }, () => 0.002),
+    ]
+    const sortino252 = sortinoRatio(returns, 0, 252)
+    const sortino365 = sortinoRatio(returns, 0, 365)
+    expect(sortino252).not.toBeNull()
+    expect(sortino365).not.toBeNull()
+    if (sortino252 != null && sortino365 != null) {
+      expect(sortino365 / sortino252).toBeCloseTo(Math.sqrt(365 / 252), 3)
     }
   })
 })

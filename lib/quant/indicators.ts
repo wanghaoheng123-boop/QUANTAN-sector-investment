@@ -148,7 +148,18 @@ export function macdArray(
   const line = nanArr()
   const signal = nanArr()
   const histogram = nanArr()
-  if (fast <= 0 || slow <= 0 || sig <= 0 || closes.length < slow) return { line, signal, histogram }
+  // Phase 13 S2 (F2.7): MACD signal line requires slow+sig-1 bars to be valid.
+  // Previously only `closes.length < slow` was checked, which left signal/histogram
+  // silently NaN when slow ≤ length < slow+sig-1 — caller saw a populated MACD line
+  // with an empty signal and no diagnostic.
+  if (
+    fast <= 0 ||
+    slow <= 0 ||
+    sig <= 0 ||
+    closes.length < slow + sig - 1
+  ) {
+    return { line, signal, histogram }
+  }
 
   const emaFastArr = emaFull(closes, fast)
   const emaSlowArr = emaFull(closes, slow)
@@ -212,7 +223,9 @@ export function bollingerArray(
   const upper = nanArr()
   const lower = nanArr()
   const pctB = nanArr()
-  if (closes.length < period || period <= 0) return { mid, upper, lower, pctB }
+  // Phase 13 S2 (F2.9): Bollinger period must be ≥ 2 — at period=1 sample
+  // variance is identically 0 and the bands collapse to the price line.
+  if (closes.length < period || period < 2) return { mid, upper, lower, pctB }
 
   for (let i = period - 1; i < closes.length; i++) {
     const slice = closes.slice(i - period + 1, i + 1)
@@ -304,13 +317,21 @@ export function atrLatest(bars: OhlcBar[], period = 14): number | null {
 
 // ─── Additional indicators (from btc-indicators) ───────────────────────────
 
-/** On-Balance Volume */
+/**
+ * On-Balance Volume.
+ *
+ * Phase 13 S2 (F2.6): silent length-mismatch fallback removed. Mismatched
+ * input is now an explicit error — silent truncation hid alignment bugs.
+ *
+ * @throws Error when closes.length !== volumes.length.
+ */
 export function obvArray(closes: number[], volumes: number[]): number[] {
-  // Guard: if volumes are shorter than closes, truncate closes to match volumes length
-  if (volumes.length < closes.length) {
-    closes = closes.slice(-volumes.length)
+  if (closes.length !== volumes.length) {
+    throw new Error(
+      `obvArray: closes (${closes.length}) and volumes (${volumes.length}) length mismatch`,
+    )
   }
-  if (closes.length === 0 || volumes.length === 0) return []
+  if (closes.length === 0) return []
   let cum = 0
   return closes.map((c, i) => {
     if (i === 0) return 0
@@ -446,17 +467,52 @@ export function sharpeRatio(returns: number[], rfAnnual = 0.04): number | null {
   return (mean / sd) * Math.sqrt(252)
 }
 
-/** Sortino using downside deviation vs MAR. Denominator = N-1 (sample std, matches Sharpe). */
-export function sortinoRatio(returns: number[], marDaily = 0): number | null {
-  if (returns.length < 20) return null
-  const n = returns.length
-  const downsideSq = returns.map((x) => {
-    const dev = Math.min(0, x - marDaily)
-    return dev * dev
-  })
-  const downsideVariance = downsideSq.reduce((s, x) => s + x, 0) / Math.max(1, n - 1)
+/**
+ * Sortino ratio — canonical single-source-of-truth implementation.
+ *
+ * Phase 13 S2 fix (F2.1 + F1.16): Three divergent Sortino implementations existed
+ * (engine.ts, portfolioBacktest.ts, indicators.ts) — this is now the canonical one.
+ * Other call-sites import from here.
+ *
+ * Formula (Sortino & van der Meer 1991):
+ *   downsideDeviation = sqrt( sum( min(0, r - MAR)^2 ) / n_d )
+ *   Sortino           = ((mean - MAR) / downsideDeviation) * sqrt(annualization)
+ *
+ * Key choices:
+ *   - Denominator is n_d (count of negative excess returns), NOT N (total obs).
+ *     Using N understates downside deviation, inflating Sortino by sqrt(N/n_d).
+ *   - Minimum n_d ≥ 30 for statistically stable estimate (Bacon 2008 p107).
+ *   - MAR (Minimum Acceptable Return) is configurable as a daily rate. Pass
+ *     `marDaily = rfAnnual / annualization` to use risk-free rate as MAR.
+ *   - Numerator uses (mean - MAR), matching the MAR used in the denominator.
+ *
+ * Returns null when:
+ *   - returns.length < 30
+ *   - n_d (negative excess returns) < 30
+ *   - downsideDeviation is degenerate (zero or non-finite)
+ *
+ * @param returns        Daily return series (decimal, e.g. 0.01 = 1%).
+ * @param marDaily       Minimum Acceptable Return as a daily rate. Default 0
+ *                       (any negative return counts as downside).
+ * @param annualization  Trading periods per year (252 equities, 365 crypto).
+ */
+export function sortinoRatio(
+  returns: number[],
+  marDaily = 0,
+  annualization = 252,
+): number | null {
+  if (returns.length < 30) return null
+  const negDevs = returns
+    .map((x) => Math.min(0, x - marDaily))
+    .filter((x) => x < 0)
+  if (negDevs.length < 30) return null
+
+  const downsideVariance =
+    negDevs.reduce((s, x) => s + x * x, 0) / negDevs.length
   const dsd = Math.sqrt(downsideVariance)
-  if (dsd === 0) return null
-  const mean = returns.reduce((a, b) => a + b, 0) / n
-  return ((mean - marDaily) / dsd) * Math.sqrt(252)
+  if (!Number.isFinite(dsd) || dsd < 1e-12) return null
+
+  const mean = returns.reduce((a, b) => a + b, 0) / returns.length
+  const ratio = ((mean - marDaily) / dsd) * Math.sqrt(annualization)
+  return Number.isFinite(ratio) ? ratio : null
 }
