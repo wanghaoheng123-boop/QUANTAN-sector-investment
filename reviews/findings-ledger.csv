@@ -1,0 +1,90 @@
+id,reviewer,severity,domain,file,line,one_line,citation,acceptance_test_id,assigned_engineer,target_sprint,status
+F1.1,R1,CRITICAL,quant-finance,lib/backtest/engine.ts,605-650,walk-forward broken (testRows<252 short-circuit),"Pardo (2008) Ch.11; Bailey & Lopez de Prado (2014) JPM 40(5)",AT-F1.1-walkforward-osnonzero,E1,S2,open
+F1.2,R1,CRITICAL,quant-finance,lib/backtest/engine.ts,545,portfolio max DD = max-of-individual not curve,"Magdon-Ismail & Atiya (2004); Bacon (2008) p102-105",AT-F1.2-portfolio-dd,E1,S2,open
+F1.3,R1,CRITICAL,quant-finance,"lib/backtest/engine.ts","186, 205, 224",stops use close not intraday low,"Pardo (2008) Ch.8 p161-164; Aronson (2007) p202-205",AT-F1.3-intraday-stop,E1,S2,open
+F1.4,R1,HIGH,quant-finance,lib/backtest/engine.ts,"373, 385, 525, 601",RFR hardcoded 4%,Sharpe (1994) JPM 21(1),AT-F1.4-rfr-fred,E1+E3,S2,open
+F1.5,R1,HIGH,quant-finance,lib/backtest/engine.ts,343,B&H ignores dividends,"Sharpe (1994); Bacon (2008) p44",AT-F1.5-bnh-totalreturn,E1+E3,S2,open
+F1.6,R1,HIGH,quant-finance,lib/backtest/engine.ts,many,crypto annualization uses 252 not 365,Bacon (2008) p43,AT-F1.6-crypto-365,E1,S2,open
+F1.7,R1,CRITICAL,quant-finance,lib/backtest/portfolioBacktest.ts,"31, 47, 136, 301-305",correlation-Kelly documented and configured but NEVER implemented (UPGRADED from HIGH after S1 day-1 second pass),"Thorp (2006); Maillard et al (2010)",AT-F1.7-corr-kelly,E1,S2,open
+F1.8,R1,MEDIUM,quant-finance,lib/backtest/engine.ts,"387, 530",Sortino MAR=rfd undocumented,Sortino & van der Meer (1991),AT-F1.8-sortino-mar-config,E1,S3,open
+F1.9,R1,MEDIUM,quant-finance,lib/backtest/engine.ts,"389, 532",Sortino n_d>=3 too low,Bacon (2008) p107,AT-F1.9-sortino-nmin30,E1,S3,open
+F1.10,R1,MEDIUM,quant-finance,lib/backtest/signals.ts,312-416,combinedSignal duplicates enhancedCombinedSignal,N/A (SSOT),AT-F1.10-combinedsignal-callers,E1,S3,open
+F1.11,R1,MEDIUM,quant-finance,lib/backtest/signals.ts,561,RSI score linear; should be nonlinear,"Wilder (1978) p65; Murphy (1999) p243",AT-F1.11-rsi-piecewise,E1,S3,open
+F1.12,R1,MEDIUM,quant-finance,lib/backtest/signals.ts,82,bullish divergence requires RSI<50,Murphy (1999) p245,AT-F1.12-divergence-rsi-bound,E1,S3,open
+F1.13,R1,LOW,quant-finance,lib/backtest/signals.ts,563,MACD score scale magic constant,Appel (1979),AT-F1.13-macd-scale-doc,E1,S3,open
+F1.14,R1,LOW,quant-finance,lib/backtest/signals.ts,461-465,VPOC asymmetry no citation,Steidlmayer (1989),AT-F1.14-vpoc-regime,E1,S3,open
+F1.15,R1,LOW,quant-finance,lib/backtest/engine.ts,633,oosRatio clamp hides tail overfit,N/A (data viz),AT-F1.15-oosratio-unclamped,E1,S3,open
+F2.1,R2,CRITICAL,indicators,lib/quant/indicators.ts,449-461,sortinoRatio uses N-1 not n_d (Phase 12 bug duplicated),Sortino & van der Meer (1991),AT-F2.1-sortino-canonical,E1,S2,open
+F2.2,R2,HIGH,indicators,lib/quant/indicators.ts,"386-388, 405",ADX uses EMA not Wilder smoothing,"Wilder (1978) p35-50; Achelis (2001) p49",AT-F2.2-adx-wilder,E1,S2,open
+F2.3,R2,HIGH,indicators,lib/quant/indicators.ts,7,comment misleads ""Wilder = SMA-seeded EMA"",Wilder (1978) p65,AT-F2.3-doc-correct,E1,S2,open
+F2.4,R2,MEDIUM,indicators,lib/quant/indicators.ts,324-338,VWAP cumulative not session-anchored,"Berkowitz et al (1988); Pruitt & White (1988)",AT-F2.4-anchored-vwap,E1+E2,S3,open
+F2.5,R2,MEDIUM,indicators,lib/quant/indicators.ts,356-357,StochRSI uses EMA not SMA,Chande & Kroll (1994) p93-104,AT-F2.5-stochrsi-sma,E1,S3,open
+F2.6,R2,MEDIUM,indicators,lib/quant/indicators.ts,309-312,obvArray silent truncation,N/A (input validation),AT-F2.6-obv-throw,E1,S3,open
+F2.7,R2,MEDIUM,indicators,lib/quant/indicators.ts,151,MACD signal warmup not validated,N/A,AT-F2.7-macd-warmup,E1,S3,open
+F2.8,R2,MEDIUM,indicators,lib/quant/indicators.ts,53-81,ema/emaFull dual API footgun,N/A (DX),AT-F2.8-ema-deprecate,E1,S3,open
+F2.9,R2,LOW,indicators,lib/quant/indicators.ts,"215, 220",Bollinger period<2 silent,N/A,AT-F2.9-bb-period-min2,E1,S3,open
+F2.10,R2,LOW,indicators,lib/quant/indicators.ts,416-422,simple vs log returns convention undocumented,Tsay (2010) p3-7,AT-F2.10-log-returns,E1,S3,open
+F3.1,R3,HIGH,options,lib/options/greeks.ts,64-141,BSM omits dividend yield q,"Merton (1973) Bell J 4(1); Hull (2017) p385-388",AT-F3.1-merton-q,E1+E3,S2,open
+F3.2,R3,HIGH,options,lib/options/greeks.ts,"147, 170-184",IV solver naive seed no fallback no upper bound,"Brenner & Subrahmanyam (1988); Manaster & Koehler (1982); Brent (1973)",AT-F3.2-iv-robust,E1,S2,open
+F3.3,R3,HIGH,options,lib/options/gex.ts,47-72,GEX averages call+put gamma at same strike,"Krishnan (2017) Ch.6; Squeezemetrics whitepaper",AT-F3.3-gex-perside-gamma,E1,S2,open
+F3.4,R3,MEDIUM,options,lib/options/gex.ts,9-12,GEX sign convention undocumented,Krishnan (2017) p120-125,AT-F3.4-gex-convention-doc,E1,S3,open
+F3.5,R3,MEDIUM,options,lib/options/gex.ts,87-94,flipPoint reports only first crossing,N/A,AT-F3.5-multi-flip,E1,S3,open
+F3.6,R3,MEDIUM,options,lib/options/greeks.ts,109-110,T<=0 vs sigma<=0 conflated,Hull (2017) p404,AT-F3.6-degenerate-cases,E1,S3,open
+F3.7,R3,MEDIUM,options,"lib/options/chain.ts",99,day-count 365 convention undocumented,Hull (2017),AT-F3.7-daycount-doc,E1,S3,open
+F3.8,R3,LOW,options,lib/options/greeks.ts,146,IV_TOLERANCE tighter than option tick,N/A,AT-F3.8-iv-tolerance,E1,S3,open
+F4.1,R4,HIGH,data-engineering,app/api/prices/route.ts,38,bloomberg bridge silent .catch,N/A (observability),AT-F4.1-bb-degraded-status,E3,S2,open
+F4.2,R4,HIGH,data-engineering,lib/data/mergeQuotes.ts,39-54,merge loses field-level provenance,ISO 20022 / FIX best-practice,AT-F4.2-field-provenance,E3,S2,open
+F4.3,R4,HIGH,data-engineering,lib/api/rateLimit.ts,13,per-process bucket ineffective in serverless,Vercel docs / AWS Lambda BP,AT-F4.3-distributed-ratelimit,E3,S2,open
+F4.4,R4,HIGH,data-engineering,lib/api/reliability.ts,9-20,retry has no backoff/jitter,"Brooker (2015) AWS; SRE Beyer (2016) Ch.22",AT-F4.4-exp-backoff,E3,S2,open
+F4.5,R4,HIGH,data-engineering,(every yahoo route),yahoo-finance2 commercial redistribution,Yahoo Finance ToS §2,AT-F4.5-compliance-banner,E3,S4,open
+F4.6,R4,MEDIUM,data-engineering,app/api/prices/route.ts,47-58,falsy fallback to 0 hides missing data,N/A,AT-F4.6-nullish-coalesce,E3,S3,open
+F4.7,R4,MEDIUM,data-engineering,app/api/prices/route.ts,58,marketCap hardcoded 'B' suffix,N/A (display),AT-F4.7-format-helper,E3,S3,open
+F4.8,R4,MEDIUM,data-engineering,app/api/prices/route.ts,79,error response leaks raw error,"OWASP API8; CWE-209",AT-F4.8-sanitize,E3,S2,open
+F4.9,R4,MEDIUM,data-engineering,app/api/prices/route.ts,75,no edge-cache; high yahoo QPS,N/A (perf),AT-F4.9-edge-cache,E3,S3,open
+F4.10,R4,MEDIUM,data-engineering,app/api/prices/route.ts,30,^VIX normalization incomplete,N/A,AT-F4.10-index-symbols,E3,S3,open
+F4.11,R4,LOW,data-engineering,app/api/prices/route.ts,70,dataSources.yahoo hardcoded true,N/A,AT-F4.11-yahoo-detect,E3,S3,open
+F5.1,R5,CRITICAL,frontend-architecture,components/KLineChart.tsx,147-265,indicator math reimplemented inline; SSOT violation,N/A (SSOT),AT-F5.1-chart-canonical-indicators,E2,S3,open
+F5.2,R5,HIGH,frontend-architecture,components/stock/QuantLabPanel.tsx,173-1535,1362-line single function,Martin (2008) Clean Code,AT-F5.2-quantlab-decompose,E2,S3,open
+F5.3,R5,HIGH,frontend-architecture,app/backtest/page.tsx,"73, 415, 556, 664",page-as-application; 4 panels colocated,N/A (architecture),AT-F5.3-backtest-decompose,E2,S3,open
+F5.4,R5,HIGH,frontend-architecture,(4 files),4 silent .catch(()=>{}) remain,Phase 12 H5,AT-F5.4-zero-silent-catch,E2,S2,open
+F5.5,R5,MEDIUM,frontend-architecture,components/**/*.tsx,various,37 inline styles; no design tokens,N/A,AT-F5.5-design-tokens,E2,S3,open
+F5.6,R5,MEDIUM,frontend-architecture,(cross-component),various,32 ARIA attrs sparse coverage,WCAG 2.2 4.1.2,AT-F5.6-aria-coverage,E2+R6,S4,open
+F5.7,R5,MEDIUM,frontend-architecture,(cross-component),various,dark-card pattern variations not extracted,N/A (DRY),AT-F5.7-card-component,E2,S3,open
+F5.8,R5,MEDIUM,frontend-architecture,hooks/useLivePrices.ts,67-68,dedupingInterval < refreshInterval,SWR docs,AT-F5.8-dedup-tune,E2,S2,open
+F5.9,R5,LOW,frontend-architecture,app/backtest/page.tsx,665,Record<string,unknown> losing types,N/A,AT-F5.9-typed-livesignal,E2,S3,open
+F5.10,R5,LOW,frontend-architecture,app/backtest/page.tsx,39-50,local formatters duplicate lib/format.ts,N/A (DRY),AT-F5.10-format-import,E2,S3,open
+F6.1,R6,CRITICAL,accessibility,app/layout.tsx,49,no skip-link,WCAG 2.2 SC 2.4.1 Level A,AT-F6.1-skiplink,E2,S3,open
+F6.2,R6,HIGH,accessibility,(all chart components),various,charts lack text alternatives,WCAG 2.2 SC 1.1.1+4.1.2,AT-F6.2-chart-aria,E2,S4,open
+F6.3,R6,HIGH,accessibility,(SignalCard SectorCard etc.),various,color-only signifiers for BUY/SELL/up/down,WCAG 2.2 SC 1.4.1,AT-F6.3-icons-arrows,E2,S4,open
+F6.4,R6,HIGH,accessibility,(table components),various,tables lack caption/scope,WCAG 2.2 SC 1.3.1,AT-F6.4-table-semantics,E2,S4,open
+F6.5,R6,MEDIUM,accessibility,(cross-component),various,sparse focus management,WCAG 2.2 SC 2.4.3,AT-F6.5-focus-trap,E2,S4,open
+F6.6,R6,MEDIUM,accessibility,(cross-component),various,text-slate-600 fails AA contrast,WCAG 2.2 SC 1.4.3,AT-F6.6-contrast-axe,E2,S4,open
+F6.7,R6,MEDIUM,accessibility,components/KeyboardShortcuts.tsx,various,verify focus trap and dialog semantics,WAI-ARIA APG,AT-F6.7-modal-pattern,E2,S4,open
+F6.8,R6,MEDIUM,accessibility,(cross-component),various,aria-live underused for live updates,WCAG 2.2 SC 4.1.3,AT-F6.8-live-region,E2,S4,open
+F6.9,R6,LOW,accessibility,app/layout.tsx,root,confirm html lang attribute,WCAG 2.2 SC 3.1.1,AT-F6.9-html-lang,E2,S4,open
+F7.1,R7,HIGH,security,lib/auth.ts,34-58,NEXTAUTH_SECRET fallback OK but no alerting,OWASP ASVS V7,AT-F7.1-secret-alert,E3+E4,S4,open
+F7.2,R7,HIGH,security,lib/api/reliability.ts,50,error responses leak internals,"CWE-209; OWASP API8",AT-F7.2-error-sanitize,E3,S2,open
+F7.3,R7,HIGH,security,(API routes accepting tickers),various,tickers flow to yahoo without validation,"CWE-918; OWASP ASVS V12",AT-F7.3-ticker-whitelist-fuzz,E3,S2,open
+F7.4,R7,HIGH,security,(POST routes),trading-agents/backtest,no CSRF protection (need verify),OWASP CSRF Prevention,AT-F7.4-csrf-guard,E3,S4,open
+F7.5,R7,MEDIUM,security,lib/data/bloomberg/bridgeClient.ts,upstream,timing-safe secret comparison (need verify),Brumley & Boneh (2005),AT-F7.5-timing-safe,E3,S4,open
+F7.6,R7,MEDIUM,security,next.config.js,headers,CSP/HSTS headers (need verify),OWASP Secure Headers,AT-F7.6-secure-headers,E3,S4,open
+F7.7,R7,MEDIUM,security,lib/api/rateLimit.ts,(cross-ref F4.3),rate-limit ineffective,OWASP API4,AT-F4.3-distributed-ratelimit,E3,S2,open
+F7.8,R7,MEDIUM,security,(every yahoo route),(cross-ref F4.5),yahoo commercial use,Yahoo ToS,AT-F4.5-compliance-banner,E3,S4,open
+F7.9,R7,MEDIUM,security,lib/auth.ts,74-80,JWT callback fields not validated,OWASP ASVS V5,AT-F7.9-jwt-validate,E3,S4,open
+F7.10,R7,LOW,security,app/api/prices/route.ts,19,unauthenticated public API noted,N/A (design clarification),AT-F7.10-doc,E3,S4,open
+F8.1,R8,CRITICAL,testing,(11 modules),various,hot-path modules have zero tests,"Plan rule 5 (test-before-fix)",AT-F8.1-module-test-presence,E1+E4,S2,open
+F8.2,R8,HIGH,testing,__tests__/components/,absent,zero component tests in repo,Kent C. Dodds (2018),AT-F8.2-component-test-infra,E2+E4,S3,open
+F8.3,R8,HIGH,testing,package.json,absent,no mutation testing,"Jia & Harman (2011); Petrovic & Ivankovic (2018)",AT-F8.3-stryker,E1+E4,S4,open
+F8.4,R8,HIGH,testing,__tests__/api/,absent,zero API integration tests,N/A (industry standard),AT-F8.4-api-integration,E3+E4,S2,open
+F8.5,R8,MEDIUM,testing,__tests__/quant/*,various,no property-based tests for math,Hughes (2007),AT-F8.5-fast-check,E1,S4,open
+F8.6,R8,MEDIUM,testing,vitest.config.ts,thresholds,coverage thresholds not verified,N/A,AT-F8.6-coverage-enforce,E4,S2,open
+F8.7,R8,MEDIUM,testing,CI config,smoke,smoke tests likely not in PR CI,N/A,AT-F8.7-ci-smoke,E4,S2,open
+F8.8,R8,LOW,testing,(vitest internal),N/A,space-in-path blocks local vitest from worktree,N/A,AT-F8.8-vitest-path,E4,S4,open
+F1.16,R1,CRITICAL,quant-finance,(three files),various,three divergent Sortino implementations across engine/indicators/portfolioBacktest,Sortino & van der Meer (1991),AT-F1.16-sortino-canonical-threeway,E1,S2,open
+F1.18,R1,HIGH,quant-finance,lib/backtest/portfolioBacktest.ts,301-305,Kelly applied to total equity not cash bankroll,Thorp (2006),AT-F1.18-kelly-bankroll,E1,S2,open
+F1.19,R1,MEDIUM,quant-finance,lib/backtest/portfolioBacktest.ts,"294, 339, 367",mark-to-market falls back to entry price for missing data,N/A (data integrity),AT-F1.19-forward-fill,E1,S3,open
+F1.20,R1,MEDIUM,quant-finance,lib/backtest/portfolioBacktest.ts,459-464,VaR sample size threshold too low for stable tail,Jorion (2006) p119-122,AT-F1.20-var-sample,E1,S3,open
+F1.21,R1,MEDIUM,quant-finance,lib/backtest/portfolioBacktest.ts,247-253,dead/confused state-machine code,N/A (maintenance),AT-F1.21-cleanup,E1,S3,open
+F3.9,R3,HIGH,options,lib/options/chain.ts,66,RISK_FREE_RATE hardcoded 5.25% for all Greeks,"Hull (2017) p385-388; Merton (1973)",AT-F3.9-fred-rfr,E3+E1,S2,open
+F1.22,R1,MEDIUM,quant-finance,lib/backtest/exitRules.ts,80-82,atrAdaptiveStop includes still-forming entry bar (look-ahead micro-bias),N/A (Phase 12 H3 class),AT-F1.22-atr-prior-bar,E1,S2,open
+F1.23,R1,LOW,quant-finance,lib/backtest/exitRules.ts,33-40,DEFAULT_EXIT_CONFIG magic numbers without citation,N/A (documentation),AT-F1.23-exit-config-doc,E1,S3,open
