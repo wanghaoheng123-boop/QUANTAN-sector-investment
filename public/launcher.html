@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>QUANTAN Launcher — All Dashboards</title>
+<meta name="description" content="QUANTAN Sector Intelligence — entry point for every dashboard, with what each one shows, when to use it, and how to read it." />
+<style>
+  :root {
+    --bg: #050810;
+    --panel: #0c1322;
+    --panel-2: #11192c;
+    --border: #1f2a44;
+    --border-strong: #334362;
+    --text: #e6ecff;
+    --muted: #8696b8;
+    --cyan: #22d3ee;
+    --emerald: #34d399;
+    --amber: #fbbf24;
+    --red: #f87171;
+    --blue: #60a5fa;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, "Helvetica Neue", Arial, sans-serif; }
+  a { color: var(--cyan); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  header { padding: 56px 24px 28px; max-width: 1100px; margin: 0 auto; }
+  header h1 { font-size: 32px; margin: 0 0 8px; letter-spacing: -0.02em; }
+  header p { margin: 0; color: var(--muted); max-width: 720px; }
+  main { max-width: 1100px; margin: 0 auto; padding: 0 24px 80px; display: grid; gap: 32px; }
+  section { background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%); border: 1px solid var(--border); border-radius: 16px; padding: 22px 24px 18px; }
+  section h2 { font-size: 14px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--cyan); margin: 0 0 4px; }
+  section .section-sub { color: var(--muted); font-size: 12px; margin: 0 0 16px; }
+  .grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+  .card { display: flex; flex-direction: column; gap: 6px; padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: rgba(255,255,255,0.015); transition: border-color 120ms, transform 120ms; }
+  .card:hover { border-color: var(--border-strong); transform: translateY(-1px); }
+  .card .label { display: flex; align-items: center; gap: 8px; font-weight: 600; color: var(--text); font-size: 14px; }
+  .badge { font-size: 9.5px; padding: 2px 7px; border-radius: 999px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+  .badge.live { background: rgba(52, 211, 153, 0.12); color: var(--emerald); border: 1px solid rgba(52, 211, 153, 0.3); }
+  .badge.research { background: rgba(96, 165, 250, 0.12); color: var(--blue); border: 1px solid rgba(96, 165, 250, 0.3); }
+  .badge.backtest { background: rgba(251, 191, 36, 0.12); color: var(--amber); border: 1px solid rgba(251, 191, 36, 0.3); }
+  .card .what { color: var(--text); font-size: 12.5px; }
+  .card .when { color: var(--muted); font-size: 11.5px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,0.05); margin-top: 4px; }
+  .card .when strong { color: var(--cyan); font-weight: 500; }
+  .card a { font-size: 11.5px; padding-top: 6px; }
+  ul.legend { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+  ul.legend li { display: flex; align-items: flex-start; gap: 8px; font-size: 12px; color: var(--muted); }
+  ul.legend .dot { width: 10px; height: 10px; border-radius: 999px; margin-top: 4px; box-shadow: 0 0 8px currentColor; }
+  ul.legend strong { color: var(--text); font-weight: 600; }
+  .glossary { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+  .glossary div { background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 10px; padding: 12px; font-size: 12px; }
+  .glossary h3 { margin: 0 0 4px; font-size: 12.5px; color: var(--cyan); }
+  .glossary p { margin: 0; color: var(--muted); }
+  .glossary p strong { color: var(--text); font-weight: 500; }
+  footer { color: var(--muted); font-size: 11px; padding: 0 24px 28px; max-width: 1100px; margin: 0 auto; }
+  hr { border: none; border-top: 1px solid var(--border); margin: 0; }
+  .kbd { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 10.5px; padding: 1.5px 5px; border: 1px solid var(--border-strong); border-radius: 4px; background: rgba(255,255,255,0.04); color: var(--text); }
+</style>
+</head>
+<body>
+<header>
+  <h1>QUANTAN — Launcher</h1>
+  <p>Single entry point to every dashboard, plus a one-line guide on <strong>what it shows</strong>, <strong>when to use it</strong>, and <strong>what action to take</strong>. Click any card to jump in.</p>
+</header>
+
+<main>
+
+  <!-- LIVE INTELLIGENCE -->
+  <section>
+    <h2>Live intelligence — what's moving now</h2>
+    <p class="section-sub">Real-time prices, regimes, and signals. Use these for "what should I look at right now?" decisions.</p>
+    <div class="grid">
+
+      <a class="card" href="/">
+        <div class="label">Sector Home <span class="badge live">live</span></div>
+        <div class="what">11 GICS sector ETFs side-by-side: live prices, signal strength, top movers, market breadth.</div>
+        <div class="when"><strong>When:</strong> open of the day. <strong>Then:</strong> drill into a sector that's standing out.</div>
+      </a>
+
+      <a class="card" href="/heatmap">
+        <div class="label">Heatmap <span class="badge live">live</span></div>
+        <div class="what">All 55 stocks coloured by session move, sized by market cap. Visual rotation map.</div>
+        <div class="when"><strong>When:</strong> spotting cluster moves (e.g. mega-cap tech red while value green = rotation day).</div>
+      </a>
+
+      <a class="card" href="/desk">
+        <div class="label">Trading Desk <span class="badge live">live</span></div>
+        <div class="what">Curated multi-asset watchlist with live quotes, regime tags, and quick links to detail pages.</div>
+        <div class="when"><strong>When:</strong> intraday review of the names you actually trade.</div>
+      </a>
+
+      <a class="card" href="/briefs">
+        <div class="label">Signal Briefs <span class="badge live">live</span></div>
+        <div class="what">News-aware briefs per sector. Each note ties a recent event to a quant signal.</div>
+        <div class="when"><strong>When:</strong> understanding "why" a sector moved — not just "that" it moved.</div>
+      </a>
+
+      <a class="card" href="/commodities">
+        <div class="label">Commodities <span class="badge live">live</span></div>
+        <div class="what">Energy, metals, grains, softs — with macro overlays (DXY, real yields, inventories).</div>
+        <div class="when"><strong>When:</strong> trading energy/materials sectors or watching inflation prints.</div>
+      </a>
+
+      <a class="card" href="/crypto">
+        <div class="label">Crypto / BTC <span class="badge live">live</span></div>
+        <div class="what">BTC regime classification (Strong Bull / Bear / Euphoria / Capitulation), on-chain proxies, funding.</div>
+        <div class="when"><strong>When:</strong> sizing crypto allocation. Match strategy to regime — trend-follow in Strong Bull, mean-revert in Neutral.</div>
+      </a>
+
+      <a class="card" href="/ma-deviation">
+        <div class="label">MA Deviation Scan <span class="badge live">live</span></div>
+        <div class="what">All sectors ranked by % distance from 200SMA — extremes flag mean-reversion or breakout setups.</div>
+        <div class="when"><strong>When:</strong> hunting dip-buys (large negative deviation in rising trend) or reversion shorts (extreme positive).</div>
+      </a>
+
+    </div>
+  </section>
+
+  <!-- DRILL-DOWN -->
+  <section>
+    <h2>Drill-downs — single-instrument analysis</h2>
+    <p class="section-sub">Click into a sector or single stock for full chart, indicators, options, and quant lab.</p>
+    <div class="grid">
+
+      <a class="card" href="/sector/technology">
+        <div class="label">Sector Detail <span class="badge research">drill</span></div>
+        <div class="what">Full chart + RSI/MACD/ATR + dark pool prints + composite signals for one sector. (Example: Tech / XLK)</div>
+        <div class="when"><strong>When:</strong> validating a directional thesis on a sector.</div>
+      </a>
+
+      <a class="card" href="/stock/nvda">
+        <div class="label">Stock Detail <span class="badge research">drill</span></div>
+        <div class="what">Single-name analysis: chart, options chain, GEX, max pain, fundamentals + DCF. (Example: NVDA)</div>
+        <div class="when"><strong>When:</strong> sizing a single-name swing or evaluating an options position.</div>
+      </a>
+
+    </div>
+  </section>
+
+  <!-- BACKTEST -->
+  <section>
+    <h2>Backtest &amp; research</h2>
+    <p class="section-sub">Validate strategies before risking capital. 5-year walk-forward, transaction-cost-adjusted, with circuit breakers.</p>
+    <div class="grid">
+
+      <a class="card" href="/backtest">
+        <div class="label">Institutional Backtest <span class="badge backtest">research</span></div>
+        <div class="what">Portfolio-level walk-forward: Sharpe, Sortino, Profit Factor, Max DD per sector + per ticker.</div>
+        <div class="when"><strong>When:</strong> comparing strategy variants. Look at <strong>walk-forward consistency</strong>, not just aggregate.</div>
+      </a>
+
+    </div>
+  </section>
+
+  <!-- LEGEND -->
+  <section>
+    <h2>Color legend used everywhere</h2>
+    <p class="section-sub">Same palette across all dashboards.</p>
+    <ul class="legend">
+      <li><span class="dot" style="background:#34d399;color:#34d399"></span><span><strong>Bullish</strong> — price up vs prior close, BUY composite, or above 200EMA.</span></li>
+      <li><span class="dot" style="background:#f87171;color:#f87171"></span><span><strong>Bearish</strong> — price down vs prior close, SELL composite, or below 200EMA.</span></li>
+      <li><span class="dot" style="background:#fbbf24;color:#fbbf24"></span><span><strong>Caution / macro</strong> — volatility regime, drawdown warning, or unmet condition.</span></li>
+      <li><span class="dot" style="background:#22d3ee;color:#22d3ee"></span><span><strong>Cyan / outperform</strong> — alpha vs B&amp;H, info icon, indicator panels.</span></li>
+      <li><span class="dot" style="background:#60a5fa;color:#60a5fa"></span><span><strong>Blue</strong> — dark pool prints, options flow.</span></li>
+    </ul>
+  </section>
+
+  <!-- GLOSSARY -->
+  <section>
+    <h2>30-second metric glossary</h2>
+    <p class="section-sub">Hover the <span style="color:var(--cyan)">ⓘ</span> next to any metric in-app for a longer explanation. Below: the essentials.</p>
+    <div class="glossary">
+
+      <div>
+        <h3>RSI(14)</h3>
+        <p><strong>What:</strong> momentum oscillator (0–100). <strong>Use:</strong> &gt;70 overbought, &lt;30 oversold; persistent &gt;70 in strong trend = continuation.</p>
+      </div>
+      <div>
+        <h3>MACD</h3>
+        <p><strong>What:</strong> EMA12 − EMA26 with signal-line crossover. <strong>Use:</strong> bullish on positive crossover; rising histogram = trend strengthening.</p>
+      </div>
+      <div>
+        <h3>EMA200 / 200SMA</h3>
+        <p><strong>What:</strong> long-term trend filter. <strong>Use:</strong> most quant systems require <strong>price &gt; EMA200</strong> for new longs.</p>
+      </div>
+      <div>
+        <h3>ATR(14)</h3>
+        <p><strong>What:</strong> avg daily range (volatility). <strong>Use:</strong> set stops at <strong>1.5×ATR</strong>; size positions inversely to ATR%.</p>
+      </div>
+      <div>
+        <h3>Sharpe Ratio</h3>
+        <p><strong>What:</strong> annual return ÷ volatility. <strong>Use:</strong> &gt;1 good, &gt;2 excellent. Better metric than raw return.</p>
+      </div>
+      <div>
+        <h3>Sortino Ratio</h3>
+        <p><strong>What:</strong> Sharpe but only penalises downside. (Phase 12 fix: correct denominator <em>n_d</em>, count of negative periods.) <strong>Use:</strong> &gt;1.5 = good downside management.</p>
+      </div>
+      <div>
+        <h3>Profit Factor</h3>
+        <p><strong>What:</strong> gross profit ÷ gross loss. <strong>Use:</strong> &gt;1.5 robust, &gt;2 excellent. &lt;1.3 = fragile.</p>
+      </div>
+      <div>
+        <h3>Max Drawdown</h3>
+        <p><strong>What:</strong> largest peak-to-trough loss. <strong>Use:</strong> pre-approve mental tolerance; if live DD &gt; 1.5× backtest DD, model is broken.</p>
+      </div>
+      <div>
+        <h3>GEX (Gamma Exposure)</h3>
+        <p><strong>What:</strong> dealer gamma at each strike. <strong>Use:</strong> high positive = pinning; deeply negative = destabilising flow, expect bigger moves.</p>
+      </div>
+      <div>
+        <h3>Dark Pool Prints</h3>
+        <p><strong>What:</strong> off-exchange institutional block trades. <strong>Use:</strong> clusters near support/resistance carry signal — but rarely same-day.</p>
+      </div>
+      <div>
+        <h3>Regime (BTC / Sector)</h3>
+        <p><strong>What:</strong> discrete state (Strong Bull / Bull / Neutral / Bear / Strong Bear / Euphoria / Capitulation). <strong>Use:</strong> match strategy to regime.</p>
+      </div>
+      <div>
+        <h3>Data Freshness</h3>
+        <p><strong>What:</strong> pulsing dot showing data age. <strong>Use:</strong> green = live, amber = recent (10–120s), red = stale (&gt;2min) — refresh before acting.</p>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- HOW TO ACT -->
+  <section>
+    <h2>Decision workflow — turn signals into action</h2>
+    <p class="section-sub">Same disciplined sequence regardless of which dashboard you start in.</p>
+    <ol style="margin: 0; padding-left: 18px; color: var(--text); font-size: 13px; line-height: 1.7;">
+      <li><strong>Spot.</strong> Use Sector Home / Heatmap / Briefs to find what's moving.</li>
+      <li><strong>Check regime.</strong> Is the broader sector / market bullish (price &gt; EMA200)? If no, skip longs.</li>
+      <li><strong>Drill in.</strong> Open the Sector or Stock detail page. Look for indicator alignment: trend (EMA200) + momentum (RSI 50–70) + MACD positive crossover.</li>
+      <li><strong>Validate via backtest.</strong> Has this signal pattern actually paid in this name historically? Open Backtest dashboard.</li>
+      <li><strong>Size correctly.</strong> Place a 1.5×ATR stop. Position size so hitting that stop = ≤1% of account.</li>
+      <li><strong>Set alerts, not orders.</strong> Wait for confirmation in the next session before adding.</li>
+    </ol>
+  </section>
+
+  <hr />
+
+</main>
+
+<footer>
+  Built into the QUANTAN platform — Phase 12 Sprint 1+2.<br>
+  Tip: from any page press <span class="kbd">/</span> to open global search; <span class="kbd">?</span> shows keyboard shortcuts.<br>
+  Not investment advice. Past performance ≠ future results.
+</footer>
+
+</body>
+</html>
