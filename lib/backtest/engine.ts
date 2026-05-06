@@ -465,6 +465,12 @@ export function aggregatePortfolio(results: BacktestResult[], initialCapital: nu
   let truePortfolioAnnReturn = 0
   let combinedFinalEquity = 0
   let combinedInitialEquity = 0
+  // Phase 13 S2 fix (F1.2): portfolio max DD computed from the combined equity
+  // curve (correct), not Math.max of individual instrument DDs (overstates by
+  // 3-10× because diversification staggers per-instrument DDs in time).
+  // Reference: Magdon-Ismail & Atiya (2004); Bacon (2008) p102-105.
+  let portfolioMaxDdFromCurve = 0
+  let portfolioMaxDdComputed = false
 
   if (maxLen > 30 && results.length > 0) {
     // Combine all equity curves into a single portfolio equity curve.
@@ -494,6 +500,19 @@ export function aggregatePortfolio(results: BacktestResult[], initialCapital: nu
       const years = (lastValid - firstValid) / 252
       truePortfolioAnnReturn = years > 0 ? ((1 + truePortfolioReturn) ** (1 / years) - 1) : 0
 
+      // F1.2: max drawdown of the combined portfolio curve (true portfolio DD).
+      let peak = combinedEquity[firstValid]
+      let maxDd = 0
+      for (let i = firstValid; i <= lastValid; i++) {
+        if (combinedEquity[i] > peak) peak = combinedEquity[i]
+        if (peak > 0) {
+          const dd = (peak - combinedEquity[i]) / peak
+          if (dd > maxDd) maxDd = dd
+        }
+      }
+      portfolioMaxDdFromCurve = maxDd
+      portfolioMaxDdComputed = true
+
       // Compute daily returns from combined equity (for Sharpe/Sortino)
       const portfolioDailyReturns: number[] = []
       for (let i = firstValid + 1; i <= lastValid; i++) {
@@ -518,8 +537,13 @@ export function aggregatePortfolio(results: BacktestResult[], initialCapital: nu
     }
   }
 
-  // For max drawdown, use maximum across all instruments
-  const maxDrawdown = Math.max(...results.map(r => r.maxDrawdown), 0)
+  // F1.2 (Phase 13 S2 fix): use the curve-based portfolio max DD.
+  // Falls back to max-of-individual-DDs only when combinedEquity construction
+  // produced no valid window (e.g. zero or single-instrument empty results).
+  // The fallback path matches prior behavior to avoid regressions on degenerate inputs.
+  const maxDrawdown = portfolioMaxDdComputed
+    ? portfolioMaxDdFromCurve
+    : Math.max(...results.map(r => r.maxDrawdown), 0)
 
   // Average B&H return across instruments
   const bnhAvg = results.reduce((s, r) => s + r.bnhReturn, 0) / Math.max(results.length, 1)

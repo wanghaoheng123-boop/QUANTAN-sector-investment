@@ -447,7 +447,11 @@ export default function QuantLabPanel({ ticker }: { ticker: string }) {
             note: j.note,
           })
       })
-      .catch(() => {})
+      .catch((err) => {
+        // Phase 13 S2 fix (F5.4): advanced metrics fetch failure was fully silent;
+        // UI continues without them but operators now see the cause.
+        console.warn('[QuantLabPanel] advanced metrics fetch failed for', ticker, err)
+      })
       .finally(() => setAdvLoading(false))
   }, [sub, ticker, advFetched])
 
