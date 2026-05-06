@@ -200,9 +200,13 @@ export function runPortfolioBacktest(
       const row = rows[idx]
       const price = row.close
 
-      // Update highest price for trailing stop
+      // Update highest price for trailing stop + last-known close for MTM (F1.19).
       const updatedPos = updatePosition(pos, price)
-      openPositions.set(ticker, { ...pos, highestPrice: updatedPos.highestPrice })
+      openPositions.set(ticker, {
+        ...pos,
+        highestPrice: updatedPos.highestPrice,
+        lastKnownClose: price,
+      })
 
       // Compute current ATR%
       const recentBars = rows.slice(Math.max(0, idx - 20), idx + 1).map(r => ({
@@ -268,13 +272,12 @@ export function runPortfolioBacktest(
             stopLossPrice: Math.max(pos.stopLossPrice, pos.entryPrice),
           })
         } else {
+          // F1.21 (Phase 13 S2): cleaned up dead state-machine code.
+          // Previous version had a self-canceling -X +X capital adjustment plus
+          // an empty `if (isPartial === false)` branch — leftovers from a bug
+          // hunt. exitShares already equals pos.currentShares when !isPartial,
+          // and capital was already credited for the full exit at line 250.
           openPositions.delete(ticker)
-          capital -= pos.currentShares * exitPrice  // remove remaining (partial already removed above)
-          capital += pos.currentShares * exitPrice  // re-add full proceeds
-          // Actually just: net out the remainder
-          if (exitCheck.isPartial === false) {
-            // Already handled above via exitShares = pos.currentShares
-          }
         }
       }
     }
@@ -315,7 +318,7 @@ export function runPortfolioBacktest(
           (s, p) => {
             const pidx = priceIndex[p.ticker]?.get(currentTime)
             const prow = pidx != null ? instrumentData[p.ticker][pidx] : null
-            return s + p.currentShares * (prow?.close ?? p.entryPrice)
+            return s + p.currentShares * (prow?.close ?? p.lastKnownClose ?? p.entryPrice)
           }, 0,
         )
         if (currentEquity > peakEquity) peakEquity = currentEquity
@@ -341,17 +344,23 @@ export function runPortfolioBacktest(
           cfg.correlationGate,
         )
 
-        // Max single-position sizing. Kelly applied to total equity (cash +
-        // marked-to-market positions); concentration cap also enforced.
-        // (F1.18 — Kelly bankroll choice — tracked separately.)
+        // F1.18 (Phase 13 S2): Kelly applies to bankroll (available cash),
+        // concentration cap applies to total equity (cash + MTM positions).
+        // Previously Kelly used currentEquity, allowing oversizing against
+        // unrealized gains in other positions and risking negative capital
+        // when cash < kelly*equity. (Thorp 2006 — Kelly is on bankroll.)
         const maxAllocation = Math.min(
-          currentEquity * adjustedKelly,
+          capital * adjustedKelly,
           currentEquity * cfg.maxSinglePositionPct,
         )
-        if (maxAllocation < price) continue
+        // Defensive guard: never spend more than we have.
+        const cashCap = Math.max(0, capital * 0.99)  // small buffer for tx cost
+        const allowed = Math.min(maxAllocation, cashCap)
+        if (allowed < price) continue
 
         const atrResult = atrAdaptiveStop(price, bars, cfg.exit.atrStopMultiplier)
-        const shares = Math.floor(maxAllocation / price)
+        // F1.18: size shares from `allowed` (cash-bounded), not maxAllocation.
+        const shares = Math.floor(allowed / price)
         if (shares <= 0) continue
 
         const txCost = shares * price * 0.0011  // 11bps entry cost
@@ -381,7 +390,7 @@ export function runPortfolioBacktest(
     const posValue = Array.from(openPositions.values()).reduce((s, p) => {
       const pidx = priceIndex[p.ticker]?.get(currentTime)
       const prow = pidx != null ? instrumentData[p.ticker][pidx] : null
-      return s + p.currentShares * (prow?.close ?? p.entryPrice)
+      return s + p.currentShares * (prow?.close ?? p.lastKnownClose ?? p.entryPrice)
     }, 0)
     const equity = capital + posValue
     if (equity > peakEquity) peakEquity = equity
@@ -391,7 +400,7 @@ export function runPortfolioBacktest(
       for (const [ticker, pos] of openPositions) {
         const pidx = priceIndex[ticker]?.get(currentTime)
         const prow = pidx != null ? instrumentData[ticker][pidx] : null
-        const exitPrice = prow?.close ?? pos.entryPrice
+        const exitPrice = prow?.close ?? pos.lastKnownClose ?? pos.entryPrice
         capital += pos.currentShares * exitPrice * (1 - 0.0011)  // 11bps exit cost
         closedTrades.push({
           ticker, sector: sectorMap[ticker] ?? 'Unknown',
@@ -410,7 +419,7 @@ export function runPortfolioBacktest(
     const finalEquity = capital + Array.from(openPositions.values()).reduce((s, p) => {
       const pidx = priceIndex[p.ticker]?.get(currentTime)
       const prow = pidx != null ? instrumentData[p.ticker][pidx] : null
-      return s + p.currentShares * (prow?.close ?? p.entryPrice)
+      return s + p.currentShares * (prow?.close ?? p.lastKnownClose ?? p.entryPrice)
     }, 0)
 
     equityHistory.push(finalEquity)
@@ -499,12 +508,19 @@ export function runPortfolioBacktest(
   }
   for (const t of closedTrades) exitBreakdown[t.exitReason]++
 
-  // VaR approximation
-  const var95_1d = dailyReturns.length >= 30
-    ? -[...dailyReturns].sort((a, b) => a - b)[Math.floor(0.05 * dailyReturns.length)]
+  // F1.20 (Phase 13 S2): VaR threshold raised so percentile estimates are
+  // statistically stable. With N=30, 99% VaR sat at index 0 (worst single
+  // observation) — a noisy point estimate. Per Jorion (2006) p119-122, ≥250
+  // bars (~1y) is the institutional standard for stable historical 99% VaR;
+  // 100 bars is acceptable for 95% VaR. Below those gates the field is null.
+  const sortedReturns = dailyReturns.length > 0
+    ? [...dailyReturns].sort((a, b) => a - b)
+    : []
+  const var95_1d = dailyReturns.length >= 100
+    ? -sortedReturns[Math.floor(0.05 * dailyReturns.length)]
     : null
-  const var99_1d = dailyReturns.length >= 30
-    ? -[...dailyReturns].sort((a, b) => a - b)[Math.floor(0.01 * dailyReturns.length)]
+  const var99_1d = dailyReturns.length >= 250
+    ? -sortedReturns[Math.floor(0.01 * dailyReturns.length)]
     : null
 
   return {

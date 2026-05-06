@@ -62,6 +62,11 @@ export interface OpenPosition {
   partialExitDone: boolean
   confidence: number
   reason: string
+  // F1.19 (Phase 13 S2): forward-filled last observed close. Used by the
+  // portfolio engine to mark positions to market on bars where this ticker
+  // has missing data (vendor outage, halts) instead of falling back to
+  // entry price (which silently understates losses or overstates gains).
+  lastKnownClose?: number
 }
 
 /**
