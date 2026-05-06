@@ -3,6 +3,8 @@ import YahooFinance from 'yahoo-finance2'
 import { SECTORS } from '@/lib/sectors'
 import { sectorScores } from '@/lib/quant/sectorRotation'
 import { hasPositiveClose } from '@/lib/quant/chartQuoteFilter'
+import { applyRateLimit } from '@/lib/api/rateLimit'
+import { sanitizeError } from '@/lib/api/sanitize'
 
 const yahooFinance = new YahooFinance()
 
@@ -16,12 +18,23 @@ async function fetchCloses(etf: string): Promise<number[] | null> {
       .filter(hasPositiveClose)
       .map((q) => q.close!)
     return closes.length > 20 ? closes : null
-  } catch {
+  } catch (err) {
+    // Phase 13 S2 fix: previously silent; operators couldn't diagnose
+    // partial-data sector rotation failures.
+    console.warn('[sector-rotation] fetchCloses failed for', etf, err)
     return null
   }
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  // Phase 13 S2: rate-limit. Each request triggers 11 yahoo chart calls
+  // (one per sector ETF), so abuse amplifies upstream load 11×.
+  const rateLimitResponse = applyRateLimit(request, 'sector-rotation', {
+    maxRequests: 10,
+    windowSeconds: 60,
+  })
+  if (rateLimitResponse) return rateLimitResponse
+
   try {
     // Fetch all sector ETF closes in parallel
     const etfList = SECTORS.map((s) => s.etf)
@@ -48,7 +61,7 @@ export async function GET() {
   } catch (e) {
     console.error('[Sector Rotation API]', e)
     return NextResponse.json(
-      { error: 'Failed to compute sector rotation', details: String(e) },
+      { error: 'Failed to compute sector rotation', details: sanitizeError(e) ?? null },
       { status: 502 },
     )
   }

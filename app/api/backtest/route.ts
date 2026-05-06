@@ -12,6 +12,9 @@ import { SECTORS } from '@/lib/sectors'
 import { loadStockHistory, loadBtcHistory, availableTickers } from '@/lib/backtest/dataLoader'
 import { backtestInstrument, aggregatePortfolio } from '@/lib/backtest/engine'
 import { applyRateLimit } from '@/lib/api/rateLimit'
+import { normalizeTicker, sanitizeError } from '@/lib/api/sanitize'
+
+const MAX_FILTER_TICKERS = 100
 
 // ─── In-memory cache ──────────────────────────────────────────────────────────
 
@@ -117,8 +120,14 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url)
   const tickersParam = searchParams.get('tickers')
+  // Phase 13 S2 (F7.3): validate + cap each ticker. Drop invalid tokens
+  // silently — fail-closed style. Cap total to avoid amplification.
   const filterTickers = tickersParam
-    ? tickersParam.split(',').map((t) => t.trim().toUpperCase())
+    ? tickersParam
+        .split(',')
+        .map((t) => normalizeTicker(t))
+        .filter((t): t is string => t != null)
+        .slice(0, MAX_FILTER_TICKERS)
     : undefined
 
   // Serve from cache for full (unfiltered) runs
@@ -133,21 +142,31 @@ export async function GET(request: Request) {
   } catch (e) {
     console.error('[api/backtest] error:', e)
     return NextResponse.json(
-      { error: 'Backtest failed', message: e instanceof Error ? e.message : String(e) },
+      { error: 'Backtest failed', message: sanitizeError(e) ?? null },
       { status: 500 },
     )
   }
 }
 
-export async function POST() {
+// Phase 13 S2 (DoS hardening): POST clears the 1-hour cache and triggers a
+// full recompute. Tighter rate limit than GET — anyone hitting POST forces
+// expensive aggregation across 56 instruments. Rate-limited at 3 req/min.
+export async function POST(request: Request) {
+  const rateLimitResponse = applyRateLimit(request, 'backtest-recompute', {
+    maxRequests: 3,
+    windowSeconds: 60,
+  })
+  if (rateLimitResponse) return rateLimitResponse
+
   cache = null
   try {
     const data = await runBacktest()
     cache = { data, timestamp: Date.now() }
     return NextResponse.json({ status: 'ok', computedAt: data.computedAt })
   } catch (e) {
+    console.error('[api/backtest POST] recompute failed:', e)
     return NextResponse.json(
-      { error: 'Recompute failed', message: e instanceof Error ? e.message : String(e) },
+      { error: 'Recompute failed', message: sanitizeError(e) ?? null },
       { status: 500 },
     )
   }
