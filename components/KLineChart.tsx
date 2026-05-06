@@ -20,6 +20,16 @@ import {
   type ChartEmaKey,
   type ChartEmaPeriod,
 } from '@/lib/chartEma'
+import {
+  emaFull,
+  rsiArray,
+  macdArray,
+  bollingerArray,
+  atrArray,
+  smaArray,
+  vwapArray,
+  type OhlcBar,
+} from '@/lib/quant/indicators'
 
 const TIMEFRAMES = ['1D', '1W', '1M', '3M', '6M', '1Y', 'ALL'] as const
 type Timeframe = typeof TIMEFRAMES[number]
@@ -140,123 +150,74 @@ function buildVisFromProps(ind: KLineIndicatorFlags): Record<VisKey, boolean> {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Pure indicator math — all functions are O(n) total, called once
-// per dataset change, NOT per candle update.
+// Indicator adapters — delegate to canonical lib/quant/indicators.ts.
+// Phase 13 S2 fix (F5.1): seven indicator implementations were inlined
+// here, duplicating canonical logic and silently drifting from algorithm
+// fixes (e.g. F2.7 MACD warmup, F2.9 Bollinger period gate, F2.6 OBV
+// throw on length mismatch). Now the chart inherits every fix made to
+// the canonical library automatically.
+//
+// Numeric notes vs prior local impls:
+//   - calcBollingerBands previously used population variance (/period);
+//     canonical bollingerArray uses sample variance (/(period-1)) per
+//     Phase 12 commit 1f3b1b8 and matches the signal layer. Bands are
+//     now ~2% wider (sqrt(N/(N-1)) factor) and consistent with the
+//     backtest engine.
+//   - calcVolumeSMA was actually Wilder smoothing (recursive average,
+//     not sliding-window mean); replaced with true SMA via smaArray.
 // ─────────────────────────────────────────────────────────────────
 
 function calcEMA(prices: number[], period: number): number[] {
-  const k = 2 / (period + 1)
-  const ema: number[] = new Array(prices.length).fill(NaN)
-  if (prices.length < period) return ema
-  let prev = prices.slice(0, period).reduce((a, b) => a + b, 0) / period
-  ema[period - 1] = prev
-  for (let i = period; i < prices.length; i++) {
-    prev = prices[i] * k + prev * (1 - k)
-    ema[i] = prev
-  }
-  return ema
+  return emaFull(prices, period)
 }
 
 function calcRSI(prices: number[], period = 14): number[] {
-  const rsi: number[] = new Array(prices.length).fill(NaN)
-  if (prices.length < period + 1) return rsi
-  let avgGain = 0,
-    avgLoss = 0
-  for (let i = 1; i <= period; i++) {
-    const diff = prices[i] - prices[i - 1]
-    if (diff > 0) avgGain += diff
-    else avgLoss -= diff
-  }
-  avgGain /= period
-  avgLoss /= period
-  rsi[period] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss)
-  for (let i = period + 1; i < prices.length; i++) {
-    const diff = prices[i] - prices[i - 1]
-    avgGain = (avgGain * (period - 1) + Math.max(0, diff)) / period
-    avgLoss = (avgLoss * (period - 1) + Math.max(0, -diff)) / period
-    rsi[i] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss)
-  }
-  return rsi
+  return rsiArray(prices, period)
 }
 
-function calcMACD(prices: number[], fast = 12, slow = 26, signal = 9) {
-  const result = new Array(prices.length).fill({ macd: NaN, signal: NaN, histogram: NaN })
-  if (prices.length < slow) return result
-  const fastEma = calcEMA(prices, fast)
-  const slowEma = calcEMA(prices, slow)
-  for (let i = slow - 1; i < prices.length; i++)
-    result[i] = { macd: fastEma[i] - slowEma[i], signal: NaN, histogram: NaN }
-  const validMacd = result.map((r) => r.macd).slice(slow - 1)
-  const signalEma = calcEMA(validMacd, signal)
-  for (let i = 0; i < signalEma.length; i++) {
-    const idx = i + slow - 1
-    const m = result[idx].macd,
-      s = signalEma[i]
-    result[idx] = { macd: m, signal: s, histogram: !isNaN(m) && !isNaN(s) ? m - s : NaN }
-  }
-  return result
+interface MacdRow { macd: number; signal: number; histogram: number }
+
+function calcMACD(prices: number[], fast = 12, slow = 26, signal = 9): MacdRow[] {
+  const { line, signal: sig, histogram } = macdArray(prices, fast, slow, signal)
+  return prices.map((_, i) => ({
+    macd: line[i],
+    signal: sig[i],
+    histogram: histogram[i],
+  }))
 }
 
-function calcBollingerBands(prices: number[], period = 20, std = 2) {
-  const result = new Array(prices.length).fill({ mid: NaN, upper: NaN, lower: NaN })
-  if (prices.length < period) return result
-  for (let i = period - 1; i < prices.length; i++) {
-    const slice = prices.slice(i - period + 1, i + 1)
-    const mean = slice.reduce((a, b) => a + b, 0) / period
-    const variance = slice.reduce((a, b) => a + (b - mean) ** 2, 0) / period
-    result[i] = {
-      mid: mean,
-      upper: mean + std * Math.sqrt(variance),
-      lower: mean - std * Math.sqrt(variance),
-    }
-  }
-  return result
+interface BollingerRow { mid: number; upper: number; lower: number }
+
+function calcBollingerBands(prices: number[], period = 20, std = 2): BollingerRow[] {
+  const { mid, upper, lower } = bollingerArray(prices, period, std)
+  return prices.map((_, i) => ({
+    mid: mid[i],
+    upper: upper[i],
+    lower: lower[i],
+  }))
 }
 
 function calcVWAP(candles: Candle[]): { time: Time; value: number }[] {
-  let cumulativeTPV = 0,
-    cumulativeVol = 0
-  return candles.map((c) => {
-    const tpv = ((c.high + c.low + c.close) / 3) * c.volume
-    cumulativeTPV += tpv
-    cumulativeVol += c.volume
-    return { time: c.time as Time, value: cumulativeVol > 0 ? cumulativeTPV / cumulativeVol : NaN }
-  })
+  const highs = candles.map((c) => c.high)
+  const lows = candles.map((c) => c.low)
+  const closes = candles.map((c) => c.close)
+  const volumes = candles.map((c) => c.volume)
+  const values = vwapArray(highs, lows, closes, volumes)
+  return candles.map((c, i) => ({ time: c.time as Time, value: values[i] }))
 }
 
 function calcATR(candles: Candle[], period = 14): number[] {
-  const tr: number[] = []
-  for (let i = 0; i < candles.length; i++) {
-    if (i === 0) {
-      tr.push(candles[i].high - candles[i].low)
-    } else {
-      const hl = candles[i].high - candles[i].low
-      const hc = Math.abs(candles[i].high - candles[i - 1].close)
-      const lc = Math.abs(candles[i].low - candles[i - 1].close)
-      tr.push(Math.max(hl, hc, lc))
-    }
-  }
-  const atr: number[] = new Array(tr.length).fill(NaN)
-  if (tr.length < period) return atr
-  let avg = tr.slice(0, period).reduce((a, b) => a + b, 0) / period
-  atr[period - 1] = avg
-  for (let i = period; i < tr.length; i++) {
-    avg = (avg * (period - 1) + tr[i]) / period
-    atr[i] = avg
-  }
-  return atr
+  const bars: OhlcBar[] = candles.map((c) => ({
+    open: c.open,
+    high: c.high,
+    low: c.low,
+    close: c.close,
+  }))
+  return atrArray(bars, period)
 }
 
 function calcVolumeSMA(volumes: number[], period = 20): number[] {
-  const sma: number[] = new Array(volumes.length).fill(NaN)
-  if (volumes.length < period) return sma
-  let avg = volumes.slice(0, period).reduce((a, b) => a + b, 0) / period
-  sma[period - 1] = avg
-  for (let i = period; i < volumes.length; i++) {
-    avg = (avg * (period - 1) + volumes[i]) / period
-    sma[i] = avg
-  }
-  return sma
+  return smaArray(volumes, period)
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -396,7 +357,13 @@ export default function KLineChart({
         rightPriceScale: { borderColor: '#1e1e2e' },
         timeScale: { borderColor: '#1e1e2e', timeVisible: true, secondsVisible: false, rightOffset: 5 },
         width: containerRef.current.clientWidth,
-        height: showRSI ? 280 : 380,
+        // Responsive height: cap at desktop default but shrink on small viewports.
+        // showRSI mode totals ~540px (main+RSI+MACD+ATR) — clamp main accordingly.
+        height: (() => {
+          const vh = typeof window !== 'undefined' ? window.innerHeight : 800
+          if (showRSI) return Math.max(220, Math.min(Math.round(vh * 0.45), 320))
+          return Math.max(280, Math.min(Math.round(vh * 0.6), 420))
+        })(),
       })
 
       // Subscribe to crosshair move for OHLCV tooltip

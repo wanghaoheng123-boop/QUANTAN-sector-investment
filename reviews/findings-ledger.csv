@@ -43,7 +43,7 @@ F4.8,R4,MEDIUM,data-engineering,app/api/prices/route.ts,79,error response leaks 
 F4.9,R4,MEDIUM,data-engineering,app/api/prices/route.ts,75,no edge-cache; high yahoo QPS,N/A (perf),AT-F4.9-edge-cache,E3,S3,open
 F4.10,R4,MEDIUM,data-engineering,app/api/prices/route.ts,30,^VIX normalization incomplete,N/A,AT-F4.10-index-symbols,E3,S3,open
 F4.11,R4,LOW,data-engineering,app/api/prices/route.ts,70,dataSources.yahoo hardcoded true,N/A,AT-F4.11-yahoo-detect,E3,S3,open
-F5.1,R5,CRITICAL,frontend-architecture,components/KLineChart.tsx,147-265,indicator math reimplemented inline; SSOT violation,N/A (SSOT),AT-F5.1-chart-canonical-indicators,E2,S3,open
+F5.1,R5,CRITICAL,frontend-architecture,components/KLineChart.tsx,147-220,indicator math reimplemented inline; SSOT violation,N/A (SSOT),AT-F5.1-chart-canonical-indicators,E2,S2,FIXED-c7fa7902+
 F5.2,R5,HIGH,frontend-architecture,components/stock/QuantLabPanel.tsx,173-1535,1362-line single function,Martin (2008) Clean Code,AT-F5.2-quantlab-decompose,E2,S3,open
 F5.3,R5,HIGH,frontend-architecture,app/backtest/page.tsx,"73, 415, 556, 664",page-as-application; 4 panels colocated,N/A (architecture),AT-F5.3-backtest-decompose,E2,S3,open
 F5.4,R5,HIGH,frontend-architecture,(4 files),4 silent .catch(()=>{}) remain,Phase 12 H5,AT-F5.4-zero-silent-catch,E2,S2,open
