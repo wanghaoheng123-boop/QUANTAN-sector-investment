@@ -17,6 +17,7 @@ import type { OhlcvRow } from '@/scripts/backtest/dataLoader'
 import { enhancedCombinedSignal, DEFAULT_CONFIG } from '@/lib/backtest/signals'
 import type { BacktestConfig, SectorGateConfig } from '@/lib/backtest/signals'
 import { atrArray, sortinoRatio } from '@/lib/quant/indicators'
+import { maxCorrelationVsPeers, correlationAdjustedKelly } from '@/lib/quant/correlation'
 import {
   checkExitConditions, updatePosition, atrAdaptiveStop,
   DEFAULT_EXIT_CONFIG,
@@ -132,9 +133,15 @@ export function runPortfolioBacktest(
   let maxConcurrent = 0
   let concurrentSum = 0
 
-  // Portfolio-level return series per ticker (for correlation calc)
+  // Phase 13 S2 fix (F1.7): per-ticker rolling-return series populated each
+  // bar; consumed by correlation-adjusted Kelly when sizing new BUYs.
+  // Previously declared but never read or written — F1.7 falsely-advertised.
   const tickerDailyReturns: Record<string, number[]> = {}
   for (const ticker of tickers) tickerDailyReturns[ticker] = []
+  // Retain only the most recent N samples to bound memory and bias correlation
+  // toward recent regime. 63 ≈ 3 trading months — typical lookback in
+  // institutional risk reports for short-term correlation.
+  const CORRELATION_WINDOW = 63
 
   // Phase 12-A: Build per-ticker sector-gate map.
   // Resolution order:
@@ -166,6 +173,23 @@ export function runPortfolioBacktest(
     const currentDate = new Date(currentTime * 1000).toISOString().split('T')[0]
 
     let dayPnl = 0
+
+    // F1.7: update per-ticker daily-return tape for correlation analysis.
+    // Computed from the previous trading bar to avoid look-ahead bias —
+    // any ticker without a prior bar at this date is skipped.
+    for (const t of tickers) {
+      const rows = instrumentData[t]
+      const idx = priceIndex[t].get(currentTime)
+      if (idx == null || idx < 1) continue
+      const prev = rows[idx - 1].close
+      const curr = rows[idx].close
+      if (prev > 0 && Number.isFinite(curr) && Number.isFinite(prev)) {
+        const r = (curr - prev) / prev
+        const tape = tickerDailyReturns[t]
+        tape.push(r)
+        if (tape.length > CORRELATION_WINDOW) tape.shift()
+      }
+    }
 
     // ── Update open positions ────────────────────────────────────────────────
     for (const [ticker, pos] of openPositions) {
@@ -298,9 +322,30 @@ export function runPortfolioBacktest(
         const dd = (peakEquity - currentEquity) / peakEquity
         if (dd >= cfg.maxDrawdownCap) continue
 
-        // Max single-position sizing (Kelly applied to total equity, not just cash)
+        // F1.7: correlation-adjusted Kelly. Shrink the candidate's Kelly
+        // fraction when its 63-day return profile is highly correlated with
+        // any existing open position (Thorp 2006 §5). Below the gate the
+        // base Kelly passes through unchanged.
+        const candidateReturns = tickerDailyReturns[ticker] ?? []
+        const peerReturns: number[][] = []
+        for (const t of openPositions.keys()) {
+          const peer = tickerDailyReturns[t]
+          if (peer && peer.length > 0) peerReturns.push(peer)
+        }
+        const maxRho = peerReturns.length > 0
+          ? maxCorrelationVsPeers(candidateReturns, peerReturns, 20)
+          : 0
+        const adjustedKelly = correlationAdjustedKelly(
+          sig.KellyFraction,
+          maxRho,
+          cfg.correlationGate,
+        )
+
+        // Max single-position sizing. Kelly applied to total equity (cash +
+        // marked-to-market positions); concentration cap also enforced.
+        // (F1.18 — Kelly bankroll choice — tracked separately.)
         const maxAllocation = Math.min(
-          currentEquity * sig.KellyFraction,
+          currentEquity * adjustedKelly,
           currentEquity * cfg.maxSinglePositionPct,
         )
         if (maxAllocation < price) continue

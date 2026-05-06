@@ -5,6 +5,7 @@ import { buildFundamentalsPayload, type FundamentalsQuery } from '@/lib/quant/bu
 import { fetchBloombergQuotesViaBridge, isBloombergBridgeConfigured } from '@/lib/data/bloomberg/bridgeClient'
 import { hasPositiveClose } from '@/lib/quant/chartQuoteFilter'
 import { errorResponse, withRetry } from '@/lib/api/reliability'
+import { sanitizeError } from '@/lib/api/sanitize'
 
 const yahooFinance = new YahooFinance()
 
@@ -24,7 +25,10 @@ const MODULES = [
 
 export async function GET(req: NextRequest, { params }: { params: { ticker: string } }) {
   const symbol = yahooSymbolFromParam(params.ticker)
-  if (symbol === '^VIX' || symbol.startsWith('^') && symbol.length <= 5) {
+  // Phase 13 S2 cleanup: explicit parentheses on the index-skip predicate.
+  // Without them, JS evaluates `&&` before `||` — works correctly today but
+  // brittle to refactor. The intent is: skip if it's ^VIX or any short index.
+  if (symbol === '^VIX' || (symbol.startsWith('^') && symbol.length <= 5)) {
     return NextResponse.json(
       { error: 'Fundamentals module is for equities/ETFs with statements, not broad indices.' },
       { status: 422 }
@@ -121,7 +125,13 @@ export async function GET(req: NextRequest, { params }: { params: { ticker: stri
     )
   } catch (e) {
     console.error('[Fundamentals API]', symbol, e)
-    return errorResponse('fundamentals_failed', `Failed to load fundamentals for ${symbol}`, String(e), 502)
+    // Phase 13 S2 fix (F4.8): sanitize error for client (no stack/paths in prod).
+    return errorResponse(
+      'fundamentals_failed',
+      `Failed to load fundamentals for ${symbol}`,
+      sanitizeError(e),
+      502,
+    )
   }
 }
 

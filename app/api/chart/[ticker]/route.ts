@@ -3,6 +3,7 @@ import YahooFinance from 'yahoo-finance2'
 import { generateDarkPoolMarkers } from '@/lib/mockData'
 import { aggregateMinuteQuotesToN } from '@/lib/chartYahoo'
 import { applyRateLimit } from '@/lib/api/rateLimit'
+import { normalizeTicker, sanitizeError } from '@/lib/api/sanitize'
 
 const yahooFinance = new YahooFinance()
 
@@ -33,8 +34,14 @@ export async function GET(
   const rateLimitResponse = applyRateLimit(req, 'chart', { maxRequests: 60, windowSeconds: 60 })
   if (rateLimitResponse) return rateLimitResponse
 
-  let ticker = params.ticker.toUpperCase()
-  if (ticker === 'VIX') ticker = '^VIX'
+  // Phase 13 S2 fix (F4.10 + F7.3): full US-index whitelist + strict ticker
+  // character validation. Previously only VIX was auto-prefixed and there was
+  // no character whitelist, allowing arbitrary user input through to yahoo.
+  const normalized = normalizeTicker(params.ticker)
+  if (!normalized) {
+    return NextResponse.json({ error: 'Invalid ticker symbol' }, { status: 400 })
+  }
+  const ticker = normalized
   const { searchParams } = new URL(req.url)
   const range = searchParams.get('range') || '1Y'
   const cacheKey = `${ticker}:${range}`
@@ -200,6 +207,10 @@ export async function GET(
     )
   } catch (error) {
     console.error(`[Chart API] Error fetching historical data for ${ticker}:`, error)
-    return NextResponse.json({ error: 'Failed to fetch historical data', details: String(error) }, { status: 500 })
+    // Phase 13 S2 fix (F4.8): sanitize error for production response.
+    return NextResponse.json(
+      { error: 'Failed to fetch historical data', details: sanitizeError(error) ?? null },
+      { status: 500 },
+    )
   }
 }

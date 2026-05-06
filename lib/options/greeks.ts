@@ -96,7 +96,17 @@ export function blackScholesPrice(
 
 /**
  * Computes all five standard Black-Scholes Greeks.
- * Returns zeros when T ≤ 0 or sigma ≤ 0.
+ *
+ * Edge cases:
+ *   - T ≤ 0 (expired): delta is the intrinsic indicator (1/0 for ITM/OTM call,
+ *     -1/0 for ITM/OTM put), all other Greeks are 0.
+ *   - sigma ≤ 0 or S ≤ 0 or K ≤ 0 (degenerate live option): all Greeks are 0.
+ *     A truly zero-vol live option's delta depends on forward moneyness, but
+ *     this case is unreachable in practice — IV is bounded > 0 by the solver,
+ *     and S/K are positive by market construction.
+ *
+ * Phase 13 S2 fix (F3.6): T≤0 and sigma≤0 cases are now handled separately so
+ * the intrinsic-delta logic only applies at expiry, not when sigma=0 mid-life.
  */
 export function greeks(
   S: number,
@@ -106,8 +116,16 @@ export function greeks(
   sigma: number,
   type: OptionType,
 ): Greeks {
-  if (T <= 0 || sigma <= 0 || S <= 0 || K <= 0) {
-    return { delta: type === 'call' ? (S > K ? 1 : 0) : (S < K ? -1 : 0), gamma: 0, theta: 0, vega: 0, rho: 0 }
+  // Expiry — return intrinsic delta indicator.
+  if (T <= 0) {
+    const intrinsicDelta = type === 'call'
+      ? (S > K ? 1 : 0)
+      : (S < K ? -1 : 0)
+    return { delta: intrinsicDelta, gamma: 0, theta: 0, vega: 0, rho: 0 }
+  }
+  // Degenerate live option (zero vol or non-positive prices).
+  if (sigma <= 0 || S <= 0 || K <= 0) {
+    return { delta: 0, gamma: 0, theta: 0, vega: 0, rho: 0 }
   }
 
   const sqrtT = Math.sqrt(T)
@@ -143,7 +161,11 @@ export function greeks(
 // ─── Implied Volatility ───────────────────────────────────────────────────────
 
 const IV_MAX_ITER = 100
-const IV_TOLERANCE = 1e-6
+// Phase 13 S2 fix (F3.8): tolerance relaxed from 1e-6 to 1e-4. Listed options
+// have $0.01 minimum tick; 1e-6 is six orders of magnitude tighter than the
+// underlying price precision and just adds Newton-Raphson iterations without
+// improving practical IV resolution.
+const IV_TOLERANCE = 1e-4
 const IV_INIT_SIGMA = 0.3
 
 /**

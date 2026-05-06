@@ -5,6 +5,7 @@ import { putCallRatio, maxPain } from '@/lib/options/sentiment'
 import { computeGex } from '@/lib/options/gex'
 import { unusualFlow, flowSentiment } from '@/lib/options/flow'
 import { applyRateLimit } from '@/lib/api/rateLimit'
+import { sanitizeError } from '@/lib/api/sanitize'
 
 export async function GET(req: Request, { params }: { params: { ticker: string } }) {
   // Rate limit: 30 req/min per IP
@@ -46,13 +47,22 @@ export async function GET(req: Request, { params }: { params: { ticker: string }
         gex,
         unusualFlow: flow,
         fetchedAt: new Date().toISOString(),
+        // Phase 13 S2 (R3 C3.3 — OPRA compliance signal): yahoo-finance2 returns
+        // delayed options quotes (free tier ≈ 15-20 min). Surface this so UI can
+        // render an explicit "DELAYED" label and downstream callers can decide.
+        dataProvenance: {
+          provider: 'yahoo-finance2',
+          delayedMinutes: 15,
+          realtime: false,
+        },
       },
       { headers: { 'Cache-Control': 's-maxage=300, stale-while-revalidate=600' } },
     )
   } catch (e) {
     console.error('[Options API]', symbol, e)
+    // Phase 13 S2 fix (F4.8): sanitized error message in production.
     return NextResponse.json(
-      { error: 'Failed to fetch options data', details: String(e) },
+      { error: 'Failed to fetch options data', details: sanitizeError(e) ?? null },
       { status: 502 },
     )
   }
