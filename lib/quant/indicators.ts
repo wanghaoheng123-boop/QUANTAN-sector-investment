@@ -379,7 +379,42 @@ export function stochRsiArray(
   return { k, d }
 }
 
-/** ADX (Average Directional Index) returning full-length arrays. */
+/**
+ * Wilder smoothing — alpha = 1/period (equivalent to an EMA with span 2N-1).
+ *
+ * This is the smoothing scheme Wilder defined for ADX, ATR, and RSI in
+ * "New Concepts in Technical Trading Systems" (1978). It is *not* the same as
+ * standard EMA (alpha = 2/(N+1)) — Wilder's reacts more slowly. TA-Lib (the
+ * de facto reference) uses Wilder smoothing for ADX/ATR/RSI; charting
+ * platforms generally follow.
+ *
+ * Returns full-length array, NaN before index `period - 1`.
+ */
+export function wilderSmoothing(values: number[], period: number): number[] {
+  const out = new Array<number>(values.length).fill(NaN)
+  if (period <= 0 || values.length < period) return out
+  // SMA seed for the first `period` values.
+  let sum = 0
+  for (let i = 0; i < period; i++) sum += values[i]
+  let prev = sum / period
+  out[period - 1] = prev
+  // Recursive Wilder smoothing: prev = prev + (current - prev) / period
+  //                          = prev * (1 - 1/period) + current * (1/period)
+  for (let i = period; i < values.length; i++) {
+    prev = prev + (values[i] - prev) / period
+    out[i] = prev
+  }
+  return out
+}
+
+/**
+ * ADX (Average Directional Index) returning full-length arrays.
+ *
+ * Phase 13 S2 fix (F2.2): smoothing now uses Wilder's method per the
+ * original 1978 specification. Previously used standard EMA (alpha=2/(N+1)),
+ * which produces faster-reacting (more noisy) ADX values that disagree with
+ * TA-Lib and charting platforms.
+ */
 export function adxArray(bars: OhlcBar[], period = 14): {
   adx: number[]
   plusDI: number[]
@@ -404,9 +439,9 @@ export function adxArray(bars: OhlcBar[], period = 14): {
     minusDM.push(downMove > upMove && downMove > 0 ? downMove : 0)
   }
 
-  const trSmooth = emaFull(tr, period)
-  const plusDISmooth = emaFull(plusDM, period)
-  const minusDISmooth = emaFull(minusDM, period)
+  const trSmooth = wilderSmoothing(tr, period)
+  const plusDISmooth = wilderSmoothing(plusDM, period)
+  const minusDISmooth = wilderSmoothing(minusDM, period)
 
   const adxRaw = new Array<number>(bars.length).fill(NaN)
   const plusDIOut = new Array<number>(bars.length).fill(NaN)
@@ -421,9 +456,9 @@ export function adxArray(bars: OhlcBar[], period = 14): {
     adxRaw[i] = pdi + mdi > 0 ? (Math.abs(pdi - mdi) / (pdi + mdi)) * 100 : 0
   }
 
-  // Smooth ADX itself
+  // Smooth the per-bar DX (in adxRaw) with Wilder smoothing → ADX. F2.2 fix.
   const validAdx = adxRaw.slice(period)
-  const adxSmoothed = emaFull(validAdx, period)
+  const adxSmoothed = wilderSmoothing(validAdx, period)
   const adxOut = new Array<number>(bars.length).fill(NaN)
   for (let i = 0; i < adxSmoothed.length; i++) {
     adxOut[i + period] = adxSmoothed[i]

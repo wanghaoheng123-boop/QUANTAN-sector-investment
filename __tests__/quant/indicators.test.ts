@@ -10,6 +10,7 @@ import {
   dailyReturns, maxDrawdown,
   sharpeRatio, sortinoRatio,
   obvArray, stochRsiArray, adxArray,
+  wilderSmoothing,
 } from '@/lib/quant/indicators'
 
 // ─── Test data ──────────────────────────────────────────────────────────────
@@ -401,5 +402,109 @@ describe('Stochastic RSI', () => {
     // Should return arrays matching input length
     expect(k).toHaveLength(200)
     expect(d).toHaveLength(200)
+  })
+})
+
+// ─── Wilder smoothing (Phase 13 S2 — F2.2) ──────────────────────────────────
+
+describe('Wilder smoothing', () => {
+  it('returns NaN-padded array of input length', () => {
+    const out = wilderSmoothing([1, 2, 3, 4, 5], 3)
+    expect(out).toHaveLength(5)
+    expect(isNaN(out[0])).toBe(true)
+    expect(isNaN(out[1])).toBe(true)
+    expect(out[2]).toBe(2) // SMA seed of [1,2,3]
+  })
+
+  it('seeds at index period-1 with the SMA of the first period values', () => {
+    const out = wilderSmoothing([10, 20, 30, 40, 50], 3)
+    expect(out[2]).toBe(20) // (10+20+30)/3 = 20
+  })
+
+  it('uses recursive Wilder formula: prev + (current - prev)/period', () => {
+    // [1,2,3,4,5,6,7], period=3
+    // out[2] = 2 (seed)
+    // out[3] = 2 + (4-2)/3 = 2.666...
+    // out[4] = 2.666 + (5-2.666)/3 = 3.444...
+    const out = wilderSmoothing([1, 2, 3, 4, 5, 6, 7], 3)
+    expect(out[2]).toBeCloseTo(2, 6)
+    expect(out[3]).toBeCloseTo(2.666666, 4)
+    expect(out[4]).toBeCloseTo(3.444444, 4)
+  })
+
+  it('produces values that lag a standard EMA on a step input', () => {
+    // Step from 0 to 100 at index 5; both seed at index 2 (period=3).
+    // Wilder smoothing has alpha=1/3 ≈ 0.333; standard EMA span=3 alpha=2/4=0.5.
+    // After the step, the EMA should track the new value faster than Wilder.
+    const input = [0, 0, 0, 0, 0, 100, 100, 100, 100, 100, 100, 100]
+    const wilder = wilderSmoothing(input, 3)
+    const ema = emaFull(input, 3)
+    // After several bars, EMA should be closer to 100 than Wilder.
+    expect(ema[ema.length - 1]).toBeGreaterThan(wilder[wilder.length - 1])
+  })
+
+  it('returns full-NaN array on insufficient data', () => {
+    const out = wilderSmoothing([1, 2], 5)
+    expect(out.every((x) => isNaN(x))).toBe(true)
+  })
+
+  it('rejects period <= 0 with full-NaN array', () => {
+    const out = wilderSmoothing([1, 2, 3, 4, 5], 0)
+    expect(out.every((x) => isNaN(x))).toBe(true)
+  })
+})
+
+// ─── ADX (Phase 13 S2 — F2.2: Wilder smoothing) ─────────────────────────────
+
+describe('ADX with Wilder smoothing', () => {
+  it('returns NaN arrays for insufficient data', () => {
+    const bars = BARS.slice(0, 10)
+    const { adx, plusDI, minusDI } = adxArray(bars, 14)
+    // First valid ADX value is at index 2*period (after DM smoothing + DX smoothing)
+    // For 10 bars, all should be NaN
+    expect(adx.every((v) => isNaN(v))).toBe(true)
+    expect(plusDI.every((v) => isNaN(v))).toBe(true)
+    expect(minusDI.every((v) => isNaN(v))).toBe(true)
+  })
+
+  it('produces +DI > -DI on a strong uptrend', () => {
+    // Linear uptrend: high keeps rising, low keeps rising slower.
+    const bars = Array.from({ length: 60 }, (_, i) => ({
+      open: 100 + i,
+      high: 100 + i + 2,
+      low: 100 + i - 1,
+      close: 100 + i + 1,
+    }))
+    const { plusDI, minusDI } = adxArray(bars, 14)
+    const last = bars.length - 1
+    expect(plusDI[last]).toBeGreaterThan(minusDI[last])
+  })
+
+  it('produces -DI > +DI on a strong downtrend', () => {
+    const bars = Array.from({ length: 60 }, (_, i) => ({
+      open: 200 - i,
+      high: 200 - i + 1,
+      low: 200 - i - 2,
+      close: 200 - i - 1,
+    }))
+    const { plusDI, minusDI } = adxArray(bars, 14)
+    const last = bars.length - 1
+    expect(minusDI[last]).toBeGreaterThan(plusDI[last])
+  })
+
+  it('returns ADX in plausible 0-100 range on trending input', () => {
+    const bars = Array.from({ length: 80 }, (_, i) => ({
+      open: 100 + i * 0.5,
+      high: 100 + i * 0.5 + 1.5,
+      low: 100 + i * 0.5 - 0.5,
+      close: 100 + i * 0.5 + 0.5,
+    }))
+    const { adx } = adxArray(bars, 14)
+    const validAdx = adx.filter((v) => Number.isFinite(v))
+    expect(validAdx.length).toBeGreaterThan(0)
+    for (const v of validAdx) {
+      expect(v).toBeGreaterThanOrEqual(0)
+      expect(v).toBeLessThanOrEqual(100)
+    }
   })
 })
