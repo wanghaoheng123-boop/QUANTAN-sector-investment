@@ -15,7 +15,7 @@ F1.13,R1,LOW,quant-finance,lib/backtest/signals.ts,563,MACD score scale magic co
 F1.14,R1,LOW,quant-finance,lib/backtest/signals.ts,461-465,VPOC asymmetry no citation,Steidlmayer (1989),AT-F1.14-vpoc-regime,E1,S3,open
 F1.15,R1,LOW,quant-finance,lib/backtest/engine.ts,633,oosRatio clamp hides tail overfit,N/A (data viz),AT-F1.15-oosratio-unclamped,E1,S3,open
 F2.1,R2,CRITICAL,indicators,lib/quant/indicators.ts,449-461,sortinoRatio uses N-1 not n_d (Phase 12 bug duplicated),Sortino & van der Meer (1991),AT-F2.1-sortino-canonical,E1,S2,FIXED-c2801090+
-F2.2,R2,HIGH,indicators,lib/quant/indicators.ts,"386-388, 405",ADX uses EMA not Wilder smoothing,"Wilder (1978) p35-50; Achelis (2001) p49",AT-F2.2-adx-wilder,E1,S2,open
+F2.2,R2,HIGH,indicators,lib/quant/indicators.ts,"386-388, 405",ADX now uses Wilder smoothing,"Wilder (1978) p35-50; Achelis (2001) p49",AT-F2.2-adx-wilder,E1,S2,FIXED-c22278ad+
 F2.3,R2,HIGH,indicators,lib/quant/indicators.ts,7,comment misleads ""Wilder = SMA-seeded EMA"",Wilder (1978) p65,AT-F2.3-doc-correct,E1,S2,open
 F2.4,R2,MEDIUM,indicators,lib/quant/indicators.ts,324-338,VWAP cumulative not session-anchored,"Berkowitz et al (1988); Pruitt & White (1988)",AT-F2.4-anchored-vwap,E1+E2,S3,open
 F2.5,R2,MEDIUM,indicators,lib/quant/indicators.ts,356-357,StochRSI uses EMA not SMA,Chande & Kroll (1994) p93-104,AT-F2.5-stochrsi-sma,E1,S3,open

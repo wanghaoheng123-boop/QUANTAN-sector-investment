@@ -3,6 +3,7 @@ import {
   emaFull,
   rsiArray,
   macdArray,
+  bollingerArray,
   atrArray,
   vwapArray,
   type OhlcBar,
@@ -123,18 +124,23 @@ export function calcStochastic(
   return { k, d }
 }
 
-/** Bollinger Bands */
-export function calcBollingerBands(prices: number[], period = 20, stdDev = 2) {
-  const result = new Array(prices.length).fill({ mid: NaN, upper: NaN, lower: NaN })
-  if (prices.length < period) return result
-  for (let i = period - 1; i < prices.length; i++) {
-    const slice = prices.slice(i - period + 1, i + 1)
-    const mean = slice.reduce((a, b) => a + b, 0) / period
-    const variance = slice.reduce((a, b) => a + (b - mean) ** 2, 0) / period
-    const std = Math.sqrt(variance)
-    result[i] = { mid: mean, upper: mean + stdDev * std, lower: mean - stdDev * std }
-  }
-  return result
+/**
+ * Bollinger Bands — delegates to canonical bollingerArray with shape adapter.
+ *
+ * Phase 13 S2 fix: canonical uses SAMPLE variance (/(period-1)) per Bessel's
+ * correction; the previous inline impl here used POPULATION variance
+ * (/period). Bands are now ~2.6% wider for period=20, matching the signal
+ * layer + KLineChart, which both already use canonical.
+ */
+interface BollingerRow { mid: number; upper: number; lower: number }
+
+export function calcBollingerBands(prices: number[], period = 20, stdDev = 2): BollingerRow[] {
+  const { mid, upper, lower } = bollingerArray(prices, period, stdDev)
+  return prices.map((_, i) => ({
+    mid: mid[i],
+    upper: upper[i],
+    lower: lower[i],
+  }))
 }
 
 /**
