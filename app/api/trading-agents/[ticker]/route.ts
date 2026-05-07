@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { getAuthOptions } from '@/lib/auth'
 import { SUPPORTED_PROVIDERS, DEFAULT_MODELS, type LLMProvider, resolveTradingAgentsBase, type TradingAgentsResolved } from '@/lib/trading-agents-config'
 import { applyRateLimit } from '@/lib/api/rateLimit'
+import { normalizeTicker, sanitizeError } from '@/lib/api/sanitize'
 
 const TIMEOUT_MS = 5 * 60 * 1000 // 5 minutes — TradingAgents can be slow
 const TA_RATE_LIMIT = { maxRequests: 10, windowSeconds: 60 }
@@ -57,9 +58,11 @@ export async function GET(
   // Rate limit: 10 req/min per IP
   const rateLimitResponse = applyRateLimit(req, 'trading-agents', TA_RATE_LIMIT)
   if (rateLimitResponse) return rateLimitResponse
-  const ticker = params.ticker?.trim().toUpperCase()
+  // Phase 13 S2 (F7.3): canonical ticker validation — rejects scripts/paths
+  // before they reach the upstream Python service.
+  const ticker = normalizeTicker(params.ticker || '')
   if (!ticker) {
-    return NextResponse.json({ error: 'ticker is required' }, { status: 400 })
+    return NextResponse.json({ error: 'Invalid ticker symbol' }, { status: 400 })
   }
 
   const resolved = resolveTradingAgentsBase()
@@ -91,9 +94,13 @@ export async function GET(
     }
 
     if (!res.ok) {
-      const text = await res.text()
+      // Phase 13 S2 (F4.8): never forward raw upstream body to client — it
+      // can contain Python tracebacks, internal paths, or third-party API
+      // error envelopes with secrets.
+      const text = await res.text().catch(() => '')
+      console.warn('[trading-agents GET] upstream', res.status, text.slice(0, 200))
       return NextResponse.json(
-        { error: 'upstream_error', details: text },
+        { error: 'upstream_error', status: res.status, details: sanitizeError(text) ?? null },
         { status: 502 }
       )
     }
@@ -154,9 +161,9 @@ export async function POST(
     )
   }
 
-  const ticker = params.ticker?.trim().toUpperCase()
+  const ticker = normalizeTicker(params.ticker || '')
   if (!ticker) {
-    return NextResponse.json({ error: 'ticker is required' }, { status: 400 })
+    return NextResponse.json({ error: 'Invalid ticker symbol' }, { status: 400 })
   }
 
   let body: Record<string, unknown> = {}
