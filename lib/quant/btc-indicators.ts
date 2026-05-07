@@ -1,8 +1,38 @@
 /**
- * BTC-specific quantitative indicators and models.
- * All functions are pure — no network calls, no side effects.
+ * BTC-specific quantitative indicators and on-chain models.
+ *
+ * Phase 13 S2 fix (F-NEW HIGH): the seven inline indicator implementations
+ * (calcEMA, calcRSI, calcMACD, calcBollingerBands, calcVWAP, calcStochRSI,
+ * calcATR) that previously lived here were a SSOT violation with
+ * `lib/quant/indicators.ts`. They are now thin adapters that delegate to
+ * the canonical implementations — Phase 12+ algorithm fixes (Wilder
+ * smoothing, sample variance, MACD warmup gate, n_d Sortino, OBV
+ * length-mismatch throw) flow through automatically.
+ *
+ * What this module *does* still own (genuinely BTC-specific, no equity
+ * counterpart):
+ *   • MVRV ratio
+ *   • Pi Cycle Top
+ *   • Stock-to-Flow price
+ *   • Difficulty Ribbon
+ *   • generateSignals (BTC-specific signal pack including funding rate
+ *     and Fear & Greed)
+ *   • btcRegime (price-vs-EMA200 + RSI extreme regime classifier)
  */
 
+import {
+  emaFull,
+  rsiArray,
+  macdArray,
+  bollingerArray,
+  atrArray,
+  smaArray,
+  obvArray,
+  vwapArray,
+  stochRsiArray,
+  adxArray,
+  type OhlcBar,
+} from './indicators'
 import { PERP_FUNDING_HIGH_ABS } from './fundingConstants'
 
 export interface BtcCandle {
@@ -14,135 +44,80 @@ export interface BtcCandle {
   volume: number
 }
 
-// ─── Price-based indicators ──────────────────────────────────────────────────
+function toBars(candles: BtcCandle[]): OhlcBar[] {
+  return candles.map((c) => ({
+    open: c.open,
+    high: c.high,
+    low: c.low,
+    close: c.close,
+  }))
+}
+
+// ─── Price-based indicators (canonical adapters) ────────────────────────────
 
 export function calcEMA(prices: number[], period: number): number[] {
-  const k = 2 / (period + 1)
-  const ema: number[] = new Array(prices.length).fill(NaN)
-  if (prices.length < period) return ema
-  let prev = prices.slice(0, period).reduce((a, b) => a + b, 0) / period
-  ema[period - 1] = prev
-  for (let i = period; i < prices.length; i++) {
-    prev = prices[i] * k + prev * (1 - k)
-    ema[i] = prev
-  }
-  return ema
+  return emaFull(prices, period)
 }
 
 export function calcRSI(prices: number[], period = 14): number[] {
-  const rsi: number[] = new Array(prices.length).fill(NaN)
-  if (prices.length < period + 1) return rsi
-  let avgGain = 0, avgLoss = 0
-  for (let i = 1; i <= period; i++) {
-    const diff = prices[i] - prices[i - 1]
-    if (diff > 0) avgGain += diff
-    else avgLoss -= diff
-  }
-  avgGain /= period
-  avgLoss /= period
-  rsi[period] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss)
-  for (let i = period + 1; i < prices.length; i++) {
-    const diff = prices[i] - prices[i - 1]
-    avgGain = (avgGain * (period - 1) + Math.max(0, diff)) / period
-    avgLoss = (avgLoss * (period - 1) + Math.max(0, -diff)) / period
-    rsi[i] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss)
-  }
-  return rsi
+  return rsiArray(prices, period)
 }
 
-export function calcMACD(prices: number[], fast = 12, slow = 26, signal = 9) {
-  const result = new Array(prices.length).fill({ macd: NaN, signal: NaN, histogram: NaN })
-  if (prices.length < slow) return result
-  const fastEma = calcEMA(prices, fast)
-  const slowEma = calcEMA(prices, slow)
-  for (let i = slow - 1; i < prices.length; i++) result[i] = { macd: fastEma[i] - slowEma[i], signal: NaN, histogram: NaN }
-  const validMacd = result.map(r => r.macd).slice(slow - 1)
-  const signalEma = calcEMA(validMacd, signal)
-  for (let i = 0; i < signalEma.length; i++) {
-    const idx = i + slow - 1
-    const m = result[idx].macd
-    const s = signalEma[i]
-    result[idx] = { macd: m, signal: s, histogram: !isNaN(m) && !isNaN(s) ? m - s : NaN }
-  }
-  return result
+interface MacdRow { macd: number; signal: number; histogram: number }
+
+export function calcMACD(prices: number[], fast = 12, slow = 26, signal = 9): MacdRow[] {
+  const { line, signal: sig, histogram } = macdArray(prices, fast, slow, signal)
+  return prices.map((_, i) => ({
+    macd: line[i],
+    signal: sig[i],
+    histogram: histogram[i],
+  }))
 }
 
-export function calcBollingerBands(prices: number[], period = 20, stdDev = 2) {
-  const result = new Array(prices.length).fill({ mid: NaN, upper: NaN, lower: NaN })
-  if (prices.length < period) return result
-  for (let i = period - 1; i < prices.length; i++) {
-    const slice = prices.slice(i - period + 1, i + 1)
-    const mean = slice.reduce((a, b) => a + b, 0) / period
-    const variance = slice.reduce((a, b) => a + (b - mean) ** 2, 0) / (period - 1)  // sample variance
-    result[i] = { mid: mean, upper: mean + stdDev * Math.sqrt(variance), lower: mean - stdDev * Math.sqrt(variance) }
-  }
-  return result
+interface BollingerRow { mid: number; upper: number; lower: number }
+
+export function calcBollingerBands(prices: number[], period = 20, stdDev = 2): BollingerRow[] {
+  const { mid, upper, lower } = bollingerArray(prices, period, stdDev)
+  return prices.map((_, i) => ({
+    mid: mid[i],
+    upper: upper[i],
+    lower: lower[i],
+  }))
 }
 
 export function calcVWAP(candles: BtcCandle[]): { time: number; value: number }[] {
-  let cumulativeTPV = 0, cumulativeVol = 0
-  return candles.map(c => {
-    const tpv = ((c.high + c.low + c.close) / 3) * c.volume
-    cumulativeTPV += tpv
-    cumulativeVol += c.volume
-    const t = typeof c.time === 'string' ? Math.floor(new Date(c.time).getTime() / 1000) : c.time
-    return { time: t, value: cumulativeVol > 0 ? cumulativeTPV / cumulativeVol : NaN }
-  })
+  const highs = candles.map((c) => c.high)
+  const lows = candles.map((c) => c.low)
+  const closes = candles.map((c) => c.close)
+  const volumes = candles.map((c) => c.volume)
+  const values = vwapArray(highs, lows, closes, volumes)
+  return candles.map((c, i) => ({
+    time: typeof c.time === 'string' ? Math.floor(new Date(c.time).getTime() / 1000) : c.time,
+    value: values[i],
+  }))
 }
 
-export function calcStochRSI(prices: number[], period = 14, k = 3, d = 3) {
-  const rsi = calcRSI(prices, period)
-  const stoch: number[] = new Array(prices.length).fill(NaN)
-  if (prices.length < period * 2) return { k: stoch, d: stoch }
-  for (let i = period; i < prices.length; i++) {
-    const window = rsi.slice(i - period + 1, i + 1)
-    const minR = Math.min(...window)
-    const maxR = Math.max(...window)
-    stoch[i] = maxR - minR > 0 ? ((rsi[i] - minR) / (maxR - minR)) * 100 : 50
-  }
-  const kLine = calcEMA(stoch, k)
-  const dLine = calcEMA(kLine, d)
-  return { k: kLine, d: dLine }
-}
-
-/** Wilder EMA with alpha = 1/period (used for ATR smoothing). */
-function calcWilderEMA(prices: number[], period: number): number[] {
-  const ema: number[] = new Array(prices.length).fill(NaN)
-  if (period <= 0 || prices.length < period) return ema
-  let prev = prices.slice(0, period).reduce((a, b) => a + b, 0) / period
-  ema[period - 1] = prev
-  for (let i = period; i < prices.length; i++) {
-    prev = prices[i] / period + prev * (1 - 1 / period)
-    ema[i] = prev
-  }
-  return ema
+export function calcStochRSI(prices: number[], period = 14, _k = 3, _d = 3) {
+  // Canonical stochRsiArray uses period+kSmooth+dSmooth signature; mirror with defaults.
+  return stochRsiArray(prices, period, _k, _d)
 }
 
 export function calcATR(candles: BtcCandle[], period = 14): number[] {
-  const tr: number[] = candles.map((c, i) => {
-    if (i === 0) return c.high - c.low
-    const hl = c.high - c.low
-    const hC = Math.abs(c.high - candles[i - 1].close)
-    const lC = Math.abs(c.low - candles[i - 1].close)
-    return Math.max(hl, hC, lC)
-  })
-  // Wilder smoothing (alpha = 1/period) to match indicators.ts atrArray
-  return calcWilderEMA(tr, period)
+  return atrArray(toBars(candles), period)
 }
 
 // ─── Volume analysis ───────────────────────────────────────────────────────────
 
 export function calcOBV(candles: BtcCandle[]): number[] {
-  let cumulative = 0
-  return candles.map((c, i) => {
-    if (i === 0) return 0
-    const prevClose = candles[i - 1].close
-    if (c.close > prevClose) cumulative += c.volume
-    else if (c.close < prevClose) cumulative -= c.volume
-    return cumulative
-  })
+  const closes = candles.map((c) => c.close)
+  const volumes = candles.map((c) => c.volume)
+  return obvArray(closes, volumes)
 }
 
+/**
+ * Volume-Weighted Moving Average — short-period weighted mean. Genuinely
+ * BTC-specific (no canonical counterpart yet); kept inline.
+ */
 export function calcVWMA(candles: BtcCandle[], period = 20): number[] {
   const result: number[] = new Array(candles.length).fill(NaN)
   for (let i = period - 1; i < candles.length; i++) {
@@ -157,34 +132,10 @@ export function calcVWMA(candles: BtcCandle[], period = 20): number[] {
   return result
 }
 
+/** ADX — delegates to canonical adxArray (carries any future Wilder-smoothing fixes). */
 export function calcADX(candles: BtcCandle[], period = 14) {
-  const plusDM: number[] = [], minusDM: number[] = [], tr: number[] = []
-  for (let i = 1; i < candles.length; i++) {
-    const hl = candles[i].high - candles[i].low
-    const hPH = Math.abs(candles[i].high - candles[i - 1].close)
-    const lPC = Math.abs(candles[i].low - candles[i - 1].close)
-    tr.push(Math.max(hl, hPH, lPC))
-    plusDM.push(candles[i].high - candles[i - 1].high > candles[i - 1].low - candles[i].low && candles[i].high - candles[i - 1].high > 0 ? candles[i].high - candles[i - 1].high : 0)
-    minusDM.push(candles[i - 1].low - candles[i].low > candles[i].high - candles[i - 1].high && candles[i - 1].low - candles[i].low > 0 ? candles[i - 1].low - candles[i].low : 0)
-  }
-  const trSmooth = calcEMA(tr, period)
-  const plusDISmooth = calcEMA(plusDM, period)
-  const minusDISmooth = calcEMA(minusDM, period)
-  // Build normalized DI arrays (DI% = smoothed DM / smoothed TR × 100)
-  const normPlusDI: number[] = new Array(candles.length).fill(NaN)
-  const normMinusDI: number[] = new Array(candles.length).fill(NaN)
-  const adx: number[] = new Array(candles.length).fill(NaN)
-  for (let i = period; i < candles.length; i++) {
-    const trVal = trSmooth[i - 1]  // correct index: TR/DM arrays start at bar 1
-    const plusDI = trVal > 0 ? (plusDISmooth[i - 1] / trVal) * 100 : 0
-    const minusDI = trVal > 0 ? (minusDISmooth[i - 1] / trVal) * 100 : 0
-    normPlusDI[i] = plusDI
-    normMinusDI[i] = minusDI
-    const dx = plusDI + minusDI > 0 ? Math.abs(plusDI - minusDI) / (plusDI + minusDI) * 100 : 0
-    adx[i] = dx
-  }
-  const adxSmooth = calcEMA(adx, period)
-  return { adx: adxSmooth, plusDI: normPlusDI, minusDI: normMinusDI }
+  const { adx, plusDI, minusDI } = adxArray(toBars(candles), period)
+  return { adx, plusDI, minusDI }
 }
 
 // ─── On-chain / model indicators ─────────────────────────────────────────────
@@ -194,25 +145,40 @@ export function calcMVRV(price: number, realizedCap: number): number {
   return realizedCap > 0 ? price / realizedCap : 1
 }
 
-/** Pi Cycle Top indicator — approximate */
+/**
+ * Pi Cycle Top indicator — approximate.
+ *
+ * Original Pi Cycle (Philip Swift, 2019) uses 111-DAY SMA crossing 350-DAY
+ * SMA × 2. This function takes pre-computed EMAs as inputs because callers
+ * already have those handy from other indicators; document the divergence
+ * to make the convention explicit.
+ */
 export function calcPiCycleTop(ema111: number, ema350: number, multi = 2): boolean {
   return ema111 > ema350 * multi
 }
 
-/** Stock-to-Flow model price (PlanB power-law approximation) */
+/** Stock-to-Flow model price (PlanB power-law approximation, simplified). */
 export function calcS2FPrice(totalS2F: number): number {
   return Math.pow(totalS2F, 3) * 0.001
 }
 
-/** Difficulty Ribbon compression — indicates miner capitulation */
+/**
+ * Difficulty Ribbon compression — indicates miner capitulation.
+ *
+ * Phase 13 S2 fix: previous implementation seeded each ribbon EMA from
+ * `closes.slice(-p * 2)` — independent of the long-term price path.
+ * Now computes each EMA on the full series (canonical emaFull) and reads
+ * the latest value, so the ribbon reflects continuous EMA values. The
+ * inversion check (8-period EMA below 256-period EMA) is unchanged.
+ */
 export function calcDifficultyRibbon(candles: BtcCandle[], periods = [8, 16, 32, 64, 128, 256]): boolean {
   if (candles.length < 256) return false
-  const closes = candles.map(c => c.close)
-  const ribbons = periods.map(p => {
-    const ema = calcEMA(closes.slice(-p * 2), p)
+  const closes = candles.map((c) => c.close)
+  const ribbons = periods.map((p) => {
+    const ema = emaFull(closes, p)
     return ema[ema.length - 1]
   })
-  // Ribbon compression: short-term EMAs cross below long-term
+  // Ribbon compression: short-term EMA below long-term = miner capitulation
   return ribbons[0] < ribbons[ribbons.length - 1]
 }
 
@@ -228,7 +194,7 @@ export interface IndicatorSignal {
 }
 
 export function generateSignals(candles: BtcCandle[], fundingRate?: number, fearGreed?: number): IndicatorSignal[] {
-  const closes = candles.map(c => c.close)
+  const closes = candles.map((c) => c.close)
   if (closes.length < 55) return []
 
   const rsi = calcRSI(closes)
@@ -431,3 +397,6 @@ export function btcRegime(candles: BtcCandle[], opts: BtcRegimeOptions = {}): Bt
     },
   }
 }
+
+// ─── Re-export canonical SMA so consumers don't reach across libraries ───────
+export { smaArray as calcSMA }
