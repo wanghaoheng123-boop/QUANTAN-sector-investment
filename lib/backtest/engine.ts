@@ -621,6 +621,36 @@ function windowSharpe(dailyReturns: number[]): number | null {
   return ((mean - rfD) / sd) * Math.sqrt(252)
 }
 
+/**
+ * Walk-forward analysis via trade attribution.
+ *
+ * Phase 13 S2 fix (F1.1) — Architectural rework:
+ *
+ *   PREVIOUS BUG: this function ran `backtestInstrument(testRows)` with
+ *   `testRows` of length `testDays = 63`. But `backtestInstrument` short-
+ *   circuits when `rows.length < 252` (the 200-bar warmup gate plus 52-bar
+ *   minimum signal generation), so the test-window result was always
+ *   identically zero. `oosRatio` and `overfittingIndex` were therefore
+ *   meaningless — every window reported osReturn=0 regardless of
+ *   strategy performance, giving false confidence in OOS robustness.
+ *
+ *   FIXED APPROACH: run a SINGLE backtest on the full series (which has
+ *   sufficient warmup), then partition the resulting trades into IS/OS
+ *   windows by entry date. Window return is the sum of trade pnlPct for
+ *   trades whose entry date falls within the window. Annualized to a
+ *   per-year rate using the window's calendar length.
+ *
+ *   Note on parameter optimisation: this codebase uses fixed sector-
+ *   profile parameters (no per-window re-optimisation), so the strict
+ *   "walk-forward optimisation" interpretation (Pardo 2008) doesn't
+ *   apply. The function answers "how stable is this strategy across
+ *   non-overlapping time windows?" rather than "how much does parameter
+ *   re-optimisation overfit?" Sufficient for the platform's stability
+ *   diagnostic needs.
+ *
+ *   Reference: Pardo, R. (2008). The Evaluation and Optimization of
+ *   Trading Strategies, 2e. Wiley. Ch.11 (Walk-Forward Analysis).
+ */
 export function walkForwardAnalysis(
   ticker: string,
   sector: string,
@@ -628,33 +658,74 @@ export function walkForwardAnalysis(
   trainDays = 252,
   testDays = 63,
 ): WFWWindow[] {
-  // trainDays = 1 year in-sample, testDays = 1 quarter out-of-sample
   const windows: WFWWindow[] = []
   const n = rows.length
-  let trainStart = 0
 
+  // Need at least one full IS window past the engine's 252-bar warmup.
+  const WARMUP = 252
+  if (n < WARMUP + trainDays + testDays) return windows
+
+  // Single backtest on full series — produces all trades + equity curve.
+  // Note: even when zero trades fire, we still emit windows with 0/0
+  // returns so the temporal scaffolding (window labels, dates) is
+  // populated for downstream UI tabs that expect a non-empty array.
+  const fullResult = backtestInstrument(ticker, sector, rows)
+  const trades = fullResult.closedTrades
+
+  // Map row index → ISO date string for window boundary lookups.
+  const dateAt = (idx: number) =>
+    new Date(rows[idx].time * 1000).toISOString().slice(0, 10)
+
+  // Pre-bucket trades by entry-date for O(N) windowing.
+  const sortedTrades = [...trades].sort((a, b) =>
+    a.date < b.date ? -1 : a.date > b.date ? 1 : 0,
+  )
+
+  let trainStart = WARMUP
   while (trainStart + trainDays + testDays <= n) {
     const trainEnd = trainStart + trainDays
     const testEnd = trainEnd + testDays
 
-    const trainRows = rows.slice(trainStart, trainEnd)
-    const testRows = rows.slice(trainEnd, testEnd)
+    const trainStartDate = dateAt(trainStart)
+    const trainEndDate = dateAt(trainEnd - 1)
+    const testStartDate = dateAt(trainEnd)
+    const testEndDate = dateAt(testEnd - 1)
 
-    if (trainRows.length < 100 || testRows.length < 20) break
+    // Trade-attribution: sum pnlPct of trades entering inside each window.
+    let isReturnSum = 0
+    let osReturnSum = 0
+    for (const t of sortedTrades) {
+      if (t.date < trainStartDate) continue
+      if (t.date > testEndDate) break
+      const pnl = t.pnlPct ?? 0
+      if (t.date <= trainEndDate) {
+        isReturnSum += pnl
+      } else if (t.date >= testStartDate) {
+        osReturnSum += pnl
+      }
+    }
 
-    const trainResult = backtestInstrument(ticker, sector, trainRows)
-    const testResult = backtestInstrument(ticker, sector, testRows)
+    const isAnn = annualized(isReturnSum, trainDays)
+    const osAnn = annualized(osReturnSum, testDays)
 
-    const isAnn = annualized(trainResult.totalReturn, trainRows.length)
-    const osAnn = annualized(testResult.totalReturn, testRows.length)
-    const isSharpe = windowSharpe(trainResult.dailyReturns)
-    const osSharpe = windowSharpe(testResult.dailyReturns)
+    // Sharpe per window: compute from equityHistory slice. equityHistory[0]
+    // is initial capital (set BEFORE the loop), and the loop pushes one
+    // entry per iteration starting at row index 200. Index mapping:
+    //   row i (i ≥ 200) ↔ equityHistory[i - 199].
+    const histStart = Math.max(0, trainStart - 199)
+    const histTrainEnd = Math.max(histStart, trainEnd - 199)
+    const histTestEnd = Math.max(histTrainEnd, testEnd - 199)
+    const isReturns = sliceDailyReturns(fullResult.equityCurve, histStart, histTrainEnd)
+    const osReturns = sliceDailyReturns(fullResult.equityCurve, histTrainEnd, histTestEnd)
+    const isSharpe = windowSharpe(isReturns)
+    const osSharpe = windowSharpe(osReturns)
+
     const oosRatio = isAnn !== 0 ? Math.min(2, Math.max(-1, osAnn / isAnn)) : 0
 
     windows.push({
-      periodLabel: `${new Date(trainRows[0].time * 1000).toISOString().slice(0, 7)} – ${new Date(testRows[testRows.length - 1].time * 1000).toISOString().slice(0, 7)}`,
-      startDate: new Date(trainRows[0].time * 1000).toISOString().split('T')[0],
-      endDate: new Date(testRows[testRows.length - 1].time * 1000).toISOString().split('T')[0],
+      periodLabel: `${trainStartDate.slice(0, 7)} – ${testEndDate.slice(0, 7)}`,
+      startDate: trainStartDate,
+      endDate: testEndDate,
       isReturn: isAnn,
       isSharpe,
       osReturn: osAnn,
@@ -666,6 +737,19 @@ export function walkForwardAnalysis(
   }
 
   return windows
+}
+
+/** Compute daily returns from an equity-curve slice [a, b). */
+function sliceDailyReturns(equityCurve: number[], a: number, b: number): number[] {
+  const out: number[] = []
+  for (let i = a + 1; i < b && i < equityCurve.length; i++) {
+    const prev = equityCurve[i - 1]
+    if (prev > 0) {
+      const r = (equityCurve[i] - prev) / prev
+      if (Number.isFinite(r)) out.push(r)
+    }
+  }
+  return out
 }
 
 export interface WalkForwardSummary {

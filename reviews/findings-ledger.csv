@@ -1,5 +1,5 @@
 id,reviewer,severity,domain,file,line,one_line,citation,acceptance_test_id,assigned_engineer,target_sprint,status
-F1.1,R1,CRITICAL,quant-finance,lib/backtest/engine.ts,605-650,walk-forward broken (testRows<252 short-circuit),"Pardo (2008) Ch.11; Bailey & Lopez de Prado (2014) JPM 40(5)",AT-F1.1-walkforward-osnonzero,E1,S2,open
+F1.1,R1,CRITICAL,quant-finance,lib/backtest/engine.ts,605-650,walk-forward fixed via trade-attribution (single backtest + window partition by entry date),"Pardo (2008) Ch.11; Bailey & Lopez de Prado (2014) JPM 40(5)",AT-F1.1-walkforward-osnonzero,E1,S2,FIXED
 F1.2,R1,CRITICAL,quant-finance,lib/backtest/engine.ts,545,portfolio max DD now uses combined-curve,"Magdon-Ismail & Atiya (2004); Bacon (2008) p102-105",AT-F1.2-portfolio-dd,E1,S2,FIXED-c7340323+
 F1.3,R1,CRITICAL,quant-finance,"lib/backtest/engine.ts","186, 205, 224",stops use close not intraday low,"Pardo (2008) Ch.8 p161-164; Aronson (2007) p202-205",AT-F1.3-intraday-stop,E1,S2,open
 F1.4,R1,HIGH,quant-finance,lib/backtest/engine.ts,"373, 385, 525, 601",RFR hardcoded 4%,Sharpe (1994) JPM 21(1),AT-F1.4-rfr-fred,E1+E3,S2,open
