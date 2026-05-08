@@ -50,13 +50,36 @@ export async function GET(request: NextRequest) {
     ? queryTickers.split(',').map(normalizeTicker)
     : [...SECTORS.map((s) => s.etf), 'SPY', 'QQQ']
 
+  // F4.1 (Phase 13 S2): Bloomberg-bridge fetch was previously wrapped in a
+  // silent .catch(() => null), so when the bridge degraded the response
+  // showed `dataSource: 'yahoo'` with no signal that bloomberg was meant to
+  // be primary. Now we capture the failure as a structured outcome and
+  // expose `bloombergStatus` in the response so clients can display a
+  // "bloomberg degraded" banner without breaking the data flow.
+  type BridgeOutcome =
+    | { ok: true; map: Awaited<ReturnType<typeof fetchBloombergQuotesViaBridge>> | null }
+    | { ok: false; error: string }
+
+  const bridgeConfigured = isBloombergBridgeConfigured()
+  const bridgePromise: Promise<BridgeOutcome> = bridgeConfigured
+    ? fetchBloombergQuotesViaBridge(tickers).then(
+        (map) => ({ ok: true as const, map }),
+        (e) => {
+          console.warn('[Prices API] Bloomberg bridge failed:', e instanceof Error ? e.message : String(e))
+          return { ok: false as const, error: e instanceof Error ? e.message : 'bridge unreachable' }
+        },
+      )
+    : Promise.resolve({ ok: true as const, map: null })
+
   try {
-    const [raw, bbMap] = await Promise.all([
+    const [raw, bridgeOutcome] = await Promise.all([
       withRetry(() => yahooFinance.quote(tickers), { attempts: 2, timeoutMs: 7000, retryLabel: 'yahoo quote' }),
-      isBloombergBridgeConfigured()
-        ? fetchBloombergQuotesViaBridge(tickers).catch(() => null)
-        : Promise.resolve(null),
+      bridgePromise,
     ])
+    const bbMap = bridgeOutcome.ok ? bridgeOutcome.map : null
+    const bloombergStatus: 'ok' | 'degraded' | 'not_configured' = !bridgeConfigured
+      ? 'not_configured'
+      : bridgeOutcome.ok ? 'ok' : 'degraded'
 
     // yahooFinance.quote() returns a single object for one ticker, array for multiple.
     const results = Array.isArray(raw) ? raw : [raw]
@@ -93,6 +116,9 @@ export async function GET(request: NextRequest) {
           yahoo: yahooQuotes.length > 0,
           bloombergBridge: Boolean(bbMap && bbMap.size > 0),
           bloombergTickers,
+          // F4.1 (Phase 13 S2): explicit bridge status — clients can render
+          // "Bloomberg degraded" banner without inspecting bloombergTickers.
+          bloombergStatus,
         },
       },
       { headers: { 'Cache-Control': 'no-store', 'CDN-Cache-Control': 'no-store' } }

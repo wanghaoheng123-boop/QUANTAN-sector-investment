@@ -106,6 +106,18 @@ function currentEquity(state: PortfolioState): number {
   return state.capital + state.position * state.avgCost
 }
 
+// Phase 13 S2 fix (F1.6): tickers that trade 7 days a week need 365-day
+// annualization; equities use 252. The detection is conservative — only
+// known crypto symbols and futures get 365. New crypto tickers default to
+// 252 unless added here or passed explicitly via config.
+const CRYPTO_TICKERS_365 = new Set(['BTC', 'BTC-USD', 'ETH', 'ETH-USD', 'SOL', 'SOL-USD'])
+
+function tradingDaysPerYear(ticker: string, sector: string): number {
+  if (CRYPTO_TICKERS_365.has(ticker.toUpperCase())) return 365
+  if (sector?.toLowerCase() === 'crypto') return 365
+  return 252
+}
+
 /** Walk-forward backtest for a single instrument. */
 export function backtestInstrument(
   ticker: string,
@@ -115,6 +127,7 @@ export function backtestInstrument(
 ): BacktestResult {
   const cfg = { ...DEFAULT_CONFIG, ...config }
   const initialCapital = cfg.initialCapital
+  const annualization = tradingDaysPerYear(ticker, sector)
 
   if (rows.length < 252) {
     return {
@@ -338,7 +351,10 @@ export function backtestInstrument(
 
   const finalEquity = state.capital
   const days = rows.length
-  const years = days / 252
+  // F1.6 (Phase 13 S2): annualization uses tradingDaysPerYear() — 252 for
+  // equities, 365 for crypto. Previously hardcoded 252 understated crypto
+  // Sharpe by sqrt(252/365) ≈ 17% and overstated annualized return by ~4-5%/yr.
+  const years = days / annualization
   const totalReturn = (finalEquity - initialCapital) / initialCapital
   const annualizedReturn = years > 0 ? (1 + totalReturn) ** (1 / years) - 1 : 0
   const bnhReturn = (finalPrice - rows[0].close) / rows[0].close
@@ -364,25 +380,25 @@ export function backtestInstrument(
   const profitFactor = state.grossLoss > 0 ? state.grossProfit / state.grossLoss : state.grossProfit > 0 ? Infinity : 0
   const avgTradeReturn = closed.length > 0 ? closed.reduce((s, t) => s + (t.pnlPct ?? 0), 0) / closed.length : 0
 
-  // Sharpe (annualized, daily)
+  // Sharpe (annualized, daily). F1.6: annualization param matches instrument.
   let sharpe: number | null = null
   if (dailyReturns.length > 30) {
     const mean = dailyReturns.reduce((a, b) => a + b, 0) / dailyReturns.length
     const v = dailyReturns.reduce((s, x) => s + (x - mean) ** 2, 0) / Math.max(1, dailyReturns.length - 1)
     const sd = Math.sqrt(Math.max(v, 0))
     if (sd > 1e-10) {
-      const rfD = 0.04 / 252
-      sharpe = ((mean - rfD) / sd) * Math.sqrt(252)
+      const rfD = 0.04 / annualization
+      sharpe = ((mean - rfD) / sd) * Math.sqrt(annualization)
     }
   }
 
   // Sortino: delegated to canonical lib/quant/indicators.ts:sortinoRatio.
-  // Phase 13 S2 fix (F2.1 + F1.16): consolidated three divergent implementations
+  // Phase 13 S2 fix (F2.1 + F1.16 + F1.6): consolidated three divergent implementations
   // (engine.ts, portfolioBacktest.ts, indicators.ts) into the single canonical impl.
   // Uses MAR = rfDaily, n_d denominator (Sortino & van der Meer 1991),
-  // and minimum n_d ≥ 30 (Bacon 2008 p107).
-  const rfDaily = 0.04 / 252  // TODO Phase 13 F1.4: replace with FRED-fetched rate
-  const sortino = sortinoRatio(dailyReturns, rfDaily, 252)
+  // and minimum n_d ≥ 30 (Bacon 2008 p107). Annualization matches instrument.
+  const rfDaily = 0.04 / annualization  // TODO Phase 13 F1.4: replace with FRED-fetched rate
+  const sortino = sortinoRatio(dailyReturns, rfDaily, annualization)
 
   return {
     ticker, sector,

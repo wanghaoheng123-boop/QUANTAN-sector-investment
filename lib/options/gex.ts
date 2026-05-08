@@ -25,14 +25,18 @@ export interface GexResult {
   /** Sum of all strikeGex values. */
   totalGex: number
   /**
-   * The spot price at which cumulative GEX (from lowest to highest strike)
-   * changes sign (either positive → negative or negative → positive).
-   * In options markets, cumulative GEX typically transitions from negative
-   * (puts dominate at low strikes) to positive (calls dominate at high strikes).
-   * Returns the first flip point found regardless of direction.
+   * The first spot price at which cumulative GEX (from lowest to highest
+   * strike) changes sign. Backward-compatible single-flip API.
    * Null if no sign change exists.
    */
   flipPoint: number | null
+  /**
+   * Phase 13 S2 fix (F3.5): all spot prices at which cumulative GEX flips
+   * sign. Multi-flip is common during vol-expansion regimes and when
+   * positioning is bimodal (e.g. a put-skew cluster around a key level
+   * sandwiched between call walls). Sorted ascending by strike.
+   */
+  flipPoints: number[]
 }
 
 /**
@@ -74,25 +78,26 @@ export function computeGex(
 
   const totalGex = strikeGex.reduce((s, x) => s + x.gex, 0)
 
-  // Find flip point: strike where cumulative GEX changes sign (either direction).
-  // In options markets the typical pattern is negative (puts dominate low strikes)
-  // → positive (calls dominate high strikes), but both directions are checked.
+  // F3.5: collect ALL flip points where cumulative GEX changes sign.
+  // Linear-interpolated between strikes for sub-strike resolution.
   let cumulative = 0
-  let flipPoint: number | null = null
+  const flipPoints: number[] = []
 
   for (let i = 0; i < strikeGex.length; i++) {
     const prev = cumulative
     cumulative += strikeGex[i].gex
     // Check both sign-change directions: positive→negative OR negative→positive
     if ((prev > 0 && cumulative <= 0) || (prev < 0 && cumulative >= 0)) {
-      // Linear interpolation between strikes[i-1] and strikes[i]
       const s0 = i > 0 ? strikeGex[i - 1].strike : strikeGex[i].strike
       const s1 = strikeGex[i].strike
-      const frac = Math.abs(prev) / (Math.abs(prev) + Math.abs(cumulative))
-      flipPoint = s0 + frac * (s1 - s0)
-      break
+      const denom = Math.abs(prev) + Math.abs(cumulative)
+      const frac = denom > 0 ? Math.abs(prev) / denom : 0
+      flipPoints.push(s0 + frac * (s1 - s0))
     }
   }
 
-  return { strikeGex, totalGex, flipPoint }
+  // Backward-compat: flipPoint = first flip if any.
+  const flipPoint = flipPoints.length > 0 ? flipPoints[0] : null
+
+  return { strikeGex, totalGex, flipPoint, flipPoints }
 }

@@ -4,7 +4,7 @@ F1.2,R1,CRITICAL,quant-finance,lib/backtest/engine.ts,545,portfolio max DD now u
 F1.3,R1,CRITICAL,quant-finance,"lib/backtest/engine.ts","186, 205, 224",stops use close not intraday low,"Pardo (2008) Ch.8 p161-164; Aronson (2007) p202-205",AT-F1.3-intraday-stop,E1,S2,open
 F1.4,R1,HIGH,quant-finance,lib/backtest/engine.ts,"373, 385, 525, 601",RFR hardcoded 4%,Sharpe (1994) JPM 21(1),AT-F1.4-rfr-fred,E1+E3,S2,open
 F1.5,R1,HIGH,quant-finance,lib/backtest/engine.ts,343,B&H ignores dividends,"Sharpe (1994); Bacon (2008) p44",AT-F1.5-bnh-totalreturn,E1+E3,S2,open
-F1.6,R1,HIGH,quant-finance,lib/backtest/engine.ts,many,crypto annualization uses 252 not 365,Bacon (2008) p43,AT-F1.6-crypto-365,E1,S2,open
+F1.6,R1,HIGH,quant-finance,lib/backtest/engine.ts,many,crypto annualization now 365 via tradingDaysPerYear(),Bacon (2008) p43,AT-F1.6-crypto-365,E1,S2,FIXED
 F1.7,R1,CRITICAL,quant-finance,lib/backtest/portfolioBacktest.ts,"171-191, 325-341",correlation-Kelly now implemented via lib/quant/correlation.ts,"Thorp (2006); Maillard et al (2010)",AT-F1.7-corr-kelly,E1,S2,FIXED-c11591f1+
 F1.8,R1,MEDIUM,quant-finance,lib/quant/indicators.ts,canonical,Sortino MAR is configurable + documented,Sortino & van der Meer (1991),AT-F1.8-sortino-mar-config,E1,S2,FIXED-c7fa7902+
 F1.9,R1,MEDIUM,quant-finance,lib/quant/indicators.ts,canonical,Sortino min n_d raised from 3 to 30,Bacon (2008) p107,AT-F1.9-sortino-nmin30,E1,S2,FIXED-c7fa7902+
@@ -16,7 +16,7 @@ F1.14,R1,LOW,quant-finance,lib/backtest/signals.ts,461-465,VPOC asymmetry no cit
 F1.15,R1,LOW,quant-finance,lib/backtest/engine.ts,633,oosRatio clamp hides tail overfit,N/A (data viz),AT-F1.15-oosratio-unclamped,E1,S3,open
 F2.1,R2,CRITICAL,indicators,lib/quant/indicators.ts,449-461,sortinoRatio uses N-1 not n_d (Phase 12 bug duplicated),Sortino & van der Meer (1991),AT-F2.1-sortino-canonical,E1,S2,FIXED-c2801090+
 F2.2,R2,HIGH,indicators,lib/quant/indicators.ts,"386-388, 405",ADX now uses Wilder smoothing,"Wilder (1978) p35-50; Achelis (2001) p49",AT-F2.2-adx-wilder,E1,S2,FIXED-c22278ad+
-F2.3,R2,HIGH,indicators,lib/quant/indicators.ts,7,comment misleads ""Wilder = SMA-seeded EMA"",Wilder (1978) p65,AT-F2.3-doc-correct,E1,S2,open
+F2.3,R2,HIGH,indicators,lib/quant/indicators.ts,7,header comment now distinguishes Wilder from EMA + Bollinger sample variance,Wilder (1978) p65,AT-F2.3-doc-correct,E1,S2,FIXED
 F2.4,R2,MEDIUM,indicators,lib/quant/indicators.ts,324-338,VWAP cumulative not session-anchored,"Berkowitz et al (1988); Pruitt & White (1988)",AT-F2.4-anchored-vwap,E1+E2,S3,open
 F2.5,R2,MEDIUM,indicators,lib/quant/indicators.ts,356-357,StochRSI uses EMA not SMA,Chande & Kroll (1994) p93-104,AT-F2.5-stochrsi-sma,E1,S3,open
 F2.6,R2,MEDIUM,indicators,lib/quant/indicators.ts,309-312,obvArray silent truncation,N/A (input validation),AT-F2.6-obv-throw,E1,S2,FIXED-c2801090+
@@ -28,12 +28,12 @@ F3.1,R3,HIGH,options,lib/options/greeks.ts,64-141,BSM omits dividend yield q,"Me
 F3.2,R3,HIGH,options,lib/options/greeks.ts,"147, 170-184",IV solver naive seed no fallback no upper bound,"Brenner & Subrahmanyam (1988); Manaster & Koehler (1982); Brent (1973)",AT-F3.2-iv-robust,E1,S2,open
 F3.3,R3,HIGH,options,lib/options/gex.ts,47-72,GEX averages call+put gamma at same strike,"Krishnan (2017) Ch.6; Squeezemetrics whitepaper",AT-F3.3-gex-perside-gamma,E1,S2,open
 F3.4,R3,MEDIUM,options,lib/options/gex.ts,9-12,GEX sign convention undocumented,Krishnan (2017) p120-125,AT-F3.4-gex-convention-doc,E1,S3,open
-F3.5,R3,MEDIUM,options,lib/options/gex.ts,87-94,flipPoint reports only first crossing,N/A,AT-F3.5-multi-flip,E1,S3,open
+F3.5,R3,MEDIUM,options,lib/options/gex.ts,87-94,flipPoints array exposes all crossings (backward-compat flipPoint preserved),N/A,AT-F3.5-multi-flip,E1,S2,FIXED
 F3.6,R3,MEDIUM,options,lib/options/greeks.ts,109-110,T<=0 vs sigma<=0 cases now handled separately,Hull (2017) p404,AT-F3.6-degenerate-cases,E1,S2,FIXED-c11591f1+
 F3.7,R3,MEDIUM,options,"lib/options/chain.ts",99,day-count 365 convention undocumented,Hull (2017),AT-F3.7-daycount-doc,E1,S3,open
 F3.8,R3,LOW,options,lib/options/greeks.ts,146,IV_TOLERANCE relaxed from 1e-6 to 1e-4 (matches option tick),N/A,AT-F3.8-iv-tolerance,E1,S2,FIXED-c11591f1+
-F4.1,R4,HIGH,data-engineering,app/api/prices/route.ts,38,bloomberg bridge silent .catch,N/A (observability),AT-F4.1-bb-degraded-status,E3,S2,open
-F4.2,R4,HIGH,data-engineering,lib/data/mergeQuotes.ts,39-54,merge loses field-level provenance,ISO 20022 / FIX best-practice,AT-F4.2-field-provenance,E3,S2,open
+F4.1,R4,HIGH,data-engineering,app/api/prices/route.ts,38,bloomberg bridge degradation surfaced as bloombergStatus + console.warn,N/A (observability),AT-F4.1-bb-degraded-status,E3,S2,FIXED
+F4.2,R4,HIGH,data-engineering,lib/data/mergeQuotes.ts,39-54,QuoteProvenance interface tracks per-field source,ISO 20022 / FIX best-practice,AT-F4.2-field-provenance,E3,S2,FIXED
 F4.3,R4,HIGH,data-engineering,lib/api/rateLimit.ts,13,per-process bucket ineffective in serverless,Vercel docs / AWS Lambda BP,AT-F4.3-distributed-ratelimit,E3,S2,open
 F4.4,R4,HIGH,data-engineering,lib/api/reliability.ts,9-20,exponential backoff with full jitter added,"Brooker (2015) AWS; SRE Beyer (2016) Ch.22",AT-F4.4-exp-backoff,E3,S2,FIXED-c81db8f2+
 F4.5,R4,HIGH,data-engineering,(every yahoo route),yahoo-finance2 commercial redistribution,Yahoo Finance ToS §2,AT-F4.5-compliance-banner,E3,S4,open
@@ -70,7 +70,7 @@ F7.5,R7,MEDIUM,security,lib/data/bloomberg/bridgeClient.ts,upstream,timing-safe 
 F7.6,R7,MEDIUM,security,next.config.js,headers,security headers added (HSTS/X-Frame/Referrer/Permissions/CSP-RO),OWASP Secure Headers,AT-F7.6-secure-headers,E3,S2,FIXED-c7340323+
 F7.7,R7,MEDIUM,security,lib/api/rateLimit.ts,(cross-ref F4.3),rate-limit ineffective,OWASP API4,AT-F4.3-distributed-ratelimit,E3,S2,open
 F7.8,R7,MEDIUM,security,(every yahoo route),(cross-ref F4.5),yahoo commercial use,Yahoo ToS,AT-F4.5-compliance-banner,E3,S4,open
-F7.9,R7,MEDIUM,security,lib/auth.ts,74-80,JWT callback fields not validated,OWASP ASVS V5,AT-F7.9-jwt-validate,E3,S4,open
+F7.9,R7,MEDIUM,security,lib/auth.ts,74-80,JWT callback validates name/email/image via safeStringField+safeUrlField,OWASP ASVS V5,AT-F7.9-jwt-validate,E3,S2,FIXED
 F7.10,R7,LOW,security,app/api/prices/route.ts,19,unauthenticated public API noted,N/A (design clarification),AT-F7.10-doc,E3,S4,open
 F8.1,R8,CRITICAL,testing,(11 modules),various,hot-path modules have zero tests,"Plan rule 5 (test-before-fix)",AT-F8.1-module-test-presence,E1+E4,S2,open
 F8.2,R8,HIGH,testing,__tests__/components/,absent,zero component tests in repo,Kent C. Dodds (2018),AT-F8.2-component-test-infra,E2+E4,S3,open

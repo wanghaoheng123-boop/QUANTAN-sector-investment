@@ -108,4 +108,73 @@ describe('computeGex', () => {
     expect(result.strikeGex).toHaveLength(0)
     expect(result.flipPoint).toBeNull()
   })
+
+  // F3.5 (Phase 13 S2): expose ALL flip points, not just the first.
+  describe('flipPoints (F3.5 multi-flip)', () => {
+    it('returns empty array when GEX stays uniformly positive', () => {
+      const calls = [90, 100, 110].map((s) => makeEnriched(s, 2000, 0.05, 'call'))
+      const puts  = [90, 100, 110].map((s) => makeEnriched(s,  100, 0.05, 'put'))
+      const result = computeGex(calls, puts, SPOT)
+      expect(result.flipPoints).toEqual([])
+      expect(result.flipPoint).toBeNull()
+    })
+
+    it('returns single-flip array when only one sign change', () => {
+      // Lower strikes negative (puts dominate), upper strikes positive (calls)
+      const calls = [
+        makeEnriched(90, 100, 0.05, 'call'),
+        makeEnriched(100, 2000, 0.05, 'call'),
+        makeEnriched(110, 2000, 0.05, 'call'),
+      ]
+      const puts = [
+        makeEnriched(90, 2000, 0.05, 'put'),
+        makeEnriched(100, 100, 0.05, 'put'),
+        makeEnriched(110, 100, 0.05, 'put'),
+      ]
+      const result = computeGex(calls, puts, SPOT)
+      expect(result.flipPoints).toHaveLength(1)
+      expect(result.flipPoint).toBe(result.flipPoints[0])
+    })
+
+    it('returns multi-flip array when cumulative GEX crosses zero multiple times', () => {
+      // Construct asymmetric values so cumulative GEX zigzags:
+      //   strike 80:  callOI=100, putOI=10000  → contribution very negative
+      //   strike 90:  callOI=20000, putOI=100  → strong positive (cum > 0)
+      //   strike 100: callOI=100, putOI=30000  → strong negative (cum < 0 again)
+      //   strike 110: callOI=40000, putOI=100  → strong positive (cum > 0 again)
+      const calls = [
+        makeEnriched(80, 100, 0.05, 'call'),
+        makeEnriched(90, 20000, 0.05, 'call'),
+        makeEnriched(100, 100, 0.05, 'call'),
+        makeEnriched(110, 40000, 0.05, 'call'),
+      ]
+      const puts = [
+        makeEnriched(80, 10000, 0.05, 'put'),
+        makeEnriched(90, 100, 0.05, 'put'),
+        makeEnriched(100, 30000, 0.05, 'put'),
+        makeEnriched(110, 100, 0.05, 'put'),
+      ]
+      const result = computeGex(calls, puts, SPOT)
+      // Hand check cumulative gex (gamma=0.05, 100×100²×0.01 = 1e4 weight):
+      //   strike 80:  (100 - 10000) × 5e2 = -4_950_000        cum = -4_950_000
+      //   strike 90:  (20000 - 100) × 5e2 = +9_950_000         cum = +5_000_000  ← flip 1
+      //   strike 100: (100 - 30000) × 5e2 = -14_950_000        cum = -9_950_000  ← flip 2
+      //   strike 110: (40000 - 100) × 5e2 = +19_950_000        cum = +10_000_000 ← flip 3
+      expect(result.flipPoints.length).toBeGreaterThanOrEqual(2)
+      expect(result.flipPoint).toBe(result.flipPoints[0])
+      for (const fp of result.flipPoints) {
+        expect(fp).toBeGreaterThanOrEqual(80)
+        expect(fp).toBeLessThanOrEqual(110)
+      }
+      // Flip points must be sorted ascending (since we iterate strikes ascending)
+      for (let i = 1; i < result.flipPoints.length; i++) {
+        expect(result.flipPoints[i]).toBeGreaterThanOrEqual(result.flipPoints[i - 1])
+      }
+    })
+
+    it('handles empty arrays — flipPoints is empty', () => {
+      const result = computeGex([], [], SPOT)
+      expect(result.flipPoints).toEqual([])
+    })
+  })
 })

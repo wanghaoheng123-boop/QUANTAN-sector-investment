@@ -4,7 +4,14 @@
  * All functions return full time-series arrays (oldest → newest).
  * Convenience "*Latest" wrappers return only the last valid value.
  *
- * Standard: Wilder smoothing for RSI/ATR, SMA-seeded EMA, sample variance for Bollinger.
+ * Smoothing conventions (Phase 13 S2 — F2.3 documentation correction):
+ *   - Wilder smoothing (alpha = 1/N) for RSI, ATR, ADX (Wilder 1978).
+ *     Wilder smoothing ≠ EMA: it equals an EMA of span 2N-1, reacting more
+ *     slowly than standard EMA(N). Use `wilderSmoothing()` (exported).
+ *   - Standard EMA (alpha = 2/(N+1)) for MACD signal-line, multi-timeframe
+ *     trend, and chart overlays. SMA-seeded for the first N values.
+ *   - Sample variance (Bessel's correction, /(N-1)) for Bollinger and
+ *     Sharpe/Sortino — unbiased estimator (Bacon 2008 p35).
  */
 
 export interface OhlcBar {
@@ -490,16 +497,30 @@ export function maxDrawdown(closes: number[]): { maxDd: number; maxDdPct: number
   return { maxDd, maxDdPct }
 }
 
-/** Sample Sharpe (daily), annualized; rf annual default 4%. */
-export function sharpeRatio(returns: number[], rfAnnual = 0.04): number | null {
+/**
+ * Sample Sharpe (daily), annualized.
+ *
+ * Phase 13 S2 fix (F1.6): annualization is now configurable. Default 252 for
+ * US equities; pass 365 for crypto (24/7 trading). Previously hardcoded 252,
+ * which understated crypto Sharpe by sqrt(252/365) ≈ 17%.
+ *
+ * @param returns        Daily returns series (decimal, e.g. 0.01 = 1%).
+ * @param rfAnnual       Annualized risk-free rate; default 4%.
+ * @param annualization  Trading periods per year; default 252.
+ */
+export function sharpeRatio(
+  returns: number[],
+  rfAnnual = 0.04,
+  annualization = 252,
+): number | null {
   if (returns.length < 20) return null
-  const rfD = rfAnnual / 252
+  const rfD = rfAnnual / annualization
   const excess = returns.map((x) => x - rfD)
   const mean = excess.reduce((a, b) => a + b, 0) / excess.length
   const v = excess.reduce((s, x) => s + (x - mean) ** 2, 0) / Math.max(1, excess.length - 1)
   const sd = Math.sqrt(Math.max(v, 0))
   if (sd === 0) return null
-  return (mean / sd) * Math.sqrt(252)
+  return (mean / sd) * Math.sqrt(annualization)
 }
 
 /**

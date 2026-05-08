@@ -89,4 +89,54 @@ describe('mergeYahooAndBloomberg', () => {
     const out = mergeYahooAndBloomberg([yahoo()], bbMap)
     expect(out.filter((q) => q.ticker === 'AAPL')).toHaveLength(1)
   })
+
+  // F4.2 (Phase 13 S2): per-field provenance for institutional audit trail
+  describe('field-level provenance (F4.2)', () => {
+    it('all-yahoo provenance when bridge unavailable', () => {
+      const out = mergeYahooAndBloomberg([yahoo()], null)
+      expect(out[0].provenance).toBeDefined()
+      expect(out[0].provenance!.price).toBe('yahoo')
+      expect(out[0].provenance!.volume).toBe('yahoo')
+      expect(out[0].provenance!.marketCap).toBe('yahoo')
+    })
+
+    it('all-bloomberg provenance when bridge has full data', () => {
+      const bbMap = new Map([['AAPL', bb()]])
+      const out = mergeYahooAndBloomberg([yahoo()], bbMap)
+      expect(out[0].provenance).toBeDefined()
+      expect(out[0].provenance!.price).toBe('bloomberg')
+      expect(out[0].provenance!.volume).toBe('bloomberg')
+      expect(out[0].provenance!.marketCap).toBe('bloomberg')
+      expect(out[0].provenance!.bid).toBe('bloomberg')
+      expect(out[0].provenance!.ask).toBe('bloomberg')
+    })
+
+    it('mixed provenance — bb price/change but yahoo fallback for missing volume', () => {
+      const bbMap = new Map([
+        ['AAPL', bb({ volume: 0, high52w: 0, marketCap: 'N/A' })],
+      ])
+      const out = mergeYahooAndBloomberg([yahoo()], bbMap)
+      expect(out[0].provenance!.price).toBe('bloomberg')
+      expect(out[0].provenance!.change).toBe('bloomberg')
+      expect(out[0].provenance!.volume).toBe('yahoo')   // bb 0 → yahoo
+      expect(out[0].provenance!.high52w).toBe('yahoo')
+      expect(out[0].provenance!.marketCap).toBe('yahoo')
+      expect(out[0].provenance!.pe).toBe('bloomberg')   // bb non-zero
+    })
+
+    it('bid/ask provenance undefined when bridge has no bid/ask', () => {
+      const bbMap = new Map([['AAPL', bb({ bid: undefined, ask: undefined })]])
+      const out = mergeYahooAndBloomberg([yahoo()], bbMap)
+      expect(out[0].provenance!.bid).toBeUndefined()
+      expect(out[0].provenance!.ask).toBeUndefined()
+    })
+
+    it('bloomberg-only ticker has all-bloomberg provenance (no yahoo counterpart)', () => {
+      const bbMap = new Map([['MSFT', bb({ ticker: 'MSFT' })]])
+      const out = mergeYahooAndBloomberg([yahoo()], bbMap)
+      const msft = out.find((q) => q.ticker === 'MSFT')!
+      expect(msft.provenance!.price).toBe('bloomberg')
+      expect(msft.provenance!.volume).toBe('bloomberg')
+    })
+  })
 })
