@@ -4,7 +4,7 @@
  */
 
 import type { OhlcBar } from '@/lib/quant/technicals'
-import { combinedSignal, enhancedCombinedSignal, DEFAULT_CONFIG, atr, type BacktestConfig } from './signals'
+import { enhancedCombinedSignal, DEFAULT_CONFIG, atr, type BacktestConfig } from './signals'
 import { sortinoRatio } from '@/lib/quant/indicators'
 import { BACKTEST_RFR_ANNUAL } from '@/lib/quant/constants'
 

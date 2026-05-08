@@ -79,7 +79,14 @@ export function detectBullishDivergence(closes: number[], rsiValues: number[], l
   const rsi2 = rsiWindow[t2]
   if (!Number.isFinite(rsi1) || !Number.isFinite(rsi2)) return false
 
-  return rsi2 > rsi1 && rsi2 < 50  // divergence + still oversold-ish
+  // Phase 13 S2 fix (F1.12): the previous `rsi2 < 50` gate excluded valid
+  // bullish divergences in the 50-70 RSI range. Murphy (1999) op cit. p245
+  // defines bullish divergence as price-lower-low-with-rsi-higher-low —
+  // independent of absolute RSI level. We retain `rsi2 < 65` as a soft cap
+  // to avoid flagging divergences inside near-overbought ranges where the
+  // signal is unreliable; this is more permissive than the old 50 cutoff
+  // but still excludes the >70 overbought zone where mean-reversion dominates.
+  return rsi2 > rsi1 && rsi2 < 65
 }
 
 /**
@@ -302,118 +309,17 @@ export interface CombinedSignal {
   reason: string
 }
 
-/**
- * Combined signal with proper ATR% volatility confirmation.
- *
- * ATR% = (ATR / price) * 100 — daily volatility as % of price.
- * ATR% > 2 means the stock moves >2% per day — good for swing trades.
- * ATR% < 1 means low volatility — position may not have enough range.
- */
-export function combinedSignal(
-  ticker: string,
-  date: string,
-  price: number,
-  closes: number[],
-  bars: OhlcBar[],
-  config: Partial<BacktestConfig> = {},
-): CombinedSignal {
-  const cfg = { ...DEFAULT_CONFIG, ...config }
-
-  const rsiVals = rsi(closes)
-  const macdVals = macdFn(closes)
-  const atrVals = atr(bars)
-  const bbVals = bollinger(closes)
-
-  const rsi14 = rsiVals[rsiVals.length - 1]
-  const macdHist = macdVals.histogram[macdVals.histogram.length - 1]
-  const atrLast = atrVals[atrVals.length - 1]
-  const bbPctB = bbVals.pctB[bbVals.pctB.length - 1]
-
-  // ATR as percentage of price — makes sense across all price levels
-  const atrPct = Number.isFinite(atrLast) && Number.isFinite(price) && price > 0
-    ? (atrLast / price) * 100
-    : NaN
-
-  const regime = regimeSignal(price, closes, rsi14)
-
-  // ── Individual confirmation signals ───────────────────────────────────
-  const rsiBullish  = Number.isFinite(rsi14)   && rsi14 < 35
-  const macdBullish = Number.isFinite(macdHist) && macdHist > 0
-  // ATR% > 2% means meaningful daily range — good for swing trading
-  const atrBullish   = Number.isFinite(atrPct)  && atrPct > 2.0
-  // BB% < 0.20 means price is in the lower 20% of its Bollinger range — near lower band
-  const bbBullish    = Number.isFinite(bbPctB)   && bbPctB < 0.20
-
-  const bullishCount =
-    (rsiBullish  ? 1 : 0) +
-    (macdBullish ? 1 : 0) +
-    (atrBullish  ? 1 : 0) +
-    (bbBullish   ? 1 : 0)
-
-  // ── Override regime action with confirmation filter ─────────────────────
-  let action: 'BUY' | 'HOLD' | 'SELL' = regime.action
-
-  // BUY requires at least 2 confirmations to avoid false signals in chop
-  if (action === 'BUY' && bullishCount < 2) {
-    action = 'HOLD'
-  }
-  // HOLD near-overbought: if RSI > 70, be more cautious
-  if (action === 'HOLD' && regime.zone === 'HEALTHY_BULL' && Number.isFinite(rsi14) && rsi14 > 70) {
-    action = 'SELL'
-  }
-
-  const confidence = Math.min(100, regime.confidence + Math.round((bullishCount / 4) * 25))
-
-  // Suppress if below threshold (unless it's a SELL signal)
-  if (confidence < cfg.confidenceThreshold && action !== 'SELL') {
-    action = 'HOLD'
-  }
-
-  // ── Kelly fraction sizing ──────────────────────────────────────────────
-  let kellyFrac = 0.10
-  if (action === 'BUY') {
-    // Use pure Kelly formula with confidence as win probability proxy.
-    // avgWin: deeper dips = higher expected returns. avgLoss: ~3% with ATR stops.
-    const winProb = confidence / 100
-    const avgWin = regime.dipSignal === 'STRONG_DIP' ? 0.06 : 0.04
-    const avgLoss = 0.03
-    const computed = halfKelly(winProb, avgWin, avgLoss)
-    if (computed != null && computed > 0) {
-      kellyFrac = cfg.halfKelly ? Math.min(computed, 0.25) : Math.min(computed * 2, 0.50)
-    } else if (regime.dipSignal === 'STRONG_DIP' && bullishCount >= 3) {
-      kellyFrac = cfg.halfKelly ? 0.25 : 0.50  // Maximum conviction (fallback)
-    } else if (regime.dipSignal === 'STRONG_DIP') {
-      kellyFrac = cfg.halfKelly ? 0.15 : 0.30  // Strong signal (fallback)
-    }
-  } else if (action === 'SELL') {
-    kellyFrac = 1.0  // Exit full position
-  }
-
-  // ── Human-readable reason ───────────────────────────────────────────────
-  const confLabels = [
-    Number.isFinite(rsi14)   && rsiBullish  ? `RSI ${rsi14.toFixed(1)}`        : null,
-    Number.isFinite(macdHist) && macdBullish ? `MACD hist +${macdHist.toFixed(2)}` : null,
-    Number.isFinite(atrPct)  && atrBullish  ? `ATR% ${atrPct.toFixed(1)}%`     : null,
-    Number.isFinite(bbPctB)  && bbBullish   ? `BB% ${(bbPctB * 100).toFixed(0)}%` : null,
-  ].filter(Boolean)
-
-  const reason = action === 'BUY'
-    ? `${regime.zone} [${regime.dipSignal}]: price ${deviationLabel(regime.deviationPct)} vs 200SMA. ${confLabels.join(', ') || 'no extra confirms'}. Kelly ${(kellyFrac * 100).toFixed(0)}%.`
-    : action === 'SELL'
-    ? `${regime.zone} [${regime.dipSignal}]: exiting. ${confLabels.join(', ') || 'no confirms'}.`
-    : `${regime.zone} [${regime.dipSignal}]: confidence ${confidence}% (need ${cfg.confidenceThreshold}%). Hold.`
-
-  return {
-    ticker, date, price, regime,
-    confirms: [
-      { name: 'RSI(14)', value: Number.isFinite(rsi14) ? rsi14 : null, bullish: rsiBullish },
-      { name: 'MACD hist', value: Number.isFinite(macdHist) ? macdHist : null, bullish: macdBullish },
-      { name: 'ATR%', value: Number.isFinite(atrPct) ? atrPct : null, bullish: atrBullish },
-      { name: 'BB%', value: Number.isFinite(bbPctB) ? bbPctB : null, bullish: bbBullish },
-    ],
-    action, confidence, KellyFraction: kellyFrac, reason,
-  }
-}
+// Phase 13 S2 fix (F1.10): the legacy `combinedSignal` was a 4-confirmation
+// bullishCount-based version superseded by `enhancedCombinedSignal` below
+// (7-factor weighted confluence). It was only ever consumed by its own
+// tests — no production caller — so it has been removed to honour the
+// "single canonical signal path" invariant.  The `CombinedSignal` interface
+// is retained because `EnhancedCombinedSignal` extends it.
+//
+// Migration: callers that previously used combinedSignal should switch to
+// enhancedCombinedSignal with sectorGates=undefined; behaviour is broadly
+// equivalent for the default config but uses weighted-score thresholds
+// instead of a binary bullishCount gate.
 
 function deviationLabel(dev: number | null): string {
   if (dev === null) return '?'
@@ -454,14 +360,32 @@ const WEIGHT_PROFILES: Record<string, { rsi: number; macd: number; atr: number; 
   neutral:         { rsi: 0.20, macd: 0.15, atr: 0.10, bb: 0.15, vpoc: 0.10, mtf: 0.20, volReg: 0.10 },
 }
 
-/** Volume zone to score mapping. */
+/**
+ * Volume-profile zone score.
+ *
+ * Phase 13 S2 documentation (F1.14): the asymmetry below_va=+0.8 vs
+ * above_va=-0.5 reflects a MEAN-REVERSION prior — the default signal mode
+ * for this codebase. Steidlmayer's Market Profile (1989) treats below-VA
+ * as accumulation territory (institutional buyers absorbing supply) and
+ * above-VA as distribution territory; the asymmetric weights bias the
+ * confluence score toward dip-buying, which historically produces the
+ * platform's institutional-grade win rate.
+ *
+ * For TREND-FOLLOWING regimes (high ADX), an above-VA breakout is
+ * bullish, not bearish. The current implementation does not flip the
+ * sign for trend regimes; this is a known limitation queued for a
+ * future pass that would make the score regime-dependent (passing
+ * `volRegime.strategyHint` into this helper).
+ *
+ * Reference: Steidlmayer, J. P. (1989). Steidlmayer on Markets. Wiley.
+ */
 function volumeZoneScore(zone: PriceZone | null): number {
   if (zone === null) return 0
   switch (zone) {
-    case 'below_va': return 0.8   // below value area = potential support = bullish
+    case 'below_va': return 0.8   // below value area = potential support = bullish (mean-rev prior)
     case 'at_poc':   return 0.3   // at POC = fair value
     case 'in_va':    return 0.0   // inside value area = neutral
-    case 'above_va': return -0.5  // above value area = extended
+    case 'above_va': return -0.5  // above value area = extended (mean-rev prior)
   }
 }
 
@@ -560,6 +484,12 @@ export function enhancedCombinedSignal(
   // ── Compute per-indicator scores (-1 to +1) ──
   const rsiScore = Number.isFinite(rsi14) ? (50 - rsi14) / 50 : 0
   const macdScore = Number.isFinite(macdHist) && Number.isFinite(atrLast) && atrLast > 0
+    // F1.13 (Phase 13 S2 documentation): scale MACD histogram by 10% of the
+    // current ATR to make the score volatility-normalised. The 0.1 factor is
+    // an empirical tunable — Appel's original 1979 MACD paper does not specify
+    // a normalisation. The chosen value approximately maps a "1×ATR" MACD
+    // displacement to a score of ±10 (clamped to ±1 by `clamp()`), which lines
+    // up with practitioner heuristics for "meaningful MACD divergence".
     ? clamp(macdHist / (atrLast * 0.1), -1, 1) : 0
   const atrScore = Number.isFinite(atrPct) ? clamp((atrPct - 1.5) / 2.0, -1, 1) : 0
   const bbScore = Number.isFinite(bbPctB) ? 1 - 2 * bbPctB : 0

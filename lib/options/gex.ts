@@ -6,21 +6,36 @@
  * as stabilisers (sell rallies / buy dips). When net GEX is negative, they are
  * short gamma and amplify moves.
  *
- * Phase 13 S2 fix (F3.3): per-side gamma is now used. Previously the
- * implementation averaged call gamma and put gamma at the same strike before
- * the (callOI - putOI) × gamma × ... aggregation. Theoretically gamma is
- * type-independent for European options at same K/T/r/σ — but the chain
- * enrichment computes IV per-contract, so call IV and put IV at the same
- * strike differ under volatility skew. Averaging the gammas under-weights
- * the side with the higher gamma. The corrected formulation:
+ * Sign convention (F3.4 — Phase 13 S2 documentation):
+ * ────────────────────────────────────────────────────
+ *   This module uses the **Squeezemetrics convention**: dealers are assumed to
+ *   be net SHORT calls (customers buy calls speculatively) and net LONG puts
+ *   (customers buy puts as protection). Positive aggregate GEX therefore means
+ *   dealers carry net long gamma → they hedge by selling into rallies and
+ *   buying into dips, dampening realised volatility.
  *
- *   GEX_strike = (callOI × call_gamma - putOI × put_gamma) × 100 × spot² × 0.01
+ *   Vendor cross-reference:
+ *     • Squeezemetrics (https://squeezemetrics.com)            — same sign as ours
+ *     • SpotGamma (https://spotgamma.com)                       — same sign for SPX
+ *     • MenthorQ                                                — opposite sign for some indices
+ *   If migrating clients between platforms, verify each vendor's convention
+ *   before reading the GEX magnitude as directional evidence.
  *
- * Sign convention (Krishnan 2017 / Squeezemetrics whitepaper):
- *   Assumes standard customer flow — dealers short calls, long puts.
- *   Positive GEX = dealers net long gamma = stabilising (sell rallies, buy dips).
+ *   Reference: Krishnan, H. (2017). The Second Leg Down. Wiley. p120–125.
  *
- * The factor 100 = contracts per lot; 0.01 converts a 1% spot move to dollars.
+ * Per-side gamma (F3.3 — Phase 13 S2 fix):
+ * ────────────────────────────────────────
+ *   Previously averaged call gamma and put gamma at the same strike before
+ *   the (callOI - putOI) × gamma × ... aggregation. Under skew, call IV ≠ put
+ *   IV at the same strike, so the averaged-gamma form under-weights the
+ *   dominant side. Corrected formulation:
+ *
+ *     GEX_strike = (callOI × call_gamma - putOI × put_gamma) × 100 × spot² × 0.01
+ *
+ * Multipliers:
+ *   100        = contracts per lot (US standard equity options)
+ *   spot² × 0.01 = dollar change for a 1% spot move applied to the squared
+ *                  notional (gamma's quadratic-payoff scaling)
  */
 
 import type { EnrichedContract } from './chain'

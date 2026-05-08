@@ -178,11 +178,23 @@ export function macdArray(
     }
   }
 
-  // Signal line = EMA of valid MACD line values
+  // Signal line = EMA of valid MACD line values.
+  //
+  // F-NEW (Phase 13 S2 fix): the previous version placed sigEma[i] at
+  // signal[i + slow - 1], which is OFF BY (sig - 1) BARS. `ema()` returns
+  // a shorter array of length `validLine.length - sig + 1`, so the loop
+  // only filled signal[slow-1 .. closes.length - sig], leaving the most
+  // recent sig-1 bars (≈8 for default sig=9) as NaN. As a result, the
+  // signal layer's `macdHist` was effectively NaN forever and the MACD
+  // weight (0.15-0.20) silently contributed 0 to the weighted score.
+  //
+  // Correct anchoring: sigEma[k] is the EMA value computed using the first
+  // (k+sig) values of validLine. Anchored at validLine index (k + sig - 1),
+  // i.e., line index (k + slow + sig - 2). Place it at signal[k + slow + sig - 2].
   const validLine = line.slice(slow - 1)
   const sigEma = ema(validLine, sig)
   for (let i = 0; i < sigEma.length; i++) {
-    signal[i + slow - 1] = sigEma[i]
+    signal[i + slow + sig - 2] = sigEma[i]
   }
 
   // Histogram = line - signal
@@ -476,6 +488,23 @@ export function adxArray(bars: OhlcBar[], period = 14): {
 
 // ─── Utility: daily returns, max drawdown, Sharpe, Sortino ─────────────────
 
+/**
+ * Simple daily returns: r_i = close_i / close_{i-1} - 1.
+ *
+ * Convention (F2.10 — Phase 13 S2 documentation):
+ *   We use SIMPLE returns throughout. Tsay (2010) op cit. p3-7 covers the
+ *   tradeoffs vs LOG returns:
+ *     • Simple returns aggregate naturally across portfolios (weighted sum).
+ *     • Log returns aggregate naturally across time (additive).
+ *     • For typical daily moves (|r| < 5%), simple ≈ log to second-order.
+ *   Sharpe/Sortino computations that follow are based on simple returns,
+ *   matching most institutional reporting conventions (e.g., Bacon 2008
+ *   uses simple returns for performance attribution).
+ *
+ *   For log-return computations (e.g., volatility annualisation), see
+ *   `realizedVol` in `lib/quant/regimeDetection.ts` and `logReturns` in
+ *   `lib/quant/relativeStrength.ts` which explicitly use Math.log(c/c_prev).
+ */
 export function dailyReturns(closes: number[]): number[] {
   const r: number[] = []
   for (let i = 1; i < closes.length; i++) {
