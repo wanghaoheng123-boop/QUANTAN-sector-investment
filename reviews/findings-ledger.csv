@@ -26,7 +26,7 @@ F2.9,R2,LOW,indicators,lib/quant/indicators.ts,"215, 220",Bollinger period<2 sil
 F2.10,R2,LOW,indicators,lib/quant/indicators.ts,416-422,simple vs log returns convention undocumented,Tsay (2010) p3-7,AT-F2.10-log-returns,E1,S3,open
 F3.1,R3,HIGH,options,lib/options/greeks.ts,64-141,BSM extended with Merton dividend yield q (default 0 = backward compat),"Merton (1973) Bell J 4(1); Hull (2017) p385-388",AT-F3.1-merton-q,E1+E3,S2,FIXED
 F3.2,R3,HIGH,options,lib/options/greeks.ts,"147, 170-184",IV solver: BS-seed for ATM + sigma clamp [0.005..5.0],"Brenner & Subrahmanyam (1988); Manaster & Koehler (1982)",AT-F3.2-iv-robust,E1,S2,FIXED
-F3.3,R3,HIGH,options,lib/options/gex.ts,47-72,GEX averages call+put gamma at same strike,"Krishnan (2017) Ch.6; Squeezemetrics whitepaper",AT-F3.3-gex-perside-gamma,E1,S2,open
+F3.3,R3,HIGH,options,lib/options/gex.ts,47-72,GEX now uses per-side gamma (call_gamma vs put_gamma tracked independently),"Krishnan (2017) Ch.6; Squeezemetrics whitepaper",AT-F3.3-gex-perside-gamma,E1,S2,FIXED
 F3.4,R3,MEDIUM,options,lib/options/gex.ts,9-12,GEX sign convention undocumented,Krishnan (2017) p120-125,AT-F3.4-gex-convention-doc,E1,S3,open
 F3.5,R3,MEDIUM,options,lib/options/gex.ts,87-94,flipPoints array exposes all crossings (backward-compat flipPoint preserved),N/A,AT-F3.5-multi-flip,E1,S2,FIXED
 F3.6,R3,MEDIUM,options,lib/options/greeks.ts,109-110,T<=0 vs sigma<=0 cases now handled separately,Hull (2017) p404,AT-F3.6-degenerate-cases,E1,S2,FIXED-c11591f1+
@@ -56,7 +56,7 @@ F5.10,R5,LOW,frontend-architecture,app/backtest/page.tsx,39-50,local formatters 
 F6.1,R6,CRITICAL,accessibility,app/layout.tsx,49,no skip-link,WCAG 2.2 SC 2.4.1 Level A,AT-F6.1-skiplink,E2,S2,FIXED-c7340323+
 F6.2,R6,HIGH,accessibility,(all chart components),various,charts lack text alternatives,WCAG 2.2 SC 1.1.1+4.1.2,AT-F6.2-chart-aria,E2,S4,open
 F6.3,R6,HIGH,accessibility,(SignalCard SectorCard etc.),various,color-only signifiers for BUY/SELL/up/down,WCAG 2.2 SC 1.4.1,AT-F6.3-icons-arrows,E2,S4,open
-F6.4,R6,HIGH,accessibility,(table components),various,tables lack caption/scope,WCAG 2.2 SC 1.3.1,AT-F6.4-table-semantics,E2,S4,open
+F6.4,R6,HIGH,accessibility,(table components),various,caption + scope added on 5 high-traffic tables (desk\, backtest\, options\, flow\, trades),WCAG 2.2 SC 1.3.1,AT-F6.4-table-semantics,E2,S2,FIXED
 F6.5,R6,MEDIUM,accessibility,(cross-component),various,sparse focus management,WCAG 2.2 SC 2.4.3,AT-F6.5-focus-trap,E2,S4,open
 F6.6,R6,MEDIUM,accessibility,(cross-component),various,text-slate-600 fails AA contrast,WCAG 2.2 SC 1.4.3,AT-F6.6-contrast-axe,E2,S4,open
 F6.7,R6,MEDIUM,accessibility,components/KeyboardShortcuts.tsx,various,verify focus trap and dialog semantics,WAI-ARIA APG,AT-F6.7-modal-pattern,E2,S4,open

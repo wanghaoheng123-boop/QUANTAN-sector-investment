@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import type { BacktestResult } from '@/lib/backtest/engine'
+import { MetricTooltip } from '@/components/MetricTooltip'
 
 interface Props {
   results: BacktestResult[]
@@ -54,16 +55,16 @@ export default function InstrumentTable({ results, sectorColors }: Props) {
     return <span className="text-cyan-400 ml-1">{sortDir === 'desc' ? '↓' : '↑'}</span>
   }
 
-  const cols: { key: SortKey; label: string; align?: string }[] = [
+  const cols: { key: SortKey; label: string; align?: string; metricKey?: string }[] = [
     { key: 'ticker', label: 'Ticker', align: 'text-left' },
     { key: 'sector', label: 'Sector', align: 'text-left' },
     { key: 'totalReturn', label: 'Return', align: 'text-right' },
-    { key: 'annualizedReturn', label: 'Ann. Return', align: 'text-right' },
-    { key: 'sharpeRatio', label: 'Sharpe', align: 'text-right' },
-    { key: 'maxDrawdown', label: 'Max DD', align: 'text-right' },
-    { key: 'winRate', label: 'Win Rate', align: 'text-right' },
+    { key: 'annualizedReturn', label: 'Ann. Return', align: 'text-right', metricKey: 'annualizedReturn' },
+    { key: 'sharpeRatio', label: 'Sharpe', align: 'text-right', metricKey: 'sharpe' },
+    { key: 'maxDrawdown', label: 'Max DD', align: 'text-right', metricKey: 'maxDrawdown' },
+    { key: 'winRate', label: 'Win Rate', align: 'text-right', metricKey: 'winRate' },
     { key: 'totalTrades', label: 'Trades', align: 'text-right' },
-    { key: 'excessReturn', label: 'Alpha', align: 'text-right' },
+    { key: 'excessReturn', label: 'Alpha', align: 'text-right', metricKey: 'alpha' },
   ]
 
   return (
@@ -82,15 +83,24 @@ export default function InstrumentTable({ results, sectorColors }: Props) {
 
       <div className="overflow-x-auto rounded-xl border border-slate-800">
         <table className="w-full text-xs">
+          {/* F6.4 (Phase 13 S2): caption + scope for screen readers — WCAG 1.3.1. */}
+          <caption className="sr-only">Per-instrument backtest results — ticker, sector, total return, annualized return, Sharpe ratio, max drawdown, win rate, trade count, and alpha vs benchmark. Click any column header to sort.</caption>
           <thead className="bg-slate-900 border-b border-slate-800">
             <tr>
               {cols.map(col => (
                 <th
                   key={col.key}
-                  onClick={() => toggleSort(col.key)}
-                  className={`px-3 py-2.5 ${col.align ?? 'text-right'} text-slate-500 uppercase tracking-wider font-medium cursor-pointer hover:text-slate-300 select-none`}
+                  scope="col"
+                  aria-sort={sortKey === col.key ? (sortDir === 'desc' ? 'descending' : 'ascending') : 'none'}
+                  className={`px-3 py-2.5 ${col.align ?? 'text-right'} text-slate-500 uppercase tracking-wider font-medium select-none`}
                 >
-                  {col.label}<SortIcon k={col.key} />
+                  <span
+                    onClick={() => toggleSort(col.key)}
+                    className="cursor-pointer hover:text-slate-300 inline-flex items-center"
+                  >
+                    {col.label}<SortIcon k={col.key} />
+                  </span>
+                  {col.metricKey && <MetricTooltip metricKey={col.metricKey} compact />}
                 </th>
               ))}
             </tr>

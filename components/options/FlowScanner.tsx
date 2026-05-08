@@ -1,6 +1,15 @@
 'use client'
 
 import type { UnusualFlowItem, FlowSentimentLabel } from '@/lib/options/flow'
+import { MetricTooltip } from '@/components/MetricTooltip'
+
+const HEADER_TOOLTIPS: Record<string, string> = {
+  Volume: 'volSma',
+  OI: 'openInterest',
+  'Vol/OI': 'volumeToOI',
+  IV: 'iv',
+  Sentiment: 'flowSentiment',
+}
 
 interface Props {
   items: UnusualFlowItem[]
@@ -38,7 +47,9 @@ export default function FlowScanner({ items, sentiment }: Props) {
     <div className="space-y-3">
       {/* Overall sentiment */}
       <div className="flex items-center gap-2 text-xs">
-        <span className="text-gray-400">Overall flow sentiment:</span>
+        <span className="text-gray-400 inline-flex items-center">
+          Overall flow sentiment:<MetricTooltip metricKey="flowSentiment" compact />
+        </span>
         <SentimentBadge label={sentiment} />
         <span className="text-gray-500">({items.length} unusual contracts)</span>
       </div>
@@ -46,18 +57,27 @@ export default function FlowScanner({ items, sentiment }: Props) {
       {/* Flow table */}
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
+          {/* F6.4 (Phase 13 S2): caption + scope for screen readers — WCAG 1.3.1. */}
+          <caption className="sr-only">Unusual options flow — contract symbol, side (call or put), strike, expiry, volume, open interest, volume-over-OI ratio, implied volatility, last price, and aggregated sentiment.</caption>
           <thead>
             <tr className="border-b border-gray-700 text-gray-500">
-              <th className="text-left py-1 px-2">Contract</th>
-              <th className="text-center py-1 px-2">Type</th>
-              <th className="text-right py-1 px-2">Strike</th>
-              <th className="text-right py-1 px-2">Expiry</th>
-              <th className="text-right py-1 px-2">Volume</th>
-              <th className="text-right py-1 px-2">OI</th>
-              <th className="text-right py-1 px-2">Vol/OI</th>
-              <th className="text-right py-1 px-2">IV</th>
-              <th className="text-right py-1 px-2">Last</th>
-              <th className="text-center py-1 px-2">Sentiment</th>
+              <th scope="col" className="text-left py-1 px-2">Contract</th>
+              <th scope="col" className="text-center py-1 px-2">Type</th>
+              <th scope="col" className="text-right py-1 px-2">Strike</th>
+              <th scope="col" className="text-right py-1 px-2">Expiry</th>
+              {(['Volume', 'OI', 'Vol/OI', 'IV'] as const).map((h) => (
+                <th key={h} scope="col" className="text-right py-1 px-2">
+                  <span className="inline-flex items-center justify-end">
+                    {h}<MetricTooltip metricKey={HEADER_TOOLTIPS[h]} compact />
+                  </span>
+                </th>
+              ))}
+              <th scope="col" className="text-right py-1 px-2">Last</th>
+              <th scope="col" className="text-center py-1 px-2">
+                <span className="inline-flex items-center justify-center">
+                  Sentiment<MetricTooltip metricKey="flowSentiment" compact />
+                </span>
+              </th>
             </tr>
           </thead>
           <tbody>

@@ -177,4 +177,40 @@ describe('computeGex', () => {
       expect(result.flipPoints).toEqual([])
     })
   })
+
+  // F3.3 (Phase 13 S2): per-side gamma — call_gamma and put_gamma tracked
+  // independently so vol skew correctly weights each side.
+  describe('per-side gamma (F3.3)', () => {
+    it('matches old behavior when call_gamma === put_gamma at every strike', () => {
+      // With uniform gamma, per-side and averaged give identical results.
+      const calls = [makeEnriched(100, 1000, 0.04, 'call')]
+      const puts = [makeEnriched(100, 1000, 0.04, 'put')]
+      const result = computeGex(calls, puts, SPOT)
+      expect(result.strikeGex[0].gex).toBeCloseTo(0, 4)  // equal OI cancels
+    })
+
+    it('differs from averaged-gamma when call/put gammas diverge under skew', () => {
+      // Skew scenario: at-the-money put has higher gamma than ATM call (typical
+      // put skew on equity indices). Per-side weights the dominant put more.
+      const calls = [makeEnriched(100, 5000, 0.03, 'call')]   // call gamma 0.03
+      const puts = [makeEnriched(100, 5000, 0.06, 'put')]     // put gamma 0.06 (skew)
+      const result = computeGex(calls, puts, SPOT)
+      // Per-side: gex = (5000·0.03 - 5000·0.06) × 1e4 = -1_500_000
+      // Averaged-gamma (old buggy): gex = (5000-5000) × 0.045 × 1e4 = 0
+      // The fix MUST produce non-zero GEX in this scenario.
+      expect(Math.abs(result.strikeGex[0].gex)).toBeGreaterThan(0)
+      // And direction should be negative (put gamma dominates).
+      expect(result.strikeGex[0].gex).toBeLessThan(0)
+    })
+
+    it('isolates gamma per side (zero-OI side does not pollute)', () => {
+      // Strike 100: only calls (no put data). Old impl averaged 0+gamma → wrong.
+      // Per-side: only call_gamma is used.
+      const calls = [makeEnriched(100, 5000, 0.05, 'call')]
+      const puts: ReturnType<typeof makeEnriched>[] = []
+      const result = computeGex(calls, puts, SPOT)
+      // gex = 5000 × 0.05 × 1e4 = 2_500_000
+      expect(result.strikeGex[0].gex).toBeCloseTo(5000 * 0.05 * 1e4, 0)
+    })
+  })
 })
