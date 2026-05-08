@@ -6,6 +6,7 @@
 import type { OhlcBar } from '@/lib/quant/technicals'
 import { combinedSignal, enhancedCombinedSignal, DEFAULT_CONFIG, atr, type BacktestConfig } from './signals'
 import { sortinoRatio } from '@/lib/quant/indicators'
+import { BACKTEST_RFR_ANNUAL } from '@/lib/quant/constants'
 
 // ─── Transaction cost model ─────────────────────────────────────────────────────
 // Applied per side (entry OR exit) to reflect realistic execution costs.
@@ -387,7 +388,7 @@ export function backtestInstrument(
     const v = dailyReturns.reduce((s, x) => s + (x - mean) ** 2, 0) / Math.max(1, dailyReturns.length - 1)
     const sd = Math.sqrt(Math.max(v, 0))
     if (sd > 1e-10) {
-      const rfD = 0.04 / annualization
+      const rfD = BACKTEST_RFR_ANNUAL / annualization
       sharpe = ((mean - rfD) / sd) * Math.sqrt(annualization)
     }
   }
@@ -397,7 +398,8 @@ export function backtestInstrument(
   // (engine.ts, portfolioBacktest.ts, indicators.ts) into the single canonical impl.
   // Uses MAR = rfDaily, n_d denominator (Sortino & van der Meer 1991),
   // and minimum n_d ≥ 30 (Bacon 2008 p107). Annualization matches instrument.
-  const rfDaily = 0.04 / annualization  // TODO Phase 13 F1.4: replace with FRED-fetched rate
+  // F1.4 (Phase 13 S2 partial): rate sourced from canonical constant; FRED hookup TBD.
+  const rfDaily = BACKTEST_RFR_ANNUAL / annualization
   const sortino = sortinoRatio(dailyReturns, rfDaily, annualization)
 
   return {
@@ -543,7 +545,7 @@ export function aggregatePortfolio(results: BacktestResult[], initialCapital: nu
         const mean = portfolioDailyReturns.reduce((a, b) => a + b, 0) / n
         const variance = portfolioDailyReturns.reduce((s, x) => s + (x - mean) ** 2, 0) / Math.max(1, n - 1)
         const sd = Math.sqrt(Math.max(variance, 0))
-        const rfD = 0.04 / 252
+        const rfD = BACKTEST_RFR_ANNUAL / 252
         if (sd > 1e-10) {
           sharpe = ((mean - rfD) / sd) * Math.sqrt(252)
         }
@@ -615,7 +617,7 @@ function windowSharpe(dailyReturns: number[]): number | null {
   const variance = dailyReturns.reduce((s, x) => s + (x - mean) ** 2, 0) / Math.max(1, dailyReturns.length - 1)
   const sd = Math.sqrt(Math.max(variance, 0))
   if (sd < 1e-10) return null
-  const rfD = 0.04 / 252
+  const rfD = BACKTEST_RFR_ANNUAL / 252
   return ((mean - rfD) / sd) * Math.sqrt(252)
 }
 

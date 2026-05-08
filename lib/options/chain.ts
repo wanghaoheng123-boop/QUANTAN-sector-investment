@@ -51,19 +51,9 @@ export interface EnrichedChain {
 
 const yahooFinance = new YahooFinance()
 
-/**
- * Continuously compounded risk-free rate for all greeks calculations.
- *
- * Currently hardcoded to 5.25% (Fed Funds upper bound as of mid-2024).
- * For production use, this should be dynamically sourced from:
- *   - US Treasury yield curve (e.g. 3-month T-bill for near-dated options)
- *   - Fed Funds futures or SOFR for accurate short-rate interpolation
- *   - Yahoo Finance ^IRX (13-week T-bill) for a live market proxy
- *
- * To update: change this constant or replace with a function that fetches
- * the current rate from a data source matching the option's time to expiry.
- */
-const RISK_FREE_RATE = 0.0525
+// Phase 13 S2 (F1.4 partial): centralized in lib/quant/constants.ts.
+// Eventual FRED-backed getRiskFreeRate(tenorDays) will be a 1-line change.
+import { OPTIONS_RFR_ANNUAL as RISK_FREE_RATE } from '@/lib/quant/constants'
 
 function toDate(d: unknown): Date {
   if (d instanceof Date) return d

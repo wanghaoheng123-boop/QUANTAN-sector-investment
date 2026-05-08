@@ -153,3 +153,78 @@ describe('impliedVolatility', () => {
     expect(iv!).toBeCloseTo(sigma, 2)
   })
 })
+
+// ─── Merton dividend extension (Phase 13 S2 — F3.1) ─────────────────────────
+
+describe('Merton dividend yield (F3.1)', () => {
+  const S = 70, K = 70, T = 0.25, r = 0.04, sigma = 0.20
+
+  it('q=0 reduces to original Black-Scholes (backward compat)', () => {
+    const price0 = blackScholesPrice(S, K, T, r, sigma, 'call', 0)
+    const priceDefault = blackScholesPrice(S, K, T, r, sigma, 'call')
+    expect(price0).toBeCloseTo(priceDefault, 10)
+  })
+
+  it('non-zero q reduces call price (Merton: dividend reduces call value)', () => {
+    const callQ0 = blackScholesPrice(S, K, T, r, sigma, 'call', 0)
+    const callQ034 = blackScholesPrice(S, K, T, r, sigma, 'call', 0.034)  // XLU yield
+    expect(callQ034).toBeLessThan(callQ0)
+  })
+
+  it('non-zero q increases put price (symmetric to call)', () => {
+    const putQ0 = blackScholesPrice(S, K, T, r, sigma, 'put', 0)
+    const putQ034 = blackScholesPrice(S, K, T, r, sigma, 'put', 0.034)
+    expect(putQ034).toBeGreaterThan(putQ0)
+  })
+
+  it('put-call parity holds with q != 0: C - P = S·e^-qT - K·e^-rT', () => {
+    const q = 0.034
+    const C = blackScholesPrice(S, K, T, r, sigma, 'call', q)
+    const P = blackScholesPrice(S, K, T, r, sigma, 'put', q)
+    const lhs = C - P
+    const rhs = S * Math.exp(-q * T) - K * Math.exp(-r * T)
+    expect(lhs).toBeCloseTo(rhs, 6)
+  })
+
+  it('greeks delta scales by exp(-q·T) for calls', () => {
+    const q = 0.05
+    const gQ0 = greeks(S, K, T, r, sigma, 'call', 0)
+    const gQ = greeks(S, K, T, r, sigma, 'call', q)
+    expect(gQ.delta).toBeLessThan(gQ0.delta)
+  })
+
+  it('IV solver recovers q-aware implied vol', () => {
+    const targetSigma = 0.25
+    const q = 0.034
+    const price = blackScholesPrice(S, K, T, r, targetSigma, 'call', q)
+    const iv = impliedVolatility(price, S, K, T, r, 'call', q)
+    expect(iv).not.toBeNull()
+    expect(iv!).toBeCloseTo(targetSigma, 3)
+  })
+})
+
+// ─── IV solver hardening (F3.2 partial) ─────────────────────────────────────
+
+describe('IV solver Brenner-Subrahmanyam seed + sigma clamp (F3.2)', () => {
+  it('converges fast for ATM options (BS seed close to truth)', () => {
+    const sigma = 0.20
+    const price = blackScholesPrice(100, 100, 0.5, 0.04, sigma, 'call')
+    const iv = impliedVolatility(price, 100, 100, 0.5, 0.04, 'call')
+    expect(iv).not.toBeNull()
+    expect(iv!).toBeCloseTo(sigma, 4)
+  })
+
+  it('converges for deep-OTM options (sigma clamp prevents divergence)', () => {
+    const sigma = 1.50
+    const price = blackScholesPrice(100, 150, 1, 0.04, sigma, 'call')  // OTM
+    const iv = impliedVolatility(price, 100, 150, 1, 0.04, 'call')
+    expect(iv).not.toBeNull()
+    expect(iv!).toBeCloseTo(sigma, 2)
+  })
+
+  it('returns null or finite value on absurd inputs without throwing', () => {
+    // Premium > spot for an OTM put — pathological. Solver must not crash.
+    const r = impliedVolatility(150, 100, 50, 1, 0.04, 'put')
+    expect(typeof r === 'number' || r === null).toBe(true)
+  })
+})

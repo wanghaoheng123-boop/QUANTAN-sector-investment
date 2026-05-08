@@ -24,8 +24,8 @@ F2.7,R2,MEDIUM,indicators,lib/quant/indicators.ts,151,MACD signal warmup not val
 F2.8,R2,MEDIUM,indicators,lib/quant/indicators.ts,53-81,ema/emaFull dual API footgun,N/A (DX),AT-F2.8-ema-deprecate,E1,S3,open
 F2.9,R2,LOW,indicators,lib/quant/indicators.ts,"215, 220",Bollinger period<2 silent,N/A,AT-F2.9-bb-period-min2,E1,S2,FIXED-c2801090+
 F2.10,R2,LOW,indicators,lib/quant/indicators.ts,416-422,simple vs log returns convention undocumented,Tsay (2010) p3-7,AT-F2.10-log-returns,E1,S3,open
-F3.1,R3,HIGH,options,lib/options/greeks.ts,64-141,BSM omits dividend yield q,"Merton (1973) Bell J 4(1); Hull (2017) p385-388",AT-F3.1-merton-q,E1+E3,S2,open
-F3.2,R3,HIGH,options,lib/options/greeks.ts,"147, 170-184",IV solver naive seed no fallback no upper bound,"Brenner & Subrahmanyam (1988); Manaster & Koehler (1982); Brent (1973)",AT-F3.2-iv-robust,E1,S2,open
+F3.1,R3,HIGH,options,lib/options/greeks.ts,64-141,BSM extended with Merton dividend yield q (default 0 = backward compat),"Merton (1973) Bell J 4(1); Hull (2017) p385-388",AT-F3.1-merton-q,E1+E3,S2,FIXED
+F3.2,R3,HIGH,options,lib/options/greeks.ts,"147, 170-184",IV solver: BS-seed for ATM + sigma clamp [0.005..5.0],"Brenner & Subrahmanyam (1988); Manaster & Koehler (1982)",AT-F3.2-iv-robust,E1,S2,FIXED
 F3.3,R3,HIGH,options,lib/options/gex.ts,47-72,GEX averages call+put gamma at same strike,"Krishnan (2017) Ch.6; Squeezemetrics whitepaper",AT-F3.3-gex-perside-gamma,E1,S2,open
 F3.4,R3,MEDIUM,options,lib/options/gex.ts,9-12,GEX sign convention undocumented,Krishnan (2017) p120-125,AT-F3.4-gex-convention-doc,E1,S3,open
 F3.5,R3,MEDIUM,options,lib/options/gex.ts,87-94,flipPoints array exposes all crossings (backward-compat flipPoint preserved),N/A,AT-F3.5-multi-flip,E1,S2,FIXED

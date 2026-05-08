@@ -18,6 +18,7 @@ import { enhancedCombinedSignal, DEFAULT_CONFIG } from '@/lib/backtest/signals'
 import type { BacktestConfig, SectorGateConfig } from '@/lib/backtest/signals'
 import { atrArray, sortinoRatio } from '@/lib/quant/indicators'
 import { maxCorrelationVsPeers, correlationAdjustedKelly } from '@/lib/quant/correlation'
+import { BACKTEST_RFR_ANNUAL } from '@/lib/quant/constants'
 import {
   checkExitConditions, updatePosition, atrAdaptiveStop,
   DEFAULT_EXIT_CONFIG,
@@ -475,7 +476,8 @@ export function runPortfolioBacktest(
   // Phase 13 S2 fix (F1.16): Sortino delegated to canonical indicators.ts impl.
   // Sharpe stays inline (no SSOT divergence to fix).
   let sharpe: number | null = null
-  const rfD = 0.04 / 252  // TODO Phase 13 F1.4: replace with FRED-fetched rate
+  // F1.4 (Phase 13 S2 partial): rate sourced from canonical constant; FRED hookup TBD.
+  const rfD = BACKTEST_RFR_ANNUAL / 252
   if (dailyReturns.length > 30) {
     const mean = dailyReturns.reduce((a, b) => a + b, 0) / dailyReturns.length
     const variance = dailyReturns.reduce((s, x) => s + (x - mean) ** 2, 0) / Math.max(1, dailyReturns.length - 1)
