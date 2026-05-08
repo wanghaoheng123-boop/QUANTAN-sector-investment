@@ -54,8 +54,8 @@ F5.8,R5,MEDIUM,frontend-architecture,hooks/useLivePrices.ts,67-68,dedupingInterv
 F5.9,R5,LOW,frontend-architecture,app/backtest/page.tsx,665,Record<string,unknown> losing types,N/A,AT-F5.9-typed-livesignal,E2,S3,open
 F5.10,R5,LOW,frontend-architecture,app/backtest/page.tsx,39-50,local formatters duplicate lib/format.ts,N/A (DRY),AT-F5.10-format-import,E2,S3,open
 F6.1,R6,CRITICAL,accessibility,app/layout.tsx,49,no skip-link,WCAG 2.2 SC 2.4.1 Level A,AT-F6.1-skiplink,E2,S2,FIXED-c7340323+
-F6.2,R6,HIGH,accessibility,(all chart components),various,charts lack text alternatives,WCAG 2.2 SC 1.1.1+4.1.2,AT-F6.2-chart-aria,E2,S4,open
-F6.3,R6,HIGH,accessibility,(SignalCard SectorCard etc.),various,color-only signifiers for BUY/SELL/up/down,WCAG 2.2 SC 1.4.1,AT-F6.3-icons-arrows,E2,S4,open
+F6.2,R6,HIGH,accessibility,(KLineChart\, Sparkline\, GexChart\, EquityCurveChart),various,role=img + descriptive aria-label on 4 chart components,WCAG 2.2 SC 1.1.1+4.1.2,AT-F6.2-chart-aria,E2,S2,FIXED
+F6.3,R6,HIGH,accessibility,(SignalCard\, SectorCard\, desk page),various,arrow glyph + sign prefix + aria-label on direction indicators,WCAG 2.2 SC 1.4.1,AT-F6.3-icons-arrows,E2,S2,FIXED
 F6.4,R6,HIGH,accessibility,(table components),various,caption + scope added on 5 high-traffic tables (desk\, backtest\, options\, flow\, trades),WCAG 2.2 SC 1.3.1,AT-F6.4-table-semantics,E2,S2,FIXED
 F6.5,R6,MEDIUM,accessibility,(cross-component),various,sparse focus management,WCAG 2.2 SC 2.4.3,AT-F6.5-focus-trap,E2,S4,open
 F6.6,R6,MEDIUM,accessibility,(cross-component),various,text-slate-600 fails AA contrast,WCAG 2.2 SC 1.4.3,AT-F6.6-contrast-axe,E2,S4,open

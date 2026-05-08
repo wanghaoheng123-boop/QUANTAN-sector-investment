@@ -1,6 +1,7 @@
 'use client'
 
 import { PriceSignal } from '@/lib/sectors'
+import { MetricTooltip } from '@/components/MetricTooltip'
 
 interface SignalCardProps {
   signal: PriceSignal
@@ -8,17 +9,27 @@ interface SignalCardProps {
   compact?: boolean
 }
 
+// Phase 13 S2 fix (F6.3): colorblind-safe directional indicators.
+// Each direction now carries an icon (▲/▼/●/◆) plus a sign/word so users
+// with red-green color deficiency (~8% of men) can distinguish BUY/SELL
+// without relying on hue alone. WCAG 2.2 SC 1.4.1 (Use of Color, Level A).
 const DIRECTION_CONFIG = {
-  BUY: { label: 'BUY', bg: 'bg-green-900/30', border: 'border-green-500/40', text: 'text-green-400', dot: 'bg-green-400' },
-  SELL: { label: 'SELL', bg: 'bg-red-900/30', border: 'border-red-500/40', text: 'text-red-400', dot: 'bg-red-400' },
-  HOLD: { label: 'HOLD', bg: 'bg-yellow-900/20', border: 'border-yellow-500/30', text: 'text-yellow-400', dot: 'bg-yellow-400' },
-  WATCH: { label: 'WATCH', bg: 'bg-blue-900/20', border: 'border-blue-500/30', text: 'text-blue-400', dot: 'bg-blue-400' },
+  BUY:   { label: 'BUY',   icon: '▲', bg: 'bg-green-900/30',  border: 'border-green-500/40',  text: 'text-green-400',  dot: 'bg-green-400' },
+  SELL:  { label: 'SELL',  icon: '▼', bg: 'bg-red-900/30',    border: 'border-red-500/40',    text: 'text-red-400',    dot: 'bg-red-400' },
+  HOLD:  { label: 'HOLD',  icon: '●', bg: 'bg-yellow-900/20', border: 'border-yellow-500/30', text: 'text-yellow-400', dot: 'bg-yellow-400' },
+  WATCH: { label: 'WATCH', icon: '◆', bg: 'bg-blue-900/20',   border: 'border-blue-500/30',   text: 'text-blue-400',   dot: 'bg-blue-400' },
 }
 
 function sessionDirectionLabel(direction: PriceSignal['direction']): string {
   if (direction === 'BUY') return 'UP'
   if (direction === 'SELL') return 'DOWN'
   return 'NEUTRAL'
+}
+
+function directionAriaLabel(direction: PriceSignal['direction'], session: boolean): string {
+  if (direction === 'BUY') return session ? 'session up' : 'buy signal'
+  if (direction === 'SELL') return session ? 'session down' : 'sell signal'
+  return session ? 'session neutral' : `${direction.toLowerCase()} signal`
 }
 
 function formatRiskReward(signal: PriceSignal): string {
@@ -50,9 +61,13 @@ export default function SignalCard({ signal, color, compact = false }: SignalCar
       <div
         className={`rounded-xl p-4 border ${config.bg} ${config.border} hover:brightness-110 transition-all animate-card-enter`}
         style={{ boxShadow: `0 0 20px ${color}10` }}
+        aria-label={directionAriaLabel(signal.direction, session)}
       >
         <div className="flex items-center justify-between mb-2">
-          <span className={`text-xs font-bold ${config.text} tracking-widest`}>{headline}</span>
+          <span className={`text-xs font-bold ${config.text} tracking-widest inline-flex items-center gap-1`}>
+            <span aria-hidden="true">{config.icon}</span>
+            {headline}
+          </span>
           <span className="text-xs text-slate-400 font-mono">{signal.etf}</span>
         </div>
         {session && signal.sessionChangePct != null && (
@@ -82,12 +97,14 @@ export default function SignalCard({ signal, color, compact = false }: SignalCar
     <div
       className={`rounded-2xl p-5 border ${config.bg} ${config.border} animate-card-enter`}
       style={{ boxShadow: `0 0 40px ${color}15, 0 4px 20px rgba(0,0,0,0.3)` }}
+      aria-label={directionAriaLabel(signal.direction, session)}
     >
-      {/* Header */}
+      {/* Header — F6.3: icon + text so direction is clear without color */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
-          <div className={`w-2.5 h-2.5 rounded-full ${config.dot} ${session ? '' : 'animate-pulse'}`} />
-          <span className={`text-sm font-bold tracking-widest ${config.text}`}>
+          <div className={`w-2.5 h-2.5 rounded-full ${config.dot} ${session ? '' : 'animate-pulse'}`} aria-hidden="true" />
+          <span className={`text-sm font-bold tracking-widest ${config.text} inline-flex items-center gap-2`}>
+            <span aria-hidden="true">{config.icon}</span>
             {session ? `${headline} SESSION` : `${config.label} SIGNAL`}
           </span>
         </div>
@@ -159,7 +176,9 @@ export default function SignalCard({ signal, color, compact = false }: SignalCar
             <div className="font-mono text-sm text-white font-semibold">${signal.entry.toFixed(2)}</div>
           </div>
           <div className="bg-red-950/30 rounded-lg p-2.5 border border-red-900/40">
-            <div className="text-xs text-slate-500">Stop Loss</div>
+            <div className="text-xs text-slate-500 inline-flex items-center">
+              Stop Loss<MetricTooltip metricKey="atrStop" compact />
+            </div>
             <div className="font-mono text-sm text-red-400 font-semibold">${signal.stopLoss.toFixed(2)}</div>
           </div>
           <div className="bg-green-950/30 rounded-lg p-2.5 border border-green-900/40">
@@ -171,7 +190,9 @@ export default function SignalCard({ signal, color, compact = false }: SignalCar
 
       {/* Risk/Reward */}
       <div className="flex items-center justify-between text-xs text-slate-500 mb-3">
-        <span>Risk/Reward Ratio</span>
+        <span className="inline-flex items-center">
+          Risk/Reward Ratio<MetricTooltip metricKey="riskReward" compact />
+        </span>
         <span className="font-mono text-white">{riskPct === 'N/A' || riskPct === '—' ? riskPct : `1:${riskPct}`}</span>
       </div>
 

@@ -229,6 +229,7 @@ export default function KLineChart({
   darkPoolMarkers = [],
   newsMarkers = [],
   color,
+  ticker,
   showRSI = true,
   indicators: indicatorsIn,
   onIndicatorsChange,
@@ -943,7 +944,21 @@ export default function KLineChart({
         </span>
       </div>
 
-      <div ref={containerRef} className="w-full rounded-t-lg overflow-hidden min-h-[200px]" />
+      {/* F6.2 (Phase 13 S2): chart text alternative for screen readers — WCAG 1.1.1 + 4.1.2.
+          The canvas itself isn't accessible to AT; this role+aria-label gives a summary. */}
+      <div
+        ref={containerRef}
+        role="img"
+        aria-label={
+          candles.length > 0 && latestCandle
+            ? `Price chart for ${ticker}: ${candles.length} candles. ` +
+              `Latest close ${latestCandle.close?.toFixed(2) ?? 'N/A'}, ` +
+              `range ${Math.min(...candles.map(c => c.low ?? Infinity)).toFixed(2)}–` +
+              `${Math.max(...candles.map(c => c.high ?? 0)).toFixed(2)}.`
+            : `Price chart for ${ticker} (loading)`
+        }
+        className="w-full rounded-t-lg overflow-hidden min-h-[200px]"
+      />
 
       {showRSI && (
         <>

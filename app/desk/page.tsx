@@ -200,11 +200,24 @@ export default function DeskPage() {
                           {label}
                         </td>
                         <td className="px-2 py-1 text-right text-slate-100">{q ? formatCurrency(q.price) : '—'}</td>
-                        <td className={`px-2 py-1 text-right ${q ? (up ? 'text-emerald-400' : 'text-red-400') : 'text-slate-600'}`}>
-                          {q ? formatSignedNumber(q.change) : '—'}
+                        {/* F6.3 (Phase 13 S2): sign prefix + arrow glyph so direction
+                            is clear without relying on color (WCAG 2.2 SC 1.4.1). */}
+                        <td
+                          className={`px-2 py-1 text-right ${q ? (up ? 'text-emerald-400' : 'text-red-400') : 'text-slate-600'}`}
+                          aria-label={q ? `${up ? 'up' : 'down'} ${Math.abs(q.change).toFixed(2)}` : 'no change data'}
+                        >
+                          {q ? (
+                            <>
+                              <span aria-hidden="true">{up ? '▲' : '▼'}</span>{' '}
+                              {formatSignedNumber(q.change)}
+                            </>
+                          ) : '—'}
                         </td>
-                        <td className={`px-2 py-1 text-right hidden sm:table-cell ${q ? (up ? 'text-emerald-400' : 'text-red-400') : 'text-slate-600'}`}>
-                          {q ? `${up ? '+' : ''}${q.changePct.toFixed(2)}` : '—'}
+                        <td
+                          className={`px-2 py-1 text-right hidden sm:table-cell ${q ? (up ? 'text-emerald-400' : 'text-red-400') : 'text-slate-600'}`}
+                          aria-label={q ? `${up ? 'up' : 'down'} ${Math.abs(q.changePct).toFixed(2)} percent` : 'no change data'}
+                        >
+                          {q ? `${up ? '+' : '−'}${Math.abs(q.changePct).toFixed(2)}%` : '—'}
                         </td>
                         <td className="px-2 py-1 text-right text-slate-600 hidden md:table-cell">
                           {q && q.volume ? formatCompactNumber(q.volume) : '—'}

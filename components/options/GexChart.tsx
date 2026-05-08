@@ -1,6 +1,7 @@
 'use client'
 
 import type { GexResult } from '@/lib/options/gex'
+import { MetricTooltip } from '@/components/MetricTooltip'
 
 interface Props {
   gex: GexResult
@@ -36,13 +37,17 @@ export default function GexChart({ gex, spot }: Props) {
     <div className="space-y-2">
       {/* Summary row */}
       <div className="flex items-center gap-4 text-xs">
-        <span className="text-gray-400">Total GEX:</span>
+        <span className="text-gray-400 inline-flex items-center">
+          Total GEX:<MetricTooltip metricKey="gex" compact />
+        </span>
         <span className={totalGex >= 0 ? 'text-emerald-400' : 'text-red-400'}>
           {totalGex >= 0 ? '+' : ''}{fmtGex(totalGex)}
         </span>
         {flipPoint != null && (
           <>
-            <span className="text-gray-400">Flip:</span>
+            <span className="text-gray-400 inline-flex items-center">
+              Flip:<MetricTooltip metricKey="gammaFlip" compact />
+            </span>
             <span className="text-yellow-400">${flipPoint.toFixed(2)}</span>
           </>
         )}
@@ -50,9 +55,20 @@ export default function GexChart({ gex, spot }: Props) {
         <span className="text-gray-300">${spot.toFixed(2)}</span>
       </div>
 
-      {/* Bar chart */}
+      {/* Bar chart — F6.2 (Phase 13 S2): chart text alternative for screen readers (WCAG 1.1.1). */}
       <div className="overflow-y-auto max-h-96">
-        <svg width={BAR_MAX_WIDTH * 2 + 80} height={chartHeight} className="font-mono">
+        <svg
+          width={BAR_MAX_WIDTH * 2 + 80}
+          height={chartHeight}
+          className="font-mono"
+          role="img"
+          aria-label={
+            `Gamma exposure by strike — ${strikeGex.length} strikes from ${minStrike} to ${maxStrike}, ` +
+            `total GEX ${fmtGex(totalGex)}` +
+            (flipPoint != null ? `, gamma flip at ${flipPoint.toFixed(2)}` : '') +
+            `. Spot ${spot.toFixed(2)}.`
+          }
+        >
           {strikeGex.map((item, i) => {
             const y = i * (BAR_HEIGHT + 2)
             const barWidth = (Math.abs(item.gex) / maxAbs) * BAR_MAX_WIDTH
