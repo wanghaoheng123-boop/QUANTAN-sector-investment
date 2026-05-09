@@ -18,7 +18,7 @@ import {
 } from './technicals'
 import { alignCloses, logReturns, correlation, excessReturn } from './relativeStrength'
 import { bandPosition, computeResearchScore } from './researchScore'
-import { classicPivots } from './pivots'
+import { classicPivots, priorSessionBar } from './pivots'
 import { parseEarningsSnapshot } from './earningsParse'
 
 type AnyRec = Record<string, unknown>
@@ -280,10 +280,15 @@ export function buildFundamentalsPayload(
     bandPosition: bPos,
   })
 
+  // Floor-trader pivots: derive from the most-recent COMPLETED session's HLC.
+  // priorSessionBar inspects dates to distinguish "last bar is today's intraday"
+  // (use length-2) from "last bar IS yesterday/the prior complete session"
+  // (use length-1). Previous code always took length-2 and silently returned
+  // 2-day-old data on weekends, holidays, and pre-market hits.
   let pivots: ReturnType<typeof classicPivots> | null = null
-  if (ohlc.length >= 2) {
-    const p = ohlc[ohlc.length - 2]
-    pivots = classicPivots(p.high, p.low, p.close)
+  const prior = priorSessionBar(ohlc, dates)
+  if (prior) {
+    pivots = classicPivots(prior.high, prior.low, prior.close)
   }
 
   const earnings = parseEarningsSnapshot(quoteSummary as Record<string, unknown>)
