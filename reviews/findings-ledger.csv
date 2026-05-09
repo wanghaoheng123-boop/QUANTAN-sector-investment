@@ -18,7 +18,7 @@ F2.1,R2,CRITICAL,indicators,lib/quant/indicators.ts,449-461,sortinoRatio uses N-
 F2.2,R2,HIGH,indicators,lib/quant/indicators.ts,"386-388, 405",ADX now uses Wilder smoothing,"Wilder (1978) p35-50; Achelis (2001) p49",AT-F2.2-adx-wilder,E1,S2,FIXED-c22278ad+
 F2.3,R2,HIGH,indicators,lib/quant/indicators.ts,7,header comment now distinguishes Wilder from EMA + Bollinger sample variance,Wilder (1978) p65,AT-F2.3-doc-correct,E1,S2,FIXED
 F2.4,R2,MEDIUM,indicators,lib/quant/indicators.ts,324-338,vwapArray gains anchorIndex param + vwapArrayWindow sliding-window helper,"Berkowitz et al (1988); Pruitt & White (1988)",AT-F2.4-anchored-vwap,E1+E2,S2,FIXED
-F2.5,R2,MEDIUM,indicators,lib/quant/indicators.ts,356-357,StochRSI uses EMA not SMA,Chande & Kroll (1994) p93-104,AT-F2.5-stochrsi-sma,E1,S3,open
+F2.5,R2,MEDIUM,indicators,lib/quant/indicators.ts,356-357,stochRsiArray gains smoothing param (ema default | sma for Chande-Kroll original),Chande & Kroll (1994) p93-104,AT-F2.5-stochrsi-sma,E1,S2,FIXED
 F2.6,R2,MEDIUM,indicators,lib/quant/indicators.ts,309-312,obvArray silent truncation,N/A (input validation),AT-F2.6-obv-throw,E1,S2,FIXED-c2801090+
 F2.7,R2,MEDIUM,indicators,lib/quant/indicators.ts,151,MACD signal warmup not validated,N/A,AT-F2.7-macd-warmup,E1,S2,FIXED-c2801090+
 F2.8,R2,MEDIUM,indicators,lib/quant/indicators.ts,53-81,ema marked @deprecated; emaFull preferred,N/A (DX),AT-F2.8-ema-deprecate,E1,S2,FIXED
@@ -50,7 +50,7 @@ F5.4,R5,HIGH,frontend-architecture,(4 files),4 silent .catch(()=>{}) replaced wi
 F5.5,R5,MEDIUM,frontend-architecture,components/**/*.tsx,various,37 inline styles; no design tokens,N/A,AT-F5.5-design-tokens,E2,S3,open
 F5.6,R5,MEDIUM,frontend-architecture,(cross-component),various,32 ARIA attrs sparse coverage,WCAG 2.2 4.1.2,AT-F5.6-aria-coverage,E2+R6,S4,open
 F5.7,R5,MEDIUM,frontend-architecture,(cross-component),various,dark-card pattern variations not extracted,N/A (DRY),AT-F5.7-card-component,E2,S3,open
-F5.8,R5,MEDIUM,frontend-architecture,hooks/useLivePrices.ts,67-68,dedupingInterval < refreshInterval,SWR docs,AT-F5.8-dedup-tune,E2,S2,open
+F5.8,R5,MEDIUM,frontend-architecture,hooks/useLivePrices.ts,67-68,dedupingInterval raised to 5s = refreshInterval,SWR docs,AT-F5.8-dedup-tune,E2,S2,FIXED
 F5.9,R5,LOW,frontend-architecture,app/backtest/page.tsx,665,Record<string,unknown> losing types,N/A,AT-F5.9-typed-livesignal,E2,S3,open
 F5.10,R5,LOW,frontend-architecture,app/backtest/page.tsx,39-50,local formatters duplicate lib/format.ts,N/A (DRY),AT-F5.10-format-import,E2,S3,open
 F6.1,R6,CRITICAL,accessibility,app/layout.tsx,49,no skip-link,WCAG 2.2 SC 2.4.1 Level A,AT-F6.1-skiplink,E2,S2,FIXED-c7340323+

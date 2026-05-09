@@ -427,12 +427,25 @@ export function vwapArrayWindow(
   return vwapArray(highs, lows, closes, volumes, anchor)
 }
 
-/** Stochastic RSI returning K and D lines (full-length, NaN-padded). */
+/**
+ * Stochastic RSI returning K and D lines (full-length, NaN-padded).
+ *
+ * Phase 13 S2 (F2.5): added optional `smoothing` param to choose between
+ * SMA (Chande & Kroll 1994 original convention; matches TradingView /
+ * ThinkOrSwim defaults) and EMA (legacy default for backward compat).
+ *
+ * SMA-smoothed StochRSI signals fire ~1-2 bars later than EMA-smoothed,
+ * trading earlier action for fewer false signals.
+ *
+ * Reference: Chande, T. S. & Kroll, S. (1994). The New Technical Trader.
+ *            Wiley. p93-104.
+ */
 export function stochRsiArray(
   closes: number[],
   rsiPeriod = 14,
   kSmooth = 3,
   dSmooth = 3,
+  smoothing: 'ema' | 'sma' = 'ema',
 ): { k: number[]; d: number[] } {
   const rsi = rsiArray(closes, rsiPeriod)
   const stoch = new Array<number>(closes.length).fill(NaN)
@@ -443,8 +456,9 @@ export function stochRsiArray(
     const max = Math.max(...window)
     stoch[i] = max - min > 0 ? ((rsi[i] - min) / (max - min)) * 100 : 50
   }
-  const k = emaFull(stoch, kSmooth)
-  const d = emaFull(k, dSmooth)
+  const smoothFn = smoothing === 'sma' ? smaArray : emaFull
+  const k = smoothFn(stoch, kSmooth)
+  const d = smoothFn(k, dSmooth)
   return { k, d }
 }
 

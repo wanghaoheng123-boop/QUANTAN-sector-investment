@@ -64,8 +64,11 @@ const fetcher = async (url: string): Promise<LivePricesResponse> => {
 const DEFAULT_OPTIONS: SWRConfiguration = {
   // Poll every 5s — institutional-acceptable for sector dashboards.
   refreshInterval: 5_000,
-  // Drop dupes within 2.5s window (e.g. user navigates and back quickly).
-  dedupingInterval: 2_500,
+  // Phase 13 S2 fix (F5.8): dedup matches refresh interval. With dedup
+  // < refresh, a third hook mount happening between two refresh ticks
+  // would trigger an extra fetch. Setting dedup = refresh ensures all
+  // mounts within the same refresh window share one network request.
+  dedupingInterval: 5_000,
   // Don't re-fetch on tab focus — relies on the 5s interval instead.
   revalidateOnFocus: false,
   // Don't re-mount with stale data unnecessarily.
