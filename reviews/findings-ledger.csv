@@ -17,11 +17,11 @@ F1.15,R1,LOW,quant-finance,lib/backtest/engine.ts,633,oosRatio clamp hides tail 
 F2.1,R2,CRITICAL,indicators,lib/quant/indicators.ts,449-461,sortinoRatio uses N-1 not n_d (Phase 12 bug duplicated),Sortino & van der Meer (1991),AT-F2.1-sortino-canonical,E1,S2,FIXED-c2801090+
 F2.2,R2,HIGH,indicators,lib/quant/indicators.ts,"386-388, 405",ADX now uses Wilder smoothing,"Wilder (1978) p35-50; Achelis (2001) p49",AT-F2.2-adx-wilder,E1,S2,FIXED-c22278ad+
 F2.3,R2,HIGH,indicators,lib/quant/indicators.ts,7,header comment now distinguishes Wilder from EMA + Bollinger sample variance,Wilder (1978) p65,AT-F2.3-doc-correct,E1,S2,FIXED
-F2.4,R2,MEDIUM,indicators,lib/quant/indicators.ts,324-338,VWAP cumulative not session-anchored,"Berkowitz et al (1988); Pruitt & White (1988)",AT-F2.4-anchored-vwap,E1+E2,S3,open
+F2.4,R2,MEDIUM,indicators,lib/quant/indicators.ts,324-338,vwapArray gains anchorIndex param + vwapArrayWindow sliding-window helper,"Berkowitz et al (1988); Pruitt & White (1988)",AT-F2.4-anchored-vwap,E1+E2,S2,FIXED
 F2.5,R2,MEDIUM,indicators,lib/quant/indicators.ts,356-357,StochRSI uses EMA not SMA,Chande & Kroll (1994) p93-104,AT-F2.5-stochrsi-sma,E1,S3,open
 F2.6,R2,MEDIUM,indicators,lib/quant/indicators.ts,309-312,obvArray silent truncation,N/A (input validation),AT-F2.6-obv-throw,E1,S2,FIXED-c2801090+
 F2.7,R2,MEDIUM,indicators,lib/quant/indicators.ts,151,MACD signal warmup not validated,N/A,AT-F2.7-macd-warmup,E1,S2,FIXED-c2801090+
-F2.8,R2,MEDIUM,indicators,lib/quant/indicators.ts,53-81,ema/emaFull dual API footgun,N/A (DX),AT-F2.8-ema-deprecate,E1,S3,open
+F2.8,R2,MEDIUM,indicators,lib/quant/indicators.ts,53-81,ema marked @deprecated; emaFull preferred,N/A (DX),AT-F2.8-ema-deprecate,E1,S2,FIXED
 F2.9,R2,LOW,indicators,lib/quant/indicators.ts,"215, 220",Bollinger period<2 silent,N/A,AT-F2.9-bb-period-min2,E1,S2,FIXED-c2801090+
 F2.10,R2,LOW,indicators,lib/quant/indicators.ts,416-422,simple-vs-log-returns convention now documented,Tsay (2010) p3-7,AT-F2.10-log-returns,E1,S2,FIXED
 F3.1,R3,HIGH,options,lib/options/greeks.ts,64-141,BSM extended with Merton dividend yield q (default 0 = backward compat),"Merton (1973) Bell J 4(1); Hull (2017) p385-388",AT-F3.1-merton-q,E1+E3,S2,FIXED
@@ -40,7 +40,7 @@ F4.5,R4,HIGH,data-engineering,(every yahoo route),yahoo-finance2 commercial redi
 F4.6,R4,MEDIUM,data-engineering,app/api/prices/route.ts,47-58,falsy fallback to 0 hides missing data,N/A,AT-F4.6-nullish-coalesce,E3,S2,FIXED-c7340323+
 F4.7,R4,MEDIUM,data-engineering,app/api/prices/route.ts,58,marketCap hardcoded 'B' suffix,N/A (display),AT-F4.7-format-helper,E3,S2,FIXED-c7340323+
 F4.8,R4,MEDIUM,data-engineering,app/api/prices/route.ts,79,error response leaks raw error,"OWASP API8; CWE-209",AT-F4.8-sanitize,E3,S2,FIXED-c7340323+
-F4.9,R4,MEDIUM,data-engineering,app/api/prices/route.ts,75,no edge-cache; high yahoo QPS,N/A (perf),AT-F4.9-edge-cache,E3,S3,open
+F4.9,R4,MEDIUM,data-engineering,app/api/prices/route.ts,75,edge-cache 3s + stale-while-revalidate 5s; reduces yahoo QPS by Nx,N/A (perf),AT-F4.9-edge-cache,E3,S2,FIXED
 F4.10,R4,MEDIUM,data-engineering,app/api/prices/route.ts,30,^VIX normalization incomplete,N/A,AT-F4.10-index-symbols,E3,S2,FIXED-c7340323+
 F4.11,R4,LOW,data-engineering,app/api/prices/route.ts,70,dataSources.yahoo hardcoded true,N/A,AT-F4.11-yahoo-detect,E3,S2,FIXED-c7340323+
 F5.1,R5,CRITICAL,frontend-architecture,components/KLineChart.tsx,147-220,indicator math reimplemented inline; SSOT violation,N/A (SSOT),AT-F5.1-chart-canonical-indicators,E2,S2,FIXED-c7fa7902+
@@ -62,7 +62,7 @@ F6.6,R6,MEDIUM,accessibility,(cross-component),various,text-slate-600 fails AA c
 F6.7,R6,MEDIUM,accessibility,components/KeyboardShortcuts.tsx,various,verify focus trap and dialog semantics,WAI-ARIA APG,AT-F6.7-modal-pattern,E2,S4,open
 F6.8,R6,MEDIUM,accessibility,(cross-component),various,aria-live underused for live updates,WCAG 2.2 SC 4.1.3,AT-F6.8-live-region,E2,S4,open
 F6.9,R6,LOW,accessibility,app/layout.tsx,root,confirm html lang attribute,WCAG 2.2 SC 3.1.1,AT-F6.9-html-lang,E2,S4,open
-F7.1,R7,HIGH,security,lib/auth.ts,34-58,NEXTAUTH_SECRET fallback OK but no alerting,OWASP ASVS V7,AT-F7.1-secret-alert,E3+E4,S4,open
+F7.1,R7,HIGH,security,lib/auth.ts,34-58,NEXTAUTH_SECRET fallback now logs structured event at console.error severity,OWASP ASVS V7,AT-F7.1-secret-alert,E3+E4,S2,FIXED
 F7.2,R7,HIGH,security,lib/api/reliability.ts,50,error responses leak internals,"CWE-209; OWASP API8",AT-F7.2-error-sanitize,E3,S2,open
 F7.3,R7,HIGH,security,(API routes accepting tickers),various,tickers flow to yahoo without validation,"CWE-918; OWASP ASVS V12",AT-F7.3-ticker-whitelist-fuzz,E3,S2,open
 F7.4,R7,HIGH,security,(POST routes),trading-agents/backtest,no CSRF protection (need verify),OWASP CSRF Prevention,AT-F7.4-csrf-guard,E3,S4,open
@@ -71,7 +71,7 @@ F7.6,R7,MEDIUM,security,next.config.js,headers,security headers added (HSTS/X-Fr
 F7.7,R7,MEDIUM,security,lib/api/rateLimit.ts,(cross-ref F4.3),rate-limit ineffective,OWASP API4,AT-F4.3-distributed-ratelimit,E3,S2,open
 F7.8,R7,MEDIUM,security,(every yahoo route),(cross-ref F4.5),yahoo commercial use,Yahoo ToS,AT-F4.5-compliance-banner,E3,S4,open
 F7.9,R7,MEDIUM,security,lib/auth.ts,74-80,JWT callback validates name/email/image via safeStringField+safeUrlField,OWASP ASVS V5,AT-F7.9-jwt-validate,E3,S2,FIXED
-F7.10,R7,LOW,security,app/api/prices/route.ts,19,unauthenticated public API noted,N/A (design clarification),AT-F7.10-doc,E3,S4,open
+F7.10,R7,LOW,security,app/api/prices/route.ts,19,public-API design + caching strategy explicitly documented,N/A (design clarification),AT-F7.10-doc,E3,S2,FIXED
 F8.1,R8,CRITICAL,testing,(11 modules),various,hot-path modules have zero tests,"Plan rule 5 (test-before-fix)",AT-F8.1-module-test-presence,E1+E4,S2,open
 F8.2,R8,HIGH,testing,__tests__/components/,absent,zero component tests in repo,Kent C. Dodds (2018),AT-F8.2-component-test-infra,E2+E4,S3,open
 F8.3,R8,HIGH,testing,package.json,absent,no mutation testing,"Jia & Harman (2011); Petrovic & Ivankovic (2018)",AT-F8.3-stryker,E1+E4,S4,open

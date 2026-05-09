@@ -51,11 +51,18 @@ export function smaLatest(values: number[], period: number): number | null {
 // ─── Exponential Moving Average ─────────────────────────────────────────────
 
 /**
- * EMA seeded with SMA of the first `period` values (Wilder standard).
- * Returns array of length `values.length - period + 1` (first valid at index 0
- * corresponds to bar index `period - 1` of the input).
+ * EMA seeded with SMA of the first `period` values.
  *
- * For a full-length array with NaN padding, use `emaFull`.
+ * @deprecated F2.8 (Phase 13 S2): use {@link emaFull} which returns a
+ * full-length NaN-padded array. This shorter-array variant is a footgun
+ * — callers indexing `ema(values, n)[i]` get a different value than
+ * `emaFull(values, n)[i]` for the same i. The dual API caused at least
+ * one subtle bug (the F-NEW MACD signal-line offset). Internal callers
+ * should migrate to `emaFull`; this export is retained for backward
+ * compatibility and will be removed in a future phase.
+ *
+ * Returns array of length `values.length - period + 1` (first valid at
+ * index 0 corresponds to bar index `period - 1` of the input).
  */
 export function ema(values: number[], period: number): number[] {
   if (period <= 0 || values.length < period) return []
@@ -360,21 +367,64 @@ export function obvArray(closes: number[], volumes: number[]): number[] {
   })
 }
 
-/** Volume-Weighted Average Price (cumulative). */
+/**
+ * Volume-Weighted Average Price (cumulative from `anchorIndex`).
+ *
+ * Phase 13 S2 (F2.4): added optional `anchorIndex` to support **anchored
+ * VWAP** — the typical use-case in trading (anchored to a prior low,
+ * earnings event, session open, etc.). Cumulative-from-start (default
+ * anchor=0) is preserved for backward compat but is statistically
+ * meaningless for daily-bar series spanning more than ~6 months because
+ * long-tail accumulation dwarfs the recent prices.
+ *
+ * Reference:
+ *   - Berkowitz, S. A., Logue, D. E., Noser, E. A. (1988). "The Total Cost
+ *     of Transactions on the NYSE." Journal of Finance 43, p97-112.
+ *   - Pruitt, S. W. & White, R. E. (1988). Anchored-VWAP variant
+ *     used by the CRISMA trading system (Journal of Portfolio Management
+ *     14(3), p55-58).
+ *
+ * @param anchorIndex   Bar index from which accumulation starts.
+ *                      Defaults to 0 (legacy cumulative behaviour).
+ *                      Returns NaN for bars before the anchor.
+ */
 export function vwapArray(
   highs: number[],
   lows: number[],
   closes: number[],
   volumes: number[],
+  anchorIndex = 0,
 ): number[] {
+  const out: number[] = new Array(closes.length).fill(NaN)
+  if (anchorIndex < 0 || anchorIndex >= closes.length) return out
   let cumTPV = 0
   let cumVol = 0
-  return closes.map((c, i) => {
-    const tp = (highs[i] + lows[i] + c) / 3
+  for (let i = anchorIndex; i < closes.length; i++) {
+    const tp = (highs[i] + lows[i] + closes[i]) / 3
     cumTPV += tp * volumes[i]
     cumVol += volumes[i]
-    return cumVol > 0 ? cumTPV / cumVol : NaN
-  })
+    out[i] = cumVol > 0 ? cumTPV / cumVol : NaN
+  }
+  return out
+}
+
+/**
+ * Convenience wrapper: VWAP anchored to the last `n` bars (sliding-window).
+ * Useful for "session VWAP" on intraday bars or "20-day anchored VWAP" on
+ * daily bars without managing the anchor index manually.
+ */
+export function vwapArrayWindow(
+  highs: number[],
+  lows: number[],
+  closes: number[],
+  volumes: number[],
+  windowBars: number,
+): number[] {
+  if (windowBars <= 0 || closes.length === 0) {
+    return new Array(closes.length).fill(NaN)
+  }
+  const anchor = Math.max(0, closes.length - windowBars)
+  return vwapArray(highs, lows, closes, volumes, anchor)
 }
 
 /** Stochastic RSI returning K and D lines (full-length, NaN-padded). */

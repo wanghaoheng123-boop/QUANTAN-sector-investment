@@ -38,8 +38,30 @@ function isoQuoteTime(q: { regularMarketTime?: unknown }): string | null {
   return null
 }
 
+/**
+ * Public endpoint, no authentication required (F7.10 — Phase 13 S2 doc).
+ *
+ * Returns live or near-live prices for the requested tickers. Backed by
+ * yahoo-finance2 with an optional Bloomberg-bridge upgrade when the
+ * `BLOOMBERG_BRIDGE_URL` env var is configured.
+ *
+ * Rate-limit: 60 req/min per IP (per-process bucket — F4.3 distributed
+ * implementation deferred to S3 with Vercel KV).
+ *
+ * Caching strategy (F4.9 — Phase 13 S2):
+ *   The endpoint is rate-limited and caches at the CDN edge for 3 seconds
+ *   with `stale-while-revalidate` for a further 5 seconds. This caps the
+ *   downstream load on yahoo-finance2 — the previous `no-store` policy
+ *   meant N concurrent users polling at 5s each fired N×M yahoo calls
+ *   per 5-second window.  Edge-cache reduces upstream QPS by ~Nx.
+ *
+ *   Note: 3 seconds is below the SWR client-side `dedupingInterval`
+ *   (2.5s) and the `refreshInterval` (5s) so freshness from a user's
+ *   perspective is unchanged. Per the Phase 12 plan note,
+ *   "5s = standard institutional cadence" — 3s edge TTL is well within.
+ */
 export async function GET(request: NextRequest) {
-  // Rate limit: 60 req/min per IP (prices poll frequently)
+  // Rate limit: 60 req/min per IP (prices poll frequently).
   const rateLimitResponse = applyRateLimit(request, 'prices', { maxRequests: 60, windowSeconds: 60 })
   if (rateLimitResponse) return rateLimitResponse
 
@@ -121,7 +143,17 @@ export async function GET(request: NextRequest) {
           bloombergStatus,
         },
       },
-      { headers: { 'Cache-Control': 'no-store', 'CDN-Cache-Control': 'no-store' } }
+      {
+        headers: {
+          // F4.9 (Phase 13 S2): edge-cache for 3s + serve stale for 5s while
+          // revalidating. Per-user freshness is unchanged because the SWR
+          // client uses 5s refresh + 2.5s dedup.
+          'Cache-Control': 'public, s-maxage=3, stale-while-revalidate=5',
+          'CDN-Cache-Control': 'public, s-maxage=3, stale-while-revalidate=5',
+          // Browser MUST NOT cache (per-user data changes constantly).
+          'Vary': 'Accept-Encoding',
+        },
+      }
     )
   } catch (error) {
     console.error('[Prices API] Error fetching from Yahoo Finance:', error)
