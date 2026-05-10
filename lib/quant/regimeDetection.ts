@@ -84,21 +84,30 @@ export function detectRegime(closes: number[], bars: OhlcBar[]): RegimeState {
   const adx = adxArray(bars, 14)
   const lastAdx = adx.adx[adx.adx.length - 1]
   let adxValue: number | null = null
+  // When ADX is unavailable (insufficient bars), trendRegime stays UNKNOWN
+  // (encoded by adxValue === null below). Previously this defaulted to
+  // 'range_bound' which then triggered a mean_reversion strategy hint
+  // based on no actual trend signal — a fail-open bug.
   let trendRegime: TrendRegime = 'range_bound'
+  let trendKnown = false
 
   if (Number.isFinite(lastAdx)) {
     adxValue = lastAdx
+    trendKnown = true
     if (lastAdx > 25) trendRegime = 'strong_trend'
     else if (lastAdx > 15) trendRegime = 'weak_trend'
     else trendRegime = 'range_bound'
   }
 
-  // Strategy hint
+  // Strategy hint — only emit a recommendation when we actually have an
+  // ADX reading. Fail-closed to 'neutral' when trend signal is unknown.
   let strategyHint: StrategyHint = 'neutral'
-  if (trendRegime === 'strong_trend' && volatilityRegime !== 'crisis') {
-    strategyHint = 'trend_following'
-  } else if (trendRegime === 'range_bound' && (volatilityRegime === 'low' || volatilityRegime === 'normal')) {
-    strategyHint = 'mean_reversion'
+  if (trendKnown) {
+    if (trendRegime === 'strong_trend' && volatilityRegime !== 'crisis') {
+      strategyHint = 'trend_following'
+    } else if (trendRegime === 'range_bound' && (volatilityRegime === 'low' || volatilityRegime === 'normal')) {
+      strategyHint = 'mean_reversion'
+    }
   }
 
   // Confidence: clearer signals = higher confidence
