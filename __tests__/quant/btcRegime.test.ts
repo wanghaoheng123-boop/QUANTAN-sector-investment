@@ -13,7 +13,18 @@ function makeCandles(closes: number[], baseTime = 1700000000): BtcCandle[] {
 }
 
 function makeFlatCandles(n: number, price = 50000): BtcCandle[] {
-  return makeCandles(Array.from({ length: n }, () => price))
+  // True-flat: H = L = C, ATR = 0 — required for the confidence test.
+  // makeCandles synthesises ±1% wicks (H = C*1.01, L = C*0.99), which
+  // would inflate ATR to ~2% of price and clamp confidence to 75.
+  const baseTime = 1700000000
+  return Array.from({ length: n }, (_, i) => ({
+    time: baseTime + i * 86400,
+    open: price,
+    high: price,
+    low: price,
+    close: price,
+    volume: 1000,
+  }))
 }
 
 function makeTrendCandles(n: number, start: number, dailyReturn: number): BtcCandle[] {
