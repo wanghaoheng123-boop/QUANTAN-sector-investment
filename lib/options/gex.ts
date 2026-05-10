@@ -6,10 +6,21 @@
  * as stabilisers (sell rallies / buy dips).  When net GEX is negative, they are
  * short gamma and amplify moves.
  *
- * Formula per strike:
- *   GEX_strike = (callOI - putOI) × gamma × 100 × spot² × 0.01
+ * Formula per strike (per-side gamma — Krishnan 2017):
+ *   GEX_strike = (callOI × callGamma − putOI × putGamma) × 100 × spot² × 0.01
  *
  * The factor 100 = contracts per lot; 0.01 converts a 1% spot move to dollars.
+ *
+ * Why per-side gamma rather than `(callOI − putOI) × gamma`:
+ *   Under volatility skew (the empirically-observed smile), same-strike call
+ *   IV and put IV diverge — for equity index options, OTM puts trade at
+ *   markedly higher IV than equidistant OTM calls. Different IVs produce
+ *   different gammas. The single-gamma formulation conflates the two and
+ *   biases GEX in the direction of whichever side's gamma was used last.
+ *
+ * Citation: Krishnan, V. (2017), "Gamma Exposure: Quantifying Hedging
+ *           Flows," Squeezemetrics white paper. Defines GEX per side
+ *           explicitly to avoid skew-induced bias.
  */
 
 import type { EnrichedContract } from './chain'
@@ -39,19 +50,25 @@ export function computeGex(
   puts: EnrichedContract[],
   spot: number,
 ): GexResult {
-  // Build per-strike map
-  const strikeMap = new Map<number, { callOI: number; putOI: number; gamma: number }>()
+  // Per-strike accumulators with separate gamma for calls and puts so the
+  // formula honors volatility skew. If multiple call (or put) contracts
+  // share the same strike (rare), the last one's gamma wins — which mirrors
+  // the prior single-gamma behaviour for that subset.
+  const strikeMap = new Map<number, { callOI: number; putOI: number; callGamma: number; putGamma: number }>()
 
   function upsert(strike: number, oi: number, gamma: number, side: 'call' | 'put') {
     let entry = strikeMap.get(strike)
     if (!entry) {
-      entry = { callOI: 0, putOI: 0, gamma }
+      entry = { callOI: 0, putOI: 0, callGamma: 0, putGamma: 0 }
       strikeMap.set(strike, entry)
     }
-    if (side === 'call') entry.callOI += oi
-    else entry.putOI += oi
-    // Use the gamma from whichever contract we encounter last (they should be ~equal)
-    entry.gamma = gamma
+    if (side === 'call') {
+      entry.callOI += oi
+      entry.callGamma = gamma
+    } else {
+      entry.putOI += oi
+      entry.putGamma = gamma
+    }
   }
 
   for (const c of calls) upsert(c.strike, c.openInterest ?? 0, c.gamma, 'call')
@@ -60,8 +77,10 @@ export function computeGex(
   const strikes = Array.from(strikeMap.keys()).sort((a, b) => a - b)
 
   const strikeGex: StrikeGex[] = strikes.map((strike) => {
-    const { callOI, putOI, gamma } = strikeMap.get(strike)!
-    const gex = (callOI - putOI) * gamma * 100 * spot * spot * 0.01
+    const { callOI, putOI, callGamma, putGamma } = strikeMap.get(strike)!
+    // Per-side computation: call contribution and put contribution use
+    // their own gamma, summed (puts net negative).
+    const gex = (callOI * callGamma - putOI * putGamma) * 100 * spot * spot * 0.01
     return { strike, gex }
   })
 

@@ -108,4 +108,52 @@ describe('computeGex', () => {
     expect(result.strikeGex).toHaveLength(0)
     expect(result.flipPoint).toBeNull()
   })
+
+  /**
+   * Regression: GEX formula was `(callOI - putOI) × gamma × ...` using a
+   * single gamma per strike — last contract's gamma overwrote the
+   * earlier one. Under volatility skew (real markets), same-strike call
+   * and put have meaningfully different gammas. New per-side
+   * formulation (Krishnan 2017): callOI × callGamma − putOI × putGamma.
+   */
+  describe('per-side gamma under skew (regression)', () => {
+    it('uses each side\'s own gamma when call and put gammas differ at the same strike', () => {
+      // Equal OI on both sides but different gammas (typical skew: put gamma > call gamma OTM)
+      const calls = [makeEnriched(100, 1000, 0.04, 'call')]
+      const puts  = [makeEnriched(100, 1000, 0.06, 'put')]
+      const r = computeGex(calls, puts, SPOT)
+      // Per-side: gex = (1000 × 0.04 − 1000 × 0.06) × 100 × 100² × 0.01
+      //              = (40 − 60) × 100 × 10000 × 0.01
+      //              = −20 × 100 × 10000 × 0.01 = −200000
+      expect(r.totalGex).toBeCloseTo(-200_000, 2)
+      // OLD single-gamma formula (broken): (1000 - 1000) × 0.06 × ... = 0
+      // Our test would FAIL on the old formula which pinned totalGex to 0.
+      expect(r.totalGex).not.toBe(0)
+    })
+
+    it('preserves backward compat when call and put gammas are equal (degenerate skew)', () => {
+      const calls = [makeEnriched(100, 2000, 0.05, 'call')]
+      const puts  = [makeEnriched(100,  500, 0.05, 'put')]
+      const r = computeGex(calls, puts, SPOT)
+      // (2000 × 0.05 − 500 × 0.05) × 100 × 100² × 0.01 = 1500 × 0.05 × 10000 = 750000
+      expect(r.totalGex).toBeCloseTo(750_000, 2)
+      // Same as the old (callOI - putOI) × gamma when callGamma === putGamma
+    })
+
+    it('asymmetric gammas across multiple strikes preserve flip detection', () => {
+      // Lower strike: puts with high gamma dominate; upper strike: calls dominate
+      const calls = [
+        makeEnriched(90, 100, 0.02, 'call'),
+        makeEnriched(110, 2000, 0.05, 'call'),
+      ]
+      const puts = [
+        makeEnriched(90, 2000, 0.08, 'put'),  // high put gamma OTM (skew)
+        makeEnriched(110, 100, 0.04, 'put'),
+      ]
+      const r = computeGex(calls, puts, SPOT)
+      expect(r.strikeGex).toHaveLength(2)
+      expect(r.strikeGex[0].gex).toBeLessThan(0)  // puts dominate at 90
+      expect(r.strikeGex[1].gex).toBeGreaterThan(0)  // calls dominate at 110
+    })
+  })
 })
