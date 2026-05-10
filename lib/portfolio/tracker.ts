@@ -26,7 +26,9 @@ export interface Portfolio {
   initialCapital: number
   totalValue: number     // cash + sum(position market values)
   unrealizedPnl: number
-  unrealizedPnlPct: number
+  /** Total return since inception: (totalValue - initialCapital) / initialCapital.
+   *  Includes both realized and unrealized P&L, hence "total return" not "unrealized PnL%". */
+  totalReturnPct: number
   realizedPnl: number
   createdAt: string
   updatedAt: string
@@ -68,7 +70,7 @@ export function createPortfolio(name: string, initialCapital: number): Portfolio
     initialCapital,
     totalValue: initialCapital,
     unrealizedPnl: 0,
-    unrealizedPnlPct: 0,
+    totalReturnPct: 0,
     realizedPnl: 0,
     createdAt: now,
     updatedAt: now,
@@ -121,13 +123,16 @@ export function addPosition(
   }
   const existing = portfolio.positions.find(p => p.ticker === ticker)
   if (existing) {
-    // Average-up / average-down
+    // Average-up / average-down: keep original entryDate for the original shares.
+    // The new shares get the new entryDate in tracking, but the position-level
+    // entryDate stays as the original — this is the conventional treatment.
     const totalShares = existing.shares + shares
     const newAvgCost = (existing.shares * existing.avgCost + shares * price) / totalShares
     existing.shares = totalShares
     existing.avgCost = newAvgCost
     existing.currentPrice = price
-    existing.entryDate = entryDate
+    // Keep original entryDate; do NOT overwrite with the new date
+    // existing.entryDate remains unchanged
   } else {
     portfolio.positions.push({
       ticker, sector, shares, avgCost: price,
@@ -182,8 +187,13 @@ export function closePosition(
 
 export function updatePrices(portfolio: Portfolio, prices: Record<string, number>): Portfolio {
   for (const pos of portfolio.positions) {
-    if (prices[pos.ticker] != null) {
-      pos.currentPrice = prices[pos.ticker]
+    const rawPrice = prices[pos.ticker]
+    if (rawPrice != null) {
+      // Validate: reject NaN, Infinity, negative, or zero prices
+      if (!Number.isFinite(rawPrice) || rawPrice <= 0) {
+        continue  // Keep previous price for invalid inputs
+      }
+      pos.currentPrice = rawPrice
     }
   }
   return recomputePortfolio(portfolio)
@@ -202,7 +212,9 @@ function recomputePortfolio(portfolio: Portfolio): Portfolio {
 
   const totalUnrealized = portfolio.positions.reduce((s, p) => s + p.unrealizedPnl, 0)
   portfolio.unrealizedPnl = totalUnrealized
-  portfolio.unrealizedPnlPct = portfolio.initialCapital > 0
+  // This is actually total return (realized + unrealized), not just unrealized PnL %.
+  // totalValue includes both cash (which holds realized PnL) and position market values.
+  portfolio.totalReturnPct = portfolio.initialCapital > 0
     ? (portfolio.totalValue - portfolio.initialCapital) / portfolio.initialCapital
     : 0
 
@@ -214,7 +226,14 @@ function recomputePortfolio(portfolio: Portfolio): Portfolio {
 export function appendClosedTrade(portfolioId: string, trade: ClosedTrade): void {
   if (typeof localStorage === 'undefined') return
   const key = closedTradesKey(portfolioId)
-  const existing: ClosedTrade[] = JSON.parse(localStorage.getItem(key) ?? '[]')
+  let existing: ClosedTrade[] = []
+  try {
+    existing = JSON.parse(localStorage.getItem(key) ?? '[]') as ClosedTrade[]
+    if (!Array.isArray(existing)) existing = []
+  } catch {
+    // Corrupted data — initialize with empty array
+    existing = []
+  }
   existing.push(trade)
   localStorage.setItem(key, JSON.stringify(existing))
 }
@@ -222,5 +241,12 @@ export function appendClosedTrade(portfolioId: string, trade: ClosedTrade): void
 export function loadClosedTrades(portfolioId: string): ClosedTrade[] {
   if (typeof localStorage === 'undefined') return []
   const raw = localStorage.getItem(closedTradesKey(portfolioId))
-  return raw ? (JSON.parse(raw) as ClosedTrade[]) : []
+  if (!raw) return []
+  try {
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed as ClosedTrade[] : []
+  } catch {
+    // Corrupted data — return empty array
+    return []
+  }
 }

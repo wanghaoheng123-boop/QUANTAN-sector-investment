@@ -50,11 +50,13 @@ const META_KEY = '__WHTEST_meta_key'
 // candles with empty arrays (no-op) — instead, simply mark cleanup via deletes.
 import * as path from 'path'
 
+// DB_PATH must match lib/data/warehouse.ts. Main moved this from
+// scripts/quantan.db → root-level quantan-warehouse-new.db (post-merge).
 function cleanup(): void {
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const Database = require('better-sqlite3')
-    const dbPath = path.join(process.cwd(), 'scripts', 'quantan.db')
+    const dbPath = path.join(process.cwd(), 'quantan-warehouse-new.db')
     const db = new Database(dbPath)
     db.prepare('DELETE FROM candles WHERE ticker LIKE ?').run('__WHTEST_%')
     db.prepare('DELETE FROM quotes WHERE ticker LIKE ?').run('__WHTEST_%')

@@ -17,6 +17,9 @@ import { tradingDefaultEmaFlags } from '@/lib/chartEma'
 import { STOCK_CHART_RANGES, isStockIntradayPollRange } from '@/lib/chartYahoo'
 import { formatCompactNumber, formatCurrency, formatFreshness, formatSignedNumber } from '@/lib/format'
 import { ChartErrorBoundary } from '@/components/ChartErrorBoundary'
+import { DashboardGuide } from '@/components/DashboardGuide'
+import { MetricTooltip } from '@/components/MetricTooltip'
+import { DataFreshnessIndicator } from '@/components/DataFreshnessIndicator'
 
 const CHART_POLL_MS = (range: string) =>
   ['1m', '3m', '5m'].includes(range) ? 30_000 : 60_000
@@ -70,7 +73,11 @@ export default function SectorPage({ params }: { params: { slug: string } }) {
           setCandles(data.candles ?? [])
           setDarkPoolMarkers(data.darkPoolMarkers ?? [])
         })
-        .catch(() => {})
+        .catch((err) => {
+          // Phase 13 S2 fix (F5.4): chart data fetch failure now surfaces as a
+          // diagnostic in console; UI shows last-known candles unchanged.
+          console.warn('[sector] chart fetch failed for', sector.etf, err)
+        })
     },
     [sector.etf]
   )
@@ -122,7 +129,9 @@ export default function SectorPage({ params }: { params: { slug: string } }) {
         setDarkPoolApiData(data)
         setDarkPoolApiLoading(false)
       })
-      .catch(() => {
+      .catch((err) => {
+        // Phase 13 S2 fix (F5.4): dark-pool fetch failure now diagnosable.
+        console.warn('[sector] dark-pool fetch failed for', sector.etf, err)
         setDarkPoolApiLoading(false)
       })
   }, [sector.etf, activeTab])
@@ -198,24 +207,94 @@ export default function SectorPage({ params }: { params: { slug: string } }) {
           {/* Quick stats */}
           {quote && (
             <div className="flex flex-wrap gap-4 mt-4 text-xs text-slate-500">
-              <span>52W High: <span className="text-white font-mono">{formatCurrency(quote.high52w)}</span></span>
-              <span>52W Low: <span className="text-white font-mono">{formatCurrency(quote.low52w)}</span></span>
-              <span>P/E: <span className="text-white font-mono">{quote.pe.toFixed(1)}×</span></span>
-              <span>Vol: <span className="text-white font-mono">{formatCompactNumber(quote.volume)}</span></span>
+              <span className="flex items-center">
+                52W High: <span className="text-white font-mono ml-1">{formatCurrency(quote.high52w)}</span>
+                <MetricTooltip label="52-week high" content="Highest price over the past 52 weeks. Reference for resistance and breakout signals — price approaching 52W high after consolidation often precedes a leg up." compact />
+              </span>
+              <span className="flex items-center">
+                52W Low: <span className="text-white font-mono ml-1">{formatCurrency(quote.low52w)}</span>
+                <MetricTooltip label="52-week low" content="Lowest price over the past 52 weeks. Bouncing off 52W low with rising volume = potential capitulation reversal. Breaking below = often a long-term downtrend continuation." compact />
+              </span>
+              <span className="flex items-center">
+                P/E: <span className="text-white font-mono ml-1">{quote.pe.toFixed(1)}×</span>
+                <MetricTooltip label="Price/Earnings" content="Price divided by trailing earnings. Sector P/E < 15× = relatively cheap, > 25× = expensive. Compare across sectors and to the sector's own 5Y average, not just absolute level." compact />
+              </span>
+              <span className="flex items-center">
+                Vol: <span className="text-white font-mono ml-1">{formatCompactNumber(quote.volume)}</span>
+                <MetricTooltip label="Daily volume" content="Shares traded today. Higher than 20-day average = institutional activity. Volume confirms price moves — a rally on weak volume is suspect." compact />
+              </span>
               <span className="flex items-center gap-2">
-                Top Holdings:
+                <span className="flex items-center">
+                  Top Holdings:
+                  <MetricTooltip label="Top holdings" content="Largest single-stock weights in this ETF. They drive most of the sector's daily move. Click to drill into single-name analysis." compact />
+                </span>
                 {sector.topHoldings.map(h => (
                   <Link key={h} href={`/stock/${h.toLowerCase()}`}>
                     <span className="font-mono text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors cursor-pointer border border-slate-700 shadow-sm">{h}</span>
                   </Link>
                 ))}
               </span>
+              <span className="flex items-center gap-1">
+                <DataFreshnessIndicator quoteTime={quote.quoteTime ? Date.parse(quote.quoteTime) : null} compact />
+                <span className="text-[10px]">data freshness</span>
+              </span>
             </div>
           )}
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 py-8">
+      <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">
+        {/* Onboarding guide for sector detail */}
+        <DashboardGuide
+          pageKey={`sector-${sector.slug}`}
+          title={`${sector.name} (${sector.etf})`}
+          summary={`${sector.description}. Use the chart for trend, dark pool for institutional flow, and the right column for quant signals.`}
+          sections={[
+            {
+              title: 'Chart tab — what to look at',
+              body: (
+                <p>
+                  Top panel = price (candlesticks). Below: <strong>RSI</strong> (overbought/oversold), <strong>MACD</strong> (trend momentum), <strong>ATR</strong> (volatility).
+                  Dark pool prints (blue ●) and news (green ▲) overlay on the chart. Hover crosshair shows OHLCV at any bar.
+                </p>
+              ),
+            },
+            {
+              title: 'Dark Pool tab — institutional flow',
+              body: (
+                <p>
+                  Off-exchange block trades. <strong>Bullish prints near ask</strong> = accumulation; <strong>bearish prints near bid</strong> = distribution.
+                  Cluster of large prints often precedes a directional move — but is rarely a same-day signal.
+                </p>
+              ),
+            },
+            {
+              title: 'Right column — Quant signals',
+              body: (
+                <p>
+                  Composite signal (BUY/SELL/HOLD) blends: trend (price vs EMA200), momentum (RSI/MACD), volatility regime, and multi-timeframe alignment.
+                  <strong>Confidence %</strong> = how aligned all sub-signals are. Hover any metric’s ⓘ for the formula and how to act on it.
+                </p>
+              ),
+            },
+            {
+              title: 'How to act',
+              body: (
+                <p>
+                  Strong BUY + price above EMA200 + RSI 50–70 = <strong>quality long setup</strong>. Strong SELL + RSI &gt; 80 + dark pool selling = <strong>top warning</strong>.
+                  Always size position so a 1.5×ATR stop costs ≤1% of account.
+                </p>
+              ),
+            },
+          ]}
+          legend={[
+            { color: '#00d084', label: 'Bullish bar / signal', meaning: 'price up vs prior close, or BUY signal' },
+            { color: '#ff4757', label: 'Bearish bar / signal', meaning: 'price down vs prior close, or SELL signal' },
+            { color: '#fbbf24', label: 'Indicator overlay', meaning: 'EMA, MACD, ATR overlays on chart' },
+            { color: '#3b82f6', label: 'Dark pool print', meaning: 'institutional block trade off-exchange' },
+          ]}
+        />
+
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
           {/* Left: Chart + Tabs */}
           <div className="xl:col-span-2 space-y-6">

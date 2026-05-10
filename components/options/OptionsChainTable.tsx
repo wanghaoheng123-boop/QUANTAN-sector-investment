@@ -2,6 +2,13 @@
 
 import { useState } from 'react'
 import type { EnrichedChain, EnrichedContract } from '@/lib/options/chain'
+import { MetricTooltip } from '@/components/MetricTooltip'
+
+const HEADER_TOOLTIPS: Record<string, string> = {
+  IV: 'iv',
+  'Δ': 'delta',
+  OI: 'openInterest',
+}
 
 interface Props {
   chain: EnrichedChain
@@ -56,10 +63,13 @@ function ContractCell({
   )
 }
 
+const MAX_VISIBLE_EXPIRIES = 8
+
 export default function OptionsChainTable({ chain }: Props) {
   const [selectedExpiry, setSelectedExpiry] = useState<string>(
     chain.currentExpiry ? chain.currentExpiry.toISOString().slice(0, 10) : '',
   )
+  const [showAllExpiries, setShowAllExpiries] = useState(false)
 
   const expiryStr = selectedExpiry || (chain.currentExpiry ? chain.currentExpiry.toISOString().slice(0, 10) : '')
   const calls = chain.calls.filter(
@@ -88,7 +98,7 @@ export default function OptionsChainTable({ chain }: Props) {
       {/* Expiry selector */}
       <div className="flex items-center gap-2 flex-wrap">
         <span className="text-xs text-gray-400 uppercase tracking-wide">Expiry:</span>
-        {chain.expirationDates.slice(0, 8).map((d) => {
+        {(showAllExpiries ? chain.expirationDates : chain.expirationDates.slice(0, MAX_VISIBLE_EXPIRIES)).map((d) => {
           const str = d instanceof Date ? d.toISOString().slice(0, 10) : new Date(d).toISOString().slice(0, 10)
           return (
             <button
@@ -104,25 +114,51 @@ export default function OptionsChainTable({ chain }: Props) {
             </button>
           )
         })}
+        {chain.expirationDates.length > MAX_VISIBLE_EXPIRIES && (
+          <button
+            onClick={() => setShowAllExpiries((v) => !v)}
+            className="text-xs px-2 py-0.5 rounded border border-gray-600 text-gray-400 hover:border-gray-400 hover:text-gray-200"
+          >
+            {showAllExpiries ? 'Show less' : `+${chain.expirationDates.length - MAX_VISIBLE_EXPIRIES} more`}
+          </button>
+        )}
       </div>
 
       {/* Chain table */}
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
+          {/* F6.4 (Phase 13 S2): caption + scope for screen readers — WCAG 1.3.1. */}
+          <caption className="sr-only">Options chain — calls on the left (IV, delta, open interest, volume, last) and puts on the right (last, volume, open interest, delta, IV) sharing a central strike column.</caption>
           <thead>
             <tr className="border-b border-gray-700">
-              <th colSpan={5} className="text-center text-xs text-emerald-400 pb-1">CALLS</th>
-              <th className="text-center text-xs text-gray-300 pb-1 px-3">STRIKE</th>
-              <th colSpan={5} className="text-center text-xs text-red-400 pb-1">PUTS</th>
+              <th scope="colgroup" colSpan={5} className="text-center text-xs text-emerald-400 pb-1">CALLS</th>
+              <th scope="col" className="text-center text-xs text-gray-300 pb-1 px-3">STRIKE</th>
+              <th scope="colgroup" colSpan={5} className="text-center text-xs text-red-400 pb-1">PUTS</th>
             </tr>
             <tr className="border-b border-gray-800">
-              {['IV', 'Δ', 'OI', 'Vol', 'Last'].map((h) => (
-                <th key={`c-${h}`} className="px-2 py-1 text-xs text-gray-500 text-right">{h}</th>
-              ))}
-              <th className="px-3 py-1 text-xs text-gray-400 text-center">—</th>
-              {['IV', 'Δ', 'OI', 'Vol', 'Last'].map((h) => (
-                <th key={`p-${h}`} className="px-2 py-1 text-xs text-gray-500 text-right">{h}</th>
-              ))}
+              {['IV', 'Δ', 'OI', 'Vol', 'Last'].map((h) => {
+                const mk = HEADER_TOOLTIPS[h]
+                return (
+                  <th key={`c-${h}`} scope="col" className="px-2 py-1 text-xs text-gray-500 text-right">
+                    <span className="inline-flex items-center justify-end">
+                      {h}
+                      {mk && <MetricTooltip metricKey={mk} compact />}
+                    </span>
+                  </th>
+                )
+              })}
+              <th scope="col" className="px-3 py-1 text-xs text-gray-400 text-center">—</th>
+              {['IV', 'Δ', 'OI', 'Vol', 'Last'].map((h) => {
+                const mk = HEADER_TOOLTIPS[h]
+                return (
+                  <th key={`p-${h}`} scope="col" className="px-2 py-1 text-xs text-gray-500 text-right">
+                    <span className="inline-flex items-center justify-end">
+                      {h}
+                      {mk && <MetricTooltip metricKey={mk} compact />}
+                    </span>
+                  </th>
+                )
+              })}
             </tr>
           </thead>
           <tbody>

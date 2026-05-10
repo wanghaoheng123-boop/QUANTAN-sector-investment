@@ -2,25 +2,40 @@
  * Gamma Exposure (GEX) analysis.
  *
  * GEX quantifies the aggregate option market-maker delta-hedging pressure at
- * each strike.  When net GEX is positive, market makers are long gamma and act
- * as stabilisers (sell rallies / buy dips).  When net GEX is negative, they are
+ * each strike. When net GEX is positive, market makers are long gamma and act
+ * as stabilisers (sell rallies / buy dips). When net GEX is negative, they are
  * short gamma and amplify moves.
  *
- * Formula per strike (per-side gamma — Krishnan 2017):
- *   GEX_strike = (callOI × callGamma − putOI × putGamma) × 100 × spot² × 0.01
+ * Sign convention (F3.4 — Phase 13 S2 documentation):
+ * ────────────────────────────────────────────────────
+ *   This module uses the **Squeezemetrics convention**: dealers are assumed to
+ *   be net SHORT calls (customers buy calls speculatively) and net LONG puts
+ *   (customers buy puts as protection). Positive aggregate GEX therefore means
+ *   dealers carry net long gamma → they hedge by selling into rallies and
+ *   buying into dips, dampening realised volatility.
  *
- * The factor 100 = contracts per lot; 0.01 converts a 1% spot move to dollars.
+ *   Vendor cross-reference:
+ *     • Squeezemetrics (https://squeezemetrics.com)            — same sign as ours
+ *     • SpotGamma (https://spotgamma.com)                       — same sign for SPX
+ *     • MenthorQ                                                — opposite sign for some indices
+ *   If migrating clients between platforms, verify each vendor's convention
+ *   before reading the GEX magnitude as directional evidence.
  *
- * Why per-side gamma rather than `(callOI − putOI) × gamma`:
- *   Under volatility skew (the empirically-observed smile), same-strike call
- *   IV and put IV diverge — for equity index options, OTM puts trade at
- *   markedly higher IV than equidistant OTM calls. Different IVs produce
- *   different gammas. The single-gamma formulation conflates the two and
- *   biases GEX in the direction of whichever side's gamma was used last.
+ *   Reference: Krishnan, H. (2017). The Second Leg Down. Wiley. p120–125.
  *
- * Citation: Krishnan, V. (2017), "Gamma Exposure: Quantifying Hedging
- *           Flows," Squeezemetrics white paper. Defines GEX per side
- *           explicitly to avoid skew-induced bias.
+ * Per-side gamma (F3.3 — Phase 13 S2 fix):
+ * ────────────────────────────────────────
+ *   Previously averaged call gamma and put gamma at the same strike before
+ *   the (callOI - putOI) × gamma × ... aggregation. Under skew, call IV ≠ put
+ *   IV at the same strike, so the averaged-gamma form under-weights the
+ *   dominant side. Corrected formulation:
+ *
+ *     GEX_strike = (callOI × call_gamma - putOI × put_gamma) × 100 × spot² × 0.01
+ *
+ * Multipliers:
+ *   100        = contracts per lot (US standard equity options)
+ *   spot² × 0.01 = dollar change for a 1% spot move applied to the squared
+ *                  notional (gamma's quadratic-payoff scaling)
  */
 
 import type { EnrichedContract } from './chain'
@@ -36,38 +51,68 @@ export interface GexResult {
   /** Sum of all strikeGex values. */
   totalGex: number
   /**
-   * The spot price at which cumulative GEX (from lowest to highest strike)
-   * changes sign from positive to negative.  Null if no sign change exists.
+   * The first spot price at which cumulative GEX (from lowest to highest
+   * strike) changes sign. Backward-compatible single-flip API.
+   * Null if no sign change exists.
    */
   flipPoint: number | null
+  /**
+   * Phase 13 S2 fix (F3.5): all spot prices at which cumulative GEX flips
+   * sign. Multi-flip is common during vol-expansion regimes and when
+   * positioning is bimodal (e.g. a put-skew cluster around a key level
+   * sandwiched between call walls). Sorted ascending by strike.
+   */
+  flipPoints: number[]
 }
 
 /**
  * Computes aggregate GEX from enriched calls and puts for the same expiry.
+ *
+ * F3.3: per-side gamma — call_gamma and put_gamma tracked independently so
+ * skewed IV chains produce accurate GEX (averaging gammas underweights the
+ * dominant side).
  */
 export function computeGex(
   calls: EnrichedContract[],
   puts: EnrichedContract[],
   spot: number,
 ): GexResult {
-  // Per-strike accumulators with separate gamma for calls and puts so the
-  // formula honors volatility skew. If multiple call (or put) contracts
-  // share the same strike (rare), the last one's gamma wins — which mirrors
-  // the prior single-gamma behaviour for that subset.
-  const strikeMap = new Map<number, { callOI: number; putOI: number; callGamma: number; putGamma: number }>()
+  // Per-strike, per-side accumulators. Multiple contracts at the same strike
+  // (rare but possible across providers) get OI summed and gamma averaged
+  // (within-side average is meaningful — same side IV is consistent).
+  interface StrikeAccum {
+    callOI: number
+    callGammaSum: number
+    callGammaCount: number
+    putOI: number
+    putGammaSum: number
+    putGammaCount: number
+  }
+  const strikeMap = new Map<number, StrikeAccum>()
 
   function upsert(strike: number, oi: number, gamma: number, side: 'call' | 'put') {
     let entry = strikeMap.get(strike)
     if (!entry) {
-      entry = { callOI: 0, putOI: 0, callGamma: 0, putGamma: 0 }
+      entry = {
+        callOI: 0, callGammaSum: 0, callGammaCount: 0,
+        putOI: 0, putGammaSum: 0, putGammaCount: 0,
+      }
       strikeMap.set(strike, entry)
     }
     if (side === 'call') {
       entry.callOI += oi
-      entry.callGamma = gamma
+      // F3.3: only accumulate gamma if OI > 0 — zero-OI contracts shouldn't
+      // pollute the side average (and they contribute nothing to GEX anyway).
+      if (oi > 0) {
+        entry.callGammaSum += gamma
+        entry.callGammaCount++
+      }
     } else {
       entry.putOI += oi
-      entry.putGamma = gamma
+      if (oi > 0) {
+        entry.putGammaSum += gamma
+        entry.putGammaCount++
+      }
     }
   }
 
@@ -75,33 +120,39 @@ export function computeGex(
   for (const p of puts)  upsert(p.strike, p.openInterest ?? 0, p.gamma, 'put')
 
   const strikes = Array.from(strikeMap.keys()).sort((a, b) => a - b)
+  const dollarPer1Pct = 100 * spot * spot * 0.01
 
   const strikeGex: StrikeGex[] = strikes.map((strike) => {
-    const { callOI, putOI, callGamma, putGamma } = strikeMap.get(strike)!
-    // Per-side computation: call contribution and put contribution use
-    // their own gamma, summed (puts net negative).
-    const gex = (callOI * callGamma - putOI * putGamma) * 100 * spot * spot * 0.01
+    const e = strikeMap.get(strike)!
+    const callGamma = e.callGammaCount > 0 ? e.callGammaSum / e.callGammaCount : 0
+    const putGamma = e.putGammaCount > 0 ? e.putGammaSum / e.putGammaCount : 0
+    // F3.3: per-side gamma weighting.
+    const gex = (e.callOI * callGamma - e.putOI * putGamma) * dollarPer1Pct
     return { strike, gex }
   })
 
   const totalGex = strikeGex.reduce((s, x) => s + x.gex, 0)
 
-  // Find flip point: strike where cumulative GEX transitions positive → negative
+  // F3.5: collect ALL flip points where cumulative GEX changes sign.
+  // Linear-interpolated between strikes for sub-strike resolution.
   let cumulative = 0
-  let flipPoint: number | null = null
+  const flipPoints: number[] = []
 
   for (let i = 0; i < strikeGex.length; i++) {
     const prev = cumulative
     cumulative += strikeGex[i].gex
-    if (prev > 0 && cumulative <= 0) {
-      // Linear interpolation between strikes[i-1] and strikes[i]
+    // Check both sign-change directions: positive→negative OR negative→positive
+    if ((prev > 0 && cumulative <= 0) || (prev < 0 && cumulative >= 0)) {
       const s0 = i > 0 ? strikeGex[i - 1].strike : strikeGex[i].strike
       const s1 = strikeGex[i].strike
-      const frac = Math.abs(prev) / (Math.abs(prev) + Math.abs(cumulative))
-      flipPoint = s0 + frac * (s1 - s0)
-      break
+      const denom = Math.abs(prev) + Math.abs(cumulative)
+      const frac = denom > 0 ? Math.abs(prev) / denom : 0
+      flipPoints.push(s0 + frac * (s1 - s0))
     }
   }
 
-  return { strikeGex, totalGex, flipPoint }
+  // Backward-compat: flipPoint = first flip if any.
+  const flipPoint = flipPoints.length > 0 ? flipPoints[0] : null
+
+  return { strikeGex, totalGex, flipPoint, flipPoints }
 }

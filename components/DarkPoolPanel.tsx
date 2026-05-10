@@ -131,6 +131,8 @@ export default function DarkPoolPanel({
           {hasRealData && (
             <div
               className="rounded-xl border p-3 flex items-center gap-3"
+              role="alert"
+              aria-label={`Short interest signal: ${shortSignal}`}
               style={{
                 borderColor: `${shortColor}40`,
                 backgroundColor: `${shortColor}10`,
@@ -194,13 +196,13 @@ export default function DarkPoolPanel({
 
       {/* ── Short interest / off-exchange bar (real or synthetic) ─── */}
       {(hasRealData || true) && (
-        <div className="bg-slate-900/60 rounded-xl p-4 border border-slate-800">
+        <div className="bg-slate-900/60 rounded-xl p-4 border border-slate-800" role="region" aria-label="Off-exchange flow sentiment">
           <div className="flex items-center justify-between text-xs text-slate-500 mb-2">
-            <span>BEARISH</span>
+            <span aria-label="Bearish sentiment">BEARISH</span>
             <span className="text-slate-300 font-medium">Off-Exchange Flow</span>
-            <span>BULLISH</span>
+            <span aria-label="Bullish sentiment">BULLISH</span>
           </div>
-          <div className="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden">
+          <div className="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden" role="progressbar" aria-valuenow={Math.round(bullishPct)} aria-valuemin={0} aria-valuemax={100} aria-label={`${bullishPct.toFixed(0)}% bullish flow`}>
             <div
               className="h-full rounded-full transition-all duration-700"
               style={{

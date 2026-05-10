@@ -45,6 +45,15 @@ export default function RootLayout({
       </head>
       <body className="bg-bg text-white antialiased" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
         <Providers>
+          {/* Skip-link — Phase 13 S2 fix (F6.1) — WCAG 2.4.1 Bypass Blocks (Level A).
+              Hidden by default; visible only on keyboard focus. Allows keyboard
+              and screen-reader users to skip the global navigation. */}
+          <a
+            href="#main-content"
+            className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:px-3 focus:py-2 focus:bg-amber-600 focus:text-white focus:rounded focus:outline-none focus:ring-2 focus:ring-amber-300 focus:font-medium"
+          >
+            Skip to main content
+          </a>
           {/* Global Nav */}
           <header className="sticky top-0 z-50 border-b border-slate-800/50 bg-slate-950/90 backdrop-blur-xl">
             <div className="max-w-7xl mx-auto px-4 min-h-14 flex flex-wrap items-center justify-between gap-y-2 py-2">
@@ -93,7 +102,9 @@ export default function RootLayout({
               </nav>
             </div>
           </header>
-          <main>{children}</main>
+          <main id="main-content" tabIndex={-1} className="focus:outline-none">
+            {children}
+          </main>
           <KeyboardShortcuts />
           <ComplianceBanner />
           <footer className="border-t border-slate-800/60 mt-12 py-8">

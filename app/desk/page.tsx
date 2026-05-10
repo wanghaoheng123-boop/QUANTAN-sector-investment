@@ -1,20 +1,15 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { DESK_TICKERS } from '@/lib/deskTickers'
 import { SECTORS } from '@/lib/sectors'
 import { COMMODITY_INSTRUMENTS } from '@/lib/commodities'
 import { useWatchlist } from '@/hooks/useWatchlist'
-import { formatCompactNumber, formatCurrency, formatFreshness, formatSignedNumber } from '@/lib/format'
-
-interface Quote {
-  ticker: string
-  price: number
-  change: number
-  changePct: number
-  volume: number
-}
+import { useLivePrices } from '@/hooks/useLivePrices'
+import { formatCompactNumber, formatCurrency, formatSignedNumber } from '@/lib/format'
+import { DashboardGuide } from '@/components/DashboardGuide'
+import { DataFreshnessIndicator } from '@/components/DataFreshnessIndicator'
 
 const REFRESH_MS = { fast: 2000, normal: 5000, slow: 15000 } as const
 
@@ -38,39 +33,21 @@ function groupForTicker(t: string): 'macro' | 'sector' | 'commodity' {
 }
 
 export default function DeskPage() {
-  const [quotes, setQuotes] = useState<Record<string, Quote>>({})
-  const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
   const [intervalKey, setIntervalKey] = useState<keyof typeof REFRESH_MS>('normal')
   const [showWatchOnly, setShowWatchOnly] = useState(false)
-  const [fetchError, setFetchError] = useState<string | null>(null)
   const { items: watchlist, has, hydrated } = useWatchlist()
 
-  const param = useMemo(() => DESK_TICKERS.map(encodeURIComponent).join(','), [])
+  // SWR-backed price feed; refreshes at the user-selected cadence (2s / 5s / 15s).
+  const { data: liveQuotes, error, quoteTime } = useLivePrices(DESK_TICKERS, {
+    refreshInterval: REFRESH_MS[intervalKey],
+  })
+  const fetchError = error?.message ?? null
 
-  const fetchPrices = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/prices?tickers=${param}`)
-      const data = await res.json()
-      if (data.quotes) {
-        const map: Record<string, Quote> = {}
-        data.quotes.forEach((row: Quote) => {
-          map[row.ticker] = row
-        })
-        setQuotes(map)
-        setLastUpdate(new Date())
-        setFetchError(null)
-      }
-    } catch (e) {
-      setFetchError(e instanceof Error ? e.message : 'Feed unavailable')
-    }
-  }, [param])
-
-  useEffect(() => {
-    fetchPrices()
-    const ms = REFRESH_MS[intervalKey]
-    const id = setInterval(fetchPrices, ms)
-    return () => clearInterval(id)
-  }, [fetchPrices, intervalKey])
+  const quotes = useMemo(() => {
+    const map: Record<string, typeof liveQuotes[number]> = {}
+    for (const q of liveQuotes) map[q.ticker] = q
+    return map
+  }, [liveQuotes])
 
   const rows = useMemo(() => {
     let list = [...DESK_TICKERS]
@@ -95,6 +72,56 @@ export default function DeskPage() {
 
   return (
     <div className="min-h-screen max-w-[1600px] mx-auto px-3 sm:px-4 py-6 space-y-4">
+      <DashboardGuide
+        pageKey="desk"
+        title="Trading Desk — multi-asset monitor"
+        summary="High-density quote strip across macro / sectors / commodities. Pick refresh interval to match your monitoring cadence."
+        sections={[
+          {
+            title: 'What you see',
+            body: (
+              <p>
+                Three groups: <strong>Macro</strong> (DXY, TNX, VIX, SPY benchmarks), <strong>Sectors</strong> (11 GICS ETFs),
+                <strong> Commodities</strong> (oil, gold, copper, etc.). Each row: live price, % change, volume, sparkline.
+                Click any row to drill into the detail page.
+              </p>
+            ),
+          },
+          {
+            title: 'Refresh-rate toggle (2s / 5s / 15s)',
+            body: (
+              <p>
+                <strong>2s</strong> = active trading (heaviest API usage). <strong>5s</strong> = standard institutional cadence. <strong>15s</strong> = passive monitoring.
+                Faster intervals risk hitting rate limits on shared API keys — use 5s as default.
+              </p>
+            ),
+          },
+          {
+            title: 'Watchlist filter',
+            body: (
+              <p>
+                Toggle <strong>"Watchlist only"</strong> to hide everything except names you've starred via the watchlist button on detail pages.
+                Per-browser localStorage — your watchlist is private.
+              </p>
+            ),
+          },
+          {
+            title: 'How to use',
+            body: (
+              <p>
+                Use the desk as a <strong>passive monitor</strong>: scan for outliers (large % moves vs sector average), then drill into the suspect name.
+                Don't trade <em>from</em> the desk — confirm with chart + indicators on the detail page first.
+              </p>
+            ),
+          },
+        ]}
+        legend={[
+          { color: '#34d399', label: 'Up vs prior close', meaning: 'positive % change today' },
+          { color: '#f87171', label: 'Down vs prior close', meaning: 'negative % change today' },
+          { color: '#fbbf24', label: 'Watchlisted', meaning: 'starred name (when watchlist filter is off)' },
+          { color: '#22d3ee', label: 'Active feed', meaning: 'data refreshing at chosen cadence' },
+        ]}
+      />
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight">Trading desk</h1>
@@ -127,8 +154,8 @@ export default function DeskPage() {
           >
             Watchlist only
           </button>
-          <span className="text-[10px] text-slate-600 font-mono hidden sm:inline">
-            {lastUpdate ? formatFreshness(lastUpdate.toISOString()) : '—'}
+          <span className="hidden sm:inline-flex">
+            <DataFreshnessIndicator quoteTime={quoteTime} compact label="desk feed" />
           </span>
         </div>
       </div>
@@ -147,17 +174,19 @@ export default function DeskPage() {
               {title}
             </div>
             <div className="overflow-x-auto">
+              {/* F6.4 (Phase 13 S2): caption + scope for screen readers — WCAG 1.3.1. */}
               <table className="w-full text-xs font-mono">
+                <caption className="sr-only">{`${title} live quotes — symbol, name, last price, dollar change, percent change, volume in millions, watchlist status, and drill-down link.`}</caption>
                 <thead>
                   <tr className="text-slate-500 border-b border-slate-800/80">
-                    <th className="text-left px-2 py-1.5 w-16">Sym</th>
-                    <th className="text-left px-2 py-1.5 min-w-[120px]">Name</th>
-                    <th className="text-right px-2 py-1.5">Last</th>
-                    <th className="text-right px-2 py-1.5">Chg</th>
-                    <th className="text-right px-2 py-1.5 hidden sm:table-cell">%</th>
-                    <th className="text-right px-2 py-1.5 hidden md:table-cell">Vol M</th>
-                    <th className="text-center px-2 py-1.5">W</th>
-                    <th className="text-left px-2 py-1.5">Drill</th>
+                    <th scope="col" className="text-left px-2 py-1.5 w-16">Sym</th>
+                    <th scope="col" className="text-left px-2 py-1.5 min-w-[120px]">Name</th>
+                    <th scope="col" className="text-right px-2 py-1.5">Last</th>
+                    <th scope="col" className="text-right px-2 py-1.5">Chg</th>
+                    <th scope="col" className="text-right px-2 py-1.5 hidden sm:table-cell">%</th>
+                    <th scope="col" className="text-right px-2 py-1.5 hidden md:table-cell">Vol M</th>
+                    <th scope="col" className="text-center px-2 py-1.5">W</th>
+                    <th scope="col" className="text-left px-2 py-1.5">Drill</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -171,11 +200,24 @@ export default function DeskPage() {
                           {label}
                         </td>
                         <td className="px-2 py-1 text-right text-slate-100">{q ? formatCurrency(q.price) : '—'}</td>
-                        <td className={`px-2 py-1 text-right ${q ? (up ? 'text-emerald-400' : 'text-red-400') : 'text-slate-600'}`}>
-                          {q ? formatSignedNumber(q.change) : '—'}
+                        {/* F6.3 (Phase 13 S2): sign prefix + arrow glyph so direction
+                            is clear without relying on color (WCAG 2.2 SC 1.4.1). */}
+                        <td
+                          className={`px-2 py-1 text-right ${q ? (up ? 'text-emerald-400' : 'text-red-400') : 'text-slate-600'}`}
+                          aria-label={q ? `${up ? 'up' : 'down'} ${Math.abs(q.change).toFixed(2)}` : 'no change data'}
+                        >
+                          {q ? (
+                            <>
+                              <span aria-hidden="true">{up ? '▲' : '▼'}</span>{' '}
+                              {formatSignedNumber(q.change)}
+                            </>
+                          ) : '—'}
                         </td>
-                        <td className={`px-2 py-1 text-right hidden sm:table-cell ${q ? (up ? 'text-emerald-400' : 'text-red-400') : 'text-slate-600'}`}>
-                          {q ? `${up ? '+' : ''}${q.changePct.toFixed(2)}` : '—'}
+                        <td
+                          className={`px-2 py-1 text-right hidden sm:table-cell ${q ? (up ? 'text-emerald-400' : 'text-red-400') : 'text-slate-600'}`}
+                          aria-label={q ? `${up ? 'up' : 'down'} ${Math.abs(q.changePct).toFixed(2)} percent` : 'no change data'}
+                        >
+                          {q ? `${up ? '+' : '−'}${Math.abs(q.changePct).toFixed(2)}%` : '—'}
                         </td>
                         <td className="px-2 py-1 text-right text-slate-600 hidden md:table-cell">
                           {q && q.volume ? formatCompactNumber(q.volume) : '—'}

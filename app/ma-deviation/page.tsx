@@ -132,14 +132,16 @@ export default function MADeviationPage() {
   const [showEmpiricalTable, setShowEmpiricalTable] = useState(false)
 
   useEffect(() => {
+    let cancelled = false
     setLoading(true)
     fetch('/api/ma-deviation')
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`)
         return r.json()
       })
-      .then((d) => { setData(d); setLoading(false) })
-      .catch((e) => { setError(String(e)); setLoading(false) })
+      .then((d) => { if (!cancelled) { setData(d); setLoading(false) } })
+      .catch((e) => { if (!cancelled) { setError(String(e)); setLoading(false) } })
+    return () => { cancelled = true }
   }, [])
 
   const handleSort = (key: SortKey) => {

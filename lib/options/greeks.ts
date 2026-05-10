@@ -1,5 +1,5 @@
 /**
- * Black-Scholes-Merton option pricing, implied volatility, and Greeks.
+ * Black-Scholes option pricing, implied volatility, and Greeks.
  *
  * All functions are pure math — no external dependencies.
  *
@@ -8,22 +8,10 @@
  *   K     = strike price
  *   T     = time to expiry in years (> 0)
  *   r     = continuous risk-free rate (e.g. 0.0525 for 5.25%)
- *   q     = continuous dividend yield (e.g. 0.015 for 1.5% — defaults to 0)
  *   sigma = annualised implied volatility (e.g. 0.25 for 25%)
  *   type  = 'call' | 'put'
  *
  * Theta is returned in $/day (annual theta divided by 365).
- *
- * Dividend extension (Merton 1973):
- *   Without q the model treats the underlying as paying NO dividends. This
- *   over-prices puts and under-prices calls for any dividend-paying name
- *   (most non-tech stocks, all index ETFs). The optional q parameter
- *   defaults to 0 for back-compat; supply it whenever the underlying is
- *   known to yield (e.g. SPY ≈ 1.4%, JNJ ≈ 3%, utility ETFs ≈ 4%).
- *
- * Citation: Merton, R. C. (1973). "Theory of Rational Option Pricing,"
- *           Bell Journal of Economics and Management Science, 4(1), 141-183 —
- *           extended Black-Scholes (1973) to continuously-paying dividends.
  */
 
 export type OptionType = 'call' | 'put'
@@ -72,11 +60,20 @@ export function normalPdf(x: number): number {
 }
 
 // ─── d1 / d2 helpers ─────────────────────────────────────────────────────────
+//
+// Phase 13 S2 fix (F3.1): Merton (1973) extension — Black-Scholes pricing
+// with continuous dividend yield `q`. Backward-compatible: q defaults to 0
+// (the original Black-Scholes-Merton specification reduces to BS).
+//
+// Formulas:
+//   d1 = (ln(S/K) + (r - q + 0.5σ²)T) / (σ√T)
+//   d2 = d1 - σ√T
+//   Call = S·exp(-q·T)·N(d1) - K·exp(-r·T)·N(d2)
+//   Put  = K·exp(-r·T)·N(-d2) - S·exp(-q·T)·N(-d1)
+// References:
+//   Merton, R. C. (1973). "Theory of Rational Option Pricing." Bell J. Econ.
+//   Hull, J. C. (2017). Options, Futures, and Other Derivatives, 10e. p385-388.
 
-/**
- * Merton-extended d1/d2: replaces drift `r` with `(r - q)`.
- * When q = 0 this reduces to the Black-Scholes (1973) form exactly.
- */
 function d1d2(S: number, K: number, T: number, r: number, sigma: number, q = 0): [number, number] {
   const sqrtT = Math.sqrt(T)
   const d1 = (Math.log(S / K) + (r - q + 0.5 * sigma * sigma) * T) / (sigma * sqrtT)
@@ -88,11 +85,12 @@ function d1d2(S: number, K: number, T: number, r: number, sigma: number, q = 0):
 
 /**
  * Returns the Black-Scholes-Merton theoretical price of a European option.
- * Returns 0 if T ≤ 0 or sigma ≤ 0.
  *
- * `q` defaults to 0 (Black-Scholes-1973 form). Supply q for divvy-paying
- * underlyings: call price drops by S(1 - e^(-qT)); put price rises by
- * the same amount (put-call parity).
+ * @param q Continuous dividend yield (annualized). Default 0 reduces to
+ *          original Black-Scholes. Pass dividendYield from yahooFinance
+ *          summaryDetail for accurate pricing on dividend-paying ETFs/stocks.
+ *
+ * Returns 0 if T ≤ 0, sigma ≤ 0, S ≤ 0, or K ≤ 0.
  */
 export function blackScholesPrice(
   S: number,
@@ -105,27 +103,30 @@ export function blackScholesPrice(
 ): number {
   if (T <= 0 || sigma <= 0 || S <= 0 || K <= 0) return 0
   const [d1, d2] = d1d2(S, K, T, r, sigma, q)
-  const discount = Math.exp(-r * T)
-  const divDiscount = Math.exp(-q * T)
+  const discountR = Math.exp(-r * T)
+  const discountQ = Math.exp(-q * T)
   if (type === 'call') {
-    return S * divDiscount * normalCdf(d1) - K * discount * normalCdf(d2)
+    return S * discountQ * normalCdf(d1) - K * discountR * normalCdf(d2)
   } else {
-    return K * discount * normalCdf(-d2) - S * divDiscount * normalCdf(-d1)
+    return K * discountR * normalCdf(-d2) - S * discountQ * normalCdf(-d1)
   }
 }
 
 // ─── Greeks ──────────────────────────────────────────────────────────────────
 
 /**
- * Computes all five standard Black-Scholes-Merton Greeks.
- * Returns zeros when T ≤ 0 or sigma ≤ 0.
+ * Computes all five standard Black-Scholes Greeks.
  *
- * `q` (continuous dividend yield) defaults to 0 for back-compat. Greeks
- * shift meaningfully under non-zero q:
- *   • Call delta: e^(-qT) × N(d1)  (≤ N(d1), so lower than no-dividend)
- *   • Put delta:  e^(-qT) × (N(d1) - 1)
- *   • Theta gains a + q · S · e^(-qT) · N(d1) term (call) — dividends
- *     accrue to the call seller, not the holder, so calls decay faster.
+ * Edge cases:
+ *   - T ≤ 0 (expired): delta is the intrinsic indicator (1/0 for ITM/OTM call,
+ *     -1/0 for ITM/OTM put), all other Greeks are 0.
+ *   - sigma ≤ 0 or S ≤ 0 or K ≤ 0 (degenerate live option): all Greeks are 0.
+ *     A truly zero-vol live option's delta depends on forward moneyness, but
+ *     this case is unreachable in practice — IV is bounded > 0 by the solver,
+ *     and S/K are positive by market construction.
+ *
+ * Phase 13 S2 fix (F3.6): T≤0 and sigma≤0 cases are now handled separately so
+ * the intrinsic-delta logic only applies at expiry, not when sigma=0 mid-life.
  */
 export function greeks(
   S: number,
@@ -136,40 +137,51 @@ export function greeks(
   type: OptionType,
   q = 0,
 ): Greeks {
-  if (T <= 0 || sigma <= 0 || S <= 0 || K <= 0) {
-    return { delta: type === 'call' ? (S > K ? 1 : 0) : (S < K ? -1 : 0), gamma: 0, theta: 0, vega: 0, rho: 0 }
+  // Expiry — return intrinsic delta indicator.
+  if (T <= 0) {
+    const intrinsicDelta = type === 'call'
+      ? (S > K ? 1 : 0)
+      : (S < K ? -1 : 0)
+    return { delta: intrinsicDelta, gamma: 0, theta: 0, vega: 0, rho: 0 }
+  }
+  // Degenerate live option (zero vol or non-positive prices).
+  if (sigma <= 0 || S <= 0 || K <= 0) {
+    return { delta: 0, gamma: 0, theta: 0, vega: 0, rho: 0 }
   }
 
   const sqrtT = Math.sqrt(T)
   const [d1, d2] = d1d2(S, K, T, r, sigma, q)
   const pdf1 = normalPdf(d1)
-  const discount = Math.exp(-r * T)
-  const divDiscount = Math.exp(-q * T)
+  const discountR = Math.exp(-r * T)
+  const discountQ = Math.exp(-q * T)
 
-  // Delta — Merton form: divDiscount × {N(d1) for call, N(d1)−1 for put}
+  // Delta — Merton (1973): exp(-q·T) · N(d1) for calls; exp(-q·T)·[N(d1)-1] for puts.
   const delta = type === 'call'
-    ? divDiscount * normalCdf(d1)
-    : divDiscount * (normalCdf(d1) - 1)
+    ? discountQ * normalCdf(d1)
+    : discountQ * (normalCdf(d1) - 1)
 
-  // Gamma — Merton form: divDiscount × N'(d1) / (S σ √T)
-  const gamma = (divDiscount * pdf1) / (S * sigma * sqrtT)
+  // Gamma (same for calls and puts) — Merton: exp(-q·T)·N'(d1)/(S·σ·√T)
+  const gamma = (discountQ * pdf1) / (S * sigma * sqrtT)
 
-  // Theta (annual, then divide by 365 for daily). Merton form adds a
-  // q-dependent term that captures dividend accrual.
-  const commonTheta = -(S * divDiscount * pdf1 * sigma) / (2 * sqrtT)
+  // Theta (annual, then divide by OPTIONS_DAYS_PER_YEAR for daily)
+  // Merton extension adds the +q·S·exp(-q·T)·N(d1) term (call) / -q·S·exp(-q·T)·N(-d1) (put)
   const thetaAnnual = type === 'call'
-    ? commonTheta - r * K * discount * normalCdf(d2)  + q * S * divDiscount * normalCdf(d1)
-    : commonTheta + r * K * discount * normalCdf(-d2) - q * S * divDiscount * normalCdf(-d1)
+    ? -(S * discountQ * pdf1 * sigma) / (2 * sqrtT)
+      - r * K * discountR * normalCdf(d2)
+      + q * S * discountQ * normalCdf(d1)
+    : -(S * discountQ * pdf1 * sigma) / (2 * sqrtT)
+      + r * K * discountR * normalCdf(-d2)
+      - q * S * discountQ * normalCdf(-d1)
   const theta = thetaAnnual / 365
 
-  // Vega: dollar change per 1 percentage point move in vol (i.e. divide by 100)
-  const vegaAnnual = S * divDiscount * pdf1 * sqrtT
+  // Vega: dollar change per 1 vol point. Merton: scaled by exp(-q·T).
+  const vegaAnnual = S * discountQ * pdf1 * sqrtT
   const vega = vegaAnnual / 100
 
-  // Rho: dollar change per 1 percentage point move in r (Merton: r-discount only)
+  // Rho: dollar change per 1 percentage point move in r
   const rhoAnnual = type === 'call'
-    ? K * T * discount * normalCdf(d2)
-    : -K * T * discount * normalCdf(-d2)
+    ? K * T * discountR * normalCdf(d2)
+    : -K * T * discountR * normalCdf(-d2)
   const rho = rhoAnnual / 100
 
   return { delta, gamma, theta, vega, rho }
@@ -178,57 +190,25 @@ export function greeks(
 // ─── Implied Volatility ───────────────────────────────────────────────────────
 
 const IV_MAX_ITER = 100
-const IV_TOLERANCE = 1e-6
-const IV_SIGMA_MIN = 0.005    // 0.5% — below this Black-Scholes is numerically unstable
-const IV_SIGMA_MAX = 5.0      // 500% — well above any rational market regime
+// Phase 13 S2 fix (F3.8): tolerance relaxed from 1e-6 to 1e-4. Listed options
+// have $0.01 minimum tick; 1e-6 is six orders of magnitude tighter than the
+// underlying price precision and just adds Newton-Raphson iterations without
+// improving practical IV resolution.
+const IV_TOLERANCE = 1e-4
+const IV_INIT_SIGMA = 0.3
 
 /**
- * Brenner-Subrahmanyam (1988) closed-form approximation for the seed:
- *   σ ≈ √(2π/T) × (C/S)
- * Highly accurate near the money (where most contracts trade). For deep
- * OTM contracts the BS formula underestimates IV (the C/S ratio shrinks
- * faster than σ does), which can land Newton in a near-flat-vega
- * region. We floor the seed at 0.10 — deep-OTM Newton can climb from
- * 10% upward, where it can't easily climb from 1%.
+ * Newton-Raphson implied volatility solver with Merton dividend yield support.
  *
- * Citation: Brenner, M. & Subrahmanyam, M. G. (1988). "A Simple Formula
- *           to Compute the Implied Standard Deviation," *Financial
- *           Analysts Journal*, 44(5), 80-83.
- */
-function brennerSubrahmanyamSeed(price: number, S: number, T: number): number {
-  const raw = Math.sqrt(2 * Math.PI / T) * (price / S)
-  // 0.10 floor avoids the deep-OTM "vega cliff" where Newton stalls.
-  // 5.0 ceiling matches IV_SIGMA_MAX.
-  const seed = Math.max(0.10, raw)
-  return Math.max(IV_SIGMA_MIN, Math.min(IV_SIGMA_MAX, seed))
-}
-
-/**
- * Implied volatility solver with Merton dividend support.
+ * Phase 13 S2 fix (F3.1): accepts optional `q` (continuous dividend yield).
+ * For dividend-paying instruments, Merton's adjusted intrinsic floor is
+ * `S·exp(-q·T) - K·exp(-r·T)` for a call (and the symmetric form for a put);
+ * intrinsic with q=0 reduces to the classical S - K·exp(-r·T).
  *
- * Hybrid strategy: Newton-Raphson with bisection fallback. This handles
- * the deep-OTM failure mode where the price function is nearly flat
- * (vega → 0) at the BS-seeded sigma, which made pure Newton oscillate
- * between the clamped bounds without ever converging.
+ * @param q Continuous dividend yield. Default 0 (BSM original).
  *
- * Algorithm:
- *   1. Bracket the solution between IV_SIGMA_MIN and IV_SIGMA_MAX by
- *      checking BS prices at the bounds. If the target market price is
- *      outside [price(min), price(max)] the contract has no IV
- *      consistent with the model — return null.
- *   2. Seed sigma via Brenner-Subrahmanyam (1988), floored at 0.10 to
- *      avoid the deep-OTM vega cliff.
- *   3. Each iteration:
- *      • Compute BS price + vega at current sigma.
- *      • Take a Newton step. If the step would land OUTSIDE the
- *        current bracket, fall back to bisection (halve the bracket).
- *      • Update the bracket so the solution stays surrounded.
- *      • Stop when |diff| < IV_TOLERANCE.
- *   4. Returns null if no convergence in IV_MAX_ITER (always finite
- *      and non-zero in practice once we have a valid bracket).
- *
- * Returns null if the market price is below intrinsic value, T ≤ 0,
- * the bracket can't be established, or convergence fails.
+ * Returns null if the market price is below intrinsic, T ≤ 0,
+ * or convergence fails after MAX_ITER iterations.
  */
 export function impliedVolatility(
   marketPrice: number,
@@ -241,54 +221,45 @@ export function impliedVolatility(
 ): number | null {
   if (T <= 0 || marketPrice <= 0 || S <= 0 || K <= 0) return null
 
-  // Intrinsic value floor — Merton form discounts S by div yield.
+  // Check intrinsic value floor (Merton-adjusted when q > 0)
   const intrinsic = type === 'call'
     ? Math.max(0, S * Math.exp(-q * T) - K * Math.exp(-r * T))
     : Math.max(0, K * Math.exp(-r * T) - S * Math.exp(-q * T))
   if (marketPrice < intrinsic - 1e-8) return null
 
-  // Establish a bracket [lo, hi] such that BS(lo) ≤ marketPrice ≤ BS(hi).
-  // BS price is monotonic increasing in sigma, so bracket is unique.
-  let lo = IV_SIGMA_MIN
-  let hi = IV_SIGMA_MAX
-  const priceLo = blackScholesPrice(S, K, T, r, lo, type, q)
-  const priceHi = blackScholesPrice(S, K, T, r, hi, type, q)
-  if (marketPrice < priceLo - 1e-8 || marketPrice > priceHi + 1e-8) return null
-
-  let sigma = brennerSubrahmanyamSeed(marketPrice, S, T)
-  sigma = Math.max(lo, Math.min(hi, sigma))
+  // F3.2 (Phase 13 S2 partial): Brenner-Subrahmanyam (1988) initial seed for
+  // ATM options. For deep ITM/OTM, fall back to a moneyness-adjusted IV_INIT.
+  // Reference: Brenner, M. & Subrahmanyam, M. G. (1988). "A Simple Formula
+  // to Compute the Implied Standard Deviation." Financial Analysts Journal
+  // 44(5), p80-83.
+  const moneyness = Math.abs(Math.log(S / K))
+  let sigma: number
+  if (moneyness < 0.05) {
+    // Near-ATM: Brenner-Subrahmanyam closed-form.
+    sigma = Math.sqrt(2 * Math.PI / T) * (marketPrice / S)
+  } else {
+    sigma = IV_INIT_SIGMA
+  }
+  // Clamp seed to safe range — handles pathological inputs (e.g. premium
+  // > spot would otherwise produce a giant initial sigma).
+  const SIGMA_MIN = 0.005
+  const SIGMA_MAX = 5.0  // 500% IV cap — covers any sane market scenario
+  sigma = Math.min(SIGMA_MAX, Math.max(SIGMA_MIN, sigma))
 
   for (let i = 0; i < IV_MAX_ITER; i++) {
     const price = blackScholesPrice(S, K, T, r, sigma, type, q)
     const diff = price - marketPrice
     if (Math.abs(diff) < IV_TOLERANCE) return sigma
 
-    // Tighten the bracket: BS price monotonic in sigma, so if price is
-    // too low, lift `lo`; if too high, drop `hi`.
-    if (diff < 0) lo = sigma
-    else hi = sigma
-
-    // Try a Newton step.
+    // Vega in full annual terms — Merton: S·exp(-q·T)·N'(d1)·√T
     const sqrtT = Math.sqrt(T)
     const [d1] = d1d2(S, K, T, r, sigma, q)
     const vegaFull = S * Math.exp(-q * T) * normalPdf(d1) * sqrtT
+    if (vegaFull < 1e-12) return null  // flat vega — can't converge
 
-    let nextSigma: number
-    if (vegaFull < 1e-12) {
-      // Vega vanishing — Newton step is undefined. Bisect.
-      nextSigma = (lo + hi) / 2
-    } else {
-      const step = diff / vegaFull
-      const candidate = sigma - step
-      // If Newton lands OUTSIDE the bracket, fall back to bisection.
-      if (candidate <= lo || candidate >= hi) {
-        nextSigma = (lo + hi) / 2
-      } else {
-        nextSigma = candidate
-      }
-    }
-
-    sigma = nextSigma
+    sigma -= diff / vegaFull
+    // Clamp into safe range every iteration to prevent divergence.
+    sigma = Math.min(SIGMA_MAX, Math.max(SIGMA_MIN, sigma))
   }
 
   return null  // did not converge

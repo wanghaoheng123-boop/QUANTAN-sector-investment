@@ -4,7 +4,9 @@
  */
 
 import type { OhlcBar } from '@/lib/quant/technicals'
-import { combinedSignal, enhancedCombinedSignal, DEFAULT_CONFIG, atr, type BacktestConfig } from './signals'
+import { enhancedCombinedSignal, DEFAULT_CONFIG, atr, type BacktestConfig } from './signals'
+import { sortinoRatio } from '@/lib/quant/indicators'
+import { BACKTEST_RFR_ANNUAL } from '@/lib/quant/constants'
 
 // ─── Transaction cost model ─────────────────────────────────────────────────────
 // Applied per side (entry OR exit) to reflect realistic execution costs.
@@ -105,6 +107,18 @@ function currentEquity(state: PortfolioState): number {
   return state.capital + state.position * state.avgCost
 }
 
+// Phase 13 S2 fix (F1.6): tickers that trade 7 days a week need 365-day
+// annualization; equities use 252. The detection is conservative — only
+// known crypto symbols and futures get 365. New crypto tickers default to
+// 252 unless added here or passed explicitly via config.
+const CRYPTO_TICKERS_365 = new Set(['BTC', 'BTC-USD', 'ETH', 'ETH-USD', 'SOL', 'SOL-USD'])
+
+function tradingDaysPerYear(ticker: string, sector: string): number {
+  if (CRYPTO_TICKERS_365.has(ticker.toUpperCase())) return 365
+  if (sector?.toLowerCase() === 'crypto') return 365
+  return 252
+}
+
 /** Walk-forward backtest for a single instrument. */
 export function backtestInstrument(
   ticker: string,
@@ -114,6 +128,7 @@ export function backtestInstrument(
 ): BacktestResult {
   const cfg = { ...DEFAULT_CONFIG, ...config }
   const initialCapital = cfg.initialCapital
+  const annualization = tradingDaysPerYear(ticker, sector)
 
   if (rows.length < 252) {
     return {
@@ -337,7 +352,10 @@ export function backtestInstrument(
 
   const finalEquity = state.capital
   const days = rows.length
-  const years = days / 252
+  // F1.6 (Phase 13 S2): annualization uses tradingDaysPerYear() — 252 for
+  // equities, 365 for crypto. Previously hardcoded 252 understated crypto
+  // Sharpe by sqrt(252/365) ≈ 17% and overstated annualized return by ~4-5%/yr.
+  const years = days / annualization
   const totalReturn = (finalEquity - initialCapital) / initialCapital
   const annualizedReturn = years > 0 ? (1 + totalReturn) ** (1 / years) - 1 : 0
   const bnhReturn = (finalPrice - rows[0].close) / rows[0].close
@@ -363,40 +381,26 @@ export function backtestInstrument(
   const profitFactor = state.grossLoss > 0 ? state.grossProfit / state.grossLoss : state.grossProfit > 0 ? Infinity : 0
   const avgTradeReturn = closed.length > 0 ? closed.reduce((s, t) => s + (t.pnlPct ?? 0), 0) / closed.length : 0
 
-  // Sharpe (annualized, daily)
+  // Sharpe (annualized, daily). F1.6: annualization param matches instrument.
   let sharpe: number | null = null
   if (dailyReturns.length > 30) {
     const mean = dailyReturns.reduce((a, b) => a + b, 0) / dailyReturns.length
     const v = dailyReturns.reduce((s, x) => s + (x - mean) ** 2, 0) / Math.max(1, dailyReturns.length - 1)
     const sd = Math.sqrt(Math.max(v, 0))
     if (sd > 1e-10) {
-      const rfD = 0.04 / 252
-      sharpe = ((mean - rfD) / sd) * Math.sqrt(252)
+      const rfD = BACKTEST_RFR_ANNUAL / annualization
+      sharpe = ((mean - rfD) / sd) * Math.sqrt(annualization)
     }
   }
 
-  // Sortino: downside deviation uses n_d (count of negative-return periods only) as denominator.
-  // FIX P12-H1: Corrected from N (total observations) to n_d per Sortino & van der Meer (1991).
-  // The original Sortino formula: DSd = sqrt(sum(min(0, r_i - MAR)^2) / n_d)
-  // Using N instead of n_d understates downside deviation, inflating Sortino by sqrt(N/n_d).
-  // For a 5Y daily backtest with 40% negative days: overstatement factor ≈ sqrt(2.5) ≈ 1.58×.
-  let sortino: number | null = null
-  if (dailyReturns.length > 30) {
-    const rfD = 0.04 / 252
-    // Compute downside deviations: only negative excess returns count
-    const downsideDevs = dailyReturns.map(r => Math.min(0, r - rfD))
-    const negDevs = downsideDevs.filter(x => x < 0)
-    if (negDevs.length >= 3) {
-      // Use n_d (count of negative periods) as denominator — Sortino & van der Meer (1991)
-      const nd = negDevs.length
-      const downsideVariance = negDevs.reduce((s, x) => s + x * x, 0) / nd
-      const dsd = Math.sqrt(downsideVariance)
-      if (dsd > 1e-10) {
-        const mean = dailyReturns.reduce((a, b) => a + b, 0) / dailyReturns.length
-        sortino = ((mean - rfD) / dsd) * Math.sqrt(252)
-      }
-    }
-  }
+  // Sortino: delegated to canonical lib/quant/indicators.ts:sortinoRatio.
+  // Phase 13 S2 fix (F2.1 + F1.16 + F1.6): consolidated three divergent implementations
+  // (engine.ts, portfolioBacktest.ts, indicators.ts) into the single canonical impl.
+  // Uses MAR = rfDaily, n_d denominator (Sortino & van der Meer 1991),
+  // and minimum n_d ≥ 30 (Bacon 2008 p107). Annualization matches instrument.
+  // F1.4 (Phase 13 S2 partial): rate sourced from canonical constant; FRED hookup TBD.
+  const rfDaily = BACKTEST_RFR_ANNUAL / annualization
+  const sortino = sortinoRatio(dailyReturns, rfDaily, annualization)
 
   return {
     ticker, sector,
@@ -479,6 +483,12 @@ export function aggregatePortfolio(results: BacktestResult[], initialCapital: nu
   let truePortfolioAnnReturn = 0
   let combinedFinalEquity = 0
   let combinedInitialEquity = 0
+  // Phase 13 S2 fix (F1.2): portfolio max DD computed from the combined equity
+  // curve (correct), not Math.max of individual instrument DDs (overstates by
+  // 3-10× because diversification staggers per-instrument DDs in time).
+  // Reference: Magdon-Ismail & Atiya (2004); Bacon (2008) p102-105.
+  let portfolioMaxDdFromCurve = 0
+  let portfolioMaxDdComputed = false
 
   if (maxLen > 30 && results.length > 0) {
     // Combine all equity curves into a single portfolio equity curve.
@@ -508,6 +518,19 @@ export function aggregatePortfolio(results: BacktestResult[], initialCapital: nu
       const years = (lastValid - firstValid) / 252
       truePortfolioAnnReturn = years > 0 ? ((1 + truePortfolioReturn) ** (1 / years) - 1) : 0
 
+      // F1.2: max drawdown of the combined portfolio curve (true portfolio DD).
+      let peak = combinedEquity[firstValid]
+      let maxDd = 0
+      for (let i = firstValid; i <= lastValid; i++) {
+        if (combinedEquity[i] > peak) peak = combinedEquity[i]
+        if (peak > 0) {
+          const dd = (peak - combinedEquity[i]) / peak
+          if (dd > maxDd) maxDd = dd
+        }
+      }
+      portfolioMaxDdFromCurve = maxDd
+      portfolioMaxDdComputed = true
+
       // Compute daily returns from combined equity (for Sharpe/Sortino)
       const portfolioDailyReturns: number[] = []
       for (let i = firstValid + 1; i <= lastValid; i++) {
@@ -522,27 +545,23 @@ export function aggregatePortfolio(results: BacktestResult[], initialCapital: nu
         const mean = portfolioDailyReturns.reduce((a, b) => a + b, 0) / n
         const variance = portfolioDailyReturns.reduce((s, x) => s + (x - mean) ** 2, 0) / Math.max(1, n - 1)
         const sd = Math.sqrt(Math.max(variance, 0))
-        const rfD = 0.04 / 252
+        const rfD = BACKTEST_RFR_ANNUAL / 252
         if (sd > 1e-10) {
           sharpe = ((mean - rfD) / sd) * Math.sqrt(252)
         }
-        // FIX P12-H1: Sortino denominator uses n_d (negative periods), not N — Sortino & van der Meer (1991)
-        const downsideDevs = portfolioDailyReturns.map(r => Math.min(0, r - rfD))
-        const negDevs = downsideDevs.filter(x => x < 0)
-        if (negDevs.length >= 3) {
-          const nd = negDevs.length  // use n_d, not n (total observations)
-          const downsideVariance = negDevs.reduce((s, x) => s + x * x, 0) / nd
-          const dsd = Math.sqrt(downsideVariance)
-          if (dsd > 1e-10) {
-            sortino = ((mean - rfD) / dsd) * Math.sqrt(252)
-          }
-        }
+        // Phase 13 S2: portfolio Sortino delegated to canonical impl in indicators.ts
+        sortino = sortinoRatio(portfolioDailyReturns, rfD, 252)
       }
     }
   }
 
-  // For max drawdown, use maximum across all instruments
-  const maxDrawdown = Math.max(...results.map(r => r.maxDrawdown), 0)
+  // F1.2 (Phase 13 S2 fix): use the curve-based portfolio max DD.
+  // Falls back to max-of-individual-DDs only when combinedEquity construction
+  // produced no valid window (e.g. zero or single-instrument empty results).
+  // The fallback path matches prior behavior to avoid regressions on degenerate inputs.
+  const maxDrawdown = portfolioMaxDdComputed
+    ? portfolioMaxDdFromCurve
+    : Math.max(...results.map(r => r.maxDrawdown), 0)
 
   // Average B&H return across instruments
   const bnhAvg = results.reduce((s, r) => s + r.bnhReturn, 0) / Math.max(results.length, 1)
@@ -598,10 +617,40 @@ function windowSharpe(dailyReturns: number[]): number | null {
   const variance = dailyReturns.reduce((s, x) => s + (x - mean) ** 2, 0) / Math.max(1, dailyReturns.length - 1)
   const sd = Math.sqrt(Math.max(variance, 0))
   if (sd < 1e-10) return null
-  const rfD = 0.04 / 252
+  const rfD = BACKTEST_RFR_ANNUAL / 252
   return ((mean - rfD) / sd) * Math.sqrt(252)
 }
 
+/**
+ * Walk-forward analysis via trade attribution.
+ *
+ * Phase 13 S2 fix (F1.1) — Architectural rework:
+ *
+ *   PREVIOUS BUG: this function ran `backtestInstrument(testRows)` with
+ *   `testRows` of length `testDays = 63`. But `backtestInstrument` short-
+ *   circuits when `rows.length < 252` (the 200-bar warmup gate plus 52-bar
+ *   minimum signal generation), so the test-window result was always
+ *   identically zero. `oosRatio` and `overfittingIndex` were therefore
+ *   meaningless — every window reported osReturn=0 regardless of
+ *   strategy performance, giving false confidence in OOS robustness.
+ *
+ *   FIXED APPROACH: run a SINGLE backtest on the full series (which has
+ *   sufficient warmup), then partition the resulting trades into IS/OS
+ *   windows by entry date. Window return is the sum of trade pnlPct for
+ *   trades whose entry date falls within the window. Annualized to a
+ *   per-year rate using the window's calendar length.
+ *
+ *   Note on parameter optimisation: this codebase uses fixed sector-
+ *   profile parameters (no per-window re-optimisation), so the strict
+ *   "walk-forward optimisation" interpretation (Pardo 2008) doesn't
+ *   apply. The function answers "how stable is this strategy across
+ *   non-overlapping time windows?" rather than "how much does parameter
+ *   re-optimisation overfit?" Sufficient for the platform's stability
+ *   diagnostic needs.
+ *
+ *   Reference: Pardo, R. (2008). The Evaluation and Optimization of
+ *   Trading Strategies, 2e. Wiley. Ch.11 (Walk-Forward Analysis).
+ */
 export function walkForwardAnalysis(
   ticker: string,
   sector: string,
@@ -609,33 +658,74 @@ export function walkForwardAnalysis(
   trainDays = 252,
   testDays = 63,
 ): WFWWindow[] {
-  // trainDays = 1 year in-sample, testDays = 1 quarter out-of-sample
   const windows: WFWWindow[] = []
   const n = rows.length
-  let trainStart = 0
 
+  // Need at least one full IS window past the engine's 252-bar warmup.
+  const WARMUP = 252
+  if (n < WARMUP + trainDays + testDays) return windows
+
+  // Single backtest on full series — produces all trades + equity curve.
+  // Note: even when zero trades fire, we still emit windows with 0/0
+  // returns so the temporal scaffolding (window labels, dates) is
+  // populated for downstream UI tabs that expect a non-empty array.
+  const fullResult = backtestInstrument(ticker, sector, rows)
+  const trades = fullResult.closedTrades
+
+  // Map row index → ISO date string for window boundary lookups.
+  const dateAt = (idx: number) =>
+    new Date(rows[idx].time * 1000).toISOString().slice(0, 10)
+
+  // Pre-bucket trades by entry-date for O(N) windowing.
+  const sortedTrades = [...trades].sort((a, b) =>
+    a.date < b.date ? -1 : a.date > b.date ? 1 : 0,
+  )
+
+  let trainStart = WARMUP
   while (trainStart + trainDays + testDays <= n) {
     const trainEnd = trainStart + trainDays
     const testEnd = trainEnd + testDays
 
-    const trainRows = rows.slice(trainStart, trainEnd)
-    const testRows = rows.slice(trainEnd, testEnd)
+    const trainStartDate = dateAt(trainStart)
+    const trainEndDate = dateAt(trainEnd - 1)
+    const testStartDate = dateAt(trainEnd)
+    const testEndDate = dateAt(testEnd - 1)
 
-    if (trainRows.length < 100 || testRows.length < 20) break
+    // Trade-attribution: sum pnlPct of trades entering inside each window.
+    let isReturnSum = 0
+    let osReturnSum = 0
+    for (const t of sortedTrades) {
+      if (t.date < trainStartDate) continue
+      if (t.date > testEndDate) break
+      const pnl = t.pnlPct ?? 0
+      if (t.date <= trainEndDate) {
+        isReturnSum += pnl
+      } else if (t.date >= testStartDate) {
+        osReturnSum += pnl
+      }
+    }
 
-    const trainResult = backtestInstrument(ticker, sector, trainRows)
-    const testResult = backtestInstrument(ticker, sector, testRows)
+    const isAnn = annualized(isReturnSum, trainDays)
+    const osAnn = annualized(osReturnSum, testDays)
 
-    const isAnn = annualized(trainResult.totalReturn, trainRows.length)
-    const osAnn = annualized(testResult.totalReturn, testRows.length)
-    const isSharpe = windowSharpe(trainResult.dailyReturns)
-    const osSharpe = windowSharpe(testResult.dailyReturns)
+    // Sharpe per window: compute from equityHistory slice. equityHistory[0]
+    // is initial capital (set BEFORE the loop), and the loop pushes one
+    // entry per iteration starting at row index 200. Index mapping:
+    //   row i (i ≥ 200) ↔ equityHistory[i - 199].
+    const histStart = Math.max(0, trainStart - 199)
+    const histTrainEnd = Math.max(histStart, trainEnd - 199)
+    const histTestEnd = Math.max(histTrainEnd, testEnd - 199)
+    const isReturns = sliceDailyReturns(fullResult.equityCurve, histStart, histTrainEnd)
+    const osReturns = sliceDailyReturns(fullResult.equityCurve, histTrainEnd, histTestEnd)
+    const isSharpe = windowSharpe(isReturns)
+    const osSharpe = windowSharpe(osReturns)
+
     const oosRatio = isAnn !== 0 ? Math.min(2, Math.max(-1, osAnn / isAnn)) : 0
 
     windows.push({
-      periodLabel: `${new Date(trainRows[0].time * 1000).toISOString().slice(0, 7)} – ${new Date(testRows[testRows.length - 1].time * 1000).toISOString().slice(0, 7)}`,
-      startDate: new Date(trainRows[0].time * 1000).toISOString().split('T')[0],
-      endDate: new Date(testRows[testRows.length - 1].time * 1000).toISOString().split('T')[0],
+      periodLabel: `${trainStartDate.slice(0, 7)} – ${testEndDate.slice(0, 7)}`,
+      startDate: trainStartDate,
+      endDate: testEndDate,
       isReturn: isAnn,
       isSharpe,
       osReturn: osAnn,
@@ -647,6 +737,19 @@ export function walkForwardAnalysis(
   }
 
   return windows
+}
+
+/** Compute daily returns from an equity-curve slice [a, b). */
+function sliceDailyReturns(equityCurve: number[], a: number, b: number): number[] {
+  const out: number[] = []
+  for (let i = a + 1; i < b && i < equityCurve.length; i++) {
+    const prev = equityCurve[i - 1]
+    if (prev > 0) {
+      const r = (equityCurve[i] - prev) / prev
+      if (Number.isFinite(r)) out.push(r)
+    }
+  }
+  return out
 }
 
 export interface WalkForwardSummary {

@@ -152,7 +152,11 @@ export function runStressTest(
     ? tickerEntries.reduce((max, cur) => cur[1] > max[1] ? cur : max)
     : null
 
-  const estimatedLoss = portfolioValue * Math.min(0, portfolioReturn)
+  // estimatedLoss: positive dollar magnitude of peak loss.
+  // portfolioValue * portfolioReturn gives the signed PnL (negative for losses).
+  // Use Math.abs with Math.min(0, ...) to get a positive number, or compute
+  // max drawdown based loss for a more conservative estimate.
+  const estimatedLoss = Math.abs(portfolioValue * Math.min(0, portfolioReturn))
 
   return {
     scenario,

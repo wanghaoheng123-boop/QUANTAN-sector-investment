@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { applyRateLimit } from '@/lib/api/rateLimit'
 
 const KRAKEN_OHLC = 'https://api.kraken.com/0/public/OHLC'
 const COINBASE_CANDLES = 'https://api.exchange.coinbase.com/products/BTC-USD/candles'
@@ -42,11 +43,15 @@ async function fetchWithTimeout(url: string, timeoutMs = 15_000, attempts = 3): 
         continue
       }
       return res
-    } catch {
+    } catch (err) {
+      // Phase 13 S2: log per-attempt errors so operators can diagnose
+      // which crypto source is degraded. Loop continues to next attempt.
       if (attempt < attempts - 1) {
+        console.warn('[crypto] fetch attempt', attempt + 1, 'failed for', url, '—', err instanceof Error ? err.message : err)
         await sleep(300 * (attempt + 1))
         continue
       }
+      console.warn('[crypto] all', attempts, 'fetch attempts failed for', url, '—', err instanceof Error ? err.message : err)
     }
   }
   if (!last) throw new Error('All fetch attempts failed')
@@ -98,7 +103,11 @@ async function fetchCoinGeckoOhlc(binanceInterval: string, limit: number): Promi
         .filter((c): c is CandleRow => c !== null)
         .filter(c => c.high >= c.low && c.high >= Math.max(c.open, c.close) && c.low <= Math.min(c.open, c.close))
       return candles.length ? candles : null
-    } catch { return null }
+    } catch (err) {
+      // Phase 13 S2: surface partial-source failures for operators.
+      console.warn('[crypto] source attempt failed:', err instanceof Error ? err.message : err)
+      return null
+    }
   }
 
   try {
@@ -107,7 +116,10 @@ async function fetchCoinGeckoOhlc(binanceInterval: string, limit: number): Promi
     await sleep(1500)
     out = await attempt()
     return out
-  } catch { return null }
+  } catch (err) {
+    console.warn('[crypto/coingecko] outer attempt failed:', err instanceof Error ? err.message : err)
+    return null
+  }
 }
 
 /**
@@ -158,7 +170,8 @@ async function fetchCoinbaseOhlc(binanceInterval: string, limit: number): Promis
       .sort((a, b) => a.time - b.time)
     const slice = candles.slice(-Math.min(limit, candles.length))
     return slice.length ? slice : null
-  } catch {
+  } catch (err) {
+    console.warn('[crypto] source request failed:', err instanceof Error ? err.message : err)
     return null
   }
 }
@@ -196,7 +209,10 @@ async function fetchKrakenOhlc(binanceInterval: string, limit: number): Promise<
       .filter((c): c is CandleRow => c !== null)
       .filter(c => c.high >= c.low && c.high >= Math.max(c.open, c.close) && c.low <= Math.min(c.open, c.close))
     return candles.length ? candles : null
-  } catch { return null }
+  } catch (err) {
+    console.warn('[crypto/kraken] fetch failed:', err instanceof Error ? err.message : err)
+    return null
+  }
 }
 
 const INTERVAL_MAP: Record<string, string> = {
@@ -208,6 +224,10 @@ const INTERVAL_MAP: Record<string, string> = {
 export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {
+  // Rate limit: 30 req/min per IP
+  const rateLimitResponse = applyRateLimit(req, 'crypto-btc', { maxRequests: 30, windowSeconds: 60 })
+  if (rateLimitResponse) return rateLimitResponse
+
   const { searchParams } = new URL(req.url)
   const interval = searchParams.get('interval') || '1d'
   const rawLimit = parseInt(searchParams.get('limit') || '500', 10)

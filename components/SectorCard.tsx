@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { Sector } from '@/lib/sectors'
 import { PriceSignal } from '@/lib/sectors'
 import Sparkline from '@/components/Sparkline'
+import { MetricTooltip } from '@/components/MetricTooltip'
 
 interface SectorCardProps {
   sector: Sector
@@ -85,8 +86,14 @@ export default function SectorCard({ sector, quote, signal }: SectorCardProps) {
                 <div className="text-xl font-bold text-white font-mono leading-none transition-all duration-300">
                   ${quote.price.toFixed(2)}
                 </div>
-                <div className={`text-xs font-mono mt-0.5 transition-all duration-300 ${isUp ? 'text-green-400' : 'text-red-400'}`}>
-                  {isUp ? '▲' : '▼'} {Math.abs(quote.changePct).toFixed(2)}%
+                {/* F6.3 (Phase 13 S2): icon + sign prefix + aria-label so direction is
+                    clear without relying on color hue (WCAG 2.2 SC 1.4.1). */}
+                <div
+                  className={`text-xs font-mono mt-0.5 transition-all duration-300 ${isUp ? 'text-green-400' : 'text-red-400'}`}
+                  aria-label={`${isUp ? 'up' : 'down'} ${Math.abs(quote.changePct).toFixed(2)} percent`}
+                >
+                  <span aria-hidden="true">{isUp ? '▲' : '▼'}</span>{' '}
+                  {isUp ? '+' : '−'}{Math.abs(quote.changePct).toFixed(2)}%
                 </div>
               </>
             ) : (
@@ -125,7 +132,10 @@ export default function SectorCard({ sector, quote, signal }: SectorCardProps) {
         {signal && (
           <div className="relative mb-2.5">
             <div className="flex justify-between text-[10px] mb-1 text-slate-600">
-              <span>{session ? 'Move scale' : 'Confidence'}</span>
+              <span className="inline-flex items-center">
+                {session ? 'Move scale' : 'Confidence'}
+                {!session && <MetricTooltip metricKey="confidence" compact />}
+              </span>
               <span style={{ color: sector.color }} className="font-mono">{signal.confidence}%</span>
             </div>
             <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden">

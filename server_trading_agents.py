@@ -258,7 +258,11 @@ def _run_analysis(
         start = datetime.utcnow()
         try:
             ta = TradingAgentsGraph(debug=False, config=config)
-            _, decision = ta.propagate(ticker, trade_date_str)
+            # Wrap LLM call with 120s timeout to prevent indefinite hangs
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(ta.propagate, ticker, trade_date_str)
+                _, decision = future.result(timeout=120)
             elapsed = (datetime.utcnow() - start).total_seconds()
             result = build_result(
                 ticker=ticker, trade_date_str=trade_date_str,

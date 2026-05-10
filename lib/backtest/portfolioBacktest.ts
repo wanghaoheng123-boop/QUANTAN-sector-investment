@@ -15,13 +15,16 @@
 
 import type { OhlcvRow } from '@/scripts/backtest/dataLoader'
 import { enhancedCombinedSignal, DEFAULT_CONFIG } from '@/lib/backtest/signals'
-import type { BacktestConfig } from '@/lib/backtest/signals'
-import { atrArray } from '@/lib/quant/indicators'
+import type { BacktestConfig, SectorGateConfig } from '@/lib/backtest/signals'
+import { atrArray, sortinoRatio } from '@/lib/quant/indicators'
+import { maxCorrelationVsPeers, correlationAdjustedKelly } from '@/lib/quant/correlation'
+import { BACKTEST_RFR_ANNUAL } from '@/lib/quant/constants'
 import {
   checkExitConditions, updatePosition, atrAdaptiveStop,
   DEFAULT_EXIT_CONFIG,
 } from '@/lib/backtest/exitRules'
 import type { OpenPosition, ExitConfig, ExitReason } from '@/lib/backtest/exitRules'
+import { SECTOR_PROFILES } from '@/lib/optimize/sectorProfiles'
 
 export interface PortfolioConfig extends BacktestConfig {
   maxPositions: number        // max concurrent positions (default 10)
@@ -29,6 +32,13 @@ export interface PortfolioConfig extends BacktestConfig {
   monthlyRebalance: boolean   // rebalance based on sector rotation monthly
   correlationGate: number     // max correlation increase before reducing Kelly
   exit: ExitConfig
+  /**
+   * Per-ticker macro gate overrides. Phase 12-A: wires SECTOR_PROFILES into
+   * enhancedCombinedSignal so per-sector gates (golden cross, TLT/yield curve,
+   * threshold overrides) apply during portfolio backtests. Default: derived from
+   * SECTOR_PROFILES on first call.
+   */
+  tickerSectorGates?: Record<string, SectorGateConfig>
 }
 
 export const DEFAULT_PORTFOLIO_CONFIG: PortfolioConfig = {
@@ -124,15 +134,63 @@ export function runPortfolioBacktest(
   let maxConcurrent = 0
   let concurrentSum = 0
 
-  // Portfolio-level return series per ticker (for correlation calc)
+  // Phase 13 S2 fix (F1.7): per-ticker rolling-return series populated each
+  // bar; consumed by correlation-adjusted Kelly when sizing new BUYs.
+  // Previously declared but never read or written — F1.7 falsely-advertised.
   const tickerDailyReturns: Record<string, number[]> = {}
   for (const ticker of tickers) tickerDailyReturns[ticker] = []
+  // Retain only the most recent N samples to bound memory and bias correlation
+  // toward recent regime. 63 ≈ 3 trading months — typical lookback in
+  // institutional risk reports for short-term correlation.
+  const CORRELATION_WINDOW = 63
+
+  // Phase 12-A: Build per-ticker sector-gate map.
+  // Resolution order:
+  //   1) explicit cfg.tickerSectorGates override (per-ticker)
+  //   2) SECTOR_PROFILES lookup by ticker membership (extracts gate-relevant subset)
+  //   3) fallback: undefined (signal uses DEFAULT_CONFIG)
+  const sectorGateByTicker: Record<string, SectorGateConfig> = (() => {
+    const map: Record<string, SectorGateConfig> = {}
+    for (const profile of Object.values(SECTOR_PROFILES)) {
+      for (const t of profile.tickers) {
+        map[t] = {
+          goldenCrossGate: profile.goldenCrossGate,
+          requirePositiveMomentum: profile.requirePositiveMomentum,
+          buyWScoreThreshold: profile.buyWScoreThreshold,
+          sellWScoreThreshold: profile.sellWScoreThreshold,
+          slopeThreshold: profile.slopeThreshold,
+          tlrGate: profile.tlrGate,
+          // SectorProfile doesn't expose yieldCurveGate explicitly — Financials inherits
+          // via a reasonable default at the call site if needed.
+        }
+      }
+    }
+    // Per-ticker overrides win.
+    return { ...map, ...(cfg.tickerSectorGates ?? {}) }
+  })()
 
   for (let di = 220; di < dates.length; di++) {
     const currentTime = dates[di]
     const currentDate = new Date(currentTime * 1000).toISOString().split('T')[0]
 
     let dayPnl = 0
+
+    // F1.7: update per-ticker daily-return tape for correlation analysis.
+    // Computed from the previous trading bar to avoid look-ahead bias —
+    // any ticker without a prior bar at this date is skipped.
+    for (const t of tickers) {
+      const rows = instrumentData[t]
+      const idx = priceIndex[t].get(currentTime)
+      if (idx == null || idx < 1) continue
+      const prev = rows[idx - 1].close
+      const curr = rows[idx].close
+      if (prev > 0 && Number.isFinite(curr) && Number.isFinite(prev)) {
+        const r = (curr - prev) / prev
+        const tape = tickerDailyReturns[t]
+        tape.push(r)
+        if (tape.length > CORRELATION_WINDOW) tape.shift()
+      }
+    }
 
     // ── Update open positions ────────────────────────────────────────────────
     for (const [ticker, pos] of openPositions) {
@@ -143,9 +201,13 @@ export function runPortfolioBacktest(
       const row = rows[idx]
       const price = row.close
 
-      // Update highest price for trailing stop
+      // Update highest price for trailing stop + last-known close for MTM (F1.19).
       const updatedPos = updatePosition(pos, price)
-      openPositions.set(ticker, { ...pos, highestPrice: updatedPos.highestPrice })
+      openPositions.set(ticker, {
+        ...pos,
+        highestPrice: updatedPos.highestPrice,
+        lastKnownClose: price,
+      })
 
       // Compute current ATR%
       const recentBars = rows.slice(Math.max(0, idx - 20), idx + 1).map(r => ({
@@ -167,7 +229,11 @@ export function runPortfolioBacktest(
 
       let signalAction: 'BUY' | 'HOLD' | 'SELL' = 'HOLD'
       try {
-        const sig = enhancedCombinedSignal(ticker, currentDate, price, closes, bars, ohlcv, cfg)
+        // Phase 12-A: pass per-ticker sector gate
+        const sig = enhancedCombinedSignal(
+          ticker, currentDate, price, closes, bars, ohlcv, cfg,
+          sectorGateByTicker[ticker],
+        )
         signalAction = sig.action
       } catch { /* keep HOLD on error */ }
 
@@ -185,8 +251,9 @@ export function runPortfolioBacktest(
         const pnlPct = (exitPrice - pos.entryPrice) / pos.entryPrice
         const pnlDollar = exitShares * (exitPrice - pos.entryPrice)
 
-        capital += exitShares * exitPrice
-        dayPnl += pnlDollar
+        const exitTxCost = exitShares * exitPrice * 0.0011  // 11bps exit cost
+        capital += (exitShares * exitPrice - exitTxCost)
+        dayPnl += (pnlDollar - exitTxCost)
 
         closedTrades.push({
           ticker, sector: sectorMap[ticker] ?? 'Unknown',
@@ -206,13 +273,12 @@ export function runPortfolioBacktest(
             stopLossPrice: Math.max(pos.stopLossPrice, pos.entryPrice),
           })
         } else {
+          // F1.21 (Phase 13 S2): cleaned up dead state-machine code.
+          // Previous version had a self-canceling -X +X capital adjustment plus
+          // an empty `if (isPartial === false)` branch — leftovers from a bug
+          // hunt. exitShares already equals pos.currentShares when !isPartial,
+          // and capital was already credited for the full exit at line 250.
           openPositions.delete(ticker)
-          capital -= pos.currentShares * exitPrice  // remove remaining (partial already removed above)
-          capital += pos.currentShares * exitPrice  // re-add full proceeds
-          // Actually just: net out the remainder
-          if (exitCheck.isPartial === false) {
-            // Already handled above via exitShares = pos.currentShares
-          }
         }
       }
     }
@@ -239,7 +305,11 @@ export function runPortfolioBacktest(
 
         let sig
         try {
-          sig = enhancedCombinedSignal(ticker, currentDate, price, closes, bars, ohlcv, cfg)
+          // Phase 12-A: pass per-ticker sector gate
+          sig = enhancedCombinedSignal(
+            ticker, currentDate, price, closes, bars, ohlcv, cfg,
+            sectorGateByTicker[ticker],
+          )
         } catch { continue }
 
         if (sig.action !== 'BUY') continue
@@ -249,25 +319,53 @@ export function runPortfolioBacktest(
           (s, p) => {
             const pidx = priceIndex[p.ticker]?.get(currentTime)
             const prow = pidx != null ? instrumentData[p.ticker][pidx] : null
-            return s + p.currentShares * (prow?.close ?? p.entryPrice)
+            return s + p.currentShares * (prow?.close ?? p.lastKnownClose ?? p.entryPrice)
           }, 0,
         )
         if (currentEquity > peakEquity) peakEquity = currentEquity
         const dd = (peakEquity - currentEquity) / peakEquity
         if (dd >= cfg.maxDrawdownCap) continue
 
-        // Max single-position sizing
-        const maxAllocation = Math.min(
-          capital * sig.KellyFraction,
-          (capital + currentEquity - capital) * cfg.maxSinglePositionPct,
+        // F1.7: correlation-adjusted Kelly. Shrink the candidate's Kelly
+        // fraction when its 63-day return profile is highly correlated with
+        // any existing open position (Thorp 2006 §5). Below the gate the
+        // base Kelly passes through unchanged.
+        const candidateReturns = tickerDailyReturns[ticker] ?? []
+        const peerReturns: number[][] = []
+        for (const t of openPositions.keys()) {
+          const peer = tickerDailyReturns[t]
+          if (peer && peer.length > 0) peerReturns.push(peer)
+        }
+        const maxRho = peerReturns.length > 0
+          ? maxCorrelationVsPeers(candidateReturns, peerReturns, 20)
+          : 0
+        const adjustedKelly = correlationAdjustedKelly(
+          sig.KellyFraction,
+          maxRho,
+          cfg.correlationGate,
         )
-        if (maxAllocation < price) continue
+
+        // F1.18 (Phase 13 S2): Kelly applies to bankroll (available cash),
+        // concentration cap applies to total equity (cash + MTM positions).
+        // Previously Kelly used currentEquity, allowing oversizing against
+        // unrealized gains in other positions and risking negative capital
+        // when cash < kelly*equity. (Thorp 2006 — Kelly is on bankroll.)
+        const maxAllocation = Math.min(
+          capital * adjustedKelly,
+          currentEquity * cfg.maxSinglePositionPct,
+        )
+        // Defensive guard: never spend more than we have.
+        const cashCap = Math.max(0, capital * 0.99)  // small buffer for tx cost
+        const allowed = Math.min(maxAllocation, cashCap)
+        if (allowed < price) continue
 
         const atrResult = atrAdaptiveStop(price, bars, cfg.exit.atrStopMultiplier)
-        const shares = Math.floor(maxAllocation / price)
+        // F1.18: size shares from `allowed` (cash-bounded), not maxAllocation.
+        const shares = Math.floor(allowed / price)
         if (shares <= 0) continue
 
-        capital -= shares * price
+        const txCost = shares * price * 0.0011  // 11bps entry cost
+        capital -= (shares * price + txCost)
         openPositions.set(ticker, {
           ticker,
           sector: sectorMap[ticker] ?? 'Unknown',
@@ -293,7 +391,7 @@ export function runPortfolioBacktest(
     const posValue = Array.from(openPositions.values()).reduce((s, p) => {
       const pidx = priceIndex[p.ticker]?.get(currentTime)
       const prow = pidx != null ? instrumentData[p.ticker][pidx] : null
-      return s + p.currentShares * (prow?.close ?? p.entryPrice)
+      return s + p.currentShares * (prow?.close ?? p.lastKnownClose ?? p.entryPrice)
     }, 0)
     const equity = capital + posValue
     if (equity > peakEquity) peakEquity = equity
@@ -303,8 +401,8 @@ export function runPortfolioBacktest(
       for (const [ticker, pos] of openPositions) {
         const pidx = priceIndex[ticker]?.get(currentTime)
         const prow = pidx != null ? instrumentData[ticker][pidx] : null
-        const exitPrice = prow?.close ?? pos.entryPrice
-        capital += pos.currentShares * exitPrice
+        const exitPrice = prow?.close ?? pos.lastKnownClose ?? pos.entryPrice
+        capital += pos.currentShares * exitPrice * (1 - 0.0011)  // 11bps exit cost
         closedTrades.push({
           ticker, sector: sectorMap[ticker] ?? 'Unknown',
           entryDate: pos.entryDate, exitDate: currentDate,
@@ -322,7 +420,7 @@ export function runPortfolioBacktest(
     const finalEquity = capital + Array.from(openPositions.values()).reduce((s, p) => {
       const pidx = priceIndex[p.ticker]?.get(currentTime)
       const prow = pidx != null ? instrumentData[p.ticker][pidx] : null
-      return s + p.currentShares * (prow?.close ?? p.entryPrice)
+      return s + p.currentShares * (prow?.close ?? p.lastKnownClose ?? p.entryPrice)
     }, 0)
 
     equityHistory.push(finalEquity)
@@ -341,7 +439,7 @@ export function runPortfolioBacktest(
     const rows = instrumentData[ticker]
     const lastRow = rows[rows.length - 1]
     const exitPrice = lastRow.close
-    capital += pos.currentShares * exitPrice
+    capital += pos.currentShares * exitPrice * (1 - 0.0011)  // 11bps exit cost
     closedTrades.push({
       ticker, sector: sectorMap[ticker] ?? 'Unknown',
       entryDate: pos.entryDate, exitDate: finalDate,
@@ -375,18 +473,18 @@ export function runPortfolioBacktest(
   const avgTradeReturn = closedTrades.length > 0
     ? closedTrades.reduce((s, t) => s + t.pnlPct, 0) / closedTrades.length : 0
 
-  let sharpe: number | null = null, sortino: number | null = null
+  // Phase 13 S2 fix (F1.16): Sortino delegated to canonical indicators.ts impl.
+  // Sharpe stays inline (no SSOT divergence to fix).
+  let sharpe: number | null = null
+  // F1.4 (Phase 13 S2 partial): rate sourced from canonical constant; FRED hookup TBD.
+  const rfD = BACKTEST_RFR_ANNUAL / 252
   if (dailyReturns.length > 30) {
     const mean = dailyReturns.reduce((a, b) => a + b, 0) / dailyReturns.length
     const variance = dailyReturns.reduce((s, x) => s + (x - mean) ** 2, 0) / Math.max(1, dailyReturns.length - 1)
     const sd = Math.sqrt(Math.max(variance, 0))
-    if (sd > 0) { const rfD = 0.04 / 252; sharpe = ((mean - rfD) / sd) * Math.sqrt(252) }
-    const neg = dailyReturns.filter(x => x < 0)
-    if (neg.length > 0) {
-      const dSd = Math.sqrt(neg.reduce((s, x) => s + x * x, 0) / neg.length)
-      if (dSd > 0) { const rfD = 0.04 / 252; sortino = ((mean - rfD) / dSd) * Math.sqrt(252) }
-    }
+    if (sd > 0) sharpe = ((mean - rfD) / sd) * Math.sqrt(252)
   }
+  const sortino = sortinoRatio(dailyReturns, rfD, 252)
 
   // Sector attribution
   const sectorAttr: Record<string, { trades: number; wins: number; totalReturn: number }> = {}
@@ -412,12 +510,19 @@ export function runPortfolioBacktest(
   }
   for (const t of closedTrades) exitBreakdown[t.exitReason]++
 
-  // VaR approximation
-  const var95_1d = dailyReturns.length >= 30
-    ? -[...dailyReturns].sort((a, b) => a - b)[Math.floor(0.05 * dailyReturns.length)]
+  // F1.20 (Phase 13 S2): VaR threshold raised so percentile estimates are
+  // statistically stable. With N=30, 99% VaR sat at index 0 (worst single
+  // observation) — a noisy point estimate. Per Jorion (2006) p119-122, ≥250
+  // bars (~1y) is the institutional standard for stable historical 99% VaR;
+  // 100 bars is acceptable for 95% VaR. Below those gates the field is null.
+  const sortedReturns = dailyReturns.length > 0
+    ? [...dailyReturns].sort((a, b) => a - b)
+    : []
+  const var95_1d = dailyReturns.length >= 100
+    ? -sortedReturns[Math.floor(0.05 * dailyReturns.length)]
     : null
-  const var99_1d = dailyReturns.length >= 30
-    ? -[...dailyReturns].sort((a, b) => a - b)[Math.floor(0.01 * dailyReturns.length)]
+  const var99_1d = dailyReturns.length >= 250
+    ? -sortedReturns[Math.floor(0.01 * dailyReturns.length)]
     : null
 
   return {

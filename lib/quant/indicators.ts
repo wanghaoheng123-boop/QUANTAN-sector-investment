@@ -4,7 +4,14 @@
  * All functions return full time-series arrays (oldest → newest).
  * Convenience "*Latest" wrappers return only the last valid value.
  *
- * Standard: Wilder smoothing for RSI/ATR, SMA-seeded EMA, sample variance for Bollinger.
+ * Smoothing conventions (Phase 13 S2 — F2.3 documentation correction):
+ *   - Wilder smoothing (alpha = 1/N) for RSI, ATR, ADX (Wilder 1978).
+ *     Wilder smoothing ≠ EMA: it equals an EMA of span 2N-1, reacting more
+ *     slowly than standard EMA(N). Use `wilderSmoothing()` (exported).
+ *   - Standard EMA (alpha = 2/(N+1)) for MACD signal-line, multi-timeframe
+ *     trend, and chart overlays. SMA-seeded for the first N values.
+ *   - Sample variance (Bessel's correction, /(N-1)) for Bollinger and
+ *     Sharpe/Sortino — unbiased estimator (Bacon 2008 p35).
  */
 
 export interface OhlcBar {
@@ -23,7 +30,7 @@ export interface OhlcvBar extends OhlcBar {
 /** Rolling SMA returning full array. NaN for bars before `period`. */
 export function smaArray(values: number[], period: number): number[] {
   const out = new Array<number>(values.length).fill(NaN)
-  if (values.length < period) return out
+  if (period <= 0 || values.length < period) return out
   let sum = 0
   for (let i = 0; i < period; i++) sum += values[i]
   out[period - 1] = sum / period
@@ -44,14 +51,21 @@ export function smaLatest(values: number[], period: number): number | null {
 // ─── Exponential Moving Average ─────────────────────────────────────────────
 
 /**
- * EMA seeded with SMA of the first `period` values (Wilder standard).
- * Returns array of length `values.length - period + 1` (first valid at index 0
- * corresponds to bar index `period - 1` of the input).
+ * EMA seeded with SMA of the first `period` values.
  *
- * For a full-length array with NaN padding, use `emaFull`.
+ * @deprecated F2.8 (Phase 13 S2): use {@link emaFull} which returns a
+ * full-length NaN-padded array. This shorter-array variant is a footgun
+ * — callers indexing `ema(values, n)[i]` get a different value than
+ * `emaFull(values, n)[i]` for the same i. The dual API caused at least
+ * one subtle bug (the F-NEW MACD signal-line offset). Internal callers
+ * should migrate to `emaFull`; this export is retained for backward
+ * compatibility and will be removed in a future phase.
+ *
+ * Returns array of length `values.length - period + 1` (first valid at
+ * index 0 corresponds to bar index `period - 1` of the input).
  */
 export function ema(values: number[], period: number): number[] {
-  if (values.length < period) return []
+  if (period <= 0 || values.length < period) return []
   const k = 2 / (period + 1)
   const out: number[] = []
   let prev = values.slice(0, period).reduce((a, b) => a + b, 0) / period
@@ -69,41 +83,12 @@ export function ema(values: number[], period: number): number[] {
  */
 export function emaFull(values: number[], period: number): number[] {
   const out = new Array<number>(values.length).fill(NaN)
-  if (values.length < period) return out
+  if (period <= 0 || values.length < period) return out
   const k = 2 / (period + 1)
   let prev = values.slice(0, period).reduce((a, b) => a + b, 0) / period
   out[period - 1] = prev
   for (let i = period; i < values.length; i++) {
     prev = values[i] * k + prev * (1 - k)
-    out[i] = prev
-  }
-  return out
-}
-
-/**
- * Wilder smoothing returning a full-length array (NaN-padded before period-1).
- *
- * Wilder's "modified moving average" (Wilder 1978): the recursive form is
- *   x_t = ((N - 1) × x_{t-1} + v_t) / N
- * which is equivalent to an EMA with α = 1/N. Note this is NOT the same as
- * an N-period EMA with α = 2/(N+1) — Wilder smoothing is HALF as responsive.
- *
- * Used by RSI, ATR, and ADX in the canonical literature. ATR and RSI in this
- * file already use the inline recurrence; this helper exists so ADX (which
- * needed array form for TR/+DM/-DM/ADX itself) can also use Wilder, matching
- * TA-Lib, Bloomberg, TradingView, and MetaTrader values.
- *
- * Citation: Wilder, J. W. (1978). *New Concepts in Technical Trading
- *           Systems*. Trend Research, ch. 4 (smoothing definition) +
- *           ch. 5 (ADX procedure built on Wilder smoothing).
- */
-export function wilderSmoothFull(values: number[], period: number): number[] {
-  const out = new Array<number>(values.length).fill(NaN)
-  if (values.length < period) return out
-  let prev = values.slice(0, period).reduce((a, b) => a + b, 0) / period
-  out[period - 1] = prev
-  for (let i = period; i < values.length; i++) {
-    prev = (prev * (period - 1) + values[i]) / period
     out[i] = prev
   }
   return out
@@ -117,7 +102,7 @@ export function wilderSmoothFull(values: number[], period: number): number[] {
  */
 export function rsiArray(closes: number[], period = 14): number[] {
   const out = new Array<number>(closes.length).fill(NaN)
-  if (closes.length < period + 1) return out
+  if (period <= 0 || closes.length < period + 1) return out
   let avgGain = 0
   let avgLoss = 0
   for (let i = 1; i <= period; i++) {
@@ -177,7 +162,18 @@ export function macdArray(
   const line = nanArr()
   const signal = nanArr()
   const histogram = nanArr()
-  if (closes.length < slow) return { line, signal, histogram }
+  // Phase 13 S2 (F2.7): MACD signal line requires slow+sig-1 bars to be valid.
+  // Previously only `closes.length < slow` was checked, which left signal/histogram
+  // silently NaN when slow ≤ length < slow+sig-1 — caller saw a populated MACD line
+  // with an empty signal and no diagnostic.
+  if (
+    fast <= 0 ||
+    slow <= 0 ||
+    sig <= 0 ||
+    closes.length < slow + sig - 1
+  ) {
+    return { line, signal, histogram }
+  }
 
   const emaFastArr = emaFull(closes, fast)
   const emaSlowArr = emaFull(closes, slow)
@@ -189,11 +185,23 @@ export function macdArray(
     }
   }
 
-  // Signal line = EMA of valid MACD line values
+  // Signal line = EMA of valid MACD line values.
+  //
+  // F-NEW (Phase 13 S2 fix): the previous version placed sigEma[i] at
+  // signal[i + slow - 1], which is OFF BY (sig - 1) BARS. `ema()` returns
+  // a shorter array of length `validLine.length - sig + 1`, so the loop
+  // only filled signal[slow-1 .. closes.length - sig], leaving the most
+  // recent sig-1 bars (≈8 for default sig=9) as NaN. As a result, the
+  // signal layer's `macdHist` was effectively NaN forever and the MACD
+  // weight (0.15-0.20) silently contributed 0 to the weighted score.
+  //
+  // Correct anchoring: sigEma[k] is the EMA value computed using the first
+  // (k+sig) values of validLine. Anchored at validLine index (k + sig - 1),
+  // i.e., line index (k + slow + sig - 2). Place it at signal[k + slow + sig - 2].
   const validLine = line.slice(slow - 1)
   const sigEma = ema(validLine, sig)
   for (let i = 0; i < sigEma.length; i++) {
-    signal[i + slow - 1] = sigEma[i]
+    signal[i + slow + sig - 2] = sigEma[i]
   }
 
   // Histogram = line - signal
@@ -241,7 +249,9 @@ export function bollingerArray(
   const upper = nanArr()
   const lower = nanArr()
   const pctB = nanArr()
-  if (closes.length < period) return { mid, upper, lower, pctB }
+  // Phase 13 S2 (F2.9): Bollinger period must be ≥ 2 — at period=1 sample
+  // variance is identically 0 and the bands collapse to the price line.
+  if (closes.length < period || period < 2) return { mid, upper, lower, pctB }
 
   for (let i = period - 1; i < closes.length; i++) {
     const slice = closes.slice(i - period + 1, i + 1)
@@ -295,7 +305,7 @@ export function trueRange(bars: OhlcBar[]): number[] {
 /** ATR returning full-length array (Wilder smoothing, NaN before period). */
 export function atrArray(bars: OhlcBar[], period = 14): number[] {
   const out = new Array<number>(bars.length).fill(NaN)
-  if (bars.length < period + 1) return out
+  if (bars.length < period + 1 || period <= 0) return out
   const trs: number[] = []
   for (let i = 1; i < bars.length; i++) {
     trs.push(Math.max(
@@ -333,8 +343,21 @@ export function atrLatest(bars: OhlcBar[], period = 14): number | null {
 
 // ─── Additional indicators (from btc-indicators) ───────────────────────────
 
-/** On-Balance Volume */
+/**
+ * On-Balance Volume.
+ *
+ * Phase 13 S2 (F2.6): silent length-mismatch fallback removed. Mismatched
+ * input is now an explicit error — silent truncation hid alignment bugs.
+ *
+ * @throws Error when closes.length !== volumes.length.
+ */
 export function obvArray(closes: number[], volumes: number[]): number[] {
+  if (closes.length !== volumes.length) {
+    throw new Error(
+      `obvArray: closes (${closes.length}) and volumes (${volumes.length}) length mismatch`,
+    )
+  }
+  if (closes.length === 0) return []
   let cum = 0
   return closes.map((c, i) => {
     if (i === 0) return 0
@@ -344,52 +367,144 @@ export function obvArray(closes: number[], volumes: number[]): number[] {
   })
 }
 
-/** Volume-Weighted Average Price (cumulative). */
+/**
+ * Volume-Weighted Average Price (cumulative from `anchorIndex`).
+ *
+ * Phase 13 S2 (F2.4): added optional `anchorIndex` to support **anchored
+ * VWAP** — the typical use-case in trading (anchored to a prior low,
+ * earnings event, session open, etc.). Cumulative-from-start (default
+ * anchor=0) is preserved for backward compat but is statistically
+ * meaningless for daily-bar series spanning more than ~6 months because
+ * long-tail accumulation dwarfs the recent prices.
+ *
+ * Reference:
+ *   - Berkowitz, S. A., Logue, D. E., Noser, E. A. (1988). "The Total Cost
+ *     of Transactions on the NYSE." Journal of Finance 43, p97-112.
+ *   - Pruitt, S. W. & White, R. E. (1988). Anchored-VWAP variant
+ *     used by the CRISMA trading system (Journal of Portfolio Management
+ *     14(3), p55-58).
+ *
+ * @param anchorIndex   Bar index from which accumulation starts.
+ *                      Defaults to 0 (legacy cumulative behaviour).
+ *                      Returns NaN for bars before the anchor.
+ */
 export function vwapArray(
   highs: number[],
   lows: number[],
   closes: number[],
   volumes: number[],
+  anchorIndex = 0,
 ): number[] {
+  const out: number[] = new Array(closes.length).fill(NaN)
+  if (anchorIndex < 0 || anchorIndex >= closes.length) return out
   let cumTPV = 0
   let cumVol = 0
-  return closes.map((c, i) => {
-    const tp = (highs[i] + lows[i] + c) / 3
+  for (let i = anchorIndex; i < closes.length; i++) {
+    const tp = (highs[i] + lows[i] + closes[i]) / 3
     cumTPV += tp * volumes[i]
     cumVol += volumes[i]
-    return cumVol > 0 ? cumTPV / cumVol : NaN
-  })
+    out[i] = cumVol > 0 ? cumTPV / cumVol : NaN
+  }
+  return out
 }
 
-/** Stochastic RSI returning K and D lines (full-length, NaN-padded). */
+/**
+ * Convenience wrapper: VWAP anchored to the last `n` bars (sliding-window).
+ * Useful for "session VWAP" on intraday bars or "20-day anchored VWAP" on
+ * daily bars without managing the anchor index manually.
+ */
+export function vwapArrayWindow(
+  highs: number[],
+  lows: number[],
+  closes: number[],
+  volumes: number[],
+  windowBars: number,
+): number[] {
+  if (windowBars <= 0 || closes.length === 0) {
+    return new Array(closes.length).fill(NaN)
+  }
+  const anchor = Math.max(0, closes.length - windowBars)
+  return vwapArray(highs, lows, closes, volumes, anchor)
+}
+
+/**
+ * Stochastic RSI returning K and D lines (full-length, NaN-padded).
+ *
+ * Phase 13 S2 (F2.5): added optional `smoothing` param to choose between
+ * SMA (Chande & Kroll 1994 original convention; matches TradingView /
+ * ThinkOrSwim defaults) and EMA (legacy default for backward compat).
+ *
+ * SMA-smoothed StochRSI signals fire ~1-2 bars later than EMA-smoothed,
+ * trading earlier action for fewer false signals.
+ *
+ * Reference: Chande, T. S. & Kroll, S. (1994). The New Technical Trader.
+ *            Wiley. p93-104.
+ */
 export function stochRsiArray(
   closes: number[],
   rsiPeriod = 14,
   kSmooth = 3,
   dSmooth = 3,
+  smoothing: 'ema' | 'sma' = 'ema',
 ): { k: number[]; d: number[] } {
   const rsi = rsiArray(closes, rsiPeriod)
   const stoch = new Array<number>(closes.length).fill(NaN)
-  if (closes.length < rsiPeriod * 2) return { k: stoch, d: stoch }
+  if (rsiPeriod <= 0 || kSmooth <= 0 || dSmooth <= 0 || closes.length < rsiPeriod * 2) return { k: stoch, d: stoch }
   for (let i = rsiPeriod; i < closes.length; i++) {
     const window = rsi.slice(i - rsiPeriod + 1, i + 1)
     const min = Math.min(...window)
     const max = Math.max(...window)
     stoch[i] = max - min > 0 ? ((rsi[i] - min) / (max - min)) * 100 : 50
   }
-  const k = emaFull(stoch, kSmooth)
-  const d = emaFull(k, dSmooth)
+  const smoothFn = smoothing === 'sma' ? smaArray : emaFull
+  const k = smoothFn(stoch, kSmooth)
+  const d = smoothFn(k, dSmooth)
   return { k, d }
 }
 
-/** ADX (Average Directional Index) returning full-length arrays. */
+/**
+ * Wilder smoothing — alpha = 1/period (equivalent to an EMA with span 2N-1).
+ *
+ * This is the smoothing scheme Wilder defined for ADX, ATR, and RSI in
+ * "New Concepts in Technical Trading Systems" (1978). It is *not* the same as
+ * standard EMA (alpha = 2/(N+1)) — Wilder's reacts more slowly. TA-Lib (the
+ * de facto reference) uses Wilder smoothing for ADX/ATR/RSI; charting
+ * platforms generally follow.
+ *
+ * Returns full-length array, NaN before index `period - 1`.
+ */
+export function wilderSmoothing(values: number[], period: number): number[] {
+  const out = new Array<number>(values.length).fill(NaN)
+  if (period <= 0 || values.length < period) return out
+  // SMA seed for the first `period` values.
+  let sum = 0
+  for (let i = 0; i < period; i++) sum += values[i]
+  let prev = sum / period
+  out[period - 1] = prev
+  // Recursive Wilder smoothing: prev = prev + (current - prev) / period
+  //                          = prev * (1 - 1/period) + current * (1/period)
+  for (let i = period; i < values.length; i++) {
+    prev = prev + (values[i] - prev) / period
+    out[i] = prev
+  }
+  return out
+}
+
+/**
+ * ADX (Average Directional Index) returning full-length arrays.
+ *
+ * Phase 13 S2 fix (F2.2): smoothing now uses Wilder's method per the
+ * original 1978 specification. Previously used standard EMA (alpha=2/(N+1)),
+ * which produces faster-reacting (more noisy) ADX values that disagree with
+ * TA-Lib and charting platforms.
+ */
 export function adxArray(bars: OhlcBar[], period = 14): {
   adx: number[]
   plusDI: number[]
   minusDI: number[]
 } {
   const nanArr = () => new Array<number>(bars.length).fill(NaN)
-  if (bars.length < period + 1) return { adx: nanArr(), plusDI: nanArr(), minusDI: nanArr() }
+  if (bars.length < period + 1 || period <= 0) return { adx: nanArr(), plusDI: nanArr(), minusDI: nanArr() }
 
   const plusDM: number[] = []
   const minusDM: number[] = []
@@ -407,15 +522,9 @@ export function adxArray(bars: OhlcBar[], period = 14): {
     minusDM.push(downMove > upMove && downMove > 0 ? downMove : 0)
   }
 
-  // Wilder smoothing (α = 1/N), not standard EMA (α = 2/(N+1)). Wilder's
-  // 1978 ADX procedure pre-dates and is materially distinct from EMA — the
-  // 14-period Wilder smoothing has effective lookback ≈ 28 bars vs. ~14 for
-  // EMA. Using EMA here made our "ADX" twice as reactive as TA-Lib /
-  // TradingView / Bloomberg ADX, lowering the threshold for "strong trend"
-  // classification used downstream by regimeDetection.
-  const trSmooth = wilderSmoothFull(tr, period)
-  const plusDISmooth = wilderSmoothFull(plusDM, period)
-  const minusDISmooth = wilderSmoothFull(minusDM, period)
+  const trSmooth = wilderSmoothing(tr, period)
+  const plusDISmooth = wilderSmoothing(plusDM, period)
+  const minusDISmooth = wilderSmoothing(minusDM, period)
 
   const adxRaw = new Array<number>(bars.length).fill(NaN)
   const plusDIOut = new Array<number>(bars.length).fill(NaN)
@@ -430,9 +539,9 @@ export function adxArray(bars: OhlcBar[], period = 14): {
     adxRaw[i] = pdi + mdi > 0 ? (Math.abs(pdi - mdi) / (pdi + mdi)) * 100 : 0
   }
 
-  // Wilder smoothing on the DX series → ADX (Wilder 1978 procedure).
+  // Smooth the per-bar DX (in adxRaw) with Wilder smoothing → ADX. F2.2 fix.
   const validAdx = adxRaw.slice(period)
-  const adxSmoothed = wilderSmoothFull(validAdx, period)
+  const adxSmoothed = wilderSmoothing(validAdx, period)
   const adxOut = new Array<number>(bars.length).fill(NaN)
   for (let i = 0; i < adxSmoothed.length; i++) {
     adxOut[i + period] = adxSmoothed[i]
@@ -443,6 +552,23 @@ export function adxArray(bars: OhlcBar[], period = 14): {
 
 // ─── Utility: daily returns, max drawdown, Sharpe, Sortino ─────────────────
 
+/**
+ * Simple daily returns: r_i = close_i / close_{i-1} - 1.
+ *
+ * Convention (F2.10 — Phase 13 S2 documentation):
+ *   We use SIMPLE returns throughout. Tsay (2010) op cit. p3-7 covers the
+ *   tradeoffs vs LOG returns:
+ *     • Simple returns aggregate naturally across portfolios (weighted sum).
+ *     • Log returns aggregate naturally across time (additive).
+ *     • For typical daily moves (|r| < 5%), simple ≈ log to second-order.
+ *   Sharpe/Sortino computations that follow are based on simple returns,
+ *   matching most institutional reporting conventions (e.g., Bacon 2008
+ *   uses simple returns for performance attribution).
+ *
+ *   For log-return computations (e.g., volatility annualisation), see
+ *   `realizedVol` in `lib/quant/regimeDetection.ts` and `logReturns` in
+ *   `lib/quant/relativeStrength.ts` which explicitly use Math.log(c/c_prev).
+ */
 export function dailyReturns(closes: number[]): number[] {
   const r: number[] = []
   for (let i = 1; i < closes.length; i++) {
@@ -464,29 +590,78 @@ export function maxDrawdown(closes: number[]): { maxDd: number; maxDdPct: number
   return { maxDd, maxDdPct }
 }
 
-/** Sample Sharpe (daily), annualized; rf annual default 4%. */
-export function sharpeRatio(returns: number[], rfAnnual = 0.04): number | null {
+/**
+ * Sample Sharpe (daily), annualized.
+ *
+ * Phase 13 S2 fix (F1.6): annualization is now configurable. Default 252 for
+ * US equities; pass 365 for crypto (24/7 trading). Previously hardcoded 252,
+ * which understated crypto Sharpe by sqrt(252/365) ≈ 17%.
+ *
+ * @param returns        Daily returns series (decimal, e.g. 0.01 = 1%).
+ * @param rfAnnual       Annualized risk-free rate; default 4%.
+ * @param annualization  Trading periods per year; default 252.
+ */
+export function sharpeRatio(
+  returns: number[],
+  rfAnnual = 0.04,
+  annualization = 252,
+): number | null {
   if (returns.length < 20) return null
-  const rfD = rfAnnual / 252
+  const rfD = rfAnnual / annualization
   const excess = returns.map((x) => x - rfD)
   const mean = excess.reduce((a, b) => a + b, 0) / excess.length
   const v = excess.reduce((s, x) => s + (x - mean) ** 2, 0) / Math.max(1, excess.length - 1)
   const sd = Math.sqrt(Math.max(v, 0))
   if (sd === 0) return null
-  return (mean / sd) * Math.sqrt(252)
+  return (mean / sd) * Math.sqrt(annualization)
 }
 
-/** Sortino using downside deviation vs MAR. Denominator = total N. */
-export function sortinoRatio(returns: number[], marDaily = 0): number | null {
-  if (returns.length < 20) return null
-  const n = returns.length
-  const downsideSq = returns.map((x) => {
-    const dev = Math.min(0, x - marDaily)
-    return dev * dev
-  })
-  const downsideVariance = downsideSq.reduce((s, x) => s + x, 0) / n
+/**
+ * Sortino ratio — canonical single-source-of-truth implementation.
+ *
+ * Phase 13 S2 fix (F2.1 + F1.16): Three divergent Sortino implementations existed
+ * (engine.ts, portfolioBacktest.ts, indicators.ts) — this is now the canonical one.
+ * Other call-sites import from here.
+ *
+ * Formula (Sortino & van der Meer 1991):
+ *   downsideDeviation = sqrt( sum( min(0, r - MAR)^2 ) / n_d )
+ *   Sortino           = ((mean - MAR) / downsideDeviation) * sqrt(annualization)
+ *
+ * Key choices:
+ *   - Denominator is n_d (count of negative excess returns), NOT N (total obs).
+ *     Using N understates downside deviation, inflating Sortino by sqrt(N/n_d).
+ *   - Minimum n_d ≥ 30 for statistically stable estimate (Bacon 2008 p107).
+ *   - MAR (Minimum Acceptable Return) is configurable as a daily rate. Pass
+ *     `marDaily = rfAnnual / annualization` to use risk-free rate as MAR.
+ *   - Numerator uses (mean - MAR), matching the MAR used in the denominator.
+ *
+ * Returns null when:
+ *   - returns.length < 30
+ *   - n_d (negative excess returns) < 30
+ *   - downsideDeviation is degenerate (zero or non-finite)
+ *
+ * @param returns        Daily return series (decimal, e.g. 0.01 = 1%).
+ * @param marDaily       Minimum Acceptable Return as a daily rate. Default 0
+ *                       (any negative return counts as downside).
+ * @param annualization  Trading periods per year (252 equities, 365 crypto).
+ */
+export function sortinoRatio(
+  returns: number[],
+  marDaily = 0,
+  annualization = 252,
+): number | null {
+  if (returns.length < 30) return null
+  const negDevs = returns
+    .map((x) => Math.min(0, x - marDaily))
+    .filter((x) => x < 0)
+  if (negDevs.length < 30) return null
+
+  const downsideVariance =
+    negDevs.reduce((s, x) => s + x * x, 0) / negDevs.length
   const dsd = Math.sqrt(downsideVariance)
-  if (dsd === 0) return null
-  const mean = returns.reduce((a, b) => a + b, 0) / n
-  return ((mean - marDaily) / dsd) * Math.sqrt(252)
+  if (!Number.isFinite(dsd) || dsd < 1e-12) return null
+
+  const mean = returns.reduce((a, b) => a + b, 0) / returns.length
+  const ratio = ((mean - marDaily) / dsd) * Math.sqrt(annualization)
+  return Number.isFinite(ratio) ? ratio : null
 }

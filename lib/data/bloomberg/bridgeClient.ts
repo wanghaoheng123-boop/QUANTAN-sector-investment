@@ -6,6 +6,8 @@
  */
 
 import { fromBloombergSecurity } from './toBloombergSecurity'
+import { formatCompactNumber } from '@/lib/format'
+import { sanitizeError } from '@/lib/api/sanitize'
 
 export type BloombergQuoteNormalized = {
   ticker: string
@@ -24,7 +26,10 @@ export type BloombergQuoteNormalized = {
 
 function num(x: unknown): number {
   if (typeof x === 'number' && Number.isFinite(x)) return x
-  if (typeof x === 'string' && x.trim() !== '') return parseFloat(x) || 0
+  if (typeof x === 'string' && x.trim() !== '') {
+    const parsed = parseFloat(x)
+    return Number.isFinite(parsed) ? parsed : 0
+  }
   return 0
 }
 
@@ -105,8 +110,11 @@ export async function fetchBloombergQuotesViaBridge(
       const lo = num(row.low52w) || num(row.LOW_52WEEK) || num(row.fiftyTwoWeekLow)
       const pe = num(row.pe) || num(row.PE_RATIO) || num(row.trailingPE)
       const mcap = row.marketCap ?? row.MARKET_CAP ?? row.CUR_MKT_CAP
+      // Phase 13 S2 fix (F4.7): use formatCompactNumber for proper T/B/M
+      // formatting. Previously hardcoded 'B' suffix made AAPL render as
+      // "3500.0B" and small caps as "0.3B".
       let marketCap = 'N/A'
-      if (typeof mcap === 'number' && mcap > 0) marketCap = `${(mcap / 1e9).toFixed(1)}B`
+      if (typeof mcap === 'number' && mcap > 0) marketCap = formatCompactNumber(mcap)
       else if (typeof mcap === 'string') marketCap = mcap
 
       const bid = num(row.bid) || num(row.BID) || undefined
@@ -153,6 +161,7 @@ export async function bridgeHealthCheck(): Promise<{
     const res = await fetch(`${base.replace(/\/$/, '')}/health`, { headers, signal: AbortSignal.timeout(3000) })
     return { ok: res.ok, latencyMs: Date.now() - started, error: res.ok ? undefined : `HTTP ${res.status}` }
   } catch (e) {
-    return { ok: false, latencyMs: Date.now() - started, error: String(e) }
+    // Phase 13 S2 fix (F4.8): never leak raw error in production responses.
+    return { ok: false, latencyMs: Date.now() - started, error: sanitizeError(e) ?? 'bridge unreachable' }
   }
 }

@@ -51,8 +51,9 @@ export interface EnrichedChain {
 
 const yahooFinance = new YahooFinance()
 
-/** Continuously compounded risk-free rate for all greeks calculations. */
-const RISK_FREE_RATE = 0.0525
+// Phase 13 S2 (F1.4 partial): centralized in lib/quant/constants.ts.
+// Eventual FRED-backed getRiskFreeRate(tenorDays) will be a 1-line change.
+import { OPTIONS_RFR_ANNUAL as RISK_FREE_RATE } from '@/lib/quant/constants'
 
 function toDate(d: unknown): Date {
   if (d instanceof Date) return d
@@ -79,6 +80,20 @@ function normaliseContract(raw: Record<string, unknown>): CallOrPut {
   }
 }
 
+/**
+ * Day-count convention (F3.7 — Phase 13 S2 documentation):
+ * ────────────────────────────────────────────────────────
+ *   Time-to-expiry is computed in CALENDAR DAYS / 365 (ACT/365). Theta is
+ *   subsequently divided by 365 in `greeks()` to produce per-calendar-day
+ *   theta. This matches Hull (2017) op cit. p385 and Bloomberg defaults.
+ *
+ *   Alternative conventions in use elsewhere:
+ *     • Trading-day basis (252)   — used by some venues for theta annualisation
+ *     • Business-day basis (≈252) — used by some IRS / OIS desks
+ *
+ *   Switching conventions changes theta by ~30% (252 vs 365 → 0.69× factor)
+ *   so any platform reading our theta values must use ACT/365.
+ */
 function enrichContract(
   contract: CallOrPut,
   spot: number,

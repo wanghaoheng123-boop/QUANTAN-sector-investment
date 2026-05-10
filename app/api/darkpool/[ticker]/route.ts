@@ -19,6 +19,9 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import YahooFinance from 'yahoo-finance2'
+import { parseQuoteTime } from '@/lib/format'
+import { applyRateLimit } from '@/lib/api/rateLimit'
+import { normalizeTicker, sanitizeError } from '@/lib/api/sanitize'
 
 const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] })
 
@@ -155,10 +158,16 @@ export async function GET(
   req: NextRequest,
   { params }: { params: { ticker: string } }
 ): Promise<NextResponse<DarkPoolAnalysis | { error: string }>> {
-  const ticker = (params.ticker || '').trim().toUpperCase()
+  // Phase 13 S2: rate-limit + canonical ticker validation.
+  const rateLimitResponse = applyRateLimit(req, 'darkpool', {
+    maxRequests: 30,
+    windowSeconds: 60,
+  })
+  if (rateLimitResponse) return rateLimitResponse as unknown as NextResponse<{ error: string }>
 
+  const ticker = normalizeTicker(params.ticker || '')
   if (!ticker) {
-    return NextResponse.json({ error: 'ticker is required' }, { status: 400 })
+    return NextResponse.json({ error: 'Invalid ticker symbol' }, { status: 400 })
   }
 
   try {
@@ -184,20 +193,6 @@ export async function GET(
     const rawChangePct = safeNum(
       (q as Record<string, unknown>).regularMarketChangePercent
     )
-
-    const parseQuoteTime = (ts: unknown): string | null => {
-      if (ts == null) return null
-      if (ts instanceof Date) return ts.toISOString()
-      if (typeof ts === 'string') {
-        const d = new Date(ts)
-        return Number.isFinite(d.getTime()) ? d.toISOString() : null
-      }
-      if (typeof ts === 'number') {
-        const ms = ts > 1e12 ? ts : ts * 1000
-        return Number.isFinite(ms) ? new Date(ms).toISOString() : null
-      }
-      return null
-    }
 
     const price: PricePoint =
       rawPrice != null && rawPrice > 0
@@ -247,10 +242,11 @@ export async function GET(
     })
   } catch (err) {
     console.error(`[DarkPool API] ${ticker}:`, err)
+    // Phase 13 S2 fix (F4.8): never leak raw error in production response.
     return NextResponse.json(
       {
         error: 'Failed to fetch dark pool data',
-        details: String(err),
+        details: sanitizeError(err) ?? null,
       } as unknown as DarkPoolAnalysis,
       { status: 502 }
     )

@@ -203,10 +203,11 @@ function combinedSignal(ticker, date, price, closes, bars, cfg) {
 
 function backtestInstrument(ticker, sector, rows, cfg = {}) {
   const initialCapital = cfg.initialCapital ?? 100_000
-  const stopLossPct = cfg.stopLossPct ?? 0.10
   const confidenceThreshold = cfg.confidenceThreshold ?? 60
   const maxDdCap = cfg.maxDrawdownCap ?? 0.25
   const halfKelly = cfg.halfKelly ?? true
+  const TX_COST_BPS = 0.0011        // 11bps per side
+  const ENTRY_SLIPPAGE_BPS = 0.0002 // 2bps entry slippage
 
   if (rows.length < 252) return { ticker, sector, totalReturn: 0, annualizedReturn: 0, sharpeRatio: null, sortinoRatio: null, maxDrawdown: 0, winRate: 0, profitFactor: 0, avgTradeReturn: 0, totalTrades: 0, closedTrades: [], equityCurve: [initialCapital], days: 0, confidenceAvg: 0, bnhReturn: 0, excessReturn: 0 }
 
@@ -225,17 +226,20 @@ function backtestInstrument(ticker, sector, rows, cfg = {}) {
     const row = rows[i]
     const date = new Date(row.time * 1000).toISOString().split('T')[0]
     const price = row.close
+    // Execution price: next-day open (avoids lookahead bias of using signal-day close)
+    const execPrice = i + 1 < rows.length ? rows[i + 1].open : rows[i].close
     const lookback = rows.slice(0, i + 1).map(r => r.close)
     const barLookback = rows.slice(0, i + 1)
 
-    // Stop-loss check
+    // ATR-adaptive stop-loss check
     if (openTrade) {
-      const sl = openTrade.action === 'BUY' ? openTrade.price * (1 - stopLossPct) : openTrade.price * (1 + stopLossPct)
+      const sl = openTrade.action === 'BUY' ? openTrade.entryPrice * (1 - openTrade.stopPct) : openTrade.entryPrice * (1 + openTrade.stopPct)
       if ((openTrade.action === 'BUY' && price <= sl) || (openTrade.action === 'SELL' && price >= sl)) {
-        capital += position * price
-        const pnlPct = (price - openTrade.price) / openTrade.price
+        const netExecPrice = execPrice * (1 - TX_COST_BPS)
+        capital += position * netExecPrice
+        const pnlPct = (netExecPrice - openTrade.entryPrice) / openTrade.entryPrice
         openTrade.pnlPct = pnlPct
-        openTrade.price = price
+        openTrade.exitPrice = netExecPrice
         closedTrades.push({ ...openTrade })
         if (pnlPct > 0) tradeWins++; else tradeLosses++
         position = 0; openTrade = null
@@ -249,9 +253,10 @@ function backtestInstrument(ticker, sector, rows, cfg = {}) {
     if (eq > peakEquity) peakEquity = eq
     const dd = (peakEquity - eq) / peakEquity
     if (dd >= maxDdCap && openTrade) {
-      capital += position * price
-      const pnlPct = (price - openTrade.price) / openTrade.price
-      openTrade.pnlPct = pnlPct; openTrade.price = price
+      const netExecPrice = execPrice * (1 - TX_COST_BPS)
+      capital += position * netExecPrice
+      const pnlPct = (netExecPrice - openTrade.entryPrice) / openTrade.entryPrice
+      openTrade.pnlPct = pnlPct; openTrade.exitPrice = netExecPrice
       closedTrades.push({ ...openTrade })
       if (pnlPct > 0) tradeWins++; else tradeLosses++
       position = 0; openTrade = null
@@ -262,21 +267,31 @@ function backtestInstrument(ticker, sector, rows, cfg = {}) {
     const signal = combinedSignal(ticker, date, price, lookback, barLookback, cfg)
 
     if (signal.action === 'BUY' && !openTrade) {
+      const entryPrice = execPrice * (1 + ENTRY_SLIPPAGE_BPS)
+      // ATR-adaptive stop: clamp(atrPct * 1.5, 0.05, 0.15)
+      const atrVals = atr(barLookback)
+      const lastAtrVal = atrVals[atrVals.length - 1]
+      const lastCloseRow = barLookback[barLookback.length - 1]
+      const atrPctEntry = lastCloseRow && lastCloseRow.close > 0 ? (lastAtrVal / lastCloseRow.close) * 100 : 2
+      const stopPct = Math.min(0.15, Math.max(0.05, (atrPctEntry / 100) * 1.5))
       const kf = Math.min(signal.KellyFraction, 0.50)
       const allocation = capital * kf
-      const shares = Math.floor(allocation / price)
+      const shares = Math.floor(allocation / entryPrice)
       if (shares <= 0) { equityHistory.push(capital); continue }
-      capital -= shares * price
+      const cost = shares * entryPrice
+      const txCost = cost * TX_COST_BPS
+      capital -= (cost + txCost)
       position += shares
-      avgCost = price
-      openTrade = { date, ticker, sector, action: 'BUY', price, shares, value: shares * price, regime: signal.regime.label, dipSignal: signal.regime.dipSignal, confidence: signal.confidence, pnlPct: null, reason: signal.reason }
+      avgCost = entryPrice
+      openTrade = { date, ticker, sector, action: 'BUY', price: entryPrice, entryPrice, stopPct, shares, value: cost, regime: signal.regime.label, dipSignal: signal.regime.dipSignal, confidence: signal.confidence, pnlPct: null, reason: signal.reason }
       confidenceSum += signal.confidence; confidenceCount++
     } else if (signal.action === 'SELL' && openTrade) {
-      const proceeds = position * price
-      const pnlPct = (price - openTrade.price) / openTrade.price
+      const netExecPrice = execPrice * (1 - TX_COST_BPS)
+      const proceeds = position * netExecPrice
+      const pnlPct = (netExecPrice - openTrade.entryPrice) / openTrade.entryPrice
       if (pnlPct > 0) tradeWins++; else tradeLosses++
       capital += proceeds
-      openTrade.pnlPct = pnlPct; openTrade.price = price
+      openTrade.pnlPct = pnlPct; openTrade.exitPrice = netExecPrice
       closedTrades.push({ ...openTrade })
       position = 0; avgCost = 0; openTrade = null
     } else {
@@ -287,10 +302,11 @@ function backtestInstrument(ticker, sector, rows, cfg = {}) {
   // Close remaining position
   const finalPrice = rows[rows.length - 1].close
   if (openTrade) {
-    const pnlPct = (finalPrice - openTrade.price) / openTrade.price
+    const netFinalPrice = finalPrice * (1 - TX_COST_BPS)
+    const pnlPct = (netFinalPrice - openTrade.entryPrice) / openTrade.entryPrice
     if (pnlPct > 0) tradeWins++; else tradeLosses++
-    capital += position * finalPrice
-    openTrade.pnlPct = pnlPct; openTrade.price = finalPrice
+    capital += position * netFinalPrice
+    openTrade.pnlPct = pnlPct; openTrade.exitPrice = netFinalPrice
     closedTrades.push({ ...openTrade })
     position = 0
   }
@@ -371,7 +387,6 @@ for (const sector of SECTORS) {
     process.stdout.write(`${rows.length} bars — backtesting... `)
     const result = backtestInstrument(ticker, sector.name, rows, {
       initialCapital: INITIAL_CAPITAL,
-      stopLossPct: 0.10,
       confidenceThreshold: 60,
       maxDrawdownCap: 0.25,
       halfKelly: true,

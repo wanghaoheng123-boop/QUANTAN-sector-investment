@@ -139,7 +139,7 @@ export function ma200Regime(
   if (dev == null) return insufficient
 
   const slope = sma200Slope(closes)
-  const slopePositive = slope != null ? slope > 0 : null
+  const slopePositive = slope != null ? slope > 0.005 : null
 
   let zone: MA200Zone
   if (dev > 20) zone = 'EXTREME_BULL'

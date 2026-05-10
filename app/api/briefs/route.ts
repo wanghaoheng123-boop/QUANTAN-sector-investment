@@ -10,6 +10,8 @@
 
 import { NextResponse } from 'next/server'
 import YahooFinance from 'yahoo-finance2'
+import { applyRateLimit } from '@/lib/api/rateLimit'
+import { sanitizeError } from '@/lib/api/sanitize'
 
 const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] })
 
@@ -83,18 +85,29 @@ async function fetchNewsForTicker(ticker: string): Promise<NewsBrief[]> {
         tickers: relatedTickers,
       })
     }
-  } catch {
-    // Silently fail per ticker to not block other results
+  } catch (err) {
+    // Phase 13 S2: previously silent. Per-ticker failures don't block other
+    // results, but operators need a trail when news fetch is degraded.
+    console.warn('[briefs] news fetch failed for', ticker, err)
   }
   return results
 }
 
-export async function GET(): Promise<NextResponse<{
+export async function GET(request: Request): Promise<NextResponse<{
   briefs: NewsBrief[]
   fetchedAt: string
   sectorCount: number
   source: string
 } | { error: string }>> {
+  // Phase 13 S2: rate-limit. This route fans out to ~33 yahoo search() calls
+  // per request (11 sectors × 3 tickers each). Tighter limit to prevent
+  // amplification of upstream load.
+  const rateLimitResponse = applyRateLimit(request, 'briefs', {
+    maxRequests: 6,
+    windowSeconds: 60,
+  })
+  if (rateLimitResponse) return rateLimitResponse as unknown as NextResponse<{ error: string }>
+
   try {
     const seenLinks = new Set<string>()
     const allBriefs: NewsBrief[] = []
@@ -150,8 +163,9 @@ export async function GET(): Promise<NextResponse<{
     )
   } catch (err) {
     console.error('[Briefs API]', err)
+    // Phase 13 S2 fix (F4.8): sanitized error.
     return NextResponse.json(
-      { error: 'Failed to fetch financial news', details: String(err) },
+      { error: 'Failed to fetch financial news', details: sanitizeError(err) ?? null },
       { status: 502 }
     )
   }

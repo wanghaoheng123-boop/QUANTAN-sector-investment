@@ -48,6 +48,18 @@ export function correlationMatrix(
 
   const matrix: number[][] = Array.from({ length: n }, () => new Array(n).fill(0))
   let corrSum = 0, corrCount = 0
+
+  // Guard: single-asset portfolios have no pairwise correlations
+  if (n < 2) {
+    return {
+      tickers,
+      matrix,
+      avgPairwiseCorr: 0,
+      maxCorr: { tickers: [tickers[0] ?? '', tickers[0] ?? ''] as [string, string], corr: 0 },
+      minCorr: { tickers: [tickers[0] ?? '', tickers[0] ?? ''] as [string, string], corr: 0 },
+    }
+  }
+
   let maxCorr = { tickers: [tickers[0], tickers[1]] as [string, string], corr: -Infinity }
   let minCorr = { tickers: [tickers[0], tickers[1]] as [string, string], corr: Infinity }
 

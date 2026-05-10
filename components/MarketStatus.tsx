@@ -41,6 +41,8 @@ export default function MarketStatus() {
 
   return (
     <div
+      role="status"
+      aria-label={`Market status: ${status.label === 'RTH' ? 'Regular Trading Hours' : status.label === 'PRE' ? 'Pre-Market' : status.label === 'AH' ? 'After-Hours' : 'Closed'}`}
       className={`flex items-center gap-1.5 px-2 py-1 rounded-md border text-xs font-mono font-medium ${status.bgColor} ${status.borderColor} ${status.color}`}
       title="Market hours (Eastern Time): Pre-market 4:00 AM - 9:30 AM, Regular 9:30 AM - 4:00 PM, After-hours 4:00 PM - 8:00 PM"
     >

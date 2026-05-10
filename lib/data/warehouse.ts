@@ -25,7 +25,7 @@ try {
 
 type Db = InstanceType<typeof import('better-sqlite3')>
 
-const DB_PATH = join(process.cwd(), 'scripts', 'quantan.db')
+const DB_PATH = join(process.cwd(), 'quantan-warehouse-new.db')
 
 let _db: Db | null = null
 

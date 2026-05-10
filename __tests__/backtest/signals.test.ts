@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { regimeSignal, combinedSignal, enhancedCombinedSignal, DEFAULT_CONFIG } from '@/lib/backtest/signals'
+import { regimeSignal, enhancedCombinedSignal, DEFAULT_CONFIG } from '@/lib/backtest/signals'
 import type { OhlcBar, OhlcvBar } from '@/lib/quant/indicators'
 
 // Generate synthetic close series for regime testing
@@ -84,71 +84,11 @@ describe('Regime Signal', () => {
   })
 })
 
-describe('Combined Signal', () => {
-  it('returns valid signal structure', () => {
-    const closes = generateCloses(100, 250, 0.1)
-    const bars = generateBars(closes)
-    const price = closes[closes.length - 1]
-    const date = '2024-01-01'
-
-    const signal = combinedSignal('TEST', date, price, closes, bars)
-    expect(signal.ticker).toBe('TEST')
-    expect(signal.date).toBe(date)
-    expect(signal.price).toBe(price)
-    expect(['BUY', 'HOLD', 'SELL']).toContain(signal.action)
-    expect(signal.confidence).toBeGreaterThanOrEqual(0)
-    expect(signal.confidence).toBeLessThanOrEqual(100)
-    expect(signal.KellyFraction).toBeGreaterThanOrEqual(0)
-    expect(signal.KellyFraction).toBeLessThanOrEqual(1)
-  })
-
-  it('has 4 confirmation signals', () => {
-    const closes = generateCloses(100, 250, 0.1)
-    const bars = generateBars(closes)
-    const signal = combinedSignal('TEST', '2024-01-01', closes[249], closes, bars)
-    expect(signal.confirms).toHaveLength(4)
-    expect(signal.confirms.map(c => c.name)).toEqual(['RSI(14)', 'MACD hist', 'ATR%', 'BB%'])
-  })
-
-  it('BUY requires at least 2 bullish confirmations', () => {
-    // Even if regime says BUY, without confirmations it becomes HOLD
-    const closes = generateCloses(100, 250, 0.1)
-    const bars = generateBars(closes)
-    const signal = combinedSignal('TEST', '2024-01-01', closes[249], closes, bars)
-    if (signal.action === 'BUY') {
-      const bullishCount = signal.confirms.filter(c => c.bullish).length
-      expect(bullishCount).toBeGreaterThanOrEqual(2)
-    }
-  })
-
-  it('SELL gets Kelly fraction of 1.0 (full exit)', () => {
-    const closes = generateCloses(100, 250, 0.1)
-    const bars = generateBars(closes)
-    const signal = combinedSignal('TEST', '2024-01-01', closes[249], closes, bars)
-    if (signal.action === 'SELL') {
-      expect(signal.KellyFraction).toBe(1.0)
-    }
-  })
-
-  it('confidence below threshold converts BUY to HOLD', () => {
-    const closes = generateCloses(100, 250, 0.1)
-    const bars = generateBars(closes)
-    const signal = combinedSignal('TEST', '2024-01-01', closes[249], closes, bars, {
-      confidenceThreshold: 99, // Very high threshold
-    })
-    // With threshold at 99%, almost nothing should be a BUY
-    if (signal.action !== 'SELL') {
-      expect(signal.action).toBe('HOLD')
-    }
-  })
-
-  it('reason string is non-empty', () => {
-    const closes = generateCloses(100, 250, 0.1)
-    const bars = generateBars(closes)
-    const signal = combinedSignal('TEST', '2024-01-01', closes[249], closes, bars)
-    expect(signal.reason.length).toBeGreaterThan(0)
-  })
-})
+// Phase 13 S2 fix (F1.10): the legacy `combinedSignal` (4-confirmation
+// bullishCount-based) was deleted in favour of the canonical
+// `enhancedCombinedSignal` (7-factor weighted confluence). Its tests are
+// removed here as well — the equivalent assertions are covered by the
+// "Enhanced Combined Signal" block below.
 
 describe('Enhanced Combined Signal', () => {
   it('returns valid enhanced signal structure', () => {
@@ -250,7 +190,7 @@ describe('Enhanced Combined Signal', () => {
 describe('DEFAULT_CONFIG', () => {
   it('has expected default values', () => {
     expect(DEFAULT_CONFIG.initialCapital).toBe(100_000)
-    expect(DEFAULT_CONFIG.confidenceThreshold).toBe(55)
+    expect(DEFAULT_CONFIG.confidenceThreshold).toBe(50)
     expect(DEFAULT_CONFIG.maxDrawdownCap).toBe(0.25)
     expect(DEFAULT_CONFIG.halfKelly).toBe(true)
   })

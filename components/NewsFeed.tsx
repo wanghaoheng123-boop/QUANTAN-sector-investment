@@ -60,8 +60,10 @@ export default function NewsFeed({ sector, news: staticNews, color }: NewsFeedPr
         setFetchedAt(data.fetchedAt ?? null)
         setLoading(false)
       })
-      .catch(() => {
+      .catch((err) => {
         if (cancelled) return
+        // Phase 13 S2 fix (F5.4): preserve UI behavior, add operator-visible diagnostic.
+        console.warn('[NewsFeed] news fetch failed for sector', sector, err)
         setApiError(true)
         setLoading(false)
       })

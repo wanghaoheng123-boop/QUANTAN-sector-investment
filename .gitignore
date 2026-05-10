@@ -46,6 +46,16 @@ yarn-error.log*
 /shared-memory/
 /agents_memory/
 
+# ─── Python artifacts ───────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# ─── SQLite databases (do NOT commit) ────────────────────────────────────────
+*.db
+*.db-journal
+
 # ─── Claude / Cursor agent artifacts ─────────────────────────────────────────
 .claude/
 .cursor/

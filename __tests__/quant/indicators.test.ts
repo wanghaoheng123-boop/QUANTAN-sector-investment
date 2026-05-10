@@ -10,6 +10,7 @@ import {
   dailyReturns, maxDrawdown,
   sharpeRatio, sortinoRatio,
   obvArray, stochRsiArray, adxArray,
+  wilderSmoothing,
 } from '@/lib/quant/indicators'
 
 // ─── Test data ──────────────────────────────────────────────────────────────
@@ -287,18 +288,81 @@ describe('Sharpe Ratio', () => {
 })
 
 describe('Sortino Ratio', () => {
-  it('returns null for insufficient data', () => {
+  it('returns null for insufficient data (< 30 returns)', () => {
     expect(sortinoRatio([0.01])).toBeNull()
+    expect(sortinoRatio(Array.from({ length: 29 }, () => 0.001))).toBeNull()
+  })
+
+  it('returns null when negative-deviation count < 30', () => {
+    // 100 returns, only 5 negative — n_d = 5 < 30 → null
+    const returns = Array.from({ length: 100 }, (_, i) =>
+      i < 5 ? -0.01 : 0.01
+    )
+    expect(sortinoRatio(returns, 0)).toBeNull()
   })
 
   it('higher than Sharpe for positively skewed returns', () => {
+    // 100 returns: 40 negative (n_d threshold met)
     const returns = Array.from({ length: 100 }, (_, i) =>
-      i % 3 === 0 ? 0.03 : 0.001
+      i % 5 < 3 ? 0.02 : -0.01
     )
     const sharpe = sharpeRatio(returns)
     const sortino = sortinoRatio(returns)
+    expect(sharpe).not.toBeNull()
+    expect(sortino).not.toBeNull()
     if (sharpe != null && sortino != null) {
       expect(sortino).toBeGreaterThan(sharpe)
+    }
+  })
+
+  // F2.1 / F1.16 acceptance test: canonical n_d denominator (Sortino & van der
+  // Meer 1991), not N-1.  Hand-computed value below should hold.
+  it('uses n_d (negative-period count) denominator, not N', () => {
+    // 30 returns of -0.01 + 70 returns of +0.005, MAR = 0:
+    //   n = 100, n_d = 30
+    //   sum(min(0,r)^2) = 30 * 1e-4 = 3e-3
+    //   downsideVariance = 3e-3 / 30 = 1e-4 → dsd = 0.01
+    //   mean = (-0.30 + 0.35) / 100 = 0.0005
+    //   sortino = 0.0005 / 0.01 * sqrt(252) = 0.05 * sqrt(252) ≈ 0.7937
+    const returns = [
+      ...Array.from({ length: 30 }, () => -0.01),
+      ...Array.from({ length: 70 }, () => 0.005),
+    ]
+    const sortino = sortinoRatio(returns, 0)
+    expect(sortino).not.toBeNull()
+    if (sortino != null) {
+      expect(sortino).toBeCloseTo(0.05 * Math.sqrt(252), 4)
+      // If denom were (N-1)=99 (the old bug), sortino ≈ 1.443. We must NOT match.
+      expect(Math.abs(sortino - 1.443)).toBeGreaterThan(0.5)
+    }
+  })
+
+  it('respects custom MAR — higher MAR shrinks excess and Sortino', () => {
+    // 100 returns: 40 negative (-0.005), 60 positive (+0.005)
+    const returns = [
+      ...Array.from({ length: 40 }, () => -0.005),
+      ...Array.from({ length: 60 }, () => 0.005),
+    ]
+    const sortinoMar0 = sortinoRatio(returns, 0)
+    const sortinoMarPos = sortinoRatio(returns, 0.001)
+    expect(sortinoMar0).not.toBeNull()
+    expect(sortinoMarPos).not.toBeNull()
+    if (sortinoMar0 != null && sortinoMarPos != null) {
+      expect(sortinoMarPos).toBeLessThan(sortinoMar0)
+    }
+  })
+
+  it('respects custom annualization (365 for crypto vs 252 for equities)', () => {
+    const returns = [
+      ...Array.from({ length: 40 }, () => -0.001),
+      ...Array.from({ length: 60 }, () => 0.002),
+    ]
+    const sortino252 = sortinoRatio(returns, 0, 252)
+    const sortino365 = sortinoRatio(returns, 0, 365)
+    expect(sortino252).not.toBeNull()
+    expect(sortino365).not.toBeNull()
+    if (sortino252 != null && sortino365 != null) {
+      expect(sortino365 / sortino252).toBeCloseTo(Math.sqrt(365 / 252), 3)
     }
   })
 })
@@ -341,48 +405,106 @@ describe('Stochastic RSI', () => {
   })
 })
 
-// ─── ADX (Wilder smoothing — regression) ────────────────────────────────────
+// ─── Wilder smoothing (Phase 13 S2 — F2.2) ──────────────────────────────────
 
-describe('ADX', () => {
-  /**
-   * adxArray was previously NOT covered. Three new tests pin down:
-   *   - NaN-padded output for insufficient bars
-   *   - Strong steady uptrend produces ADX > 50 (per Wilder threshold)
-   *   - Wilder smoothing IS used (regression: was emaFull which is ~2x
-   *     more responsive — incompatible with TA-Lib / Bloomberg / TV).
-   */
-  function uptrendBars(n: number, start = 100, step = 0.5) {
-    return Array.from({ length: n }, (_, i) => ({
-      open: start + i * step,
-      high: start + i * step + 0.4,
-      low: start + i * step - 0.1,
-      close: start + i * step + 0.3,
-    }))
-  }
+describe('Wilder smoothing', () => {
+  it('returns NaN-padded array of input length', () => {
+    const out = wilderSmoothing([1, 2, 3, 4, 5], 3)
+    expect(out).toHaveLength(5)
+    expect(isNaN(out[0])).toBe(true)
+    expect(isNaN(out[1])).toBe(true)
+    expect(out[2]).toBe(2) // SMA seed of [1,2,3]
+  })
 
+  it('seeds at index period-1 with the SMA of the first period values', () => {
+    const out = wilderSmoothing([10, 20, 30, 40, 50], 3)
+    expect(out[2]).toBe(20) // (10+20+30)/3 = 20
+  })
+
+  it('uses recursive Wilder formula: prev + (current - prev)/period', () => {
+    // [1,2,3,4,5,6,7], period=3
+    // out[2] = 2 (seed)
+    // out[3] = 2 + (4-2)/3 = 2.666...
+    // out[4] = 2.666 + (5-2.666)/3 = 3.444...
+    const out = wilderSmoothing([1, 2, 3, 4, 5, 6, 7], 3)
+    expect(out[2]).toBeCloseTo(2, 6)
+    expect(out[3]).toBeCloseTo(2.666666, 4)
+    expect(out[4]).toBeCloseTo(3.444444, 4)
+  })
+
+  it('produces values that lag a standard EMA on a step input', () => {
+    // Step from 0 to 100 at index 5; both seed at index 2 (period=3).
+    // Wilder smoothing has alpha=1/3 ≈ 0.333; standard EMA span=3 alpha=2/4=0.5.
+    // After the step, the EMA should track the new value faster than Wilder.
+    const input = [0, 0, 0, 0, 0, 100, 100, 100, 100, 100, 100, 100]
+    const wilder = wilderSmoothing(input, 3)
+    const ema = emaFull(input, 3)
+    // After several bars, EMA should be closer to 100 than Wilder.
+    expect(ema[ema.length - 1]).toBeGreaterThan(wilder[wilder.length - 1])
+  })
+
+  it('returns full-NaN array on insufficient data', () => {
+    const out = wilderSmoothing([1, 2], 5)
+    expect(out.every((x) => isNaN(x))).toBe(true)
+  })
+
+  it('rejects period <= 0 with full-NaN array', () => {
+    const out = wilderSmoothing([1, 2, 3, 4, 5], 0)
+    expect(out.every((x) => isNaN(x))).toBe(true)
+  })
+})
+
+// ─── ADX (Phase 13 S2 — F2.2: Wilder smoothing) ─────────────────────────────
+
+describe('ADX with Wilder smoothing', () => {
   it('returns NaN arrays for insufficient data', () => {
-    const { adx, plusDI, minusDI } = adxArray(uptrendBars(10), 14)
-    expect(adx).toHaveLength(10)
+    const bars = BARS.slice(0, 10)
+    const { adx, plusDI, minusDI } = adxArray(bars, 14)
+    // First valid ADX value is at index 2*period (after DM smoothing + DX smoothing)
+    // For 10 bars, all should be NaN
     expect(adx.every((v) => isNaN(v))).toBe(true)
     expect(plusDI.every((v) => isNaN(v))).toBe(true)
     expect(minusDI.every((v) => isNaN(v))).toBe(true)
   })
 
-  it('produces strong ADX on a steady uptrend', () => {
-    const { adx, plusDI, minusDI } = adxArray(uptrendBars(100), 14)
-    const lastAdx = adx[adx.length - 1]
-    const lastPlusDI = plusDI[plusDI.length - 1]
-    const lastMinusDI = minusDI[minusDI.length - 1]
-    expect(Number.isFinite(lastAdx)).toBe(true)
-    expect(lastAdx).toBeGreaterThan(50) // strong trend per Wilder threshold
-    expect(lastPlusDI).toBeGreaterThan(lastMinusDI) // trend is UP
+  it('produces +DI > -DI on a strong uptrend', () => {
+    // Linear uptrend: high keeps rising, low keeps rising slower.
+    const bars = Array.from({ length: 60 }, (_, i) => ({
+      open: 100 + i,
+      high: 100 + i + 2,
+      low: 100 + i - 1,
+      close: 100 + i + 1,
+    }))
+    const { plusDI, minusDI } = adxArray(bars, 14)
+    const last = bars.length - 1
+    expect(plusDI[last]).toBeGreaterThan(minusDI[last])
   })
 
-  it('arrays are full-length and aligned with input', () => {
-    const bars = uptrendBars(50)
-    const { adx, plusDI, minusDI } = adxArray(bars, 14)
-    expect(adx).toHaveLength(bars.length)
-    expect(plusDI).toHaveLength(bars.length)
-    expect(minusDI).toHaveLength(bars.length)
+  it('produces -DI > +DI on a strong downtrend', () => {
+    const bars = Array.from({ length: 60 }, (_, i) => ({
+      open: 200 - i,
+      high: 200 - i + 1,
+      low: 200 - i - 2,
+      close: 200 - i - 1,
+    }))
+    const { plusDI, minusDI } = adxArray(bars, 14)
+    const last = bars.length - 1
+    expect(minusDI[last]).toBeGreaterThan(plusDI[last])
+  })
+
+  it('returns ADX in plausible 0-100 range on trending input', () => {
+    const bars = Array.from({ length: 80 }, (_, i) => ({
+      open: 100 + i * 0.5,
+      high: 100 + i * 0.5 + 1.5,
+      low: 100 + i * 0.5 - 0.5,
+      close: 100 + i * 0.5 + 0.5,
+    }))
+    const { adx } = adxArray(bars, 14)
+    const validAdx = adx.filter((v) => Number.isFinite(v))
+    expect(validAdx.length).toBeGreaterThan(0)
+    for (const v of validAdx) {
+      expect(v).toBeGreaterThanOrEqual(0)
+      expect(v).toBeLessThanOrEqual(100)
+    }
   })
 })

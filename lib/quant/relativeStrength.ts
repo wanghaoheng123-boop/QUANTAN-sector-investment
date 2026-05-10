@@ -1,5 +1,7 @@
 /** Align two close series by trading day key (YYYY-MM-DD). */
 
+import { pearsonCorrelation } from './correlation'
+
 export function alignCloses(
   datesA: string[],
   closesA: number[],
@@ -30,25 +32,19 @@ export function logReturns(closes: number[]): number[] {
   return r
 }
 
+/**
+ * Pearson correlation with tail-aligned, length-tolerant inputs and a
+ * minimum-sample gate (n ≥ 10) suitable for time-series usage.
+ *
+ * Phase 13 S2 fix: delegates to canonical `pearsonCorrelation` in
+ * `lib/quant/correlation.ts` (which adds zero-variance + non-finite
+ * guards). Previously this file had a separate inline implementation —
+ * a single source-of-truth violation.
+ */
 export function correlation(x: number[], y: number[]): number | null {
   const n = Math.min(x.length, y.length)
   if (n < 10) return null
-  const xs = x.slice(-n)
-  const ys = y.slice(-n)
-  const mx = xs.reduce((a, b) => a + b, 0) / n
-  const my = ys.reduce((a, b) => a + b, 0) / n
-  let num = 0
-  let dx = 0
-  let dy = 0
-  for (let i = 0; i < n; i++) {
-    const vx = xs[i] - mx
-    const vy = ys[i] - my
-    num += vx * vy
-    dx += vx * vx
-    dy += vy * vy
-  }
-  const den = Math.sqrt(dx * dy)
-  return den > 0 ? num / den : null
+  return pearsonCorrelation(x.slice(-n), y.slice(-n))
 }
 
 /** Total return over last `days` trading sessions. */

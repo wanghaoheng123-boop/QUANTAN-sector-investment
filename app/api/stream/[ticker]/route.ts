@@ -14,7 +14,9 @@
  * Vercel compatible: uses ReadableStream (Web Streams API), no Node.js streams.
  */
 
-import { yahooSymbolFromParam } from '@/lib/quant/yahooSymbol'
+import { normalizeTicker, sanitizeError } from '@/lib/api/sanitize'
+import { isMarketOpen } from '@/lib/api/marketHours'
+import { applyRateLimit } from '@/lib/api/rateLimit'
 import YahooFinance from 'yahoo-finance2'
 import { withRetry } from '@/lib/api/reliability'
 
@@ -22,24 +24,7 @@ const yahooFinance = new YahooFinance()
 
 const QUOTE_INTERVAL_MS = 15_000   // 15 s
 const HEARTBEAT_INTERVAL_MS = 30_000  // 30 s
-
-/** Returns true if US equities market is currently open (approximate, ET). */
-function isMarketOpen(): boolean {
-  const now = new Date()
-  const day = now.getUTCDay() // 0 = Sun, 6 = Sat
-  if (day === 0 || day === 6) return false
-
-  // Approximate ET offset: UTC-4 during EDT (Mar–Nov), UTC-5 during EST
-  // Simple heuristic: use UTC-4 (EDT) — slightly wrong ~3 weeks/year, acceptable
-  const etHour = now.getUTCHours() - 4
-  const etMinute = now.getUTCMinutes()
-  const etTime = etHour * 60 + etMinute
-
-  const marketOpen = 9 * 60 + 30   // 09:30 ET
-  const marketClose = 16 * 60       // 16:00 ET
-
-  return etTime >= marketOpen && etTime < marketClose
-}
+const STREAM_AUTO_CLOSE_MS = 10 * 60 * 1000  // 10 minutes
 
 interface QuoteEvent {
   ticker: string
@@ -67,7 +52,10 @@ async function fetchQuote(symbol: string): Promise<QuoteEvent | null> {
       marketOpen: isMarketOpen(),
       timestamp: new Date().toISOString(),
     }
-  } catch {
+  } catch (err) {
+    // Phase 13 S2 fix: previously a silent catch — operators had no diagnostic
+    // when stream quotes started failing.
+    console.warn('[stream] quote fetch failed for', symbol, err)
     return null
   }
 }
@@ -77,10 +65,27 @@ function sseMessage(event: string, data: unknown): string {
 }
 
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: { ticker: string } }
 ): Promise<Response> {
-  const symbol = yahooSymbolFromParam(params.ticker)
+  // Phase 13 S2: rate-limit SSE — connections are expensive (long-lived,
+  // each consumes a serverless slot). Tighter than POST routes.
+  const rateLimitResponse = applyRateLimit(req, 'stream', { maxRequests: 10, windowSeconds: 60 })
+  if (rateLimitResponse) return rateLimitResponse
+
+  // Phase 13 S2 fix (F4.10 + F7.3): canonical normalizer with strict char
+  // whitelist — was using yahooSymbolFromParam (only handled VIX).
+  const symbol = normalizeTicker(params.ticker)
+  if (!symbol) {
+    return new Response(
+      JSON.stringify({ error: 'Invalid ticker symbol' }),
+      { status: 400, headers: { 'Content-Type': 'application/json' } },
+    )
+  }
+
+  // Capture the request's AbortSignal so we can clean up when the client disconnects.
+  // `req.signal` is aborted when the HTTP connection is dropped by the client.
+  const clientSignal = req.signal
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -88,18 +93,27 @@ export async function GET(
 
       let quoteTimer: ReturnType<typeof setInterval> | null = null
       let heartbeatTimer: ReturnType<typeof setInterval> | null = null
+      let autoCloseTimer: ReturnType<typeof setTimeout> | null = null
       let closed = false
 
       function close() {
         if (closed) return
         closed = true
-        if (quoteTimer) clearInterval(quoteTimer)
-        if (heartbeatTimer) clearInterval(heartbeatTimer)
+        if (quoteTimer) { clearInterval(quoteTimer); quoteTimer = null }
+        if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null }
+        if (autoCloseTimer) { clearTimeout(autoCloseTimer); autoCloseTimer = null }
         try { controller.close() } catch { /* already closed */ }
+      }
+
+      // Stop all timers when the client disconnects (request AbortSignal).
+      // Without this, setInterval callbacks keep running after the client drops.
+      if (clientSignal) {
+        clientSignal.addEventListener('abort', () => close(), { once: true })
       }
 
       // Emit initial quote immediately
       const initial = await fetchQuote(symbol)
+      if (closed) return
       if (initial) {
         try {
           controller.enqueue(encode(sseMessage('quote', initial)))
@@ -129,6 +143,7 @@ export async function GET(
             return
           }
           const q = await fetchQuote(symbol)
+          if (closed) return
           if (q) {
             try { controller.enqueue(encode(sseMessage('quote', q))) }
             catch { close() }
@@ -146,8 +161,9 @@ export async function GET(
         }
       }, HEARTBEAT_INTERVAL_MS)
 
-      // Auto-close after 10 minutes to prevent runaway connections
-      setTimeout(() => close(), 10 * 60 * 1000)
+      // Auto-close after 10 minutes to prevent runaway connections.
+      // Stored on autoCloseTimer so close() can clear it on early termination.
+      autoCloseTimer = setTimeout(() => close(), STREAM_AUTO_CLOSE_MS)
     },
   })
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import YahooFinance from 'yahoo-finance2'
 import { yahooSymbolFromParam } from '@/lib/quant/yahooSymbol'
+import { applyRateLimit } from '@/lib/api/rateLimit'
 
 // Prevent Next.js from attempting static rendering — this route needs request.url at runtime.
 export const dynamic = 'force-dynamic'
@@ -80,6 +81,10 @@ async function resolveDirectQuote(raw: string) {
 }
 
 export async function GET(request: NextRequest) {
+  // Rate limit: 30 req/min per IP
+  const rateLimitResponse = applyRateLimit(request, 'search', { maxRequests: 30, windowSeconds: 60 })
+  if (rateLimitResponse) return rateLimitResponse
+
   try {
     return await handleSearchGet(request)
   } catch (error) {

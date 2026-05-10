@@ -35,3 +35,21 @@ export function formatFreshness(iso: string | null | undefined): string {
   const hr = Math.floor(min / 60)
   return `${hr}h ago`
 }
+
+/**
+ * Parse a Yahoo Finance quote timestamp into an ISO string.
+ * Shared by darkpool and briefs API routes.
+ */
+export function parseQuoteTime(ts: unknown): string | null {
+  if (ts == null) return null
+  if (ts instanceof Date) return ts.toISOString()
+  if (typeof ts === 'string') {
+    const d = new Date(ts)
+    return Number.isFinite(d.getTime()) ? d.toISOString() : null
+  }
+  if (typeof ts === 'number') {
+    const ms = ts > 1e12 ? ts : ts * 1000
+    return Number.isFinite(ms) ? new Date(ms).toISOString() : null
+  }
+  return null
+}

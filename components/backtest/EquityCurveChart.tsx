@@ -140,11 +140,30 @@ export default function EquityCurveChart({ instruments, initialCapital }: Props)
     }
   }, [instruments, initialCapital])
 
+  // F6.2 (Phase 13 S2): chart text alternative summarising aggregate equity
+  // performance for screen-reader users (WCAG 1.1.1).
+  const totalReturn = instruments.length > 0
+    ? instruments.reduce((s, r) => s + r.totalReturn, 0) / instruments.length
+    : 0
+  const winningInstruments = instruments.filter((r) => r.totalReturn > 0).length
+  const ariaLabel = instruments.length === 0
+    ? 'Equity curve chart — no data'
+    : `Equity curve chart — ${instruments.length} instruments, ` +
+      `${winningInstruments} positive total return, ` +
+      `mean total return ${(totalReturn * 100).toFixed(1)}%.`
+
   return (
-    <div ref={containerRef} className="w-full rounded-lg" style={{ height: 280 }}>
+    <div
+      ref={containerRef}
+      role="img"
+      aria-label={ariaLabel}
+      className="w-full rounded-lg"
+      style={{ height: 280 }}
+    >
       <canvas
         ref={canvasRef}
         className="w-full h-full rounded-lg"
+        aria-hidden="true"
       />
     </div>
   )

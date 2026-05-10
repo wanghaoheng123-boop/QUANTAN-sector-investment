@@ -1,8 +1,29 @@
 import { PERP_FUNDING_HIGH_ABS, PERP_FUNDING_MODERATE_ABS } from './quant/fundingConstants'
+import {
+  emaFull,
+  rsiArray,
+  macdArray,
+  bollingerArray,
+  atrArray,
+  vwapArray,
+  type OhlcBar,
+} from './quant/indicators'
 
 export { PERP_FUNDING_HIGH_ABS, PERP_FUNDING_MODERATE_ABS } from './quant/fundingConstants'
 
 // ─── BTC indicator calculations ────────────────────────────────────────────────
+//
+// Phase 13 S2 fix (F-NEW HIGH): EMA / RSI / MACD / ATR / VWAP previously had
+// inline implementations here that duplicated lib/quant/indicators.ts (same
+// SSOT-violation pattern as F5.1 in KLineChart). The duplicates are now thin
+// adapters that delegate to canonical impls — Phase 12+ algorithm fixes
+// (Wilder smoothing, sample variance, MACD warmup gate, OBV throw, etc.)
+// flow through automatically.
+//
+// Adapter shape notes:
+//   - calcMACD originally returned `[{ macd, signal, histogram }]` (array of
+//     structs). Canonical macdArray returns struct-of-arrays. Adapter
+//     converts so existing call sites (BtcQuantLab, BTC page) stay unchanged.
 
 export interface BtcCandle {
   time: string | number
@@ -18,89 +39,56 @@ export function calcMVRV(price: number, realizedCap: number): number {
   return realizedCap > 0 ? price / realizedCap : 1
 }
 
-/** Stock-to-Flow model price (simplified, no halving cycle) */
+/**
+ * Stock-to-Flow model price (PlanB power-law approximation).
+ *
+ * NOTE: PlanB's S2F model has been falsified statistically (Burniske 2021,
+ * NYDIG critique 2022) — it does not predict actual BTC price post-2021.
+ * Retained as an educational visualization, not a forecast.
+ *
+ * Original PlanB regression: price ≈ exp(-1.84) × sf^3.36
+ * The simplified form below (sf^3 × 0.001) approximates within an order of
+ * magnitude in the historical fit window.
+ */
 export function calcS2FPrice(totalS2F: number): number {
-  // Power-law approximation based on PlanB's original model
   return Math.pow(totalS2F, 3) * 0.001
 }
 
-/** RSI — identical math to equity RSI */
+/** RSI — delegates to canonical Wilder RSI in lib/quant/indicators. */
 export function calcRSI(prices: number[], period = 14): number[] {
-  const rsi: number[] = new Array(prices.length).fill(NaN)
-  if (prices.length < period + 1) return rsi
-  let avgGain = 0, avgLoss = 0
-  for (let i = 1; i <= period; i++) {
-    const diff = prices[i] - prices[i - 1]
-    if (diff > 0) avgGain += diff
-    else avgLoss -= diff
-  }
-  avgGain /= period
-  avgLoss /= period
-  rsi[period] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss)
-  for (let i = period + 1; i < prices.length; i++) {
-    const diff = prices[i] - prices[i - 1]
-    avgGain = (avgGain * (period - 1) + Math.max(0, diff)) / period
-    avgLoss = (avgLoss * (period - 1) + Math.max(0, -diff)) / period
-    rsi[i] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss)
-  }
-  return rsi
+  return rsiArray(prices, period)
 }
 
-/** EMA */
+/** EMA — delegates to canonical SMA-seeded EMA in lib/quant/indicators. */
 export function calcEMA(prices: number[], period: number): number[] {
-  const k = 2 / (period + 1)
-  const ema: number[] = new Array(prices.length).fill(NaN)
-  if (prices.length < period) return ema
-  let prev = prices.slice(0, period).reduce((a, b) => a + b, 0) / period
-  ema[period - 1] = prev
-  for (let i = period; i < prices.length; i++) {
-    prev = prices[i] * k + prev * (1 - k)
-    ema[i] = prev
-  }
-  return ema
+  return emaFull(prices, period)
 }
 
-/** MACD */
-export function calcMACD(prices: number[], fast = 12, slow = 26, signal = 9) {
-  const result = new Array(prices.length).fill({ macd: NaN, signal: NaN, histogram: NaN })
-  if (prices.length < slow) return result
-  const fastEma = calcEMA(prices, fast)
-  const slowEma = calcEMA(prices, slow)
-  for (let i = slow - 1; i < prices.length; i++) {
-    const macd = fastEma[i] - slowEma[i]
-    result[i] = { macd, signal: NaN, histogram: NaN }
-  }
-  const validMacd = result.map(r => r.macd).slice(slow - 1)
-  const signalEma = calcEMA(validMacd, signal)
-  for (let i = 0; i < signalEma.length; i++) {
-    const idx = i + slow - 1
-    const m = result[idx].macd
-    const s = signalEma[i]
-    result[idx] = { macd: m, signal: s, histogram: !isNaN(m) && !isNaN(s) ? m - s : NaN }
-  }
-  return result
+interface MacdRow { macd: number; signal: number; histogram: number }
+
+/**
+ * MACD — delegates to canonical macdArray with shape adapter.
+ * Canonical now also enforces `closes.length >= slow + sig - 1` (F2.7 fix);
+ * previously the inline impl returned signal=NaN with no warmup gate.
+ */
+export function calcMACD(prices: number[], fast = 12, slow = 26, signal = 9): MacdRow[] {
+  const { line, signal: sig, histogram } = macdArray(prices, fast, slow, signal)
+  return prices.map((_, i) => ({
+    macd: line[i],
+    signal: sig[i],
+    histogram: histogram[i],
+  }))
 }
 
-/** Average True Range (Wilder), for volatility / stop placement */
+/** ATR (Wilder) — delegates to canonical atrArray. */
 export function calcATR(candles: BtcCandle[], period = 14): number[] {
-  const n = candles.length
-  const tr: number[] = new Array(n).fill(NaN)
-  const atr: number[] = new Array(n).fill(NaN)
-  if (n < 2) return atr
-  for (let i = 1; i < n; i++) {
-    const h = candles[i].high
-    const l = candles[i].low
-    const pc = candles[i - 1].close
-    tr[i] = Math.max(h - l, Math.abs(h - pc), Math.abs(l - pc))
-  }
-  if (n < period + 1) return atr
-  let sum = 0
-  for (let i = 1; i <= period; i++) sum += tr[i]
-  atr[period] = sum / period
-  for (let i = period + 1; i < n; i++) {
-    atr[i] = (atr[i - 1] * (period - 1) + tr[i]) / period
-  }
-  return atr
+  const bars: OhlcBar[] = candles.map((c) => ({
+    open: c.open,
+    high: c.high,
+    low: c.low,
+    close: c.close,
+  }))
+  return atrArray(bars, period)
 }
 
 /** Stochastic %K / %D (classic 14,3,3) — %K = SMA of raw %K, %D = SMA of %K */
@@ -136,30 +124,40 @@ export function calcStochastic(
   return { k, d }
 }
 
-/** Bollinger Bands */
-export function calcBollingerBands(prices: number[], period = 20, stdDev = 2) {
-  const result = new Array(prices.length).fill({ mid: NaN, upper: NaN, lower: NaN })
-  if (prices.length < period) return result
-  for (let i = period - 1; i < prices.length; i++) {
-    const slice = prices.slice(i - period + 1, i + 1)
-    const mean = slice.reduce((a, b) => a + b, 0) / period
-    const variance = slice.reduce((a, b) => a + (b - mean) ** 2, 0) / period
-    const std = Math.sqrt(variance)
-    result[i] = { mid: mean, upper: mean + stdDev * std, lower: mean - stdDev * std }
-  }
-  return result
+/**
+ * Bollinger Bands — delegates to canonical bollingerArray with shape adapter.
+ *
+ * Phase 13 S2 fix: canonical uses SAMPLE variance (/(period-1)) per Bessel's
+ * correction; the previous inline impl here used POPULATION variance
+ * (/period). Bands are now ~2.6% wider for period=20, matching the signal
+ * layer + KLineChart, which both already use canonical.
+ */
+interface BollingerRow { mid: number; upper: number; lower: number }
+
+export function calcBollingerBands(prices: number[], period = 20, stdDev = 2): BollingerRow[] {
+  const { mid, upper, lower } = bollingerArray(prices, period, stdDev)
+  return prices.map((_, i) => ({
+    mid: mid[i],
+    upper: upper[i],
+    lower: lower[i],
+  }))
 }
 
-/** VWAP for crypto — cumulative TPV / cumulative volume */
+/**
+ * VWAP for crypto — delegates to canonical vwapArray with output adapter.
+ * The shape `{time, value}[]` is what consumers (BtcQuantLab, BTC page)
+ * expect for plotting via lightweight-charts.
+ */
 export function calcVWAP(candles: BtcCandle[]): { time: number; value: number }[] {
-  let cumulativeTPV = 0
-  let cumulativeVol = 0
-  return candles.map(c => {
-    const tpv = ((c.high + c.low + c.close) / 3) * c.volume
-    cumulativeTPV += tpv
-    cumulativeVol += c.volume
-    return { time: typeof c.time === 'string' ? Math.floor(new Date(c.time).getTime() / 1000) : c.time, value: cumulativeVol > 0 ? cumulativeTPV / cumulativeVol : NaN }
-  })
+  const highs = candles.map((c) => c.high)
+  const lows = candles.map((c) => c.low)
+  const closes = candles.map((c) => c.close)
+  const volumes = candles.map((c) => c.volume)
+  const values = vwapArray(highs, lows, closes, volumes)
+  return candles.map((c, i) => ({
+    time: typeof c.time === 'string' ? Math.floor(new Date(c.time).getTime() / 1000) : c.time,
+    value: values[i],
+  }))
 }
 
 /**

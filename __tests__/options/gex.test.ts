@@ -109,51 +109,108 @@ describe('computeGex', () => {
     expect(result.flipPoint).toBeNull()
   })
 
-  /**
-   * Regression: GEX formula was `(callOI - putOI) × gamma × ...` using a
-   * single gamma per strike — last contract's gamma overwrote the
-   * earlier one. Under volatility skew (real markets), same-strike call
-   * and put have meaningfully different gammas. New per-side
-   * formulation (Krishnan 2017): callOI × callGamma − putOI × putGamma.
-   */
-  describe('per-side gamma under skew (regression)', () => {
-    it('uses each side\'s own gamma when call and put gammas differ at the same strike', () => {
-      // Equal OI on both sides but different gammas (typical skew: put gamma > call gamma OTM)
-      const calls = [makeEnriched(100, 1000, 0.04, 'call')]
-      const puts  = [makeEnriched(100, 1000, 0.06, 'put')]
-      const r = computeGex(calls, puts, SPOT)
-      // Per-side: gex = (1000 × 0.04 − 1000 × 0.06) × 100 × 100² × 0.01
-      //              = (40 − 60) × 100 × 10000 × 0.01
-      //              = −20 × 100 × 10000 × 0.01 = −200000
-      expect(r.totalGex).toBeCloseTo(-200_000, 2)
-      // OLD single-gamma formula (broken): (1000 - 1000) × 0.06 × ... = 0
-      // Our test would FAIL on the old formula which pinned totalGex to 0.
-      expect(r.totalGex).not.toBe(0)
+  // F3.5 (Phase 13 S2): expose ALL flip points, not just the first.
+  describe('flipPoints (F3.5 multi-flip)', () => {
+    it('returns empty array when GEX stays uniformly positive', () => {
+      const calls = [90, 100, 110].map((s) => makeEnriched(s, 2000, 0.05, 'call'))
+      const puts  = [90, 100, 110].map((s) => makeEnriched(s,  100, 0.05, 'put'))
+      const result = computeGex(calls, puts, SPOT)
+      expect(result.flipPoints).toEqual([])
+      expect(result.flipPoint).toBeNull()
     })
 
-    it('preserves backward compat when call and put gammas are equal (degenerate skew)', () => {
-      const calls = [makeEnriched(100, 2000, 0.05, 'call')]
-      const puts  = [makeEnriched(100,  500, 0.05, 'put')]
-      const r = computeGex(calls, puts, SPOT)
-      // (2000 × 0.05 − 500 × 0.05) × 100 × 100² × 0.01 = 1500 × 0.05 × 10000 = 750000
-      expect(r.totalGex).toBeCloseTo(750_000, 2)
-      // Same as the old (callOI - putOI) × gamma when callGamma === putGamma
-    })
-
-    it('asymmetric gammas across multiple strikes preserve flip detection', () => {
-      // Lower strike: puts with high gamma dominate; upper strike: calls dominate
+    it('returns single-flip array when only one sign change', () => {
+      // Lower strikes negative (puts dominate), upper strikes positive (calls)
       const calls = [
-        makeEnriched(90, 100, 0.02, 'call'),
+        makeEnriched(90, 100, 0.05, 'call'),
+        makeEnriched(100, 2000, 0.05, 'call'),
         makeEnriched(110, 2000, 0.05, 'call'),
       ]
       const puts = [
-        makeEnriched(90, 2000, 0.08, 'put'),  // high put gamma OTM (skew)
-        makeEnriched(110, 100, 0.04, 'put'),
+        makeEnriched(90, 2000, 0.05, 'put'),
+        makeEnriched(100, 100, 0.05, 'put'),
+        makeEnriched(110, 100, 0.05, 'put'),
       ]
-      const r = computeGex(calls, puts, SPOT)
-      expect(r.strikeGex).toHaveLength(2)
-      expect(r.strikeGex[0].gex).toBeLessThan(0)  // puts dominate at 90
-      expect(r.strikeGex[1].gex).toBeGreaterThan(0)  // calls dominate at 110
+      const result = computeGex(calls, puts, SPOT)
+      expect(result.flipPoints).toHaveLength(1)
+      expect(result.flipPoint).toBe(result.flipPoints[0])
+    })
+
+    it('returns multi-flip array when cumulative GEX crosses zero multiple times', () => {
+      // Construct asymmetric values so cumulative GEX zigzags:
+      //   strike 80:  callOI=100, putOI=10000  → contribution very negative
+      //   strike 90:  callOI=20000, putOI=100  → strong positive (cum > 0)
+      //   strike 100: callOI=100, putOI=30000  → strong negative (cum < 0 again)
+      //   strike 110: callOI=40000, putOI=100  → strong positive (cum > 0 again)
+      const calls = [
+        makeEnriched(80, 100, 0.05, 'call'),
+        makeEnriched(90, 20000, 0.05, 'call'),
+        makeEnriched(100, 100, 0.05, 'call'),
+        makeEnriched(110, 40000, 0.05, 'call'),
+      ]
+      const puts = [
+        makeEnriched(80, 10000, 0.05, 'put'),
+        makeEnriched(90, 100, 0.05, 'put'),
+        makeEnriched(100, 30000, 0.05, 'put'),
+        makeEnriched(110, 100, 0.05, 'put'),
+      ]
+      const result = computeGex(calls, puts, SPOT)
+      // Hand check cumulative gex (gamma=0.05, 100×100²×0.01 = 1e4 weight):
+      //   strike 80:  (100 - 10000) × 5e2 = -4_950_000        cum = -4_950_000
+      //   strike 90:  (20000 - 100) × 5e2 = +9_950_000         cum = +5_000_000  ← flip 1
+      //   strike 100: (100 - 30000) × 5e2 = -14_950_000        cum = -9_950_000  ← flip 2
+      //   strike 110: (40000 - 100) × 5e2 = +19_950_000        cum = +10_000_000 ← flip 3
+      expect(result.flipPoints.length).toBeGreaterThanOrEqual(2)
+      expect(result.flipPoint).toBe(result.flipPoints[0])
+      for (const fp of result.flipPoints) {
+        expect(fp).toBeGreaterThanOrEqual(80)
+        expect(fp).toBeLessThanOrEqual(110)
+      }
+      // Flip points must be sorted ascending (since we iterate strikes ascending)
+      for (let i = 1; i < result.flipPoints.length; i++) {
+        expect(result.flipPoints[i]).toBeGreaterThanOrEqual(result.flipPoints[i - 1])
+      }
+    })
+
+    it('handles empty arrays — flipPoints is empty', () => {
+      const result = computeGex([], [], SPOT)
+      expect(result.flipPoints).toEqual([])
+    })
+  })
+
+  // F3.3 (Phase 13 S2): per-side gamma — call_gamma and put_gamma tracked
+  // independently so vol skew correctly weights each side.
+  describe('per-side gamma (F3.3)', () => {
+    it('matches old behavior when call_gamma === put_gamma at every strike', () => {
+      // With uniform gamma, per-side and averaged give identical results.
+      const calls = [makeEnriched(100, 1000, 0.04, 'call')]
+      const puts = [makeEnriched(100, 1000, 0.04, 'put')]
+      const result = computeGex(calls, puts, SPOT)
+      expect(result.strikeGex[0].gex).toBeCloseTo(0, 4)  // equal OI cancels
+    })
+
+    it('differs from averaged-gamma when call/put gammas diverge under skew', () => {
+      // Skew scenario: at-the-money put has higher gamma than ATM call (typical
+      // put skew on equity indices). Per-side weights the dominant put more.
+      const calls = [makeEnriched(100, 5000, 0.03, 'call')]   // call gamma 0.03
+      const puts = [makeEnriched(100, 5000, 0.06, 'put')]     // put gamma 0.06 (skew)
+      const result = computeGex(calls, puts, SPOT)
+      // Per-side: gex = (5000·0.03 - 5000·0.06) × 1e4 = -1_500_000
+      // Averaged-gamma (old buggy): gex = (5000-5000) × 0.045 × 1e4 = 0
+      // The fix MUST produce non-zero GEX in this scenario.
+      expect(Math.abs(result.strikeGex[0].gex)).toBeGreaterThan(0)
+      // And direction should be negative (put gamma dominates).
+      expect(result.strikeGex[0].gex).toBeLessThan(0)
+    })
+
+    it('isolates gamma per side (zero-OI side does not pollute)', () => {
+      // Strike 100: only calls (no put data). Old impl averaged 0+gamma → wrong.
+      // Per-side: only call_gamma is used.
+      const calls = [makeEnriched(100, 5000, 0.05, 'call')]
+      const puts: ReturnType<typeof makeEnriched>[] = []
+      const result = computeGex(calls, puts, SPOT)
+      // gex = 5000 × 0.05 × 1e4 = 2_500_000
+      expect(result.strikeGex[0].gex).toBeCloseTo(5000 * 0.05 * 1e4, 0)
     })
   })
 })

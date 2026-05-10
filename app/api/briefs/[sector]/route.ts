@@ -18,6 +18,7 @@
 const YahooFinance = require('yahoo-finance2').default
 import { NextRequest, NextResponse } from 'next/server'
 import { SECTORS } from '@/lib/sectors'
+import { parseQuoteTime } from '@/lib/format'
 
 const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] })
 
@@ -97,20 +98,6 @@ export interface SectorBrief {
 
 function safeNum(v: unknown): number | null {
   if (typeof v === 'number' && Number.isFinite(v)) return v
-  return null
-}
-
-function parseQuoteTime(ts: unknown): string | null {
-  if (ts == null) return null
-  if (ts instanceof Date) return ts.toISOString()
-  if (typeof ts === 'string') {
-    const d = new Date(ts)
-    return Number.isFinite(d.getTime()) ? d.toISOString() : null
-  }
-  if (typeof ts === 'number') {
-    const ms = ts > 1e12 ? ts : ts * 1000
-    return Number.isFinite(ms) ? new Date(ms).toISOString() : null
-  }
   return null
 }
 
@@ -197,7 +184,7 @@ export async function GET(
     const trends = (recTrend as Record<string, unknown>).trend as Array<Record<string, unknown>> | undefined
     if (Array.isArray(trends) && trends.length > 0) {
       const current = trends[0] as Record<string, unknown>
-      analystCount = safeNum(current.strongBuy as number) ?? 0 + (safeNum(current.buy as number) ?? 0) + (safeNum(current.hold as number) ?? 0) + (safeNum(current.sell as number) ?? 0) + (safeNum(current.strongSell as number) ?? 0)
+      analystCount = (safeNum(current.strongBuy as number) ?? 0) + (safeNum(current.buy as number) ?? 0) + (safeNum(current.hold as number) ?? 0) + (safeNum(current.sell as number) ?? 0) + (safeNum(current.strongSell as number) ?? 0)
       const strongBuy = safeNum(current.strongBuy as number) ?? 0
       const buy = safeNum(current.buy as number) ?? 0
       const hold = safeNum(current.hold as number) ?? 0

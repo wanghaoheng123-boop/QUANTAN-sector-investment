@@ -142,8 +142,13 @@ export function computePortfolioVaR(dailyLogReturns: number[]): PortfolioVaR {
 }
 
 /**
- * Back-test VaR model accuracy: count how often actual losses exceeded VaR.
- * Basel III: exceeding rate should be < 1% for 99% VaR (Kupiec test).
+ * Simple VaR back-test: count how often actual losses exceeded VaR.
+ *
+ * NOTE: This is a quick 3× heuristic check, NOT the Kupiec likelihood-ratio
+ * test. The Kupiec test uses a binomial log-likelihood framework to formally
+ * test whether the breach rate is statistically consistent with the VaR
+ * confidence level. For production use, implement the full Kupiec (1995)
+ * POF test using a chi-squared comparison.
  *
  * @param dailyLogReturns  Full return series
  * @param lookback         Rolling window for VaR estimation (default 252)
@@ -152,10 +157,10 @@ export function backtestVaR(
   dailyLogReturns: number[],
   confidenceLevel = 0.99,
   lookback = 252,
-): { breaches: number; total: number; breachRate: number; kupiecPass: boolean } {
+): { breaches: number; total: number; breachRate: number; heuristicPass: boolean } {
   let breaches = 0
   const testPeriod = dailyLogReturns.length - lookback
-  if (testPeriod <= 0) return { breaches: 0, total: 0, breachRate: 0, kupiecPass: true }
+  if (testPeriod <= 0) return { breaches: 0, total: 0, breachRate: 0, heuristicPass: true }
 
   for (let i = lookback; i < dailyLogReturns.length; i++) {
     const window = dailyLogReturns.slice(i - lookback, i)
@@ -167,12 +172,13 @@ export function backtestVaR(
 
   const total = testPeriod
   const breachRate = total > 0 ? breaches / total : 0
-  // Kupiec test: breach rate should not significantly exceed (1 - confidenceLevel)
+  // Simple heuristic: accept if breach rate is within 3× the expected rate.
+  // This is NOT a formal statistical test; the Kupiec (1995) POF test should
+  // be used for regulatory reporting.
   const expectedRate = 1 - confidenceLevel
-  // Simple check: accept if within 3× expected rate
-  const kupiecPass = breachRate <= expectedRate * 3
+  const heuristicPass = breachRate <= expectedRate * 3
 
-  return { breaches, total, breachRate, kupiecPass }
+  return { breaches, total, breachRate, heuristicPass }
 }
 
 /**
@@ -199,9 +205,11 @@ export function marginalVaR(
     const weight = weights[ticker] ?? 0
     if (returns.length !== portfolioReturns.length) continue
 
-    // Perturb portfolio by shifting +epsilon into this position
+    // Proper weight perturbation: add epsilon × position return to the
+    // original portfolio return series. This computes the actual marginal
+    // effect of increasing the position weight by epsilon.
     const perturbedReturns = portfolioReturns.map((r, i) =>
-      r * (1 - epsilon) + returns[i] * epsilon,
+      r + epsilon * returns[i],
     )
     const perturbedVaR = computeVaR(perturbedReturns, confidenceLevel, 1)
     if (!perturbedVaR) continue
