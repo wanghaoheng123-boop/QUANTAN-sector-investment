@@ -80,6 +80,35 @@ export function emaFull(values: number[], period: number): number[] {
   return out
 }
 
+/**
+ * Wilder smoothing returning a full-length array (NaN-padded before period-1).
+ *
+ * Wilder's "modified moving average" (Wilder 1978): the recursive form is
+ *   x_t = ((N - 1) × x_{t-1} + v_t) / N
+ * which is equivalent to an EMA with α = 1/N. Note this is NOT the same as
+ * an N-period EMA with α = 2/(N+1) — Wilder smoothing is HALF as responsive.
+ *
+ * Used by RSI, ATR, and ADX in the canonical literature. ATR and RSI in this
+ * file already use the inline recurrence; this helper exists so ADX (which
+ * needed array form for TR/+DM/-DM/ADX itself) can also use Wilder, matching
+ * TA-Lib, Bloomberg, TradingView, and MetaTrader values.
+ *
+ * Citation: Wilder, J. W. (1978). *New Concepts in Technical Trading
+ *           Systems*. Trend Research, ch. 4 (smoothing definition) +
+ *           ch. 5 (ADX procedure built on Wilder smoothing).
+ */
+export function wilderSmoothFull(values: number[], period: number): number[] {
+  const out = new Array<number>(values.length).fill(NaN)
+  if (values.length < period) return out
+  let prev = values.slice(0, period).reduce((a, b) => a + b, 0) / period
+  out[period - 1] = prev
+  for (let i = period; i < values.length; i++) {
+    prev = (prev * (period - 1) + values[i]) / period
+    out[i] = prev
+  }
+  return out
+}
+
 // ─── Relative Strength Index (Wilder) ───────────────────────────────────────
 
 /**
@@ -378,9 +407,15 @@ export function adxArray(bars: OhlcBar[], period = 14): {
     minusDM.push(downMove > upMove && downMove > 0 ? downMove : 0)
   }
 
-  const trSmooth = emaFull(tr, period)
-  const plusDISmooth = emaFull(plusDM, period)
-  const minusDISmooth = emaFull(minusDM, period)
+  // Wilder smoothing (α = 1/N), not standard EMA (α = 2/(N+1)). Wilder's
+  // 1978 ADX procedure pre-dates and is materially distinct from EMA — the
+  // 14-period Wilder smoothing has effective lookback ≈ 28 bars vs. ~14 for
+  // EMA. Using EMA here made our "ADX" twice as reactive as TA-Lib /
+  // TradingView / Bloomberg ADX, lowering the threshold for "strong trend"
+  // classification used downstream by regimeDetection.
+  const trSmooth = wilderSmoothFull(tr, period)
+  const plusDISmooth = wilderSmoothFull(plusDM, period)
+  const minusDISmooth = wilderSmoothFull(minusDM, period)
 
   const adxRaw = new Array<number>(bars.length).fill(NaN)
   const plusDIOut = new Array<number>(bars.length).fill(NaN)
@@ -395,9 +430,9 @@ export function adxArray(bars: OhlcBar[], period = 14): {
     adxRaw[i] = pdi + mdi > 0 ? (Math.abs(pdi - mdi) / (pdi + mdi)) * 100 : 0
   }
 
-  // Smooth ADX itself
+  // Wilder smoothing on the DX series → ADX (Wilder 1978 procedure).
   const validAdx = adxRaw.slice(period)
-  const adxSmoothed = emaFull(validAdx, period)
+  const adxSmoothed = wilderSmoothFull(validAdx, period)
   const adxOut = new Array<number>(bars.length).fill(NaN)
   for (let i = 0; i < adxSmoothed.length; i++) {
     adxOut[i + period] = adxSmoothed[i]

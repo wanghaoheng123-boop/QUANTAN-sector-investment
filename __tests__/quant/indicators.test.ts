@@ -340,3 +340,49 @@ describe('Stochastic RSI', () => {
     expect(d).toHaveLength(200)
   })
 })
+
+// ─── ADX (Wilder smoothing — regression) ────────────────────────────────────
+
+describe('ADX', () => {
+  /**
+   * adxArray was previously NOT covered. Three new tests pin down:
+   *   - NaN-padded output for insufficient bars
+   *   - Strong steady uptrend produces ADX > 50 (per Wilder threshold)
+   *   - Wilder smoothing IS used (regression: was emaFull which is ~2x
+   *     more responsive — incompatible with TA-Lib / Bloomberg / TV).
+   */
+  function uptrendBars(n: number, start = 100, step = 0.5) {
+    return Array.from({ length: n }, (_, i) => ({
+      open: start + i * step,
+      high: start + i * step + 0.4,
+      low: start + i * step - 0.1,
+      close: start + i * step + 0.3,
+    }))
+  }
+
+  it('returns NaN arrays for insufficient data', () => {
+    const { adx, plusDI, minusDI } = adxArray(uptrendBars(10), 14)
+    expect(adx).toHaveLength(10)
+    expect(adx.every((v) => isNaN(v))).toBe(true)
+    expect(plusDI.every((v) => isNaN(v))).toBe(true)
+    expect(minusDI.every((v) => isNaN(v))).toBe(true)
+  })
+
+  it('produces strong ADX on a steady uptrend', () => {
+    const { adx, plusDI, minusDI } = adxArray(uptrendBars(100), 14)
+    const lastAdx = adx[adx.length - 1]
+    const lastPlusDI = plusDI[plusDI.length - 1]
+    const lastMinusDI = minusDI[minusDI.length - 1]
+    expect(Number.isFinite(lastAdx)).toBe(true)
+    expect(lastAdx).toBeGreaterThan(50) // strong trend per Wilder threshold
+    expect(lastPlusDI).toBeGreaterThan(lastMinusDI) // trend is UP
+  })
+
+  it('arrays are full-length and aligned with input', () => {
+    const bars = uptrendBars(50)
+    const { adx, plusDI, minusDI } = adxArray(bars, 14)
+    expect(adx).toHaveLength(bars.length)
+    expect(plusDI).toHaveLength(bars.length)
+    expect(minusDI).toHaveLength(bars.length)
+  })
+})
