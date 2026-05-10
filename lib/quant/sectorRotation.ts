@@ -29,25 +29,34 @@ export interface SectorScore {
 }
 
 /**
- * Returns the percentage return of `closes` over the last `days` trading days.
- * Returns 0 if there aren't enough bars.
+ * Returns the percentage return of `closes` over the last `days` trading days,
+ * or null if there aren't enough bars or the start price is non-positive.
+ *
+ * Previously returned 0 on insufficient data — a silent fallback that
+ * conflated "no data" with "zero return". Sector momentum scores were
+ * silently distorted for newer ETFs whose history was shorter than 12mo.
  */
-function periodReturn(closes: number[], days: number): number {
-  if (closes.length < days + 1) return 0
+function periodReturn(closes: number[], days: number): number | null {
+  if (closes.length < days + 1) return null
   const start = closes[closes.length - days - 1]
   const end   = closes[closes.length - 1]
-  return start > 0 ? (end - start) / start : 0
+  return start > 0 ? (end - start) / start : null
 }
 
 /**
  * Momentum score = 40% × 3mo + 30% × 6mo + 30% × 12mo − 1mo crash filter.
  * Trading-day approximate periods: 63d, 126d, 252d, 21d.
+ *
+ * Returns null when ANY of the four constituent returns is unavailable.
+ * Callers (sectorScores) skip sectors that yield null so the ranking is
+ * computed from comparable inputs only.
  */
-export function momentumScore(closes: number[]): number {
+export function momentumScore(closes: number[]): number | null {
   const ret3mo  = periodReturn(closes, 63)
   const ret6mo  = periodReturn(closes, 126)
   const ret12mo = periodReturn(closes, 252)
   const ret1mo  = periodReturn(closes, 21)
+  if (ret3mo == null || ret6mo == null || ret12mo == null || ret1mo == null) return null
 
   return 0.40 * ret3mo + 0.30 * ret6mo + 0.30 * ret12mo - ret1mo
 }
@@ -88,8 +97,13 @@ export function sectorScores(
   const scored: Array<Omit<SectorScore, 'rank' | 'signal'>> = []
 
   for (const [etf, closes] of Object.entries(etfData)) {
-    if (!closes || closes.length < 22) continue  // need at least 1 month
+    if (!closes) continue
+    // Gate on what momentumScore actually requires (12mo + 1 baseline = 253
+    // bars). Previous gate of 22 bars admitted sectors that then had silent
+    // zero-fallbacks for the 3/6/12-month terms, distorting their scores.
+    if (closes.length < 253) continue
     const momentum = momentumScore(closes)
+    if (momentum == null) continue  // defensive — should be unreachable after the gate
     const meanReversion = meanReversionBoost(closes)
     const composite = 0.6 * momentum + 0.4 * meanReversion
     scored.push({
