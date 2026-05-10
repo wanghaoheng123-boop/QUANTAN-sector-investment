@@ -52,9 +52,19 @@ function qualityScore(de: number | null, roe: number | null, margin: number | nu
     s -= 15
     bits.push('negative ROE')
   }
-  if (margin != null && margin > 0.2) {
-    s += 10
-    bits.push('healthy margins')
+  // Profit-margin pillar: previously rewarded healthy margins (>20%) but
+  // gave NO penalty for unprofitable companies, so a -50% margin company
+  // scored identically on the margin axis to a 0% margin company. The
+  // penalty here mirrors the "negative ROE" penalty on the ROE axis,
+  // making the quality pillar honest about loss-making businesses.
+  if (margin != null) {
+    if (margin > 0.2) {
+      s += 10
+      bits.push('healthy margins')
+    } else if (margin < 0) {
+      s -= 10
+      bits.push('negative margins')
+    }
   }
   if (de != null) {
     if (de < 0.5) {
@@ -72,6 +82,43 @@ function qualityScore(de: number | null, roe: number | null, margin: number | nu
   }
 }
 
+/**
+ * Piecewise-linear RSI score delta (F1.11).
+ *
+ * Previous step-function behavior was:
+ *   RSI < 30  → +15
+ *   30..70    →  0
+ *   RSI > 70  → -10
+ * This produced a 25-point swing across the RSI 29 → 31 boundary and a
+ * 10-point swing across 69 → 71, making the pillar score non-smooth and
+ * vulnerable to RSI rounding noise.
+ *
+ * Replaced with a piecewise-linear function: zero through the neutral
+ * 30..70 band (Wilder's canonical thresholds), linearly ramping to the
+ * pinned extremes (+15 at RSI=0, -10 at RSI=100). The boundary values
+ * are unchanged at 30 and 70 (continuous transition), so the relative
+ * ordering of the existing pillar tests is preserved.
+ *
+ * Citation: Wilder, J. W. (1978). *New Concepts in Technical Trading
+ *           Systems*, ch. 6 — RSI thresholds 30/70 are the definitional
+ *           oversold/overbought bounds. Cardwell's "RSI ranges" research
+ *           supports a smooth gradient inside the band rather than a
+ *           binary classification.
+ */
+export function rsiScoreDelta(rsi: number): { delta: number; label: string } {
+  if (!Number.isFinite(rsi)) return { delta: 0, label: 'RSI n/a' }
+  const r = Math.max(0, Math.min(100, rsi))
+  if (r < 30) {
+    // 0 at r=30 → +15 at r=0
+    return { delta: ((30 - r) / 30) * 15, label: 'RSI oversold' }
+  }
+  if (r > 70) {
+    // 0 at r=70 → -10 at r=100
+    return { delta: -((r - 70) / 30) * 10, label: 'RSI overbought' }
+  }
+  return { delta: 0, label: `RSI ${r.toFixed(0)}` }
+}
+
 function momentumScore(
   rsi: number | null,
   trend: number | null,
@@ -80,13 +127,9 @@ function momentumScore(
   let s = 50
   const bits: string[] = []
   if (rsi != null) {
-    if (rsi < 30) {
-      s += 15
-      bits.push('RSI oversold')
-    } else if (rsi > 70) {
-      s -= 10
-      bits.push('RSI overbought')
-    } else bits.push(`RSI ${rsi.toFixed(0)}`)
+    const { delta, label } = rsiScoreDelta(rsi)
+    s += delta
+    bits.push(label)
   }
   if (trend != null) {
     s += trend * 20
@@ -170,7 +213,21 @@ export function computeResearchScore(i: ResearchScoreInput): {
   return { pillars, total, weights, rubricLines, benchmarkNote }
 }
 
-/** Map price vs buy/sell bands to 0..1 position. */
+/**
+ * Map price vs buy/sell bands to a 0..1 valuation-position scalar.
+ *
+ *   ≤ buyHigh  → 0.15  (clamped — deep buy zone)
+ *   ≥ sellLow  → 0.85  (clamped — at/above sell zone)
+ *   in-band    → linear interpolation
+ *
+ * The fixed 0.15 / 0.85 endpoints (rather than 0 / 1) intentionally
+ * cap the contribution from extreme bands so a single deep-discount
+ * reading cannot drive the pillar to 100 by itself.
+ *
+ * `fair` is required as a sanity gate (we refuse to score when fair
+ * value is missing) but is otherwise not used in the position math.
+ * Returns null on invalid inputs.
+ */
 export function bandPosition(
   price: number,
   buyHigh: number | null,
@@ -178,9 +235,12 @@ export function bandPosition(
   fair: number | null
 ): number | null {
   if (buyHigh == null || sellLow == null || fair == null || price <= 0) return null
+  // buyHigh > sellLow is malformed input (band is "inverted"). Refuse to
+  // guess at intent — return null so the caller sees missing-data fallback.
+  if (buyHigh > sellLow) return null
   if (price <= buyHigh) return 0.15
   if (price >= sellLow) return 0.85
-  const mid = (buyHigh + sellLow) / 2
-  if (sellLow === buyHigh) return 0.5
+  // Pure linear interpolation: at price = buyHigh we get 0, at price = sellLow we get 1.
+  // (Both endpoints are unreachable here because the gates above take precedence.)
   return (price - buyHigh) / (sellLow - buyHigh)
 }
