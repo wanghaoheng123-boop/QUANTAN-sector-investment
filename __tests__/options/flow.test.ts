@@ -78,6 +78,34 @@ describe('unusualFlow', () => {
     expect(result[0].sentiment).toBe('BEARISH')
   })
 
+  /**
+   * Regression: previously when ask === 0 (illiquid contract with no
+   * quoted spread), `lastPrice >= 0 * 0.98 = 0` was always true,
+   * marking every illiquid contract as near-ask → BULLISH/BEARISH.
+   * Now requires ask > 0 explicitly so the sentiment is left in the
+   * "far from ask" branch (correctly ambiguous, not false-positive bullish).
+   */
+  it('does NOT mark near-ask when ask === 0 (illiquid contract)', () => {
+    const calls = [
+      makeContract(100, 5000, 1000, 0.05, 0, 0, 'call'),
+    ]
+    const result = unusualFlow(calls, [])
+    expect(result).toHaveLength(1)
+    expect(result[0].nearAsk).toBe(false)
+    // Sentiment falls to the "far from ask" branch — for a CALL that
+    // means BEARISH (call selling pressure), not BULLISH. Either way,
+    // the previous code's BULLISH classification was wrong.
+    expect(result[0].sentiment).toBe('BEARISH')
+  })
+
+  it('does NOT mark near-ask when ask is undefined', () => {
+    const calls = [
+      makeContract(100, 5000, 1000, 1.50, 1.40, undefined, 'call'),
+    ]
+    const result = unusualFlow(calls, [])
+    expect(result[0].nearAsk).toBe(false)
+  })
+
   it('marks BULLISH when put is near bid', () => {
     const puts = [
       makeContract(95, 5000, 1000, 1.82, 1.80, 2.00, 'put'),  // near bid
