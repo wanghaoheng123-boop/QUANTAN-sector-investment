@@ -41,14 +41,23 @@ export function computeAdaptiveBands(i: BandInputs): PriceBands {
 
   const m = baseM + Math.min(0.12, vol * 0.6)
   const buyZoneHigh = mid * (1 - m)
-  const sellZoneLow = mid * (1 + 0.5 * m + 0.35 * vol)
+  // Sell-zone offset above mid: 0.5*m + 0.35*vol (cached for honest reporting).
+  const sellOffset = 0.5 * m + 0.35 * vol
+  const sellZoneLow = mid * (1 + sellOffset)
 
   return {
     fairValueMid: mid,
     buyZoneHigh,
     sellZoneLow,
+    // Methodology string previously claimed "buy zone X%-(X+12)%" of fair
+    // value, which conflated the *actual* margin (m) with the dynamic
+    // range of m as vol varies. The +0.12 was already INSIDE m via
+    // Math.min(0.12, vol*0.6), so adding it again was double-counting
+    // and gave users an inaccurate display of the buy-zone discount.
     methodology:
       `Composite fair value = median of ${anchors.length} anchor(s) (DCF / analyst target / forward-earnings heuristic). ` +
-      `Margin of safety scales with annualized vol (~${(vol * 100).toFixed(1)}%): buy zone below ${(m * 100).toFixed(1)}%–${((m + 0.12) * 100).toFixed(1)}% of fair value; sell zone uses vol-adjusted extension.`,
+      `Margin of safety scales with annualized vol (~${(vol * 100).toFixed(1)}%) over a ${(baseM * 100).toFixed(0)}%–${((baseM + 0.12) * 100).toFixed(0)}% range: ` +
+      `buy zone at ${(m * 100).toFixed(1)}% below fair value; ` +
+      `sell zone at ${(sellOffset * 100).toFixed(1)}% above fair value (asymmetric vol-adjusted extension).`,
   }
 }

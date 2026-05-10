@@ -108,6 +108,19 @@ export function buildFundamentalsPayload(
   const shares = num(keyStats?.sharesOutstanding) ?? num(keyStats?.ordinarySharesNumber)
   const fcf0 = pickFcf0(cashModule, financialData)
 
+  // Net debt = long-term debt − cash & equivalents (most-recent balance sheet).
+  // Required for the FCFF→equity bridge in runDcf. When the balance-sheet
+  // module is unavailable we fall back to undefined → runDcf assumes 0
+  // (preserves the previous behaviour for those tickers, but every ticker
+  // with a Yahoo balance sheet now gets the correct equity-value bridge).
+  let netDebt: number | undefined
+  if (balanceHist.length > 0) {
+    const latest = balanceHist[0] as AnyRec
+    const ltd = num(latest?.longTermDebt) ?? 0
+    const cash = num(latest?.cash) ?? 0
+    netDebt = ltd - cash
+  }
+
   const dcfBear =
     shares && fcf0
       ? runDcf({
@@ -116,11 +129,12 @@ export function buildFundamentalsPayload(
           wacc: q.wacc + 0.015,
           terminalGrowth: Math.min(q.terminalGrowth, 0.02),
           explicitGrowth: q.gBear,
+          netDebt,
         })
       : null
   const dcfBase =
     shares && fcf0
-      ? runDcf({ fcf0, shares, wacc: q.wacc, terminalGrowth: q.terminalGrowth, explicitGrowth: q.gBase })
+      ? runDcf({ fcf0, shares, wacc: q.wacc, terminalGrowth: q.terminalGrowth, explicitGrowth: q.gBase, netDebt })
       : null
   const dcfBull =
     shares && fcf0
@@ -130,6 +144,7 @@ export function buildFundamentalsPayload(
           wacc: Math.max(q.wacc - 0.01, 0.06),
           terminalGrowth: q.terminalGrowth,
           explicitGrowth: q.gBull,
+          netDebt,
         })
       : null
 
