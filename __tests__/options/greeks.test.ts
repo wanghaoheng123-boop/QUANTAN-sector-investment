@@ -153,3 +153,103 @@ describe('impliedVolatility', () => {
     expect(iv!).toBeCloseTo(sigma, 2)
   })
 })
+
+/**
+ * Dividend-extension tests (Merton 1973). Without `q`, the model
+ * treats every underlying as paying no dividends — for SPY (q ≈ 1.4%),
+ * JNJ (q ≈ 3%), or utilities (q ≈ 4%), this materially mis-prices
+ * options. These tests pin down the corrections.
+ */
+describe('Merton dividend extension', () => {
+  const REF2 = { S: 100, K: 100, T: 1.0, r: 0.05, sigma: 0.25 }
+
+  it('q=0 reproduces classical Black-Scholes (back-compat)', () => {
+    const callBS = blackScholesPrice(REF2.S, REF2.K, REF2.T, REF2.r, REF2.sigma, 'call')
+    const callBSM = blackScholesPrice(REF2.S, REF2.K, REF2.T, REF2.r, REF2.sigma, 'call', 0)
+    expect(callBSM).toBeCloseTo(callBS, 10)
+  })
+
+  it('positive q reduces call price (dividends accrue to seller)', () => {
+    const noDiv = blackScholesPrice(REF2.S, REF2.K, REF2.T, REF2.r, REF2.sigma, 'call', 0)
+    const withDiv = blackScholesPrice(REF2.S, REF2.K, REF2.T, REF2.r, REF2.sigma, 'call', 0.03)
+    expect(withDiv).toBeLessThan(noDiv)
+  })
+
+  it('positive q increases put price (mirror of call effect)', () => {
+    const noDiv = blackScholesPrice(REF2.S, REF2.K, REF2.T, REF2.r, REF2.sigma, 'put', 0)
+    const withDiv = blackScholesPrice(REF2.S, REF2.K, REF2.T, REF2.r, REF2.sigma, 'put', 0.03)
+    expect(withDiv).toBeGreaterThan(noDiv)
+  })
+
+  it('Merton put-call parity: C - P = S·e^(-qT) - K·e^(-rT)', () => {
+    const q = 0.025
+    const c = blackScholesPrice(REF2.S, REF2.K, REF2.T, REF2.r, REF2.sigma, 'call', q)
+    const p = blackScholesPrice(REF2.S, REF2.K, REF2.T, REF2.r, REF2.sigma, 'put', q)
+    const lhs = c - p
+    const rhs = REF2.S * Math.exp(-q * REF2.T) - REF2.K * Math.exp(-REF2.r * REF2.T)
+    expect(lhs).toBeCloseTo(rhs, 6)
+  })
+
+  it('call delta with q is divDiscount × N(d1) (less than no-dividend case)', () => {
+    const g0 = greeks(REF2.S, REF2.K, REF2.T, REF2.r, REF2.sigma, 'call', 0)
+    const gQ = greeks(REF2.S, REF2.K, REF2.T, REF2.r, REF2.sigma, 'call', 0.05)
+    expect(gQ.delta).toBeLessThan(g0.delta)
+    expect(gQ.delta).toBeGreaterThan(0.4)
+  })
+
+  it('IV solver round-trips with q', () => {
+    const targetSigma = 0.28
+    const q = 0.02
+    const price = blackScholesPrice(REF2.S, REF2.K, REF2.T, REF2.r, targetSigma, 'call', q)
+    const iv = impliedVolatility(price, REF2.S, REF2.K, REF2.T, REF2.r, 'call', q)
+    expect(iv).not.toBeNull()
+    expect(iv!).toBeCloseTo(targetSigma, 4)
+  })
+
+  it('IV WITHOUT q on a divvy-paying stock is biased', () => {
+    // Generate a market price under q=3%, then solve assuming q=0.
+    const trueSigma = 0.25
+    const q = 0.03
+    const price = blackScholesPrice(REF2.S, REF2.K, REF2.T, REF2.r, trueSigma, 'call', q)
+    const ivWithQ = impliedVolatility(price, REF2.S, REF2.K, REF2.T, REF2.r, 'call', q)
+    const ivNoQ = impliedVolatility(price, REF2.S, REF2.K, REF2.T, REF2.r, 'call', 0)
+    expect(ivWithQ!).toBeCloseTo(trueSigma, 3)
+    // Without q, recovered sigma is biased away from truth
+    expect(Math.abs(ivNoQ! - trueSigma)).toBeGreaterThan(0.02)
+  })
+})
+
+describe('IV solver hardening (Brenner-Subrahmanyam seed + sigma clamp)', () => {
+  it('converges fast for ATM 1yr (where the new seed is near-perfect)', () => {
+    const target = 0.20
+    const price = blackScholesPrice(100, 100, 1, 0.05, target, 'call')
+    const iv = impliedVolatility(price, 100, 100, 1, 0.05, 'call')
+    expect(iv!).toBeCloseTo(target, 5)
+  })
+
+  it('converges for deep OTM call', () => {
+    const S = 100, K = 130, T = 0.25, r = 0.05
+    const target = 0.40
+    const price = blackScholesPrice(S, K, T, r, target, 'call')
+    const iv = impliedVolatility(price, S, K, T, r, 'call')
+    expect(iv).not.toBeNull()
+    expect(iv!).toBeCloseTo(target, 3)
+  })
+
+  it('handles tiny-extrinsic deep ITM put without runaway sigma', () => {
+    const S = 100, K = 200, T = 0.05, r = 0.05
+    const intrinsic = K * Math.exp(-r * T) - S
+    const price = intrinsic + 0.01
+    const iv = impliedVolatility(price, S, K, T, r, 'put')
+    // Either converges OR returns null cleanly — must NOT throw / Infinity / >5.0
+    if (iv !== null) {
+      expect(iv).toBeGreaterThan(0)
+      expect(iv).toBeLessThanOrEqual(5.0)
+      expect(Number.isFinite(iv)).toBe(true)
+    }
+  })
+
+  it('returns null for negative market price', () => {
+    expect(impliedVolatility(-1, 100, 100, 1, 0.05, 'call')).toBeNull()
+  })
+})
