@@ -170,5 +170,25 @@ describe('detectRegime', () => {
       expect(result.strategyHint).not.toBe('mean_reversion')
       expect(result.strategyHint).not.toBe('trend_following')
     })
+
+    /**
+     * Second regression in the same family: confidence boost for
+     * `trendRegime === 'range_bound'` (+10) used to fire even when
+     * trendKnown was false (because the variable defaults to 'range_bound').
+     * The "unknown trend" therefore got the same confidence boost as a
+     * MEASURED range-bound regime. Now gated on trendKnown.
+     */
+    it('does NOT boost confidence for the default range_bound fallback', () => {
+      // Insufficient bars → adxValue null. Volatility regime can't be
+      // computed either (vol60 needs 62 bars). So confidence stays
+      // ≤ 50 (base) — no trendKnown boost, no vol-normal boost.
+      const closes = generateCloses(8)
+      const bars = closesToBars(closes)
+      const result = detectRegime(closes, bars)
+      expect(result.adxValue).toBeNull()
+      // Without trendKnown there must be no +10 boost from the
+      // (falsely-default) range_bound regime. Base is 50.
+      expect(result.confidence).toBeLessThanOrEqual(50)
+    })
   })
 })

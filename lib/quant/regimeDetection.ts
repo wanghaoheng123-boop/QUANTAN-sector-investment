@@ -66,14 +66,20 @@ function realizedVol(closes: number[], period: number): number | null {
  *   - otherwise -> neutral
  */
 export function detectRegime(closes: number[], bars: OhlcBar[]): RegimeState {
-  // Volatility regime
+  // Volatility regime — `volKnown` distinguishes "measured normal" from
+  // "default normal" (the same fail-open pattern as trendRegime below).
+  // Without the flag, an insufficient-data input got a +10 confidence
+  // boost downstream for being "normal" even though we never measured
+  // vol at all.
   const vol20 = realizedVol(closes, 20)
   const vol60 = realizedVol(closes, 60)
   let volRatio = 1.0
   let volatilityRegime: VolatilityRegime = 'normal'
+  let volKnown = false
 
   if (vol20 != null && vol60 != null && vol60 > 0) {
     volRatio = vol20 / vol60
+    volKnown = true
     if (volRatio > 1.5) volatilityRegime = 'crisis'
     else if (volRatio > 1.2) volatilityRegime = 'high'
     else if (volRatio < 0.8) volatilityRegime = 'low'
@@ -99,10 +105,14 @@ export function detectRegime(closes: number[], bars: OhlcBar[]): RegimeState {
     else trendRegime = 'range_bound'
   }
 
-  // Strategy hint — only emit a recommendation when we actually have an
-  // ADX reading. Fail-closed to 'neutral' when trend signal is unknown.
+  // Strategy hint — emit a recommendation only when BOTH the trend
+  // and the volatility regime have actually been measured. Otherwise
+  // fall through to 'neutral'. The trend-following branch checks
+  // `volatilityRegime !== 'crisis'` and the mean-reversion branch
+  // checks for 'low' / 'normal' — both readings are meaningless
+  // unless volKnown.
   let strategyHint: StrategyHint = 'neutral'
-  if (trendKnown) {
+  if (trendKnown && volKnown) {
     if (trendRegime === 'strong_trend' && volatilityRegime !== 'crisis') {
       strategyHint = 'trend_following'
     } else if (trendRegime === 'range_bound' && (volatilityRegime === 'low' || volatilityRegime === 'normal')) {
@@ -110,12 +120,21 @@ export function detectRegime(closes: number[], bars: OhlcBar[]): RegimeState {
     }
   }
 
-  // Confidence: clearer signals = higher confidence
+  // Confidence: clearer signals = higher confidence. Gated on trendKnown
+  // because `trendRegime` defaults to 'range_bound' when ADX is
+  // unavailable — without this gate, an UNKNOWN trend silently got the
+  // same +10 boost as a measured range-bound regime, inflating confidence
+  // on insufficient data (related to the same fail-open bug as the
+  // strategyHint gate above).
   let confidence = 50
-  if (trendRegime === 'strong_trend') confidence += 20
-  else if (trendRegime === 'range_bound') confidence += 10
-  if (volatilityRegime === 'normal') confidence += 10
-  else if (volatilityRegime === 'crisis') confidence -= 15
+  if (trendKnown) {
+    if (trendRegime === 'strong_trend') confidence += 20
+    else if (trendRegime === 'range_bound') confidence += 10
+  }
+  if (volKnown) {
+    if (volatilityRegime === 'normal') confidence += 10
+    else if (volatilityRegime === 'crisis') confidence -= 15
+  }
   if (adxValue != null && (adxValue > 30 || adxValue < 12)) confidence += 10 // very clear signal
 
   return {
