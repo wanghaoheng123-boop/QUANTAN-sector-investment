@@ -14,6 +14,13 @@ const buckets = new Map<string, { tokens: number; lastRefill: number }>()
 
 // Purge stale entries every 5 minutes to prevent memory leak from abandoned IPs.
 const STALE_CLEANUP_INTERVAL_MS = 5 * 60 * 1000
+// Hard cap on bucket-map size. Without this, an attacker spoofing
+// x-forwarded-for with a fresh IP per request grows the map unboundedly
+// between cleanup ticks (5 min × even modest req-rate = hundreds of
+// thousands of entries). When the cap is reached we evict the oldest
+// half by lastRefill — degrades gracefully to global limiting under
+// attack instead of OOMing the serverless instance.
+const MAX_BUCKETS = 50_000
 let _lastCleanup = Date.now()
 
 function cleanupStale() {
@@ -25,6 +32,19 @@ function cleanupStale() {
     if (now - bucket.lastRefill > 15 * 60 * 1000) {
       buckets.delete(key)
     }
+  }
+}
+
+/**
+ * Emergency eviction when bucket-map size exceeds MAX_BUCKETS. Sorts the
+ * entries by lastRefill ascending (oldest first) and removes the older
+ * half. Runs O(n log n) so we don't call it unless absolutely needed.
+ */
+function evictHalfByAge(): void {
+  const sorted = [...buckets.entries()].sort((a, b) => a[1].lastRefill - b[1].lastRefill)
+  const dropCount = Math.floor(sorted.length / 2)
+  for (let i = 0; i < dropCount; i++) {
+    buckets.delete(sorted[i][0])
   }
 }
 
@@ -55,12 +75,21 @@ export function checkRateLimit(
 
   let bucket = buckets.get(bucketKey)
   if (!bucket) {
+    // Enforce memory ceiling before adding a new bucket. Without this,
+    // an attacker spoofing fresh IPs every request can OOM the function.
+    if (buckets.size >= MAX_BUCKETS) {
+      evictHalfByAge()
+    }
     bucket = { tokens: config.maxRequests, lastRefill: now }
     buckets.set(bucketKey, bucket)
   }
 
-  // Refill tokens based on elapsed time
-  const elapsedSec = (now - bucket.lastRefill) / 1000
+  // Refill tokens based on elapsed time. Clamp elapsed to 0 — if the
+  // system clock skews backward (NTP adjustment, manual override), a
+  // raw subtraction yields negative refillTokens, which silently
+  // REDUCES bucket capacity instead of refilling it. Tokens monotonic
+  // up to maxRequests is the correct semantic.
+  const elapsedSec = Math.max(0, (now - bucket.lastRefill) / 1000)
   const refillTokens = elapsedSec * refillRate
   bucket.tokens = Math.min(config.maxRequests, bucket.tokens + refillTokens)
   bucket.lastRefill = now
