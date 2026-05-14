@@ -237,9 +237,12 @@ export function runPortfolioBacktest(
         signalAction = sig.action
       } catch { /* keep HOLD on error */ }
 
-      // Check exit conditions
+      // Check exit conditions — F1.3 (Phase 13 S2): pass the full bar so
+      // stop-loss and profit-target evaluation uses bar.low / bar.high
+      // (intraday breach), not just bar.close.
       const exitCheck = checkExitConditions(
         pos, di, price, currentDate, currentATRPct, signalAction, cfg.exit,
+        { open: row.open, high: row.high, low: row.low, close: row.close },
       )
 
       if (exitCheck) {

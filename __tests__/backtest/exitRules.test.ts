@@ -252,3 +252,106 @@ describe('computeExitStats', () => {
     expect(stats.timeExitPct).toBeCloseTo(0.2, 4)
   })
 })
+
+// ─── F1.3 (Phase 13 S2): intraday-aware exits ───────────────────────────────
+
+/**
+ * The legacy behaviour (close-only stop evaluation) systematically
+ * under-reported stops and profit-takes, biasing backtest WR optimistic
+ * on stop hits and pessimistic on profit-take hits. These tests pin
+ * down the corrected intraday-breach semantics.
+ *
+ * Reference: Pardo (2008), *The Evaluation and Optimization of Trading
+ * Strategies* (2nd ed.), ch. 7 — backtests must check bar low for
+ * long stops, bar high for long profit-targets, to avoid systematic
+ * optimism in equity-curve estimates.
+ */
+describe('checkExitConditions — F1.3 intraday-aware exits', () => {
+  it('STOP LOSS fires on bar.low <= stop even when close recovers above', () => {
+    const pos = makePosition({ stopLossPrice: 97 })
+    // close = 99 (above stop), but low = 95 (below stop) — intraday breach.
+    const result = checkExitConditions(
+      pos, 5, 99, '2026-01-06', 0.02, 'HOLD', cfg,
+      { open: 99, high: 99.5, low: 95, close: 99 },
+    )
+    expect(result).not.toBeNull()
+    expect(result!.reason).toBe('stop_loss')
+    // Fill at stop price (assumed limit-order), not at bar.low (no slippage).
+    expect(result!.exitPrice).toBe(97)
+  })
+
+  it('STOP LOSS fills at bar.open on a gap-down through the stop', () => {
+    const pos = makePosition({ stopLossPrice: 97 })
+    // Gap-down: open = 95 (below stop). Fill at open (worse).
+    const result = checkExitConditions(
+      pos, 5, 94, '2026-01-06', 0.02, 'HOLD', cfg,
+      { open: 95, high: 95.5, low: 93, close: 94 },
+    )
+    expect(result).not.toBeNull()
+    expect(result!.reason).toBe('stop_loss')
+    expect(result!.exitPrice).toBe(95) // open
+  })
+
+  it('PROFIT TARGET fires on bar.high >= target even when close pulls back', () => {
+    const pos = makePosition() // profitTake default 8% → target = 108
+    // close = 105 (below target), but high = 109 (above target).
+    const result = checkExitConditions(
+      pos, 5, 105, '2026-01-06', 0.02, 'HOLD', cfg,
+      { open: 104, high: 109, low: 103, close: 105 },
+    )
+    expect(result).not.toBeNull()
+    expect(result!.reason).toBe('profit_target')
+    // Fill at target (assumed limit-order), not at bar.high.
+    expect(result!.exitPrice).toBe(108)
+    expect(result!.isPartial).toBe(true)
+  })
+
+  it('PROFIT TARGET fills at bar.open on a gap-up through the target', () => {
+    const pos = makePosition()
+    // Gap-up: open = 110 (above target 108). Fill at open (better).
+    const result = checkExitConditions(
+      pos, 5, 111, '2026-01-06', 0.02, 'HOLD', cfg,
+      { open: 110, high: 112, low: 109, close: 111 },
+    )
+    expect(result).not.toBeNull()
+    expect(result!.reason).toBe('profit_target')
+    expect(result!.exitPrice).toBe(110) // open
+  })
+
+  it('STOP LOSS takes priority over PROFIT TARGET on a wide range bar', () => {
+    // Both breaches in one bar (very wide range): stop@97 hit AND target@108 hit.
+    // Conservative: assume stop hits first (worse outcome).
+    const pos = makePosition({ stopLossPrice: 97 })
+    const result = checkExitConditions(
+      pos, 5, 105, '2026-01-06', 0.02, 'HOLD', cfg,
+      { open: 100, high: 109, low: 96, close: 105 },
+    )
+    expect(result).not.toBeNull()
+    expect(result!.reason).toBe('stop_loss')
+  })
+
+  it('TRAILING STOP fires on bar.low <= trail level (post partial exit)', () => {
+    const pos = makePosition({
+      partialExitDone: true,
+      highestPrice: 110, // trail at 110 * 0.95 = 104.5 (default trailingStopPct = 5%)
+    })
+    // close = 105 (above trail), but low = 104 (below).
+    const result = checkExitConditions(
+      pos, 5, 105, '2026-01-06', 0.02, 'HOLD', cfg,
+      { open: 105, high: 105.5, low: 104, close: 105 },
+    )
+    expect(result).not.toBeNull()
+    expect(result!.reason).toBe('stop_loss')
+    expect(result!.exitPrice).toBe(104.5) // trail level
+  })
+
+  it('back-compat: omitting currentBar falls back to close-only behaviour', () => {
+    // No bar param — uses currentPrice as low/high/open. Same result as
+    // the legacy contract (existing 23 tests rely on this).
+    const pos = makePosition({ stopLossPrice: 97 })
+    const result = checkExitConditions(pos, 5, 96, '2026-01-06', 0.02, 'HOLD', cfg)
+    expect(result).not.toBeNull()
+    expect(result!.reason).toBe('stop_loss')
+    expect(result!.exitPrice).toBe(96)
+  })
+})
