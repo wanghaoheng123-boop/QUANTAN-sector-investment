@@ -499,7 +499,36 @@ export function enhancedCombinedSignal(
   const weights = WEIGHT_PROFILES[volRegime.strategyHint] ?? WEIGHT_PROFILES.default
 
   // ── Compute per-indicator scores (-1 to +1) ──
-  const rsiScore = Number.isFinite(rsi14) ? (50 - rsi14) / 50 : 0
+  //
+  // CRITICAL ensemble property: every score MUST lie in [-1, +1] so that
+  // the weighted sum (Σ wᵢ · sᵢ, with Σ wᵢ = 1) is bounded in [-1, +1].
+  // A single unclamped score can dominate the entire weighted ensemble.
+  //
+  // Phase 13 S2 — TEAM AUDIT (Quant + AI + Full-stack):
+  //
+  //   Bug found: bbScore = 1 - 2 * bbPctB was UNCLAMPED. When price
+  //   overshoots a Bollinger band — common in strong trends — bbPctB
+  //   exceeds [0, 1]:
+  //     bbPctB =  1.5 (price 50% above upper band)  → bbScore = -2.0
+  //     bbPctB = -0.5 (price 50% below lower band)  → bbScore = +2.0
+  //   With weight 0.15, the contribution is ±0.30 — alone matching the
+  //   SELL threshold (-0.30) or doubling the BUY threshold (+0.15).
+  //   A single-bar Bollinger overshoot could silently flip the ensemble.
+  //
+  //   Bug found: rsiScore = (50 - rsi14) / 50 assumed rsi14 ∈ [0, 100]
+  //   but had no explicit clamp. RSI is mathematically bounded by Wilder's
+  //   construction, but a numerical bug in the indicator (e.g. a divide-by-
+  //   tiny-loss) could emit out-of-range values that would silently swing
+  //   the ensemble.
+  //
+  // Fix: clamp ALL per-indicator scores to [-1, +1] explicitly.
+  //
+  // Citation: Kuncheva, L. I. (2014). *Combining Pattern Classifiers:
+  //           Methods and Algorithms* (2nd ed.), Wiley, §4.2 — weighted-
+  //           combination ensemble bounds require homogeneous base-learner
+  //           output ranges. Unbounded base learners produce unbounded
+  //           ensemble outputs, which break threshold-based decision rules.
+  const rsiScore = Number.isFinite(rsi14) ? clamp((50 - rsi14) / 50, -1, 1) : 0
   const macdScore = Number.isFinite(macdHist) && Number.isFinite(atrLast) && atrLast > 0
     // F1.13 (Phase 13 S2 documentation): scale MACD histogram by 10% of the
     // current ATR to make the score volatility-normalised. The 0.1 factor is
@@ -509,10 +538,15 @@ export function enhancedCombinedSignal(
     // up with practitioner heuristics for "meaningful MACD divergence".
     ? clamp(macdHist / (atrLast * 0.1), -1, 1) : 0
   const atrScore = Number.isFinite(atrPct) ? clamp((atrPct - 1.5) / 2.0, -1, 1) : 0
-  const bbScore = Number.isFinite(bbPctB) ? 1 - 2 * bbPctB : 0
+  const bbScore = Number.isFinite(bbPctB) ? clamp(1 - 2 * bbPctB, -1, 1) : 0
   const vpocScore = volumeZoneScore(vpZone)
-  const mtfScore = mtf.alignmentScore / 3.0
-  const volRegScore = volRegimeScore(volRegime)
+  // mtf.alignmentScore is in [-3, +3] (sum of 3 timeframe contributions);
+  // /3 maps to [-1, +1] exactly under the existing contract, but clamp
+  // defensively against future changes to multiTimeframeSignal's range.
+  const mtfScore = clamp(mtf.alignmentScore / 3.0, -1, 1)
+  // volRegimeScore returns values from a fixed enum (-0.8 .. +0.5) so a
+  // clamp here is for defence-in-depth (no current path can exceed ±1).
+  const volRegScore = clamp(volRegimeScore(volRegime), -1, 1)
 
   // ── Build weighted confirms ──
   const weightedConfirms: WeightedConfirm[] = [
