@@ -67,7 +67,7 @@ export default function TradeLog({ trades, sectorColors }: Props) {
         <div className="bg-slate-900/60 rounded-xl p-4 border border-slate-800">
           <div className="text-xs text-slate-500 mb-1">All Trades</div>
           <div className="text-xl font-bold font-mono text-white">{filtered.length}</div>
-          <div className="text-[10px] text-slate-600 mt-1">
+          <div className="text-[10px] text-slate-400 mt-1">
             {new Set(filtered.map(t => t.ticker)).size} instruments
           </div>
         </div>
@@ -153,7 +153,7 @@ export default function TradeLog({ trades, sectorColors }: Props) {
           <div className="py-12 text-center text-slate-500 text-sm">No trades found.</div>
         )}
         {filtered.length > 200 && (
-          <div className="py-2 text-center text-[10px] text-slate-600 border-t border-slate-800">
+          <div className="py-2 text-center text-[10px] text-slate-400 border-t border-slate-800">
             Showing 200 of {filtered.length} trades
           </div>
         )}

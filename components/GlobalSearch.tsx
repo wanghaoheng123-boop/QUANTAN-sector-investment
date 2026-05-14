@@ -200,7 +200,7 @@ export default function GlobalSearch() {
         </div>
       </div>
 
-      <p className="text-[10px] text-slate-600 mt-1 px-0.5">
+      <p className="text-[10px] text-slate-400 mt-1 px-0.5">
         Up to {SEARCH_LIMIT} Yahoo results · symbol + Enter opens the stock page even if the list is empty
       </p>
       {fetchError && (
@@ -224,7 +224,7 @@ export default function GlobalSearch() {
                   className="w-full text-left px-4 py-2.5 hover:bg-slate-800 transition-colors flex items-center justify-between group"
                 >
                   <div className="flex items-center gap-3 min-w-0">
-                    <svg className="w-3.5 h-3.5 text-slate-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg className="w-3.5 h-3.5 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                     <div className="min-w-0">
@@ -271,7 +271,7 @@ export default function GlobalSearch() {
                     </div>
                     <div className="text-right shrink-0">
                       <div className="text-xs font-mono text-slate-500">{quote.typeDisp}</div>
-                      <div className="text-[10px] text-slate-600 uppercase truncate max-w-[100px]">{quote.exchange}</div>
+                      <div className="text-[10px] text-slate-400 uppercase truncate max-w-[100px]">{quote.exchange}</div>
                     </div>
                   </button>
                 </li>

@@ -150,7 +150,7 @@ export default function KeyboardShortcuts() {
           ))}
         </div>
         <div className="px-5 py-3 border-t border-slate-800 bg-slate-950/50">
-          <p className="text-[10px] text-slate-600 text-center">
+          <p className="text-[10px] text-slate-400 text-center">
             Press <kbd className="inline-flex items-center justify-center h-4 px-1 text-[10px] font-mono text-slate-500 bg-slate-800 border border-slate-700 rounded">?</kbd> to toggle this overlay
           </p>
         </div>

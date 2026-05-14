@@ -21,7 +21,7 @@ export default function GlobalError({
           <h1 className="text-xl font-bold text-white">Application Error</h1>
           <p className="text-sm text-slate-400">
             {error.digest && (
-              <span className="block font-mono text-xs text-slate-600 mb-2">
+              <span className="block font-mono text-xs text-slate-400 mb-2">
                 ID: {error.digest}
               </span>
             )}

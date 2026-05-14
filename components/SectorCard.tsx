@@ -121,17 +121,17 @@ export default function SectorCard({ sector, quote, signal }: SectorCardProps) {
                 </div>
               </div>
               <Sparkline data={sparkData} color={sector.color} width={72} height={28} />
-              <span className="text-[8px] text-slate-600 font-mono text-right group-hover/sparkline:text-slate-500 transition-colors">prior→last</span>
+              <span className="text-[8px] text-slate-400 font-mono text-right group-hover/sparkline:text-slate-500 transition-colors">prior→last</span>
             </div>
           ) : (
-            <span className="text-[9px] text-slate-600 self-end">—</span>
+            <span className="text-[9px] text-slate-400 self-end">—</span>
           )}
         </div>
 
         {/* Signal confidence bar */}
         {signal && (
           <div className="relative mb-2.5">
-            <div className="flex justify-between text-[10px] mb-1 text-slate-600">
+            <div className="flex justify-between text-[10px] mb-1 text-slate-400">
               <span className="inline-flex items-center">
                 {session ? 'Move scale' : 'Confidence'}
                 {!session && <MetricTooltip metricKey="confidence" compact />}

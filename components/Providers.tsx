@@ -26,7 +26,7 @@ class SessionErrorBoundary extends Component<{ children: ReactNode }, { hasError
               The authentication session could not be loaded. This may be a temporary issue — please try refreshing the page.
             </p>
             {this.state.error && (
-              <p className="text-xs text-slate-600 font-mono break-all">
+              <p className="text-xs text-slate-400 font-mono break-all">
                 {'message' in this.state.error ? (this.state.error as Error).message : 'Unknown error'}
               </p>
             )}

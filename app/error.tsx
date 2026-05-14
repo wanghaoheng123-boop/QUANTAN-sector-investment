@@ -20,7 +20,7 @@ export default function ErrorPage({
         <h1 className="text-xl font-bold text-white">Something went wrong</h1>
         <p className="text-sm text-slate-400">
           {error.digest && (
-            <span className="block font-mono text-xs text-slate-600 mb-2">
+            <span className="block font-mono text-xs text-slate-400 mb-2">
               Error ID: {error.digest}
             </span>
           )}
@@ -32,7 +32,7 @@ export default function ErrorPage({
         >
           Try again
         </button>
-        <p className="text-xs text-slate-600">
+        <p className="text-xs text-slate-400">
           If the problem persists, the data source may be temporarily unavailable.
         </p>
       </div>

@@ -66,7 +66,7 @@ export class ChartErrorBoundary extends React.Component<Props, State> {
             {label} unavailable
           </p>
           {this.state.errorMessage && (
-            <p className="text-slate-600 text-xs max-w-xs text-center px-4 font-mono">
+            <p className="text-slate-400 text-xs max-w-xs text-center px-4 font-mono">
               {this.state.errorMessage}
             </p>
           )}

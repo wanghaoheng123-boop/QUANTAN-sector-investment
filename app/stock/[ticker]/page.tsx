@@ -256,7 +256,7 @@ export default function StockPage({ params }: { params: { ticker: string } }) {
                     {isUp ? '▲' : '▼'} {formatSignedNumber(quote.change)} ({Math.abs(quote.changePct).toFixed(2)}%)
                   </div>
                   <div className="text-xs text-slate-500 mt-1 font-mono">Market Cap: {quote.marketCap}</div>
-                  <div className="text-[10px] text-slate-600 mt-1">Quote: {formatFreshness(quote.quoteTime)}</div>
+                  <div className="text-[10px] text-slate-400 mt-1">Quote: {formatFreshness(quote.quoteTime)}</div>
                 </div>
               ) : (
                 <div className="space-y-2 text-right w-32">
@@ -342,7 +342,7 @@ export default function StockPage({ params }: { params: { ticker: string } }) {
                     </ChartErrorBoundary>
                   ) : (
                     <div className="h-[480px] bg-slate-800/10 rounded-xl flex items-center justify-center border border-dashed border-slate-800">
-                      <span className="text-slate-600 text-sm">No historical data available for {ticker}</span>
+                      <span className="text-slate-400 text-sm">No historical data available for {ticker}</span>
                     </div>
                   )}
                 </div>
@@ -440,7 +440,7 @@ export default function StockPage({ params }: { params: { ticker: string } }) {
                       <span className={`text-sm font-mono font-medium ${quote.changePct >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                         {quote.changePct >= 0 ? '+' : ''}{quote.changePct.toFixed(2)}%
                       </span>
-                    ) : <span className="text-sm text-slate-600">—</span>}
+                    ) : <span className="text-sm text-slate-400">—</span>}
                   </div>
                   <p className="text-xs text-slate-500 leading-relaxed">
                     Open <strong className="text-slate-400">Quant Lab</strong> for live fundamentals, DCF bear/base/bull, volatility-aware buy/sell bands, and Codex-style allocator checklists (not trade advice).
@@ -462,7 +462,7 @@ export default function StockPage({ params }: { params: { ticker: string } }) {
                       <div className="text-xs text-slate-500 mb-1">Bullish Prints</div>
                       <div className="text-lg font-bold text-green-400 font-mono">
                         {darkPoolPrints.filter(p => p.sentiment === 'BULLISH').length}
-                        <span className="text-slate-600 text-sm font-normal">/{darkPoolPrints.length}</span>
+                        <span className="text-slate-400 text-sm font-normal">/{darkPoolPrints.length}</span>
                       </div>
                     </div>
                   </div>

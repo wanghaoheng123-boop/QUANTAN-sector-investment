@@ -50,7 +50,7 @@ function MetricCard({ label, value, sub, color }: { label: string; value: string
     <div className="bg-slate-900/60 rounded-xl p-4 border border-slate-800">
       <div className="text-xs text-slate-500 mb-1 uppercase tracking-wider">{label}</div>
       <div className={`text-lg font-bold font-mono ${color ?? 'text-white'}`}>{value}</div>
-      {sub && <div className="text-[10px] text-slate-600 mt-0.5">{sub}</div>}
+      {sub && <div className="text-[10px] text-slate-400 mt-0.5">{sub}</div>}
     </div>
   )
 }
@@ -380,8 +380,8 @@ export default function BtcQuantLab({ candles }: Props) {
 
         {activeMetricTab === 'liquidations' && (
           <div>
-            {liqLoading && <div className="text-[10px] text-slate-600 mb-2">Refreshing liquidations data…</div>}
-          {liqFetchedAt && <div className="text-[10px] text-slate-600 mb-2">Last updated: {formatFreshness(liq?.fetchedAt)}</div>}
+            {liqLoading && <div className="text-[10px] text-slate-400 mb-2">Refreshing liquidations data…</div>}
+          {liqFetchedAt && <div className="text-[10px] text-slate-400 mb-2">Last updated: {formatFreshness(liq?.fetchedAt)}</div>}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <MetricCard
                 label="Large Trades (24h)"
@@ -422,7 +422,7 @@ export default function BtcQuantLab({ candles }: Props) {
                 <div className={`text-lg font-bold ${!emaOk ? 'text-slate-500' : latestEMA20 > latestEMA50 ? 'text-green-400' : 'text-red-400'}`}>
                   {!emaOk ? '—' : latestEMA20 > latestEMA50 ? '↑ BULLISH TREND' : '↓ BEARISH TREND'}
                 </div>
-                <div className="text-[10px] text-slate-600 mt-1">
+                <div className="text-[10px] text-slate-400 mt-1">
                   {emaOk
                     ? `EMA20 $${latestEMA20.toLocaleString('en-US', { maximumFractionDigits: 0 })} · EMA50 $${latestEMA50.toLocaleString('en-US', { maximumFractionDigits: 0 })}`
                     : 'Need more candles'}
@@ -437,7 +437,7 @@ export default function BtcQuantLab({ candles }: Props) {
                     '—'
                   )}
                 </div>
-                <div className="text-[10px] text-slate-600 mt-1">
+                <div className="text-[10px] text-slate-400 mt-1">
                   MACD Histogram: {macdOk ? (macdHist as number).toFixed(2) : '—'}
                 </div>
               </div>
@@ -446,14 +446,14 @@ export default function BtcQuantLab({ candles }: Props) {
                 <div className={`text-lg font-bold`} style={{ color: rainbowBand.color === '#f59e0b' ? '#f59e0b' : undefined }}>
                   {rainbowBand.label}
                 </div>
-                <div className="text-[10px] text-slate-600 mt-1">Based on 20-week high/low range</div>
+                <div className="text-[10px] text-slate-400 mt-1">Based on 20-week high/low range</div>
               </div>
               <div className="bg-slate-900/60 rounded-xl p-4 border border-slate-800">
                 <div className="text-xs text-slate-500 uppercase tracking-wide mb-2">Volatility</div>
                 <div className={`text-lg font-bold text-slate-400`}>
                   {bbPositionPct != null && Number.isFinite(bbPositionPct) ? `${bbPositionPct.toFixed(0)}%` : 'N/A'} BB Position
                 </div>
-                <div className="text-[10px] text-slate-600 mt-1">Upper: ${latestBB.upper?.toLocaleString('en-US', { maximumFractionDigits: 0 })} · Lower: ${latestBB.lower?.toLocaleString('en-US', { maximumFractionDigits: 0 })}</div>
+                <div className="text-[10px] text-slate-400 mt-1">Upper: ${latestBB.upper?.toLocaleString('en-US', { maximumFractionDigits: 0 })} · Lower: ${latestBB.lower?.toLocaleString('en-US', { maximumFractionDigits: 0 })}</div>
               </div>
             </div>
 

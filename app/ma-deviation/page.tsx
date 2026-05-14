@@ -98,7 +98,7 @@ function DeviationBar({ pct, color }: { pct: number; color: string }) {
 }
 
 function SlopeChip({ positive, slopePct }: { positive: boolean | null; slopePct?: number | null }) {
-  if (positive === null) return <span className="text-slate-600 text-xs">—</span>
+  if (positive === null) return <span className="text-slate-400 text-xs">—</span>
   const pct = slopePct != null ? `${slopePct > 0 ? '+' : ''}${(slopePct * 100).toFixed(3)}%` : null
   return (
     <span className={`inline-flex items-center gap-0.5 text-[10px] font-mono px-1.5 py-0.5 rounded ${positive ? 'text-emerald-400 bg-emerald-500/10' : 'text-red-400 bg-red-500/10'}`}>
@@ -212,7 +212,7 @@ export default function MADeviationPage() {
             </div>
             <div className="flex flex-col items-end gap-2">
               {data && (
-                <div className="text-xs text-slate-600 font-mono">
+                <div className="text-xs text-slate-400 font-mono">
                   Computed: {new Date(data.computedAt).toLocaleTimeString()}
                 </div>
               )}
@@ -360,7 +360,7 @@ export default function MADeviationPage() {
                   </div>
 
                   {/* RSI */}
-                  <div className={`text-sm font-mono font-semibold ${row.rsi14 != null ? (row.rsi14 < 30 ? 'text-emerald-400' : row.rsi14 > 70 ? 'text-red-400' : 'text-slate-300') : 'text-slate-600'}`}>
+                  <div className={`text-sm font-mono font-semibold ${row.rsi14 != null ? (row.rsi14 < 30 ? 'text-emerald-400' : row.rsi14 > 70 ? 'text-red-400' : 'text-slate-300') : 'text-slate-400'}`}>
                     {row.rsi14 != null ? row.rsi14.toFixed(0) : '—'}
                   </div>
 
@@ -492,7 +492,7 @@ export default function MADeviationPage() {
                 })}
             </div>
             {/* X-axis labels */}
-            <div className="flex items-center mt-3 text-[9px] text-slate-600 font-mono">
+            <div className="flex items-center mt-3 text-[9px] text-slate-400 font-mono">
               <div className="w-20 shrink-0" />
               <div className="flex-1 flex justify-between">
                 <span>-35%</span><span>-20%</span><span>-10%</span>

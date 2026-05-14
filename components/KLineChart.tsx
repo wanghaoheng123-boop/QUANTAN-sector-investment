@@ -878,7 +878,7 @@ export default function KLineChart({
         ))}
         <div className="ml-auto flex items-center gap-2">
           {/* VP hint */}
-          <span className="text-[10px] text-slate-600 font-mono">VP</span>
+          <span className="text-[10px] text-slate-400 font-mono">VP</span>
           <span className="text-[10px] text-slate-700">|</span>
           {/* Crosshair OHLCV display */}
           {crosshairData ? (
@@ -900,7 +900,7 @@ export default function KLineChart({
               </span>
             </div>
           ) : (
-            <div className="text-[10px] font-mono text-slate-600">
+            <div className="text-[10px] font-mono text-slate-400">
               {priceStr} {isUp ? '+' : ''}{chgPct}%
             </div>
           )}
@@ -922,7 +922,7 @@ export default function KLineChart({
           </span>
         )}
         {rangeStr && (
-          <span className="text-[10px] font-mono text-slate-600">
+          <span className="text-[10px] font-mono text-slate-400">
             {rangeStr}
           </span>
         )}

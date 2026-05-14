@@ -626,7 +626,7 @@ export default function BtcPage() {
                   <div className={`text-sm font-mono ${isUp ? 'text-green-400' : 'text-red-400'}`}>
                     {isUp ? '▲' : '▼'} {Math.abs(btcPrice.changePct24h).toFixed(2)}%
                   </div>
-                  <div className="text-[10px] text-slate-600 mt-1 font-mono">
+                  <div className="text-[10px] text-slate-400 mt-1 font-mono">
                     H${btcPrice.high24h.toLocaleString('en-US', { maximumFractionDigits: 0 })} · L${btcPrice.low24h.toLocaleString('en-US', { maximumFractionDigits: 0 })}
                   </div>
                 </div>
@@ -713,7 +713,7 @@ export default function BtcPage() {
                 ) : (
                   <div className="h-[480px] bg-slate-800/10 rounded-xl flex flex-col items-center justify-center gap-2 border border-dashed border-slate-800 px-6 text-center">
                     <span className="text-slate-500 text-sm">No candle data yet</span>
-                    <span className="text-[11px] text-slate-600 max-w-md">
+                    <span className="text-[11px] text-slate-400 max-w-md">
                       If this persists, open DevTools → Network, reload, and check <code className="text-slate-500">/api/crypto/btc</code> (should be 200 with a <code className="text-slate-500">candles</code> array). Disable VPN or try another network if all exchanges time out.
                     </span>
                   </div>

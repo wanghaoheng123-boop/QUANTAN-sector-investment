@@ -138,7 +138,7 @@ export default function SignalCard({ signal, color, compact = false }: SignalCar
         <div>
           <div className="text-2xl font-bold text-white font-mono">{signal.etf}</div>
           <div className="text-sm text-slate-400">{signal.sector}</div>
-          <div className="text-xs text-slate-600 mt-0.5">{barLabel}</div>
+          <div className="text-xs text-slate-400 mt-0.5">{barLabel}</div>
           {session && signal.sessionChangePct != null && (
             <div className="text-xs font-mono text-slate-300 mt-1">
               Δ {signal.sessionChangePct >= 0 ? '+' : ''}
@@ -146,7 +146,7 @@ export default function SignalCard({ signal, color, compact = false }: SignalCar
             </div>
           )}
           {session && signal.quoteTime && (
-            <div className="text-[10px] text-slate-600 mt-0.5 font-mono">
+            <div className="text-[10px] text-slate-400 mt-0.5 font-mono">
               Quote {new Date(signal.quoteTime).toLocaleString()}
             </div>
           )}

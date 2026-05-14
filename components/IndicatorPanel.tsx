@@ -71,7 +71,7 @@ export default function IndicatorPanel({
       <div className="space-y-3">
         {/* EMA Group */}
         <div>
-          <div className="text-[10px] text-slate-600 uppercase tracking-widest mb-1.5">Moving Averages</div>
+          <div className="text-[10px] text-slate-400 uppercase tracking-widest mb-1.5">Moving Averages</div>
           <div className="flex flex-wrap gap-1">
             {CHART_EMA_PERIODS.map((p) => {
               const key = `ema${p}` as ChartEmaKey
@@ -84,7 +84,7 @@ export default function IndicatorPanel({
                   className={`group relative px-1.5 py-0.5 rounded text-[10px] font-mono border transition-all duration-200 ${
                     on
                       ? `${EMA_COLOR[p] ?? 'bg-slate-600'} text-white border-transparent shadow-sm`
-                      : 'border-slate-700 text-slate-600 hover:border-slate-500 hover:text-slate-400'
+                      : 'border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-200'
                   }`}
                 >
                   {on && (
@@ -99,7 +99,7 @@ export default function IndicatorPanel({
 
         {/* Overlays Group */}
         <div>
-          <div className="text-[10px] text-slate-600 uppercase tracking-widest mb-1.5">Overlays</div>
+          <div className="text-[10px] text-slate-400 uppercase tracking-widest mb-1.5">Overlays</div>
           <div className="flex flex-col gap-1">
             {INDICATOR_DEFS.filter(d => !d.key.startsWith('ema')).map((d) => {
               if (d.key === 'volSma' && !showVolSma) return null
@@ -112,7 +112,7 @@ export default function IndicatorPanel({
                   className={`flex items-center gap-2 px-2 py-1.5 rounded text-[11px] font-mono border transition-all duration-200 text-left ${
                     on
                       ? 'bg-slate-800/80 border-slate-700 text-slate-200'
-                      : 'border-slate-800 text-slate-600 hover:border-slate-700 hover:text-slate-400'
+                      : 'border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
                   }`}
                 >
                   <span className={`w-2 h-2 rounded-full ${on ? d.dotColor : 'bg-slate-700'} transition-colors duration-200 shrink-0`} />
