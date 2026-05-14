@@ -139,7 +139,12 @@ export function isMACompression(closes: number[], tolerancePct = 0.05): boolean 
 }
 
 export function sma200DeviationPct(price: number, sma200: number): number | null {
-  if (!Number.isFinite(sma200) || sma200 <= 0 || !Number.isFinite(price)) return null
+  // Reject non-finite OR non-positive price/SMA — negative or zero prices
+  // produce mathematically-finite-but-meaningless deviations (e.g. a price
+  // of -50 vs SMA 100 yields dev = -150%, which would fall into the
+  // CRASH_ZONE branch downstream and emit a 78%-confidence BUY/SELL).
+  if (!Number.isFinite(sma200) || sma200 <= 0) return null
+  if (!Number.isFinite(price) || price <= 0) return null
   return ((price - sma200) / sma200) * 100
 }
 
@@ -218,6 +223,18 @@ export function regimeSignal(price: number, closes: number[], rsi14?: number): R
   const slopePos = slope != null ? slope > 0.005 : null
   // FIX D: Was price recently within +5% of SMA?
   const nearSma = priceWasNearSmaRecently(closes, 5)
+
+  // Fail-closed when deviation can't be computed (non-finite price, broken
+  // SMA). Previously the function fell through every `if (dev != null ...)`
+  // branch and silently classified the position as CRASH_ZONE BUY or SELL
+  // with 78–95% confidence — emitting real trading actions from bad data.
+  if (dev == null) {
+    return {
+      zone: 'INSUFFICIENT_DATA', dipSignal: 'INSUFFICIENT_DATA',
+      deviationPct: null, slopePct: slope, slopePositive: slopePos,
+      action: 'HOLD', confidence: 0, label: 'Insufficient Data',
+    }
+  }
 
   // ── Deviation-based zones ──────────────────────────────────────────────
   // EXTREME_BULL: >+20% — extremely extended, no buy

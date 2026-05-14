@@ -42,6 +42,32 @@ describe('Regime Signal', () => {
     expect(result.confidence).toBe(0)
   })
 
+  /**
+   * Regression: prior implementation silently classified non-finite prices
+   * as CRASH_ZONE BUY/SELL (78-95% confidence). Bad inputs must fail
+   * closed to HOLD with confidence=0, never emit real trading actions.
+   */
+  it('returns HOLD/0-confidence for non-finite price (fail-closed)', () => {
+    const closes = generateCloses(100, 250, 0.1) // sufficient bars
+    const nan = regimeSignal(NaN, closes)
+    expect(nan.action).toBe('HOLD')
+    expect(nan.confidence).toBe(0)
+    expect(nan.deviationPct).toBeNull()
+    const inf = regimeSignal(Infinity, closes)
+    expect(inf.action).toBe('HOLD')
+    expect(inf.confidence).toBe(0)
+  })
+
+  it('returns HOLD/0-confidence for non-positive price (fail-closed)', () => {
+    const closes = generateCloses(100, 250, 0.1)
+    const zero = regimeSignal(0, closes)
+    expect(zero.action).toBe('HOLD')
+    expect(zero.confidence).toBe(0)
+    const neg = regimeSignal(-50, closes)
+    expect(neg.action).toBe('HOLD')
+    expect(neg.confidence).toBe(0)
+  })
+
   it('classifies HEALTHY_BULL when price is 0-10% above SMA200', () => {
     // Create 250 bars with gentle uptrend so SMA200 is below current price
     const closes = generateCloses(100, 250, 0.1)
