@@ -116,8 +116,10 @@ export async function GET(
         { status: 504 }
       )
     }
+    // CWE-209: msg is used internally for connectivity-error detection only;
+    // the response uses sanitizeError so production clients don't see
+    // stack-related details (internal hostnames, file paths, etc).
     const msg = String(err)
-    // Detect connection refused / fetch failures (backend not reachable)
     const isConnectivityError =
       msg.includes('ECONNREFUSED') ||
       msg.includes('ENOTFOUND') ||
@@ -129,15 +131,17 @@ export async function GET(
       return NextResponse.json(
         {
           error: 'backend_unreachable',
-          message: `Cannot reach TradingAgents at ${TA_BASE}. ${DEPLOY_HINT}`,
-          details: msg,
+          // Do NOT echo TA_BASE — it may include a private Railway URL.
+          // Surface a generic message; full URL only in dev via sanitizeError.
+          message: `Cannot reach TradingAgents backend. ${DEPLOY_HINT}`,
+          details: sanitizeError(err),
         },
         { status: 502 }
       )
     }
     console.error('[TradingAgents GET]', err)
     return NextResponse.json(
-      { error: 'failed_to_fetch', details: msg },
+      { error: 'failed_to_fetch', details: sanitizeError(err) },
       { status: 502 }
     )
   }
@@ -288,12 +292,22 @@ export async function POST(
       } catch {
         // ignore parse error
       }
-      const detailText =
-        errorData.details || errorData.message || errorData.error || upstream.statusText
+      // CWE-209: never forward upstream `details`/`message` verbatim — the
+      // Python server may include traceback fragments, file paths, or
+      // third-party API error envelopes carrying provider-side secrets. In
+      // production return a generic message + sanitized status; preserve
+      // upstream `error` code (a short string identifier — safe).
+      const upstreamErrCode = typeof errorData.error === 'string' ? errorData.error : 'upstream_error'
+      const isDev = process.env.NODE_ENV !== 'production'
+      const detailText = isDev
+        ? (errorData.details || errorData.message || errorData.error || upstream.statusText)
+        : undefined
       return NextResponse.json(
         {
           error: 'upstream_error',
-          message: detailText,
+          upstreamErrorCode: upstreamErrCode,
+          status: upstream.status,
+          message: `Upstream returned ${upstream.status} — see server logs for details.`,
           details: detailText,
         },
         { status: 502 }
@@ -323,15 +337,16 @@ export async function POST(
       return NextResponse.json(
         {
           error: 'backend_unreachable',
-          message: `Cannot reach TradingAgents at ${TA_BASE}. ${DEPLOY_HINT}`,
-          details: msg,
+          // Do NOT echo TA_BASE — may include a private Railway URL.
+          message: `Cannot reach TradingAgents backend. ${DEPLOY_HINT}`,
+          details: sanitizeError(err),
         },
         { status: 502 }
       )
     }
     console.error('[TradingAgents POST]', err)
     return NextResponse.json(
-      { error: 'failed_to_fetch', details: msg },
+      { error: 'failed_to_fetch', details: sanitizeError(err) },
       { status: 502 }
     )
   }
