@@ -196,17 +196,20 @@ export function backtestInstrument(
         const twoAtrProfit = (2 * atrAtEntryDollar) / state.openTrade.entryPrice
         const fourAtrProfit = (4 * atrAtEntryDollar) / state.openTrade.entryPrice
         if (profitFromEntry >= twoAtrProfit) {
-          // Raise stop to break-even + 0.5% buffer
+          // Raise stop to break-even + 0.5% buffer.
+          // F1.3 intraday-aware: trigger on bar.low; fill at trail level
+          // unless gap-down opens below it (fill at open in that case).
           const trailStopPx = state.openTrade.entryPrice * (1 + 0.005)
-          if (signalPrice <= trailStopPx) {
-            const proceeds = state.position * signalPrice
+          if (rows[i].low <= trailStopPx) {
+            const fillPrice = rows[i].open <= trailStopPx ? rows[i].open : trailStopPx
+            const proceeds = state.position * fillPrice
             const txCost = proceeds * TX_COST_PCT_PER_SIDE
             const netProceeds = proceeds - txCost
-            const pnlPct = (signalPrice - state.openTrade.entryPrice) / state.openTrade.entryPrice
+            const pnlPct = (fillPrice - state.openTrade.entryPrice) / state.openTrade.entryPrice
             if (pnlPct > 0) { state.tradeWins++; state.grossProfit += pnlPct }
             else { state.tradeLosses++; state.grossLoss += Math.abs(pnlPct) }
             state.capital += netProceeds
-            state.openTrade.exitPrice = signalPrice
+            state.openTrade.exitPrice = fillPrice
             state.openTrade.pnlPct = pnlPct
             state.closedTrades.push({ ...state.openTrade })
             state.position = 0; state.avgCost = 0; state.openTrade = null
@@ -215,17 +218,19 @@ export function backtestInstrument(
           }
         }
         // 4x ATR profit → tighten to lock in 1x ATR gain from entry price
+        // F1.3 intraday-aware: same bar.low / gap-aware fill semantics.
         if (profitFromEntry >= fourAtrProfit) {
           const lockStopPx = state.openTrade.entryPrice + atrAtEntryDollar  // lock 1x ATR from entry
-          if (signalPrice <= lockStopPx) {
-            const proceeds = state.position * signalPrice
+          if (rows[i].low <= lockStopPx) {
+            const fillPrice = rows[i].open <= lockStopPx ? rows[i].open : lockStopPx
+            const proceeds = state.position * fillPrice
             const txCost = proceeds * TX_COST_PCT_PER_SIDE
             const netProceeds = proceeds - txCost
-            const pnlPct = (signalPrice - state.openTrade.entryPrice) / state.openTrade.entryPrice
+            const pnlPct = (fillPrice - state.openTrade.entryPrice) / state.openTrade.entryPrice
             if (pnlPct > 0) { state.tradeWins++; state.grossProfit += pnlPct }
             else { state.tradeLosses++; state.grossLoss += Math.abs(pnlPct) }
             state.capital += netProceeds
-            state.openTrade.exitPrice = signalPrice
+            state.openTrade.exitPrice = fillPrice
             state.openTrade.pnlPct = pnlPct
             state.closedTrades.push({ ...state.openTrade })
             state.position = 0; state.avgCost = 0; state.openTrade = null
@@ -235,19 +240,31 @@ export function backtestInstrument(
         }
       }
 
-      // Primary stop-loss check (exits at today's close)
-      if ((state.openTrade.action === 'BUY' && signalPrice <= stopPx) ||
-          (state.openTrade.action === 'SELL' && signalPrice >= stopPx)) {
-        const proceeds = state.position * signalPrice
+      // Primary stop-loss check — F1.3 (Phase 13 S2): intraday-aware.
+      // Previously compared signalPrice (= bar.close) against stopPx, which
+      // missed every stop hit where bar.low pierced the stop but the close
+      // recovered above. Now check bar.low for BUY (long) stops and
+      // bar.high for SELL (short) stops; fill at the stop price unless the
+      // bar opened beyond the stop (gap → fill at the open).
+      const barLow = rows[i].low
+      const barHigh = rows[i].high
+      const barOpen = rows[i].open
+      const longStopHit = state.openTrade.action === 'BUY' && barLow <= stopPx
+      const shortStopHit = state.openTrade.action === 'SELL' && barHigh >= stopPx
+      if (longStopHit || shortStopHit) {
+        const fillPrice = longStopHit
+          ? (barOpen <= stopPx ? barOpen : stopPx)
+          : (barOpen >= stopPx ? barOpen : stopPx)
+        const proceeds = state.position * fillPrice
         const txCost = proceeds * TX_COST_PCT_PER_SIDE
         const netProceeds = proceeds - txCost
         const pnlPct = state.openTrade.action === 'BUY'
-          ? (signalPrice - state.openTrade.entryPrice) / state.openTrade.entryPrice
-          : (state.openTrade.entryPrice - signalPrice) / state.openTrade.entryPrice
+          ? (fillPrice - state.openTrade.entryPrice) / state.openTrade.entryPrice
+          : (state.openTrade.entryPrice - fillPrice) / state.openTrade.entryPrice
         if (pnlPct > 0) { state.tradeWins++; state.grossProfit += pnlPct }
         else { state.tradeLosses++; state.grossLoss += Math.abs(pnlPct) }
         state.capital += netProceeds
-        state.openTrade.exitPrice = signalPrice
+        state.openTrade.exitPrice = fillPrice
         state.openTrade.pnlPct = pnlPct
         state.closedTrades.push({ ...state.openTrade })
         state.position = 0; state.avgCost = 0; state.openTrade = null
