@@ -105,6 +105,62 @@ export interface ExitBar {
 }
 
 /**
+ * Canonical primitive: given a bar and a price threshold, decide whether
+ * a stop/target was hit intraday and the resulting fill price.
+ *
+ * This factors out the (previously duplicated) logic that lived in both
+ * `lib/backtest/engine.ts` and `lib/backtest/exitRules.ts`. The two paths
+ * had the same close-only bug fixed in F1.3, and the same fix had to be
+ * applied twice. SSOT eliminates that future-regression hazard.
+ *
+ * Semantics:
+ *   • side='long', kind='stop':   triggered when bar.low  <= level.
+ *                                 fill = level, unless bar.open <= level
+ *                                 (gap-down → fill at open, worse than level).
+ *   • side='long', kind='target': triggered when bar.high >= level.
+ *                                 fill = level, unless bar.open >= level
+ *                                 (gap-up → fill at open, better than level).
+ *   • side='short', kind='stop':  triggered when bar.high >= level.
+ *                                 fill = level, unless bar.open >= level
+ *                                 (gap-up → fill at open, worse than level).
+ *   • side='short', kind='target': triggered when bar.low  <= level.
+ *                                 fill = level, unless bar.open <= level
+ *                                 (gap-down → fill at open, better than level).
+ *
+ * Returns null if no hit. Otherwise returns the realistic fill price.
+ *
+ * Citation: Pardo (2008) ch. 7 — intraday breach modelling is required to
+ *           avoid systematic optimism in backtest equity-curve estimates.
+ */
+export type ThresholdSide = 'long' | 'short'
+export type ThresholdKind = 'stop' | 'target'
+
+export function evaluateStopHit(
+  bar: ExitBar,
+  level: number,
+  side: ThresholdSide,
+  kind: ThresholdKind,
+): number | null {
+  if (!Number.isFinite(level) || level <= 0) return null
+  if (!Number.isFinite(bar.low) || !Number.isFinite(bar.high) || !Number.isFinite(bar.open)) return null
+
+  // For (long stop) and (short target): triggered when bar.low <= level.
+  // For (long target) and (short stop): triggered when bar.high >= level.
+  const triggerOnLow = (side === 'long' && kind === 'stop') || (side === 'short' && kind === 'target')
+  const triggered = triggerOnLow ? bar.low <= level : bar.high >= level
+  if (!triggered) return null
+
+  // Fill rules:
+  //   triggerOnLow + bar.open <= level → fill at open (gap through downward)
+  //   !triggerOnLow + bar.open >= level → fill at open (gap through upward)
+  //   else → fill exactly at level (limit-order assumption)
+  if (triggerOnLow) {
+    return bar.open <= level ? bar.open : level
+  }
+  return bar.open >= level ? bar.open : level
+}
+
+/**
  * Determine whether to exit a position at the current bar.
  *
  * F1.3 (Phase 13 S2) — intraday-aware exits:
@@ -149,17 +205,15 @@ export function checkExitConditions(
   currentBar?: ExitBar,
 ): { shouldExit: boolean; reason: ExitReason; exitPrice: number; isPartial: boolean; partialFraction: number } | null {
 
-  // Derive intraday extremes when bar is available, else fall back to close.
-  const low = currentBar ? currentBar.low : currentPrice
-  const high = currentBar ? currentBar.high : currentPrice
-  const open = currentBar ? currentBar.open : currentPrice
+  // For back-compat, synthesise a bar from close-only inputs when none provided.
+  const bar: ExitBar = currentBar ?? {
+    open: currentPrice, high: currentPrice, low: currentPrice, close: currentPrice,
+  }
 
-  // 1. Stop loss (highest priority — checked intraday on bar.low).
-  if (low <= position.stopLossPrice) {
-    // Gap-down: bar opened below the stop. Fill at open (worse than stop).
-    // Else: limit order assumed to fill exactly at stop price.
-    const fill = open <= position.stopLossPrice ? open : position.stopLossPrice
-    return { shouldExit: true, reason: 'stop_loss', exitPrice: fill, isPartial: false, partialFraction: 1.0 }
+  // 1. Stop loss (highest priority — checked intraday on bar.low via SSOT primitive).
+  const stopFill = evaluateStopHit(bar, position.stopLossPrice, 'long', 'stop')
+  if (stopFill != null) {
+    return { shouldExit: true, reason: 'stop_loss', exitPrice: stopFill, isPartial: false, partialFraction: 1.0 }
   }
 
   // 2. ATR panic exit (volatility expansion — close-based, daily ATR is daily).
@@ -177,19 +231,18 @@ export function checkExitConditions(
   // 4. Profit-taking (partial exit at target — checked intraday on bar.high).
   if (!position.partialExitDone) {
     const target = position.entryPrice * (1 + config.profitTakePct)
-    if (high >= target) {
-      // Gap-up: bar opened above the target. Fill at open (better than target).
-      const fill = open >= target ? open : target
-      return { shouldExit: true, reason: 'profit_target', exitPrice: fill, isPartial: true, partialFraction: 0.50 }
+    const targetFill = evaluateStopHit(bar, target, 'long', 'target')
+    if (targetFill != null) {
+      return { shouldExit: true, reason: 'profit_target', exitPrice: targetFill, isPartial: true, partialFraction: 0.50 }
     }
   }
 
   // 5. Trailing stop (after partial exit — checked intraday on bar.low).
   if (position.partialExitDone) {
     const trailLevel = position.highestPrice * (1 - config.trailingStopPct)
-    if (low <= trailLevel) {
-      const fill = open <= trailLevel ? open : trailLevel
-      return { shouldExit: true, reason: 'stop_loss', exitPrice: fill, isPartial: false, partialFraction: 1.0 }
+    const trailFill = evaluateStopHit(bar, trailLevel, 'long', 'stop')
+    if (trailFill != null) {
+      return { shouldExit: true, reason: 'stop_loss', exitPrice: trailFill, isPartial: false, partialFraction: 1.0 }
     }
   }
 

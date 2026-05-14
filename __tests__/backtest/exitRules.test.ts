@@ -4,6 +4,7 @@ import {
   checkExitConditions,
   updatePosition,
   computeExitStats,
+  evaluateStopHit,
   DEFAULT_EXIT_CONFIG,
   type OpenPosition,
   type ExitConfig,
@@ -353,5 +354,118 @@ describe('checkExitConditions — F1.3 intraday-aware exits', () => {
     expect(result).not.toBeNull()
     expect(result!.reason).toBe('stop_loss')
     expect(result!.exitPrice).toBe(96)
+  })
+})
+
+// ─── evaluateStopHit (SSOT primitive) ──────────────────────────────────────
+
+/**
+ * evaluateStopHit is the single source of truth for intraday stop/target
+ * detection, used by BOTH lib/backtest/exitRules.ts:checkExitConditions
+ * and lib/backtest/engine.ts. Direct tests cover the four (side, kind)
+ * quadrants so regressions show up here even if the higher-level paths
+ * don't exercise them.
+ */
+describe('evaluateStopHit — SSOT intraday primitive', () => {
+  const bar = (open: number, high: number, low: number, close: number) =>
+    ({ open, high, low, close })
+
+  // ─── LONG STOP ─────────────────────────────────────────────────────────
+  describe('long stop', () => {
+    it('triggers when bar.low <= stop (close above)', () => {
+      const r = evaluateStopHit(bar(100, 101, 95, 99), 97, 'long', 'stop')
+      expect(r).toBe(97)
+    })
+
+    it('fills at bar.open when gap-down opens below stop', () => {
+      const r = evaluateStopHit(bar(95, 96, 93, 94), 97, 'long', 'stop')
+      expect(r).toBe(95)
+    })
+
+    it('does not trigger when bar.low > stop', () => {
+      const r = evaluateStopHit(bar(100, 102, 99, 101), 97, 'long', 'stop')
+      expect(r).toBeNull()
+    })
+
+    it('boundary: bar.low === stop fires (≤ semantics)', () => {
+      const r = evaluateStopHit(bar(100, 101, 97, 99), 97, 'long', 'stop')
+      expect(r).toBe(97)
+    })
+  })
+
+  // ─── LONG TARGET ────────────────────────────────────────────────────────
+  describe('long target (profit take)', () => {
+    it('triggers when bar.high >= target (close below)', () => {
+      const r = evaluateStopHit(bar(104, 109, 103, 105), 108, 'long', 'target')
+      expect(r).toBe(108)
+    })
+
+    it('fills at bar.open when gap-up opens above target', () => {
+      const r = evaluateStopHit(bar(110, 112, 109, 111), 108, 'long', 'target')
+      expect(r).toBe(110)
+    })
+
+    it('does not trigger when bar.high < target', () => {
+      const r = evaluateStopHit(bar(104, 106, 103, 105), 108, 'long', 'target')
+      expect(r).toBeNull()
+    })
+
+    it('boundary: bar.high === target fires (≥ semantics)', () => {
+      const r = evaluateStopHit(bar(104, 108, 103, 105), 108, 'long', 'target')
+      expect(r).toBe(108)
+    })
+  })
+
+  // ─── SHORT STOP ─────────────────────────────────────────────────────────
+  describe('short stop', () => {
+    it('triggers when bar.high >= stop', () => {
+      const r = evaluateStopHit(bar(100, 109, 99, 101), 108, 'short', 'stop')
+      expect(r).toBe(108)
+    })
+
+    it('fills at bar.open when gap-up opens above stop', () => {
+      const r = evaluateStopHit(bar(110, 112, 109, 111), 108, 'short', 'stop')
+      expect(r).toBe(110)
+    })
+
+    it('does not trigger when bar.high < stop', () => {
+      const r = evaluateStopHit(bar(100, 105, 99, 101), 108, 'short', 'stop')
+      expect(r).toBeNull()
+    })
+  })
+
+  // ─── SHORT TARGET ───────────────────────────────────────────────────────
+  describe('short target (profit take)', () => {
+    it('triggers when bar.low <= target', () => {
+      const r = evaluateStopHit(bar(100, 101, 89, 99), 90, 'short', 'target')
+      expect(r).toBe(90)
+    })
+
+    it('fills at bar.open when gap-down opens below target', () => {
+      const r = evaluateStopHit(bar(88, 89, 85, 86), 90, 'short', 'target')
+      expect(r).toBe(88)
+    })
+
+    it('does not trigger when bar.low > target', () => {
+      const r = evaluateStopHit(bar(100, 101, 92, 99), 90, 'short', 'target')
+      expect(r).toBeNull()
+    })
+  })
+
+  // ─── DEFENSIVE EDGE CASES ──────────────────────────────────────────────
+  describe('defensive (non-finite / non-positive)', () => {
+    it('returns null for NaN level', () => {
+      expect(evaluateStopHit(bar(100, 101, 99, 100), NaN, 'long', 'stop')).toBeNull()
+    })
+
+    it('returns null for zero/negative level', () => {
+      expect(evaluateStopHit(bar(100, 101, 99, 100), 0, 'long', 'stop')).toBeNull()
+      expect(evaluateStopHit(bar(100, 101, 99, 100), -5, 'long', 'stop')).toBeNull()
+    })
+
+    it('returns null when bar has non-finite OHLC', () => {
+      expect(evaluateStopHit({ open: NaN, high: 101, low: 99, close: 100 }, 97, 'long', 'stop')).toBeNull()
+      expect(evaluateStopHit({ open: 100, high: Infinity, low: 99, close: 100 }, 97, 'long', 'stop')).toBeNull()
+    })
   })
 })

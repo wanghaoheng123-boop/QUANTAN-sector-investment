@@ -7,6 +7,7 @@ import type { OhlcBar } from '@/lib/quant/technicals'
 import { enhancedCombinedSignal, DEFAULT_CONFIG, atr, type BacktestConfig } from './signals'
 import { sortinoRatio } from '@/lib/quant/indicators'
 import { BACKTEST_RFR_ANNUAL } from '@/lib/quant/constants'
+import { evaluateStopHit } from './exitRules'
 
 // ─── Transaction cost model ─────────────────────────────────────────────────────
 // Applied per side (entry OR exit) to reflect realistic execution costs.
@@ -197,11 +198,10 @@ export function backtestInstrument(
         const fourAtrProfit = (4 * atrAtEntryDollar) / state.openTrade.entryPrice
         if (profitFromEntry >= twoAtrProfit) {
           // Raise stop to break-even + 0.5% buffer.
-          // F1.3 intraday-aware: trigger on bar.low; fill at trail level
-          // unless gap-down opens below it (fill at open in that case).
+          // SSOT: F1.3 intraday-aware via evaluateStopHit primitive.
           const trailStopPx = state.openTrade.entryPrice * (1 + 0.005)
-          if (rows[i].low <= trailStopPx) {
-            const fillPrice = rows[i].open <= trailStopPx ? rows[i].open : trailStopPx
+          const fillPrice = evaluateStopHit(rows[i], trailStopPx, 'long', 'stop')
+          if (fillPrice != null) {
             const proceeds = state.position * fillPrice
             const txCost = proceeds * TX_COST_PCT_PER_SIDE
             const netProceeds = proceeds - txCost
@@ -217,12 +217,12 @@ export function backtestInstrument(
             continue
           }
         }
-        // 4x ATR profit → tighten to lock in 1x ATR gain from entry price
-        // F1.3 intraday-aware: same bar.low / gap-aware fill semantics.
+        // 4x ATR profit → tighten to lock in 1x ATR gain from entry price.
+        // SSOT: F1.3 intraday-aware via evaluateStopHit primitive.
         if (profitFromEntry >= fourAtrProfit) {
           const lockStopPx = state.openTrade.entryPrice + atrAtEntryDollar  // lock 1x ATR from entry
-          if (rows[i].low <= lockStopPx) {
-            const fillPrice = rows[i].open <= lockStopPx ? rows[i].open : lockStopPx
+          const fillPrice = evaluateStopHit(rows[i], lockStopPx, 'long', 'stop')
+          if (fillPrice != null) {
             const proceeds = state.position * fillPrice
             const txCost = proceeds * TX_COST_PCT_PER_SIDE
             const netProceeds = proceeds - txCost
@@ -240,21 +240,15 @@ export function backtestInstrument(
         }
       }
 
-      // Primary stop-loss check — F1.3 (Phase 13 S2): intraday-aware.
-      // Previously compared signalPrice (= bar.close) against stopPx, which
-      // missed every stop hit where bar.low pierced the stop but the close
-      // recovered above. Now check bar.low for BUY (long) stops and
-      // bar.high for SELL (short) stops; fill at the stop price unless the
-      // bar opened beyond the stop (gap → fill at the open).
-      const barLow = rows[i].low
-      const barHigh = rows[i].high
-      const barOpen = rows[i].open
-      const longStopHit = state.openTrade.action === 'BUY' && barLow <= stopPx
-      const shortStopHit = state.openTrade.action === 'SELL' && barHigh >= stopPx
-      if (longStopHit || shortStopHit) {
-        const fillPrice = longStopHit
-          ? (barOpen <= stopPx ? barOpen : stopPx)
-          : (barOpen >= stopPx ? barOpen : stopPx)
+      // Primary stop-loss check — SSOT: F1.3 intraday-aware via the shared
+      // evaluateStopHit primitive (single source of truth, also used by
+      // lib/backtest/exitRules.ts's checkExitConditions). Previously each
+      // path had its own copy of the bar.low/bar.high/gap-aware logic — a
+      // hazard that already caused the same close-only bug to live in
+      // two places. The primitive eliminates that future-regression risk.
+      const tradeSide: 'long' | 'short' = state.openTrade.action === 'BUY' ? 'long' : 'short'
+      const fillPrice = evaluateStopHit(rows[i], stopPx, tradeSide, 'stop')
+      if (fillPrice != null) {
         const proceeds = state.position * fillPrice
         const txCost = proceeds * TX_COST_PCT_PER_SIDE
         const netProceeds = proceeds - txCost
