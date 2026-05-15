@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { safeHref } from '@/lib/security/urlValidation'
 
 // Compatible with both mock news (source/url/summary) and live news
 interface NewsItem {
@@ -26,8 +27,16 @@ interface NewsFeedProps {
 function getPublisher(item: NewsItem): string {
   return item.publisher ?? item.source ?? 'Unknown'
 }
+/**
+ * Returns the safe http(s) link for a news item, or '#' when the URL
+ * is missing or uses a disallowed scheme. Defense-in-depth via the
+ * SSOT primitive @/lib/security/urlValidation:safeHref — API boundary
+ * already filters non-http schemes, but the render boundary enforces
+ * the same contract so any future API-layer regression (or static-prop
+ * misuse) can't inject `javascript:`/`data:` into the DOM via <a href>.
+ */
 function getLink(item: NewsItem): string {
-  return item.link ?? item.url ?? '#'
+  return safeHref(item.link ?? item.url)
 }
 function getSnippet(item: NewsItem): string | undefined {
   return item.snippet ?? item.summary

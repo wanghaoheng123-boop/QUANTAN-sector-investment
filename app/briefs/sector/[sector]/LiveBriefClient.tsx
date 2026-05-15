@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { SECTORS } from '@/lib/sectors'
+import { safeHref } from '@/lib/security/urlValidation'
 
 interface NewsItem {
   title: string
@@ -287,7 +288,7 @@ export default function LiveBriefClient({ slug, initialBrief }: { slug: string; 
                 {brief.news.map((item, i) => (
                   <a
                     key={i}
-                    href={item.link}
+                    href={safeHref(item.link)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="block rounded-xl border border-slate-800 p-4 bg-slate-900/40 hover:border-slate-700 hover:bg-slate-900/60 transition-all group"

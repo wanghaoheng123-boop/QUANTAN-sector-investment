@@ -19,6 +19,7 @@ const YahooFinance = require('yahoo-finance2').default
 import { NextRequest, NextResponse } from 'next/server'
 import { SECTORS } from '@/lib/sectors'
 import { parseQuoteTime } from '@/lib/format'
+import { isSafeHttpUrl } from '@/lib/security/urlValidation'
 
 const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] })
 
@@ -228,16 +229,23 @@ export async function GET(
     : 0
 
   // ── News ──────────────────────────────────────────────────────────────────
+  // Phase 13 S2 — XSS supply-chain defense via @/lib/security/urlValidation
+  // (SSOT). The client renders the link in <a href={item.link}>, which would
+  // execute `javascript:` or `data:` URIs from a hostile upstream. Drop
+  // items with unsafe schemes entirely.
   const n = (newsResult.status === 'fulfilled' ? newsResult.value : null) as Record<string, unknown> | null
   const rawNews = (n?.news as Array<Record<string, unknown>> | undefined) ?? []
-  const news = rawNews.slice(0, 6).map((item: Record<string, unknown>) => ({
-    title: String(item.title ?? ''),
-    publisher: String(item.publisher ?? 'Unknown'),
-    publishedAt: item.publishedAt ? String(item.publishedAt) : null,
-    snippet: item.summary ? String(item.summary).slice(0, 200) : null,
-    link: String(item.link ?? ''),
-    tickers: Array.isArray(item.relatedTickers) ? (item.relatedTickers as string[]).slice(0, 5) : [],
-  }))
+  const news = rawNews
+    .slice(0, 6)
+    .map((item: Record<string, unknown>) => ({
+      title: String(item.title ?? ''),
+      publisher: String(item.publisher ?? 'Unknown'),
+      publishedAt: item.publishedAt ? String(item.publishedAt) : null,
+      snippet: item.summary ? String(item.summary).slice(0, 200) : null,
+      link: String(item.link ?? ''),
+      tickers: Array.isArray(item.relatedTickers) ? (item.relatedTickers as string[]).slice(0, 5) : [],
+    }))
+    .filter((item) => isSafeHttpUrl(item.link))
 
   // ── Derived signals ───────────────────────────────────────────────────────
   const signals: BriefSignal[] = []

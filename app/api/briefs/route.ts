@@ -12,6 +12,7 @@ import { NextResponse } from 'next/server'
 import YahooFinance from 'yahoo-finance2'
 import { applyRateLimit } from '@/lib/api/rateLimit'
 import { sanitizeError } from '@/lib/api/sanitize'
+import { isSafeHttpUrl } from '@/lib/security/urlValidation'
 
 const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] })
 
@@ -61,7 +62,8 @@ async function fetchNewsForTicker(ticker: string): Promise<NewsBrief[]> {
 
     for (const item of searchResult.news as Record<string, unknown>[]) {
       const link = String(item.link ?? '')
-      if (!link) continue
+      // Reject non-http(s) URLs entirely — see isSafeHttpUrl doc-comment.
+      if (!isSafeHttpUrl(link)) continue
 
       const title = String(item.title ?? '')
       const snippet = item.summary ? String(item.summary).slice(0, 300) : title
