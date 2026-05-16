@@ -139,4 +139,61 @@ describe('mergeYahooAndBloomberg', () => {
       expect(msft.provenance!.volume).toBe('bloomberg')
     })
   })
+
+  /**
+   * Phase 13 S2 audit — pin the documented contract for the (admittedly
+   * ambiguous) zero-volume semantic. The Bloomberg-bridge `num()` helper
+   * coerces ALL missing values to 0, so Bloomberg's 0 can mean either
+   * "halted/no trades" OR "field absent from upstream." The merge falls
+   * through to Yahoo on Bloomberg 0 — the conservative choice — and the
+   * provenance tracker labels the resulting value 'yahoo' to maintain
+   * caller-visible consistency.
+   *
+   * This test pins the contract so a future "tighten to ?? semantics"
+   * change has to be made deliberately, not accidentally.
+   */
+  describe('Bloomberg-zero fallback semantics (documented)', () => {
+    it('bb.volume = 0 falls through to yahoo.volume AND provenance.volume = yahoo', () => {
+      const y = yahoo({ volume: 5_000_000 })
+      const bbMap = new Map([['AAPL', bb({ volume: 0 })]])
+      const out = mergeYahooAndBloomberg([y], bbMap)
+      expect(out[0].volume).toBe(5_000_000)         // fell through to yahoo
+      expect(out[0].provenance!.volume).toBe('yahoo') // provenance agrees
+    })
+
+    it('bb.high52w = 0 → uses yahoo.high52w; same for low52w, pe', () => {
+      const y = yahoo({ high52w: 200, low52w: 100, pe: 25 })
+      const bbMap = new Map([['AAPL', bb({ high52w: 0, low52w: 0, pe: 0 })]])
+      const out = mergeYahooAndBloomberg([y], bbMap)
+      expect(out[0].high52w).toBe(200)
+      expect(out[0].low52w).toBe(100)
+      expect(out[0].pe).toBe(25)
+      expect(out[0].provenance!.high52w).toBe('yahoo')
+      expect(out[0].provenance!.low52w).toBe('yahoo')
+      expect(out[0].provenance!.pe).toBe('yahoo')
+    })
+
+    it("bb.marketCap = 'N/A' falls through; non-'N/A' stays even if empty-string", () => {
+      const y = yahoo({ marketCap: '3.2T' })
+      const bbMapNA = new Map([['AAPL', bb({ marketCap: 'N/A' })]])
+      expect(mergeYahooAndBloomberg([y], bbMapNA)[0].marketCap).toBe('3.2T')
+      // Empty-string marketCap from bloomberg is NOT 'N/A' — it's used as-is.
+      // (Documents the asymmetric treatment of marketCap vs numeric fields.)
+      const bbMapEmpty = new Map([['AAPL', bb({ marketCap: '' })]])
+      expect(mergeYahooAndBloomberg([y], bbMapEmpty)[0].marketCap).toBe('')
+    })
+
+    it('bb.price = 0 PRESERVED — price is the primary field, no fallback', () => {
+      // Unlike secondary fields (volume/52w/pe), the price/change/changePct
+      // primary trio is NOT subject to truthy-fallback because the row-level
+      // dataSource = 'bloomberg' claim depends on bloomberg actually providing
+      // the price. A bb.price = 0 is honored (extreme but legal in some
+      // illiquid contracts).
+      const y = yahoo({ price: 199.5 })
+      const bbMap = new Map([['AAPL', bb({ price: 0 })]])
+      const out = mergeYahooAndBloomberg([y], bbMap)
+      expect(out[0].price).toBe(0)
+      expect(out[0].provenance!.price).toBe('bloomberg')
+    })
+  })
 })
