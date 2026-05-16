@@ -96,7 +96,12 @@ function buildAnalysis(
   let onExchangePct: number | null = null
 
   if (offExchangeShares != null && totalShares != null && totalShares > 0) {
-    offExchangePct = (offExchangeShares / totalShares) * 100
+    // Phase 13 S2 defensive clamp: Yahoo occasionally returns inconsistent
+    // shares-outstanding vs shares-trading numbers (data error or stale
+    // float). Cap percentages to [0, 100] so UI charts don't display
+    // negative on-exchange% or > 100 % off-exchange.
+    const rawPct = (offExchangeShares / totalShares) * 100
+    offExchangePct = Math.max(0, Math.min(100, rawPct))
     onExchangePct = 100 - offExchangePct
   }
 

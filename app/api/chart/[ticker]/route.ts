@@ -173,12 +173,21 @@ export async function GET(
     }
 
     const isIntraday = ['1m', '2m', '5m', '15m', '1h', '2h', '4h'].includes(interval)
+    // Phase 13 S2 hardening:
+    //   1. Filter ALL non-finite closes — `c.close !== null` previously
+    //      let undefined / NaN / Infinity through, which serialise to
+    //      JSON `null` (or are dropped entirely for undefined) and break
+    //      downstream chart-rendering math (line breaks in series).
+    //   2. Defensive Date coercion — Yahoo occasionally returns a number
+    //      or string for `c.date` (older library versions, schema drift).
+    //      Use new Date(...) which accepts Date | number | string.
     const candles = result.quotes
-      .filter((c: any) => c.close !== null)
+      .filter((c: any) => Number.isFinite(c?.close))
       .map((c: any) => {
+        const d = c.date instanceof Date ? c.date : new Date(c.date)
         const timeVal = isIntraday
-          ? Math.floor(c.date.getTime() / 1000)
-          : c.date.toISOString().split('T')[0]
+          ? Math.floor(d.getTime() / 1000)
+          : d.toISOString().split('T')[0]
         return { time: timeVal, open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume }
       })
 
