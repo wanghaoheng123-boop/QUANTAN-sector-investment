@@ -93,18 +93,28 @@ function normaliseContract(raw: Record<string, unknown>): CallOrPut {
  *
  *   Switching conventions changes theta by ~30% (252 vs 365 → 0.69× factor)
  *   so any platform reading our theta values must use ACT/365.
+ *
+ * Dividend yield (Merton 1973 — Phase 13 S2 gap close):
+ * ──────────────────────────────────────────────────────
+ *   The `greeks()` function was extended earlier in this phase to accept
+ *   `q` (continuous dividend yield). Without `q`, BS-1973 prices puts
+ *   too low and calls too high for any dividend-paying underlying. This
+ *   function now forwards a caller-supplied `q` (default 0 for
+ *   back-compat). The `fetchOptionsChain` API takes a `dividendYield`
+ *   parameter that flows through here.
  */
 function enrichContract(
   contract: CallOrPut,
   spot: number,
   today: number,
   type: 'call' | 'put',
+  q = 0,
 ): EnrichedContract {
   const T = Math.max(0, (contract.expiration.getTime() - today) / (365 * 24 * 60 * 60 * 1000))
   const sigma = contract.impliedVolatility
 
   const g: Greeks = sigma > 0 && T > 0
-    ? greeks(spot, contract.strike, T, RISK_FREE_RATE, sigma, type)
+    ? greeks(spot, contract.strike, T, RISK_FREE_RATE, sigma, type, q)
     : { delta: 0, gamma: 0, theta: 0, vega: 0, rho: 0 }
 
   return { ...contract, ...g }
@@ -114,11 +124,26 @@ function enrichContract(
 
 /**
  * Fetches an enriched options chain for `symbol`.
- * Optionally pass `date` to target a specific expiration.
+ *
+ * @param symbol  Yahoo-normalized ticker (e.g. 'AAPL', '^SPX').
+ * @param date    Optional target expiration. If omitted, returns the
+ *                first available expiration.
+ * @param dividendYield  Optional continuous dividend yield (e.g. 0.014 for
+ *                       SPY's 1.4%). Forwarded to greeks() for Merton-
+ *                       extended pricing. Defaults to 0 for back-compat —
+ *                       callers should supply this whenever the underlying
+ *                       is known to yield. The yahoo-finance2 quote
+ *                       response includes `trailingAnnualDividendYield`
+ *                       which can be passed by the API route.
+ *
+ * The route reads Yahoo's quote first to extract dividendYield, then
+ * passes it here. This keeps fetchOptionsChain a pure function over
+ * its inputs.
  */
 export async function fetchOptionsChain(
   symbol: string,
   date?: Date,
+  dividendYield = 0,
 ): Promise<EnrichedChain> {
   // Use validateResult: false to tolerate Yahoo schema drift
   const raw = await (yahooFinance as unknown as {
@@ -133,6 +158,12 @@ export async function fetchOptionsChain(
   const spot = Number(quote?.regularMarketPrice ?? 0)
   const today = Date.now()
 
+  // Defensive clamp: dividend yield outside [0, 0.20] is almost certainly
+  // a misreading (REIT yields top out around 12%; energy MLPs ~10%).
+  // Clamp to prevent absurd pricing from a corrupted upstream value.
+  const q = Number.isFinite(dividendYield) && dividendYield >= 0 && dividendYield <= 0.20
+    ? dividendYield : 0
+
   const expirationDatesRaw = (raw.expirationDates as unknown[]) ?? []
   const expirationDates = expirationDatesRaw.map(toDate)
 
@@ -142,8 +173,8 @@ export async function fetchOptionsChain(
   const rawCalls = (firstExpiration?.calls as Record<string, unknown>[]) ?? []
   const rawPuts  = (firstExpiration?.puts  as Record<string, unknown>[]) ?? []
 
-  const calls = rawCalls.map((c) => enrichContract(normaliseContract(c), spot, today, 'call'))
-  const puts  = rawPuts.map((p)  => enrichContract(normaliseContract(p),  spot, today, 'put'))
+  const calls = rawCalls.map((c) => enrichContract(normaliseContract(c), spot, today, 'call', q))
+  const puts  = rawPuts.map((p)  => enrichContract(normaliseContract(p),  spot, today, 'put',  q))
 
   const currentExpiry = firstExpiration?.expirationDate != null
     ? toDate(firstExpiration.expirationDate)

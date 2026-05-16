@@ -300,4 +300,118 @@ describe('fetchOptionsChain', () => {
     optionsMock.mockRejectedValue(new Error('Yahoo 404'))
     await expect(fetchOptionsChain('NOPE')).rejects.toThrow('Yahoo 404')
   })
+
+  /**
+   * Phase 13 S2: dividend-yield forwarding to Merton-extended greeks.
+   * Without q, BS-1973 over-prices calls and under-prices puts for any
+   * dividend-paying underlying (SPY ≈ 1.4%, JNJ ≈ 3%, utilities ≈ 4%).
+   */
+  describe('dividend-yield forwarding', () => {
+    it('q defaults to 0 — back-compat preserves prior call delta', async () => {
+      const expiry = Date.now() + oneYearMs * 0.25
+      optionsMock.mockResolvedValue(
+        makeRawChain({
+          spot: 100,
+          expirationMs: expiry,
+          calls: [
+            {
+              contractSymbol: 'X',
+              strike: 100,
+              lastPrice: 5,
+              change: 0,
+              contractSize: 'REGULAR',
+              expiration: new Date(expiry),
+              lastTradeDate: new Date(),
+              impliedVolatility: 0.25,
+              inTheMoney: false,
+            },
+          ],
+        })
+      )
+      const chain = await fetchOptionsChain('AAPL')  // no q
+      const deltaNoQ = chain.calls[0].delta
+      expect(deltaNoQ).toBeGreaterThan(0.4)
+      expect(deltaNoQ).toBeLessThan(0.7)
+    })
+
+    it('positive q (3% dividend) lowers call delta vs no-dividend', async () => {
+      const expiry = Date.now() + oneYearMs
+      const callTemplate = {
+        contractSymbol: 'X',
+        strike: 100,
+        lastPrice: 5,
+        change: 0,
+        contractSize: 'REGULAR',
+        expiration: new Date(expiry),
+        lastTradeDate: new Date(),
+        impliedVolatility: 0.25,
+        inTheMoney: false,
+      }
+      // No dividend
+      optionsMock.mockResolvedValueOnce(
+        makeRawChain({ spot: 100, expirationMs: expiry, calls: [callTemplate] })
+      )
+      const noDiv = await fetchOptionsChain('AAPL')
+      // 3% dividend
+      optionsMock.mockResolvedValueOnce(
+        makeRawChain({ spot: 100, expirationMs: expiry, calls: [callTemplate] })
+      )
+      const withDiv = await fetchOptionsChain('JNJ', undefined, 0.03)
+      expect(withDiv.calls[0].delta).toBeLessThan(noDiv.calls[0].delta)
+    })
+
+    it('clamps absurd dividend yields (e.g. 50%) to 0 instead of mispricing', async () => {
+      const expiry = Date.now() + oneYearMs
+      optionsMock.mockResolvedValue(
+        makeRawChain({
+          spot: 100,
+          expirationMs: expiry,
+          calls: [
+            {
+              contractSymbol: 'X',
+              strike: 100,
+              lastPrice: 5,
+              change: 0,
+              contractSize: 'REGULAR',
+              expiration: new Date(expiry),
+              lastTradeDate: new Date(),
+              impliedVolatility: 0.25,
+              inTheMoney: false,
+            },
+          ],
+        })
+      )
+      // Pass an absurd yield (would be a data error from Yahoo).
+      const chain = await fetchOptionsChain('BAD', undefined, 0.50)
+      // Should produce same result as q=0 (clamped), not divDiscount = e^-0.5 ≈ 0.61
+      expect(chain.calls[0].delta).toBeGreaterThan(0.4)
+      expect(chain.calls[0].delta).toBeLessThan(0.7)
+    })
+
+    it('treats negative dividend yield as 0 (no negative-q exotic pricing)', async () => {
+      const expiry = Date.now() + oneYearMs
+      optionsMock.mockResolvedValue(
+        makeRawChain({
+          spot: 100,
+          expirationMs: expiry,
+          calls: [
+            {
+              contractSymbol: 'X',
+              strike: 100,
+              lastPrice: 5,
+              change: 0,
+              contractSize: 'REGULAR',
+              expiration: new Date(expiry),
+              lastTradeDate: new Date(),
+              impliedVolatility: 0.25,
+              inTheMoney: false,
+            },
+          ],
+        })
+      )
+      const chain = await fetchOptionsChain('X', undefined, -0.05)
+      // Negative yield rejected → q=0 default → call delta unchanged from no-q baseline
+      expect(chain.calls[0].delta).toBeGreaterThan(0.4)
+    })
+  })
 })
