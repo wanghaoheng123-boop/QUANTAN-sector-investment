@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import YahooFinance from 'yahoo-finance2'
 import { yahooSymbolFromParam } from '@/lib/quant/yahooSymbol'
 import { fetchOptionsChain } from '@/lib/options/chain'
 import { putCallRatio, maxPain } from '@/lib/options/sentiment'
@@ -6,6 +7,8 @@ import { computeGex } from '@/lib/options/gex'
 import { unusualFlow, flowSentiment } from '@/lib/options/flow'
 import { applyRateLimit } from '@/lib/api/rateLimit'
 import { sanitizeError } from '@/lib/api/sanitize'
+
+const yahooFinance = new YahooFinance()
 
 export async function GET(req: Request, { params }: { params: { ticker: string } }) {
   // Rate limit: 30 req/min per IP
@@ -22,7 +25,23 @@ export async function GET(req: Request, { params }: { params: { ticker: string }
   }
 
   try {
-    const chain = await fetchOptionsChain(symbol)
+    // Phase 13 S2: pull trailing annual dividend yield from the underlying's
+    // quote so the Merton-extended Black-Scholes pricing in chain.ts uses
+    // the correct `q`. Without this, SPY/JNJ/utility puts are mispriced.
+    // Fail-open to q=0 if the quote fetch fails — better to emit BS-1973
+    // greeks than no greeks at all.
+    let dividendYield = 0
+    try {
+      const q = await yahooFinance.quote(symbol) as Record<string, unknown> | null
+      const raw = q?.trailingAnnualDividendYield
+      if (typeof raw === 'number' && Number.isFinite(raw) && raw >= 0 && raw <= 0.20) {
+        dividendYield = raw
+      }
+    } catch {
+      // Non-critical: fall through with q=0
+    }
+
+    const chain = await fetchOptionsChain(symbol, undefined, dividendYield)
 
     const pcRatio = putCallRatio(chain.calls, chain.puts)
     const mp = maxPain(chain.calls, chain.puts)

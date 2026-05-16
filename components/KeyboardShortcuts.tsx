@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 
 interface Shortcut {
@@ -23,6 +23,11 @@ export default function KeyboardShortcuts() {
   const router = useRouter()
   const pathname = usePathname()
 
+  // F6.7 (WAI-ARIA APG Dialog): refs for focus management.
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const closeBtnRef = useRef<HTMLButtonElement>(null)
+  const returnFocusRef = useRef<HTMLElement | null>(null)
+
   const close = useCallback(() => setIsOpen(false), [])
 
   useEffect(() => {
@@ -40,7 +45,10 @@ export default function KeyboardShortcuts() {
 
       if (isInput) return
 
-      if (e.key === '?') {
+      // Phase 13 S2 UX: never trigger our overlay-toggle when a modifier
+      // is held. Shift+/ produces `?` and is the legitimate path, but
+      // Alt+? / Meta+? / Ctrl+? are user-defined OS / browser combos.
+      if (e.key === '?' && !e.metaKey && !e.ctrlKey && !e.altKey) {
         e.preventDefault()
         setIsOpen(prev => !prev)
         return
@@ -59,14 +67,17 @@ export default function KeyboardShortcuts() {
         return
       }
 
-      if (e.key === 'g') {
+      // F6.7 UX fix: exclude modifier keys from the `g`-prefix sequence so
+      // browser/OS Cmd+G ("find next") doesn't silently arm our navigation
+      // and trigger a route change on the next typed letter.
+      if (e.key === 'g' && !e.metaKey && !e.ctrlKey && !e.altKey) {
         if (gTimeout) clearTimeout(gTimeout)
         gPressed = true
         gTimeout = setTimeout(() => { gPressed = false }, 500)
         return
       }
 
-      if (gPressed) {
+      if (gPressed && !e.metaKey && !e.ctrlKey && !e.altKey) {
         gPressed = false
         if (gTimeout) clearTimeout(gTimeout)
         if (e.key === 'd') {
@@ -93,6 +104,54 @@ export default function KeyboardShortcuts() {
     close()
   }, [pathname, close])
 
+  // F6.7 (WAI-ARIA APG Dialog) — initial focus, focus trap, return-focus,
+  // body scroll lock. Runs on every isOpen change.
+  useEffect(() => {
+    if (!isOpen) return
+
+    // Remember which element had focus when the modal opened — restore on close.
+    returnFocusRef.current = (document.activeElement as HTMLElement) ?? null
+
+    // Move focus to the close button on open so keyboard / screen-reader
+    // users land inside the dialog immediately.
+    closeBtnRef.current?.focus()
+
+    // Body scroll lock — prevent the underlying page from scrolling while
+    // the modal is open. Cache + restore the original overflow value.
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+
+    // Focus trap — intercept Tab/Shift+Tab to keep focus inside the dialog.
+    const trapFocus = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab') return
+      const dialog = dialogRef.current
+      if (!dialog) return
+      const focusable = dialog.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"]), input:not([disabled]), textarea:not([disabled]), select:not([disabled])',
+      )
+      if (focusable.length === 0) return
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      const active = document.activeElement as HTMLElement | null
+      if (e.shiftKey && active === first) {
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault()
+        first.focus()
+      }
+    }
+    document.addEventListener('keydown', trapFocus)
+
+    return () => {
+      document.removeEventListener('keydown', trapFocus)
+      document.body.style.overflow = prevOverflow
+      // Return focus to the previously-focused element so keyboard users
+      // resume where they were rather than jumping to body / first tabstop.
+      returnFocusRef.current?.focus?.()
+    }
+  }, [isOpen])
+
   if (!isOpen) return null
 
   const grouped = SHORTCUTS.reduce<Record<string, Shortcut[]>>((acc, shortcut) => {
@@ -107,17 +166,20 @@ export default function KeyboardShortcuts() {
       onClick={close}
       role="dialog"
       aria-modal="true"
-      aria-label="Keyboard shortcuts"
+      aria-labelledby="keyboard-shortcuts-title"
     >
       <div
+        ref={dialogRef}
         className="bg-slate-900/95 border border-slate-700/50 rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800">
-          <h2 className="text-base font-semibold text-white">Keyboard Shortcuts</h2>
+          <h2 id="keyboard-shortcuts-title" className="text-base font-semibold text-white">Keyboard Shortcuts</h2>
           <button
+            ref={closeBtnRef}
+            type="button"
             onClick={close}
-            className="text-slate-500 hover:text-white transition-colors p-1 rounded-md hover:bg-slate-800"
+            className="text-slate-500 hover:text-white transition-colors p-1 rounded-md hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-400"
             aria-label="Close shortcuts"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -150,7 +212,7 @@ export default function KeyboardShortcuts() {
           ))}
         </div>
         <div className="px-5 py-3 border-t border-slate-800 bg-slate-950/50">
-          <p className="text-[10px] text-slate-600 text-center">
+          <p className="text-[10px] text-slate-400 text-center">
             Press <kbd className="inline-flex items-center justify-center h-4 px-1 text-[10px] font-mono text-slate-500 bg-slate-800 border border-slate-700 rounded">?</kbd> to toggle this overlay
           </p>
         </div>

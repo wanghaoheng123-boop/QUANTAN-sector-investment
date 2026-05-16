@@ -109,7 +109,7 @@ export default function RootLayout({
           <ComplianceBanner />
           <footer className="border-t border-slate-800/60 mt-12 py-8">
             <div className="max-w-7xl mx-auto px-4">
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-600">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-400">
                 <div className="flex items-center gap-2">
                   <div className="w-5 h-5 rounded bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center text-[9px] font-bold text-white">QU</div>
                   <span className="font-medium text-slate-500">QUANTAN</span>

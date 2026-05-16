@@ -21,7 +21,7 @@ export default function ComplianceBanner() {
               Signals, dark pool panels, and briefs are illustrative or simulated where labeled — verify all data with your OMS, vendor feeds, and compliance workflow.
             </span>
           </div>
-          {open ? <ChevronUp className="w-4 h-4 text-slate-600 shrink-0" /> : <ChevronDown className="w-4 h-4 text-slate-600 shrink-0" />}
+          {open ? <ChevronUp className="w-4 h-4 text-slate-400 shrink-0" /> : <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />}
         </button>
         {open && (
           <div className="mt-3 text-xs text-slate-500 space-y-2 leading-relaxed border-t border-slate-800/80 pt-3">

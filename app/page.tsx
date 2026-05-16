@@ -225,7 +225,7 @@ export default function HomePage() {
             <div key={i} className="rounded-xl border border-slate-800 p-4 bg-slate-900/60 hover:border-slate-700/80 transition-colors">
               <div className="text-2xl font-bold font-mono" style={{ color: stat.color }}>
                 {stat.value}
-                {stat.of && <span className="text-slate-600 text-base font-normal">/{stat.of}</span>}
+                {stat.of && <span className="text-slate-400 text-base font-normal">/{stat.of}</span>}
               </div>
               <div className="text-xs text-slate-500 mt-1">{stat.label}</div>
             </div>
@@ -414,11 +414,11 @@ export default function HomePage() {
                             {t}
                           </span>
                         ))}
-                        <span className="text-xs text-slate-600">
+                        <span className="text-xs text-slate-400">
                           {brief.publisher}
                         </span>
                         {brief.timestamp && (
-                          <span className="text-xs text-slate-600">
+                          <span className="text-xs text-slate-400">
                             {formatUtcDateTime(brief.timestamp)}
                           </span>
                         )}
@@ -433,7 +433,7 @@ export default function HomePage() {
                         ))}
                       </div>
                     </div>
-                    <div className="shrink-0 text-slate-600 group-hover:text-amber-400 transition-colors">↗</div>
+                    <div className="shrink-0 text-slate-400 group-hover:text-amber-400 transition-colors">↗</div>
                   </div>
                 </a>
               ))}

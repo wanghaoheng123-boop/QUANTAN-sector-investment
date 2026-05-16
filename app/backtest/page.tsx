@@ -51,7 +51,7 @@ function MetricCard({ label, value, sub, color }: { label: string; value: string
     <div className="bg-slate-900/60 rounded-xl p-4 border border-slate-800">
       <div className="text-xs text-slate-500 mb-1 uppercase tracking-wider">{label}</div>
       <div className={`text-xl font-bold font-mono ${color ?? 'text-white'}`}>{value}</div>
-      {sub && <div className="text-[10px] text-slate-600 mt-0.5">{sub}</div>}
+      {sub && <div className="text-[10px] text-slate-400 mt-0.5">{sub}</div>}
     </div>
   )
 }
@@ -100,7 +100,7 @@ export default function BacktestPage() {
         <div className="text-center">
           <div className="w-8 h-8 border-2 border-slate-500 border-t-cyan-400 rounded-full animate-spin mx-auto mb-4" />
           <p className="text-slate-400 text-sm">Loading backtest data…</p>
-          <p className="text-slate-600 text-xs mt-1">Fetching 5Y history for 56 instruments</p>
+          <p className="text-slate-400 text-xs mt-1">Fetching 5Y history for 56 instruments</p>
         </div>
       </div>
     )
@@ -152,7 +152,7 @@ export default function BacktestPage() {
               <div className="text-right">
                 <div className="text-xs text-slate-500">Last computed</div>
                 <div className="text-sm font-mono text-slate-300">{new Date(computedAt).toLocaleString()}</div>
-                <div className="text-[10px] text-slate-600">{formatFreshness(computedAt)}</div>
+                <div className="text-[10px] text-slate-400">{formatFreshness(computedAt)}</div>
               </div>
               <button
                 onClick={() => fetchData(true, selectedTickers.length > 0 ? selectedTickers : undefined)}
@@ -209,7 +209,7 @@ export default function BacktestPage() {
               </button>
             )}
             {selectedTickers.length === 0 && (
-              <span className="text-[10px] text-slate-600">Showing all 56 instruments. Type a ticker to filter.</span>
+              <span className="text-[10px] text-slate-400">Showing all 56 instruments. Type a ticker to filter.</span>
             )}
           </div>
 
@@ -391,7 +391,7 @@ function AnalysisTab({ results, sectorColors }: { results: BacktestResult[]; sec
                     <div className="flex items-center gap-2">
                       <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: row.color }} />
                       <span className="text-slate-300 font-medium">{row.sector}</span>
-                      <span className="text-slate-600 text-[10px]">({row.tickers.length} instr.)</span>
+                      <span className="text-slate-400 text-[10px]">({row.tickers.length} instr.)</span>
                     </div>
                   </td>
                   <td className={`px-4 py-3 font-mono font-bold ${row.annReturn >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
@@ -579,7 +579,7 @@ function WalkForwardPanel({ results }: { results: BacktestResult[] }) {
         </div>
       </div>
 
-      <div className="mt-3 text-[10px] text-slate-600">
+      <div className="mt-3 text-[10px] text-slate-400">
         Walk-forward splits data into in-sample (train) and out-of-sample (test) windows. A robust strategy should maintain similar Sharpe ratios across both. 
         Large IS/OOS gap indicates potential overfitting to historical patterns.
       </div>
@@ -760,7 +760,7 @@ function LiveSignalsPanel() {
             </select>
           </div>
           {latestDataDate && (
-            <div className="text-[10px] text-slate-600">
+            <div className="text-[10px] text-slate-400">
               Data as of: <span className="text-slate-500 font-mono">{latestDataDate}</span> · Live data refreshes every 60s
             </div>
           )}
@@ -844,7 +844,7 @@ function LiveSignalsPanel() {
                     {(inst.slopePct as number) != null ? `${(inst.slopePct as number) >= 0 ? '+' : ''}${(inst.slopePct as number * 100).toFixed(4)}%` : '—'}
                   </td>
                   <td className="px-3 py-2 font-mono text-slate-400">{((inst.KellyFraction as number) * 100).toFixed(0)}%</td>
-                  <td className="px-3 py-2 font-mono text-slate-600 text-[10px]">{inst.lastDate as string ?? '—'}</td>
+                  <td className="px-3 py-2 font-mono text-slate-400 text-[10px]">{inst.lastDate as string ?? '—'}</td>
                 </tr>
               )
             })}
@@ -854,7 +854,7 @@ function LiveSignalsPanel() {
           <div className="py-8 text-center text-slate-500 text-xs">No instruments match current filters.</div>
         )}
         {insts.length > 200 && (
-          <div className="py-2 text-center text-[10px] text-slate-600 border-t border-slate-800">
+          <div className="py-2 text-center text-[10px] text-slate-400 border-t border-slate-800">
             Showing 200 of {insts.length} instruments · Sort or filter to see more
           </div>
         )}

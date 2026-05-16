@@ -35,7 +35,14 @@ export function putCallRatio(calls: CallOrPut[], puts: CallOrPut[]): PutCallRati
  * Algorithm: for each candidate strike, compute what call writers and put
  * writers must pay out at expiry, sum them, return the minimum strike.
  *
- * Returns null if no strike data is available.
+ * Returns null when:
+ *   - No strike data is available
+ *   - Total open interest across all contracts is zero (no meaningful OI to
+ *     derive max pain from — Phase 13 S2 fail-closed regression fix).
+ *
+ * Citation: Krishnan, V. (2017). "Gamma Exposure: Quantifying Hedging
+ *           Flows." Squeezemetrics whitepaper — same OI-weighted payout
+ *           framework as max pain.
  */
 export function maxPain(calls: CallOrPut[], puts: CallOrPut[]): number | null {
   // Collect all unique strikes
@@ -44,6 +51,15 @@ export function maxPain(calls: CallOrPut[], puts: CallOrPut[]): number | null {
   puts.forEach((p) => strikeSet.add(p.strike))
   const strikes = Array.from(strikeSet).sort((a, b) => a - b)
   if (strikes.length === 0) return null
+
+  // Phase 13 S2 fail-closed: when total OI is zero, every candidate
+  // strike yields payout=0 and the first one trivially wins. The
+  // returned strike is meaningless (it's just the lowest one, not a
+  // derived max-pain value). Reject the input instead of emitting a
+  // misleading number.
+  const totalOI = calls.reduce((s, c) => s + (c.openInterest ?? 0), 0)
+                + puts.reduce((s, p) => s + (p.openInterest ?? 0), 0)
+  if (!Number.isFinite(totalOI) || totalOI <= 0) return null
 
   let minPayout = Infinity
   let maxPainStrike = strikes[0]

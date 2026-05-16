@@ -4,39 +4,64 @@ type RetryOptions = {
   attempts?: number
   timeoutMs?: number
   retryLabel?: string
+  /** Base backoff in ms for the first retry. Default 200ms. */
+  backoffBaseMs?: number
+  /** Max backoff in ms (cap on exponential growth). Default 2000ms. */
+  backoffMaxMs?: number
   /**
-   * Base delay (ms) between retry attempts. Phase 13 S2 fix (F4.4):
-   * exponential backoff with full jitter (Brooker, AWS Architecture Blog 2015).
-   * Default 200 ms — at attempts=3 this gives sleeps drawn uniformly from
-   * [0, 200], [0, 400], [0, 800].
+   * Hook for tests / non-default jitter. Returns a number in [0, 1).
+   * In production this defaults to Math.random.
    */
-  baseBackoffMs?: number
-  /** Cap the backoff at this value (ms). Default 5_000 (5 s). */
-  maxBackoffMs?: number
+  rng?: () => number
+  /** Sleep impl override (for tests). Default uses real setTimeout. */
+  sleep?: (ms: number) => Promise<void>
 }
 
+const defaultSleep = (ms: number) => new Promise<void>((res) => setTimeout(res, ms))
+
 /**
- * Run `fn` with timeout-bounded retries. Exponential backoff with full jitter
- * between attempts (Brooker 2015 / SRE Beyer 2016 Ch.22) — protects upstream
- * services from cascading-failure amplification when the failure mode is
- * upstream throttling (HTTP 429/503).
+ * Computes exponential-backoff delay with full jitter (AWS-recommended
+ * formula): delay = random(0, min(maxBackoff, base * 2^attempt)).
+ *
+ * Jitter prevents the "thundering herd" failure mode where many
+ * concurrent retrying clients re-converge on the upstream at the same
+ * time, perpetuating the original outage.
+ *
+ * Citation: Brooker, M. (2015). "Exponential Backoff and Jitter."
+ *           AWS Architecture Blog. Recommends full jitter over capped
+ *           exponential because it gives the lowest collision rate
+ *           and the lowest p99 completion time under contention.
  */
+export function backoffDelayMs(
+  attemptIndex: number,
+  baseMs = 200,
+  maxMs = 2000,
+  rng: () => number = Math.random,
+): number {
+  const exp = Math.min(maxMs, baseMs * Math.pow(2, attemptIndex))
+  return Math.floor(rng() * exp)
+}
+
 export async function withRetry<T>(fn: () => Promise<T>, opts: RetryOptions = {}): Promise<T> {
   const attempts = Math.max(1, opts.attempts ?? 2)
-  const baseBackoffMs = Math.max(0, opts.baseBackoffMs ?? 200)
-  const maxBackoffMs = Math.max(baseBackoffMs, opts.maxBackoffMs ?? 5_000)
+  const baseMs = Math.max(0, opts.backoffBaseMs ?? 200)
+  const maxMs = Math.max(baseMs, opts.backoffMaxMs ?? 2000)
+  const rng = opts.rng ?? Math.random
+  const sleep = opts.sleep ?? defaultSleep
   let lastError: unknown = null
   for (let i = 0; i < attempts; i++) {
     try {
       return await withTimeout(fn(), opts.timeoutMs ?? 8_000)
     } catch (error) {
       lastError = error
-      // F4.4: sleep with full-jitter exponential backoff before next attempt.
-      // No backoff on the final attempt — we're about to throw anyway.
-      if (i < attempts - 1 && baseBackoffMs > 0) {
-        const cap = Math.min(maxBackoffMs, baseBackoffMs * 2 ** i)
-        const sleepMs = Math.floor(Math.random() * cap)
-        await new Promise((resolve) => setTimeout(resolve, sleepMs))
+      // Don't sleep after the last attempt — we're about to throw.
+      // This was previously a bug-shaped no-backoff loop: failures
+      // were re-fired instantly, hammering the upstream and giving no
+      // time for transient outages (DNS blip, brief 503, race-conditioned
+      // rate-limit response) to self-heal. Full jitter prevents the
+      // thundering-herd failure mode under correlated outages.
+      if (i < attempts - 1) {
+        await sleep(backoffDelayMs(i, baseMs, maxMs, rng))
       }
     }
   }

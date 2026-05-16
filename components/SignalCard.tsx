@@ -2,6 +2,7 @@
 
 import { PriceSignal } from '@/lib/sectors'
 import { MetricTooltip } from '@/components/MetricTooltip'
+import { safeFixed } from '@/lib/format'
 
 interface SignalCardProps {
   signal: PriceSignal
@@ -70,10 +71,10 @@ export default function SignalCard({ signal, color, compact = false }: SignalCar
           </span>
           <span className="text-xs text-slate-400 font-mono">{signal.etf}</span>
         </div>
-        {session && signal.sessionChangePct != null && (
+        {session && signal.sessionChangePct != null && Number.isFinite(signal.sessionChangePct) && (
           <div className="text-[11px] font-mono text-slate-300 mb-1">
             {signal.sessionChangePct >= 0 ? '+' : ''}
-            {signal.sessionChangePct.toFixed(2)}% vs prior close
+            {safeFixed(signal.sessionChangePct, 2)}% vs prior close
           </div>
         )}
         <div className="flex items-center gap-2 mb-1">
@@ -138,15 +139,15 @@ export default function SignalCard({ signal, color, compact = false }: SignalCar
         <div>
           <div className="text-2xl font-bold text-white font-mono">{signal.etf}</div>
           <div className="text-sm text-slate-400">{signal.sector}</div>
-          <div className="text-xs text-slate-600 mt-0.5">{barLabel}</div>
-          {session && signal.sessionChangePct != null && (
+          <div className="text-xs text-slate-400 mt-0.5">{barLabel}</div>
+          {session && signal.sessionChangePct != null && Number.isFinite(signal.sessionChangePct) && (
             <div className="text-xs font-mono text-slate-300 mt-1">
               Δ {signal.sessionChangePct >= 0 ? '+' : ''}
-              {signal.sessionChangePct.toFixed(2)}% (Yahoo)
+              {safeFixed(signal.sessionChangePct, 2)}% (Yahoo)
             </div>
           )}
           {session && signal.quoteTime && (
-            <div className="text-[10px] text-slate-600 mt-0.5 font-mono">
+            <div className="text-[10px] text-slate-400 mt-0.5 font-mono">
               Quote {new Date(signal.quoteTime).toLocaleString()}
             </div>
           )}
@@ -158,13 +159,13 @@ export default function SignalCard({ signal, color, compact = false }: SignalCar
         <div className="grid grid-cols-2 gap-2 mb-4">
           <div className="bg-slate-900/60 rounded-lg p-2.5 border border-slate-800">
             <div className="text-xs text-slate-500">Last price</div>
-            <div className="font-mono text-sm text-white font-semibold">${signal.entry.toFixed(2)}</div>
+            <div className="font-mono text-sm text-white font-semibold">${safeFixed(signal.entry, 2)}</div>
           </div>
           <div className="bg-slate-900/60 rounded-lg p-2.5 border border-slate-800">
             <div className="text-xs text-slate-500">Session vs prior</div>
             <div className="font-mono text-sm text-white font-semibold">
-              {signal.sessionChangePct != null
-                ? `${signal.sessionChangePct >= 0 ? '+' : ''}${signal.sessionChangePct.toFixed(2)}%`
+              {signal.sessionChangePct != null && Number.isFinite(signal.sessionChangePct)
+                ? `${signal.sessionChangePct >= 0 ? '+' : ''}${safeFixed(signal.sessionChangePct, 2)}%`
                 : '—'}
             </div>
           </div>
@@ -173,17 +174,17 @@ export default function SignalCard({ signal, color, compact = false }: SignalCar
         <div className="grid grid-cols-3 gap-2 mb-4">
           <div className="bg-slate-900/60 rounded-lg p-2.5 border border-slate-800">
             <div className="text-xs text-slate-500">Entry</div>
-            <div className="font-mono text-sm text-white font-semibold">${signal.entry.toFixed(2)}</div>
+            <div className="font-mono text-sm text-white font-semibold">${safeFixed(signal.entry, 2)}</div>
           </div>
           <div className="bg-red-950/30 rounded-lg p-2.5 border border-red-900/40">
             <div className="text-xs text-slate-500 inline-flex items-center">
               Stop Loss<MetricTooltip metricKey="atrStop" compact />
             </div>
-            <div className="font-mono text-sm text-red-400 font-semibold">${signal.stopLoss.toFixed(2)}</div>
+            <div className="font-mono text-sm text-red-400 font-semibold">${safeFixed(signal.stopLoss, 2)}</div>
           </div>
           <div className="bg-green-950/30 rounded-lg p-2.5 border border-green-900/40">
             <div className="text-xs text-slate-500">Target</div>
-            <div className="font-mono text-sm text-green-400 font-semibold">${signal.target.toFixed(2)}</div>
+            <div className="font-mono text-sm text-green-400 font-semibold">${safeFixed(signal.target, 2)}</div>
           </div>
         </div>
       )}

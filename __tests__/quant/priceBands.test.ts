@@ -100,4 +100,36 @@ describe('Adaptive Price Bands', () => {
     expect(result.buyZoneHigh!).toBeGreaterThan(0)
     expect(result.sellZoneLow!).toBeLessThan(500)
   })
+
+  /**
+   * Methodology string accurately describes the actual margins it produced.
+   * Previously the string used `m` and `m + 0.12` as the buy-zone bounds,
+   * but the +0.12 was already inside `m` via Math.min(0.12, vol*0.6) —
+   * effectively double-counting and giving users an inflated display.
+   */
+  describe('methodology string honesty (regression)', () => {
+    it('reports the actual buy-zone margin used', () => {
+      // baseMargin=0.08, vol=0.10 → m = 0.08 + min(0.12, 0.10*0.6) = 0.14
+      const r = computeAdaptiveBands({
+        currentPrice: 100,
+        anchors: [120],
+        annualizedVol: 0.10,
+      })
+      // Buy zone is 14% below mid: 120 * (1 - 0.14) = 103.2
+      expect(r.buyZoneHigh).toBeCloseTo(103.2, 5)
+      // Methodology string should mention the 14% buy-zone margin
+      expect(r.methodology).toMatch(/14\.0% below fair value/)
+    })
+
+    it('reports the dynamic margin range as 8%–20%, not the always-shifted +0.12', () => {
+      const r = computeAdaptiveBands({
+        currentPrice: 100,
+        anchors: [120],
+        annualizedVol: 0.30,
+      })
+      // The dynamic range mentioned should be the global range (8% min,
+      // 20% max), not "today's-margin to today's-margin+12".
+      expect(r.methodology).toMatch(/8%–20% range/)
+    })
+  })
 })

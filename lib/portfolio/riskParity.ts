@@ -154,42 +154,25 @@ export function ercWeights(
 }
 
 /**
- * Correlation-adjusted Kelly fraction.
- * Reduces position size when adding a stock increases portfolio correlation.
+ * NOTE — Phase 13 S2 team audit cleanup:
  *
- * @param baseKelly        Signal-derived Kelly fraction
- * @param stockReturns     Daily returns for the new stock
- * @param portfolioReturns Current portfolio daily returns
- * @param threshold        Max acceptable correlation increase (default 0.2)
+ * The earlier `correlationAdjustedKelly` export that lived here was deleted
+ * because:
+ *   1. It was an SSOT duplicate of `lib/quant/correlation.ts:correlationAdjustedKelly`.
+ *      Two same-named exports in two locations is a code-organisation hazard
+ *      (imports can silently pick the wrong one).
+ *   2. The version here had a **30% Kelly floor** bug at perfect correlation:
+ *
+ *        const scale = Math.max(0.3, 1 - (corr - threshold) / (1 - threshold))
+ *
+ *      At corr = 1.0 the formula yields 0 (no allocation — correct), but the
+ *      Math.max(0.3, …) floored it at 30%. A perfectly-correlated position
+ *      with the existing book contributes ZERO diversification — should get
+ *      0%, not 30%.
+ *   3. The function had zero callers in the codebase. The real caller
+ *      (lib/backtest/portfolioBacktest.ts) imports from
+ *      '@/lib/quant/correlation' which is the canonical fail-closed version.
+ *
+ * Use the canonical primitive instead:
+ *   import { correlationAdjustedKelly } from '@/lib/quant/correlation'
  */
-export function correlationAdjustedKelly(
-  baseKelly: number,
-  stockReturns: number[],
-  portfolioReturns: number[],
-  threshold = 0.20,
-): number {
-  const n = Math.min(stockReturns.length, portfolioReturns.length, 60)
-  if (n < 10) return baseKelly
-
-  const sR = stockReturns.slice(-n)
-  const pR = portfolioReturns.slice(-n)
-
-  const meanS = sR.reduce((s, r) => s + r, 0) / n
-  const meanP = pR.reduce((s, r) => s + r, 0) / n
-
-  let cov = 0, varS = 0, varP = 0
-  for (let i = 0; i < n; i++) {
-    cov += (sR[i] - meanS) * (pR[i] - meanP)
-    varS += (sR[i] - meanS) ** 2
-    varP += (pR[i] - meanP) ** 2
-  }
-
-  const corr = (varS > 0 && varP > 0) ? cov / Math.sqrt(varS * varP) : 0
-
-  // If correlation > threshold, scale Kelly down proportionally
-  if (corr > threshold) {
-    const scale = Math.max(0.3, 1 - (corr - threshold) / (1 - threshold))
-    return baseKelly * scale
-  }
-  return baseKelly
-}

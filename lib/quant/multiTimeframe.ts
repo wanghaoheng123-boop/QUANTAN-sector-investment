@@ -217,11 +217,16 @@ export function multiTimeframeSignal(
     }
   }
 
-  // Monthly: need even more data (~24 monthly bars)
+  // Monthly: classifyTimeframe requires ≥35 bars. 35 months × ~21 trading
+  // days/month ≈ 735 daily bars minimum. The previous gate of >= 300 was
+  // a no-op: aggregateToMonthly on 300 daily bars yields ~14 monthly bars,
+  // which classifyTimeframe immediately rejects (35 > 14), so monthly was
+  // silently null for any dataset below ~750 daily bars. The new gate is
+  // both honest and saves the aggregation cost when classify will fail.
   let monthly: TimeframeSignal | null = null
-  if (hasTime && dailyBars.length >= 300) {
+  if (hasTime && dailyBars.length >= 735) {
     const monthlyBars = aggregateToMonthly(dailyBars as TimedBar[])
-    if (monthlyBars.length >= 24) {
+    if (monthlyBars.length >= 35) {
       monthly = classifyTimeframe(monthlyBars.map(b => b.close), 'monthly', strategyHint)
     }
   }

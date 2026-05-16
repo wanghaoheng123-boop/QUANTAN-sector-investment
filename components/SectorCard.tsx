@@ -5,6 +5,7 @@ import { Sector } from '@/lib/sectors'
 import { PriceSignal } from '@/lib/sectors'
 import Sparkline from '@/components/Sparkline'
 import { MetricTooltip } from '@/components/MetricTooltip'
+import { safeFixed } from '@/lib/format'
 
 interface SectorCardProps {
   sector: Sector
@@ -84,16 +85,16 @@ export default function SectorCard({ sector, quote, signal }: SectorCardProps) {
             {quote ? (
               <>
                 <div className="text-xl font-bold text-white font-mono leading-none transition-all duration-300">
-                  ${quote.price.toFixed(2)}
+                  ${safeFixed(quote.price, 2)}
                 </div>
                 {/* F6.3 (Phase 13 S2): icon + sign prefix + aria-label so direction is
                     clear without relying on color hue (WCAG 2.2 SC 1.4.1). */}
                 <div
                   className={`text-xs font-mono mt-0.5 transition-all duration-300 ${isUp ? 'text-green-400' : 'text-red-400'}`}
-                  aria-label={`${isUp ? 'up' : 'down'} ${Math.abs(quote.changePct).toFixed(2)} percent`}
+                  aria-label={`${isUp ? 'up' : 'down'} ${safeFixed(Math.abs(quote.changePct), 2)} percent`}
                 >
                   <span aria-hidden="true">{isUp ? '▲' : '▼'}</span>{' '}
-                  {isUp ? '+' : '−'}{Math.abs(quote.changePct).toFixed(2)}%
+                  {isUp ? '+' : '−'}{safeFixed(Math.abs(quote.changePct), 2)}%
                 </div>
               </>
             ) : (
@@ -110,28 +111,28 @@ export default function SectorCard({ sector, quote, signal }: SectorCardProps) {
                   <div className="text-[10px] text-slate-400 font-mono space-y-0.5">
                     <div className="flex justify-between gap-3">
                       <span className="text-slate-500">Prior:</span>
-                      <span className="text-slate-300">${priorPrice?.toFixed(2)}</span>
+                      <span className="text-slate-300">${safeFixed(priorPrice, 2)}</span>
                     </div>
                     <div className="flex justify-between gap-3">
                       <span className="text-slate-500">Last:</span>
-                      <span className="text-white font-medium">${lastPrice?.toFixed(2)}</span>
+                      <span className="text-white font-medium">${safeFixed(lastPrice, 2)}</span>
                     </div>
                   </div>
                   <div className="absolute left-1/2 -translate-x-1/2 top-full border-4 border-transparent border-t-slate-700" />
                 </div>
               </div>
               <Sparkline data={sparkData} color={sector.color} width={72} height={28} />
-              <span className="text-[8px] text-slate-600 font-mono text-right group-hover/sparkline:text-slate-500 transition-colors">prior→last</span>
+              <span className="text-[8px] text-slate-400 font-mono text-right group-hover/sparkline:text-slate-500 transition-colors">prior→last</span>
             </div>
           ) : (
-            <span className="text-[9px] text-slate-600 self-end">—</span>
+            <span className="text-[9px] text-slate-400 self-end">—</span>
           )}
         </div>
 
         {/* Signal confidence bar */}
         {signal && (
           <div className="relative mb-2.5">
-            <div className="flex justify-between text-[10px] mb-1 text-slate-600">
+            <div className="flex justify-between text-[10px] mb-1 text-slate-400">
               <span className="inline-flex items-center">
                 {session ? 'Move scale' : 'Confidence'}
                 {!session && <MetricTooltip metricKey="confidence" compact />}

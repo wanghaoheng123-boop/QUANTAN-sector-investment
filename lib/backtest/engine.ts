@@ -7,6 +7,7 @@ import type { OhlcBar } from '@/lib/quant/technicals'
 import { enhancedCombinedSignal, DEFAULT_CONFIG, atr, type BacktestConfig } from './signals'
 import { sortinoRatio } from '@/lib/quant/indicators'
 import { BACKTEST_RFR_ANNUAL } from '@/lib/quant/constants'
+import { evaluateStopHit } from './exitRules'
 
 // ─── Transaction cost model ─────────────────────────────────────────────────────
 // Applied per side (entry OR exit) to reflect realistic execution costs.
@@ -196,17 +197,19 @@ export function backtestInstrument(
         const twoAtrProfit = (2 * atrAtEntryDollar) / state.openTrade.entryPrice
         const fourAtrProfit = (4 * atrAtEntryDollar) / state.openTrade.entryPrice
         if (profitFromEntry >= twoAtrProfit) {
-          // Raise stop to break-even + 0.5% buffer
+          // Raise stop to break-even + 0.5% buffer.
+          // SSOT: F1.3 intraday-aware via evaluateStopHit primitive.
           const trailStopPx = state.openTrade.entryPrice * (1 + 0.005)
-          if (signalPrice <= trailStopPx) {
-            const proceeds = state.position * signalPrice
+          const fillPrice = evaluateStopHit(rows[i], trailStopPx, 'long', 'stop')
+          if (fillPrice != null) {
+            const proceeds = state.position * fillPrice
             const txCost = proceeds * TX_COST_PCT_PER_SIDE
             const netProceeds = proceeds - txCost
-            const pnlPct = (signalPrice - state.openTrade.entryPrice) / state.openTrade.entryPrice
+            const pnlPct = (fillPrice - state.openTrade.entryPrice) / state.openTrade.entryPrice
             if (pnlPct > 0) { state.tradeWins++; state.grossProfit += pnlPct }
             else { state.tradeLosses++; state.grossLoss += Math.abs(pnlPct) }
             state.capital += netProceeds
-            state.openTrade.exitPrice = signalPrice
+            state.openTrade.exitPrice = fillPrice
             state.openTrade.pnlPct = pnlPct
             state.closedTrades.push({ ...state.openTrade })
             state.position = 0; state.avgCost = 0; state.openTrade = null
@@ -214,18 +217,20 @@ export function backtestInstrument(
             continue
           }
         }
-        // 4x ATR profit → tighten to lock in 1x ATR gain from entry price
+        // 4x ATR profit → tighten to lock in 1x ATR gain from entry price.
+        // SSOT: F1.3 intraday-aware via evaluateStopHit primitive.
         if (profitFromEntry >= fourAtrProfit) {
           const lockStopPx = state.openTrade.entryPrice + atrAtEntryDollar  // lock 1x ATR from entry
-          if (signalPrice <= lockStopPx) {
-            const proceeds = state.position * signalPrice
+          const fillPrice = evaluateStopHit(rows[i], lockStopPx, 'long', 'stop')
+          if (fillPrice != null) {
+            const proceeds = state.position * fillPrice
             const txCost = proceeds * TX_COST_PCT_PER_SIDE
             const netProceeds = proceeds - txCost
-            const pnlPct = (signalPrice - state.openTrade.entryPrice) / state.openTrade.entryPrice
+            const pnlPct = (fillPrice - state.openTrade.entryPrice) / state.openTrade.entryPrice
             if (pnlPct > 0) { state.tradeWins++; state.grossProfit += pnlPct }
             else { state.tradeLosses++; state.grossLoss += Math.abs(pnlPct) }
             state.capital += netProceeds
-            state.openTrade.exitPrice = signalPrice
+            state.openTrade.exitPrice = fillPrice
             state.openTrade.pnlPct = pnlPct
             state.closedTrades.push({ ...state.openTrade })
             state.position = 0; state.avgCost = 0; state.openTrade = null
@@ -235,19 +240,25 @@ export function backtestInstrument(
         }
       }
 
-      // Primary stop-loss check (exits at today's close)
-      if ((state.openTrade.action === 'BUY' && signalPrice <= stopPx) ||
-          (state.openTrade.action === 'SELL' && signalPrice >= stopPx)) {
-        const proceeds = state.position * signalPrice
+      // Primary stop-loss check — SSOT: F1.3 intraday-aware via the shared
+      // evaluateStopHit primitive (single source of truth, also used by
+      // lib/backtest/exitRules.ts's checkExitConditions). Previously each
+      // path had its own copy of the bar.low/bar.high/gap-aware logic — a
+      // hazard that already caused the same close-only bug to live in
+      // two places. The primitive eliminates that future-regression risk.
+      const tradeSide: 'long' | 'short' = state.openTrade.action === 'BUY' ? 'long' : 'short'
+      const fillPrice = evaluateStopHit(rows[i], stopPx, tradeSide, 'stop')
+      if (fillPrice != null) {
+        const proceeds = state.position * fillPrice
         const txCost = proceeds * TX_COST_PCT_PER_SIDE
         const netProceeds = proceeds - txCost
         const pnlPct = state.openTrade.action === 'BUY'
-          ? (signalPrice - state.openTrade.entryPrice) / state.openTrade.entryPrice
-          : (state.openTrade.entryPrice - signalPrice) / state.openTrade.entryPrice
+          ? (fillPrice - state.openTrade.entryPrice) / state.openTrade.entryPrice
+          : (state.openTrade.entryPrice - fillPrice) / state.openTrade.entryPrice
         if (pnlPct > 0) { state.tradeWins++; state.grossProfit += pnlPct }
         else { state.tradeLosses++; state.grossLoss += Math.abs(pnlPct) }
         state.capital += netProceeds
-        state.openTrade.exitPrice = signalPrice
+        state.openTrade.exitPrice = fillPrice
         state.openTrade.pnlPct = pnlPct
         state.closedTrades.push({ ...state.openTrade })
         state.position = 0; state.avgCost = 0; state.openTrade = null

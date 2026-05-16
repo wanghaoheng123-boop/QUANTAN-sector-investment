@@ -76,8 +76,23 @@ export function trendLabel(sma50: number | null, sma200: number | null, price: n
   return 'Death cross zone (SMA50 below SMA200)'
 }
 
+/**
+ * Phase 13 S2: tightened guard to reject price <= 0 — matches the
+ * hardened version in lib/backtest/signals.ts. Without this guard a
+ * negative price produced a mathematically-finite-but-meaningless
+ * deviation (e.g. price=-50 vs SMA=100 yields dev=-150), which
+ * downstream regime classifiers would treat as an extreme CRASH_ZONE
+ * signal and emit a real BUY/SELL action from corrupted data.
+ *
+ * NOTE — duplicated math: this function exists in two files
+ *   - lib/quant/technicals.ts (this file, used by BtcQuantLab UI)
+ *   - lib/backtest/signals.ts (used by the backtest engine)
+ * Both implementations now share the same contract. Consolidating to
+ * one location (e.g. lib/quant/indicators.ts) is a queued follow-up.
+ */
 export function sma200DeviationPct(price: number, sma200: number): number | null {
-  if (!Number.isFinite(sma200) || sma200 <= 0 || !Number.isFinite(price)) return null
+  if (!Number.isFinite(sma200) || sma200 <= 0) return null
+  if (!Number.isFinite(price) || price <= 0) return null
   return ((price - sma200) / sma200) * 100
 }
 

@@ -134,22 +134,40 @@ export async function GET(
         }
       }
 
-      // Market-hours quote polling
-      if (isMarketOpen()) {
-        quoteTimer = setInterval(async () => {
-          if (closed) return
-          if (!isMarketOpen()) {
-            if (quoteTimer) { clearInterval(quoteTimer); quoteTimer = null }
+      // Phase 13 S2 fix: market-hours quote polling MUST always be armed
+      // (not gated by `isMarketOpen()` at start). Previously a client
+      // connecting pre-market (e.g. 9:25am ET) never received quote events
+      // even after the market opened at 9:30 — the gate at connection time
+      // permanently disabled the quote timer. Now the timer fires every
+      // QUOTE_INTERVAL_MS unconditionally, and the inner check decides
+      // whether to actually fetch + emit a quote OR skip silently.
+      let lastMarketOpen = isMarketOpen()
+      quoteTimer = setInterval(async () => {
+        if (closed) return
+        const open = isMarketOpen()
+        // Notify client when market state transitions (open → close → open)
+        // so the UI can re-render the "DELAYED" / "LIVE" badge instead of
+        // assuming the initial-connection state forever.
+        if (open !== lastMarketOpen) {
+          lastMarketOpen = open
+          try {
+            controller.enqueue(encode(sseMessage('market_state', {
+              open,
+              timestamp: new Date().toISOString(),
+            })))
+          } catch {
+            close()
             return
           }
-          const q = await fetchQuote(symbol)
-          if (closed) return
-          if (q) {
-            try { controller.enqueue(encode(sseMessage('quote', q))) }
-            catch { close() }
-          }
-        }, QUOTE_INTERVAL_MS)
-      }
+        }
+        if (!open) return  // skip the fetch outside market hours
+        const q = await fetchQuote(symbol)
+        if (closed) return
+        if (q) {
+          try { controller.enqueue(encode(sseMessage('quote', q))) }
+          catch { close() }
+        }
+      }, QUOTE_INTERVAL_MS)
 
       // Heartbeat to keep connection alive
       heartbeatTimer = setInterval(() => {

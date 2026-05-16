@@ -118,14 +118,14 @@ export default function CommoditiesPage() {
                       <div className="truncate" title={c.description}>
                         {c.name}
                       </div>
-                      <div className="text-xs text-slate-600 truncate">{c.benchmarkNote}</div>
+                      <div className="text-xs text-slate-400 truncate">{c.benchmarkNote}</div>
                     </td>
                     <td className="px-4 py-3 hidden md:table-cell capitalize text-slate-500">{c.category}</td>
                     <td className="px-4 py-3 text-right font-mono text-white">
                       {q ? q.price.toFixed(2) : '—'}
                     </td>
                     <td
-                      className={`px-4 py-3 text-right font-mono ${q ? (up ? 'text-emerald-400' : 'text-red-400') : 'text-slate-600'}`}
+                      className={`px-4 py-3 text-right font-mono ${q ? (up ? 'text-emerald-400' : 'text-red-400') : 'text-slate-400'}`}
                     >
                       {q ? `${up ? '+' : ''}${q.changePct.toFixed(2)}%` : '—'}
                     </td>

@@ -350,7 +350,12 @@ export function btcRegime(candles: BtcCandle[], opts: BtcRegimeOptions = {}): Bt
   // Use epsilon tolerance to avoid floating-point artefacts (e.g. -2.9e-16 for flat series)
   const pctRaw = (last - ema200) / ema200
   const pct = Math.abs(pctRaw) < 1e-10 ? 0 : pctRaw
-  const atrPct = Number.isFinite(atr) && atr > 0 ? atr / last : null
+  // ATR == 0 is a legitimate "fully flat" signal (no range over the lookback);
+  // treating it as null collapses confidence to the unknown-fallback (50) and
+  // misclassifies the calmest possible market as having no volatility info.
+  // Only reject non-finite ATR or negative ATR (the latter is impossible by
+  // construction, but defensive).
+  const atrPct = Number.isFinite(atr) && atr >= 0 && last > 0 ? atr / last : null
   const reasons: string[] = []
 
   let regime: BtcRegimeLabel = 'NEUTRAL'

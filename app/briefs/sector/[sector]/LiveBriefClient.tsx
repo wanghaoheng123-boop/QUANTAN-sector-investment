@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { SECTORS } from '@/lib/sectors'
+import { safeHref } from '@/lib/security/urlValidation'
 
 interface NewsItem {
   title: string
@@ -135,7 +136,7 @@ export default function LiveBriefClient({ slug, initialBrief }: { slug: string; 
                     }) + ' UTC'
                   : 'Live — Yahoo Finance'}
               </span>
-              <span className="text-xs text-slate-600">·</span>
+              <span className="text-xs text-slate-400">·</span>
               <span
                 className="text-xs px-1.5 py-0.5 rounded"
                 style={{
@@ -287,7 +288,7 @@ export default function LiveBriefClient({ slug, initialBrief }: { slug: string; 
                 {brief.news.map((item, i) => (
                   <a
                     key={i}
-                    href={item.link}
+                    href={safeHref(item.link)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="block rounded-xl border border-slate-800 p-4 bg-slate-900/40 hover:border-slate-700 hover:bg-slate-900/60 transition-all group"
@@ -301,20 +302,20 @@ export default function LiveBriefClient({ slug, initialBrief }: { slug: string; 
                           <div className="text-xs text-slate-500 mt-1 line-clamp-2">{item.snippet}</div>
                         )}
                         <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                          <span className="text-[10px] text-slate-600">{item.publisher}</span>
+                          <span className="text-[10px] text-slate-400">{item.publisher}</span>
                           {item.publishedAt && (
-                            <span className="text-[10px] text-slate-600">
+                            <span className="text-[10px] text-slate-400">
                               {new Date(item.publishedAt).toLocaleString('en-US', {
                                 month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
                               })}
                             </span>
                           )}
                           {item.tickers.length > 0 && (
-                            <span className="text-[10px] text-slate-600">{item.tickers.slice(0, 4).join(', ')}</span>
+                            <span className="text-[10px] text-slate-400">{item.tickers.slice(0, 4).join(', ')}</span>
                           )}
                         </div>
                       </div>
-                      <span className="text-slate-600 text-sm shrink-0 group-hover:text-slate-400 transition-colors">↗</span>
+                      <span className="text-slate-400 text-sm shrink-0 group-hover:text-slate-200 transition-colors">↗</span>
                     </div>
                   </a>
                 ))}
@@ -322,7 +323,7 @@ export default function LiveBriefClient({ slug, initialBrief }: { slug: string; 
             </div>
           )}
 
-          <div className="text-[10px] text-slate-600 leading-relaxed pt-4 border-t border-slate-800">
+          <div className="text-[10px] text-slate-400 leading-relaxed pt-4 border-t border-slate-800">
             Data sourced from Yahoo Finance · {brief.lastUpdated ? `Last session close: ${new Date(brief.lastUpdated).toLocaleString()}` : 'Pre/post-market session'} ·
             Fetched: {new Date(brief.fetchedAt).toLocaleString()}.
             Prices delayed 15 minutes during regular market hours.

@@ -176,7 +176,7 @@ export default function DarkPoolPanel({
                 {apiData.quote.changePct.toFixed(2)}%
               </span>
               {apiData.quote.quoteTime && (
-                <span className="text-slate-600">
+                <span className="text-slate-400">
                   {new Date(apiData.quote.quoteTime).toLocaleString()}
                 </span>
               )}
@@ -184,7 +184,7 @@ export default function DarkPoolPanel({
           )}
 
           {/* Data source line */}
-          <div className="text-[10px] text-slate-600 leading-relaxed">
+          <div className="text-[10px] text-slate-400 leading-relaxed">
             Source: Yahoo Finance aggregate off-exchange trading data.{' '}
             {apiData.fetchedAt && (
               <>Fetched: {new Date(apiData.fetchedAt).toLocaleString()}. </>
@@ -299,7 +299,7 @@ export default function DarkPoolPanel({
         </div>
 
         {!hasRealData && (
-          <div className="px-4 py-2.5 text-xs text-slate-600 text-center border-t border-slate-800">
+          <div className="px-4 py-2.5 text-xs text-slate-400 text-center border-t border-slate-800">
             <span className="text-amber-400/80">
               ⚠ Illustrative block prints — not from a proprietary data feed.
             </span>
@@ -326,7 +326,7 @@ function MetricCard({
     <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-3">
       <div className="text-[10px] text-slate-500 mb-1 leading-tight">{label}</div>
       <div className="text-lg font-bold font-mono text-white">{value}</div>
-      <div className="text-[10px] text-slate-600 mt-0.5 leading-tight">{sub}</div>
+      <div className="text-[10px] text-slate-400 mt-0.5 leading-tight">{sub}</div>
     </div>
   )
 }

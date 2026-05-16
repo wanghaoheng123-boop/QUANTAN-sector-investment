@@ -192,8 +192,8 @@ export default function SectorPage({ params }: { params: { slug: string } }) {
                   <div className={`text-sm font-mono ${isUp ? 'text-green-400' : 'text-red-400'}`}>
                     {isUp ? '▲' : '▼'} {formatSignedNumber(quote.change)} ({Math.abs(quote.changePct).toFixed(2)}%)
                   </div>
-                  <div className="text-xs text-slate-600 mt-1 font-mono">ETF: {sector.etf}</div>
-                  <div className="text-[10px] text-slate-600 mt-1">Quote: {formatFreshness(quote.quoteTime)}</div>
+                  <div className="text-xs text-slate-400 mt-1 font-mono">ETF: {sector.etf}</div>
+                  <div className="text-[10px] text-slate-400 mt-1">Quote: {formatFreshness(quote.quoteTime)}</div>
                 </div>
               ) : (
                 <div className="space-y-2 text-right w-32">
@@ -365,7 +365,7 @@ export default function SectorPage({ params }: { params: { slug: string } }) {
                   </ChartErrorBoundary>
                 ) : (
                   <div className="h-80 bg-slate-800/30 rounded-xl animate-pulse flex items-center justify-center">
-                    <span className="text-slate-600 text-sm">Loading chart data...</span>
+                    <span className="text-slate-400 text-sm">Loading chart data...</span>
                   </div>
                 )}
               </div>
@@ -422,7 +422,7 @@ export default function SectorPage({ params }: { params: { slug: string } }) {
                     <div className="text-xs text-slate-500 mb-1">Bullish Prints</div>
                     <div className="text-lg font-bold text-green-400 font-mono">
                       {darkPoolPrints.filter(p => p.sentiment === 'BULLISH').length}
-                      <span className="text-slate-600 text-sm font-normal">/{darkPoolPrints.length}</span>
+                      <span className="text-slate-400 text-sm font-normal">/{darkPoolPrints.length}</span>
                     </div>
                   </div>
                 </div>
@@ -440,10 +440,10 @@ export default function SectorPage({ params }: { params: { slug: string } }) {
                         <span className="text-sm">{s.icon}</span>
                         <div>
                           <div className="text-xs font-medium text-white">{s.name}</div>
-                          <div className="text-xs text-slate-600 font-mono">{s.etf}</div>
+                          <div className="text-xs text-slate-400 font-mono">{s.etf}</div>
                         </div>
                       </div>
-                      <span className="text-slate-600 group-hover:text-slate-400 text-xs transition-colors">→</span>
+                      <span className="text-slate-400 group-hover:text-slate-200 text-xs transition-colors">→</span>
                     </div>
                   </Link>
                 ))}

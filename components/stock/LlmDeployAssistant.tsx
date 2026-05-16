@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Rocket, ExternalLink, Copy, Check, X, CheckCircle2 } from 'lucide-react'
 
 /** Subfolder that contains `server_trading_agents.py` when the Git repo is the monorepo root. */
@@ -22,6 +22,10 @@ type Props = {
 export function LlmDeployAssistant({ repoServiceRoot = DEFAULT_ROOT_DIR, backendReady = false }: Props) {
   const [open, setOpen] = useState(false)
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  // Phase 13 S2 (F6.7 WAI-ARIA Dialog) — refs for full focus management.
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const closeBtnRef = useRef<HTMLButtonElement>(null)
+  const returnFocusRef = useRef<HTMLElement | null>(null)
 
   const copy = useCallback(async (text: string, id: string) => {
     try {
@@ -41,6 +45,43 @@ export function LlmDeployAssistant({ repoServiceRoot = DEFAULT_ROOT_DIR, backend
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
+  }, [open])
+
+  // F6.7 WAI-ARIA Dialog full pattern (mirrors KeyboardShortcuts.tsx):
+  //   initial focus on close button · focus trap · body scroll lock ·
+  //   return focus to previously-focused element on close.
+  useEffect(() => {
+    if (!open) return
+    returnFocusRef.current = (document.activeElement as HTMLElement) ?? null
+    closeBtnRef.current?.focus()
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+
+    const trapFocus = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab') return
+      const dialog = dialogRef.current
+      if (!dialog) return
+      const focusable = dialog.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"]), input:not([disabled]), textarea:not([disabled]), select:not([disabled])',
+      )
+      if (focusable.length === 0) return
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      const active = document.activeElement as HTMLElement | null
+      if (e.shiftKey && active === first) {
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault()
+        first.focus()
+      }
+    }
+    document.addEventListener('keydown', trapFocus)
+    return () => {
+      document.removeEventListener('keydown', trapFocus)
+      document.body.style.overflow = prevOverflow
+      returnFocusRef.current?.focus?.()
+    }
   }, [open])
 
   const openRailway = useCallback(() => {
@@ -64,7 +105,7 @@ python server_trading_agents.py`
         {backendReady ? (
           <>
             <div className="flex flex-col items-center gap-1 text-center px-1">
-              <CheckCircle2 className="w-7 h-7 text-emerald-400" aria-hidden />
+              <CheckCircle2 className="w-7 h-7 text-emerald-400" aria-hidden="true" />
               <span className="text-[10px] font-bold text-emerald-100 leading-tight uppercase tracking-wide">
                 Setup
                 <br />
@@ -87,7 +128,7 @@ python server_trading_agents.py`
               onClick={() => setOpen(true)}
               className="flex flex-col items-center gap-1.5 rounded-lg bg-gradient-to-b from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white px-2 py-3 text-center shadow-lg shadow-amber-900/30 transition-colors"
             >
-              <Rocket className="w-5 h-5" aria-hidden />
+              <Rocket className="w-5 h-5" aria-hidden="true" />
               <span className="text-[10px] font-bold leading-tight uppercase tracking-wide">
                 Deploy
                 <br />
@@ -132,11 +173,15 @@ python server_trading_agents.py`
           aria-labelledby="llm-deploy-title"
           onClick={(e) => e.target === e.currentTarget && setOpen(false)}
         >
-          <div className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl">
+          <div
+            ref={dialogRef}
+            className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl"
+          >
             <button
+              ref={closeBtnRef}
               type="button"
               onClick={() => setOpen(false)}
-              className="absolute right-3 top-3 rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white"
+              className="absolute right-3 top-3 rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-blue-400"
               aria-label="Close"
             >
               <X className="w-4 h-4" />

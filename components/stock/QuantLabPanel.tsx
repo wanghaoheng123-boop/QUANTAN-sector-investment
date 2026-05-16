@@ -478,7 +478,7 @@ export default function QuantLabPanel({ ticker }: { ticker: string }) {
             {data?.narrative?.industry ? ` · ${data.narrative.industry}` : ''}
           </p>
           {data?.fetchedAt && (
-            <p className="text-[10px] text-slate-600 mt-1">Freshness: {formatFreshness(data.fetchedAt)}</p>
+            <p className="text-[10px] text-slate-400 mt-1">Freshness: {formatFreshness(data.fetchedAt)}</p>
           )}
         </div>
         <button
@@ -549,7 +549,7 @@ export default function QuantLabPanel({ ticker }: { ticker: string }) {
                   ))}
                 </ul>
                 <p>{data.dataLineage.refresh}</p>
-                <p className="text-slate-600">{data.dataLineage.statementNote}</p>
+                <p className="text-slate-400">{data.dataLineage.statementNote}</p>
               </div>
             )}
 
@@ -637,7 +637,7 @@ export default function QuantLabPanel({ ticker }: { ticker: string }) {
                     <div key={p.name} className="rounded-lg border border-slate-800 bg-slate-900/40 p-2.5">
                       <div className="text-[10px] text-slate-500">{p.name}</div>
                       <div className="text-sm font-mono text-violet-200">{Math.round(p.score)}</div>
-                      <p className="text-[10px] text-slate-600 mt-1 leading-snug">{p.detail}</p>
+                      <p className="text-[10px] text-slate-400 mt-1 leading-snug">{p.detail}</p>
                     </div>
                   ))}
                 </div>
@@ -650,7 +650,7 @@ export default function QuantLabPanel({ ticker }: { ticker: string }) {
                       ))}
                     </ul>
                     {data.researchScore.benchmarkNote && (
-                      <p className="text-[10px] text-slate-600 leading-relaxed pt-1 border-t border-slate-800/60">
+                      <p className="text-[10px] text-slate-400 leading-relaxed pt-1 border-t border-slate-800/60">
                         {data.researchScore.benchmarkNote}
                       </p>
                     )}
@@ -695,7 +695,7 @@ export default function QuantLabPanel({ ticker }: { ticker: string }) {
                         <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">{data.signal.detail}</p>
                       </div>
                     )}
-                    <p className="text-[10px] text-slate-600 leading-relaxed">{data.bands.methodology}</p>
+                    <p className="text-[10px] text-slate-400 leading-relaxed">{data.bands.methodology}</p>
                   </>
                 ) : (
                   <p className="text-xs text-slate-500">Not enough anchors (DCF / analyst / forward heuristic) to draw bands.</p>
@@ -797,7 +797,7 @@ export default function QuantLabPanel({ ticker }: { ticker: string }) {
                 <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
                   {data.ma200Regime.forwardReturnContext}
                 </p>
-                <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-2 text-[10px] text-slate-600">
+                <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-2 text-[10px] text-slate-400">
                   <div>
                     <span className="uppercase tracking-wide mr-1">Risk: </span>
                     <span
@@ -907,7 +907,7 @@ export default function QuantLabPanel({ ticker }: { ticker: string }) {
                   <div className="md:col-span-2">Avg vol 3m: {adv.avgVolume3m != null ? fmtB(adv.avgVolume3m) : '—'}</div>
                 </div>
               )}
-              {adv?.note && <p className="text-[10px] text-slate-600">{adv.note}</p>}
+              {adv?.note && <p className="text-[10px] text-slate-400">{adv.note}</p>}
             </div>
 
             <div className="rounded-xl border border-blue-500/25 bg-blue-950/10 p-4 space-y-3">
@@ -1100,7 +1100,7 @@ export default function QuantLabPanel({ ticker }: { ticker: string }) {
               </div>
             </div>
 
-            <div className="text-[10px] text-slate-600 space-y-1">
+            <div className="text-[10px] text-slate-400 space-y-1">
               <p>FCF₀ from Yahoo (TTM or latest annual cash flow statement). Shares from key statistics.</p>
               <p>DCF ignores net cash/debt adjustment in equity bridge — upgrade for production by netting debt and minority interest.</p>
             </div>
@@ -1173,7 +1173,7 @@ export default function QuantLabPanel({ ticker }: { ticker: string }) {
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   {llmBackendHealth.checked && llmBackendHealth.status === 'ready' ? (
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" aria-hidden />
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" aria-hidden="true" />
                   ) : (
                     <span
                       className={`inline-block h-2 w-2 rounded-full ${
@@ -1524,7 +1524,7 @@ export default function QuantLabPanel({ ticker }: { ticker: string }) {
 
             {/* Not run yet */}
             {!llmHasRun && !llmError && !llmLoading && (
-              <div className="text-center py-10 text-slate-600 text-sm">
+              <div className="text-center py-10 text-slate-400 text-sm">
                 Click <strong className="text-slate-400">Run LLM Analysis</strong> to start the multi-agent debate.
               </div>
             )}
@@ -1605,17 +1605,17 @@ function PriceRail({
     <div className="space-y-2">
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px] font-mono text-slate-300">
         <div>
-          <span className="text-slate-600 block text-[9px] uppercase tracking-wide">Buy ceiling</span>
+          <span className="text-slate-400 block text-[9px] uppercase tracking-wide">Buy ceiling</span>
           {buy != null ? `$${buy.toFixed(2)}` : '—'}
         </div>
         <div>
-          <span className="text-slate-600 block text-[9px] uppercase tracking-wide">Fair mid</span>${fair.toFixed(2)}
+          <span className="text-slate-400 block text-[9px] uppercase tracking-wide">Fair mid</span>${fair.toFixed(2)}
         </div>
         <div>
-          <span className="text-slate-600 block text-[9px] uppercase tracking-wide">Spot</span>${price.toFixed(2)}
+          <span className="text-slate-400 block text-[9px] uppercase tracking-wide">Spot</span>${price.toFixed(2)}
         </div>
         <div>
-          <span className="text-slate-600 block text-[9px] uppercase tracking-wide">Sell floor</span>
+          <span className="text-slate-400 block text-[9px] uppercase tracking-wide">Sell floor</span>
           {sell != null ? `$${sell.toFixed(2)}` : '—'}
         </div>
       </div>
@@ -1640,12 +1640,12 @@ function PriceRail({
           style={{ left: pos(price) }}
           title={`Spot ${price.toFixed(2)}`}
         />
-        <div className="absolute bottom-1 left-2 right-2 flex justify-between text-[9px] text-slate-600 font-mono">
+        <div className="absolute bottom-1 left-2 right-2 flex justify-between text-[9px] text-slate-400 font-mono">
           <span>${lo.toFixed(2)}</span>
           <span>${hi.toFixed(2)}</span>
         </div>
       </div>
-      <p className="text-[10px] text-slate-600 leading-relaxed">
+      <p className="text-[10px] text-slate-400 leading-relaxed">
         Rail span ${lo.toFixed(2)}–${hi.toFixed(2)} (padded). Cheaper vs model when price is at or below the buy ceiling; above sell floor = richer vs model.
       </p>
     </div>

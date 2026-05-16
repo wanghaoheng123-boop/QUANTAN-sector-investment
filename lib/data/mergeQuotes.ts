@@ -66,10 +66,24 @@ const ALL_YAHOO: QuoteProvenance = {
  * when Bloomberg returns 0 / 'N/A'. Per-field provenance is recorded so
  * downstream audit code can verify which feed produced each value.
  *
- * Note: F4.2 also preserved the `||` fallback at the field level so that
- * Bloomberg-reported zeros DON'T silently fall through to yahoo (a 0
- * volume during a halt is meaningful). Use nullish-coalescing semantics
- * only for fields where 0 is genuinely missing.
+ * Phase 13 S2 audit (mergeQuotes correctness):
+ *   The `||` fallback DOES treat Bloomberg-reported 0 as "missing" and
+ *   falls through to Yahoo. This is the conservative choice given the
+ *   bridge-client's `num()` helper (lib/data/bloomberg/bridgeClient.ts:27)
+ *   coerces ALL missing/invalid values to 0 — making Bloomberg's 0
+ *   ambiguous between "halted/no trades" and "field absent from upstream".
+ *
+ *   Genuine zero-volume during a halt → Yahoo override → minor cost
+ *   (Yahoo has the same halt). Genuine missing-field zero → Yahoo
+ *   override → critical recovery. The conservative choice is correct.
+ *
+ *   If the bridge protocol is ever extended to distinguish missing from
+ *   zero (e.g. by emitting `volume: null`), the type & this fallback
+ *   can be tightened to use nullish-coalescing semantics.
+ *
+ *   The provenance tracker mirrors the same truthy-check so the
+ *   reported `provenance.volume = 'yahoo'` is consistent with the
+ *   value's actual source.
  */
 export function mergeYahooAndBloomberg(
   yahoo: YahooQuoteLike[],

@@ -68,7 +68,7 @@ export default function BriefCard({ brief }: { brief: SectorBrief }) {
                   {brief.dataQuality === 'partial' ? '◐ Partial' : '✕ Unavailable'}
                 </span>
               )}
-              <span className="text-xs text-slate-600">
+              <span className="text-xs text-slate-400">
                 {brief.lastUpdated
                   ? new Date(brief.lastUpdated).toLocaleString('en-US', {
                       weekday: 'short', month: 'short', day: 'numeric',
@@ -111,7 +111,7 @@ export default function BriefCard({ brief }: { brief: SectorBrief }) {
               </div>
             )}
           </div>
-          <div className="text-slate-600 group-hover:text-slate-400 transition-colors text-lg shrink-0 self-center">→</div>
+          <div className="text-slate-400 group-hover:text-slate-200 transition-colors text-lg shrink-0 self-center">→</div>
         </div>
       </div>
     </Link>

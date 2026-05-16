@@ -51,13 +51,17 @@ export function unusualFlow(calls: CallOrPut[], puts: CallOrPut[]): UnusualFlowI
 
       const bid = c.bid ?? null
       const ask = c.ask ?? null
-      const mid = bid != null && ask != null ? (bid + ask) / 2 : null
-      // "Near ask" = last price >= 98% of ask (or >= mid if no ask)
-      const nearAsk = ask != null
+      // "Near ask" = last price ≥ 98% of ask. Two prior bugs in this gate:
+      //   (a) the `mid != null` fallback was dead code — `mid = (bid+ask)/2`
+      //       requires BOTH bid and ask, so when ask is null mid is also
+      //       null and the branch never fired.
+      //   (b) ask === 0 (illiquid contract with zero quoted spread) made
+      //       `lastPrice >= 0 * 0.98 = 0` always true, marking every
+      //       illiquid trade as a near-ask buy → false BULLISH/BEARISH
+      //       sentiment. Now we require ask > 0 explicitly.
+      const nearAsk = ask != null && ask > 0
         ? c.lastPrice >= ask * 0.98
-        : mid != null
-          ? c.lastPrice >= mid
-          : false
+        : false
 
       // Sentiment: near-ask call buy = BULLISH; near-ask put buy = BEARISH
       // Far from ask (near bid) suggests closing / selling: call sell = BEARISH, put sell = BULLISH

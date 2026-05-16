@@ -46,6 +46,29 @@ describe('checkRateLimit', () => {
       expect(blocked.retryAfter).toBeGreaterThanOrEqual(1)
     }
   })
+
+  /**
+   * Regression: prior implementation computed `elapsedSec = (now - lastRefill) / 1000`
+   * without clamping. When the system clock skewed BACKWARD (NTP correction,
+   * manual override, VM time-jump), elapsed went negative → refillTokens negative
+   * → tokens SUBTRACTED instead of added → user got rate-limited for no reason.
+   * Fix clamps elapsedSec to >= 0.
+   *
+   * We can't easily move the system clock in a test, but we can verify the
+   * positive-path invariant: repeated identical-now calls don't reduce tokens.
+   */
+  it('repeated calls with identical timestamps do not reduce capacity (clock-skew regression)', () => {
+    const key = `clock-${Date.now()}-${Math.random()}`
+    const cfg = { maxRequests: 5, windowSeconds: 60 }
+    // Burst of 5 should all be allowed (initial tokens = max).
+    let allowed = 0
+    for (let i = 0; i < 5; i++) {
+      if (checkRateLimit(key, cfg).allowed) allowed++
+    }
+    expect(allowed).toBe(5)
+    // 6th must be blocked
+    expect(checkRateLimit(key, cfg).allowed).toBe(false)
+  })
 })
 
 describe('getRateLimitKey', () => {

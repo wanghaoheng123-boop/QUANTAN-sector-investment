@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { formatCurrency } from '@/lib/format'
+import { formatCurrency, safeFixed } from '@/lib/format'
 
 interface TickerItem {
   ticker: string
@@ -14,10 +14,9 @@ interface PriceTickerProps {
   items: TickerItem[]
 }
 
-function safeToFixed(value: number | null | undefined, digits: number): string {
-  if (value == null || !Number.isFinite(value)) return '—'
-  return value.toFixed(digits)
-}
+// Local `safeToFixed` removed — promoted to lib/format.ts as `safeFixed`
+// (SSOT, Phase 13 S2 cross-cutting Pattern 3).
+const safeToFixed = safeFixed
 
 export default function PriceTicker({ items }: PriceTickerProps) {
   const [isPaused, setIsPaused] = useState(false)

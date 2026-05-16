@@ -83,6 +83,12 @@ export interface StressTestResult {
   bestTicker: { ticker: string; return: number } | null
   /** Estimated portfolio dollar loss at peak drawdown */
   estimatedLoss: number
+  /**
+   * Non-fatal data-quality issues encountered during the run. UI should
+   * surface this when set, instead of treating result as fully reliable.
+   * Empty array == no issues. Phase 13 S2 anti-fail-open contract.
+   */
+  warnings: string[]
 }
 
 /**
@@ -100,22 +106,53 @@ export function runStressTest(
   scenario: StressScenario,
 ): StressTestResult {
   const { startDate, endDate } = scenario
+  const warnings: string[] = []
   const tickers = Object.keys(weights).filter(t => weights[t] > 0)
 
-  // Extract returns for each ticker during the scenario window
+  // Phase 13 S2 — weight-sum validation. Stress test assumes weights sum
+  // to 1.0. Caller-side rounding or stale weight state can violate this;
+  // a 1% sum error produces a 1% mis-scaling of the portfolio return.
+  const weightSum = tickers.reduce((s, t) => s + (weights[t] ?? 0), 0)
+  if (Math.abs(weightSum - 1) > 1e-6) {
+    warnings.push(
+      `Portfolio weights sum to ${weightSum.toFixed(4)} not 1.0 — ` +
+      `stress return will be scaled by ${weightSum.toFixed(4)} relative to a normalized portfolio.`,
+    )
+  }
+
+  // Extract returns for each ticker during the scenario window.
+  // Phase 13 S2 fail-closed: report tickers with no data in the window.
+  // Previously `Math.min(...lengths)` truncated to the shortest series so
+  // a single missing ticker silently zeroed the entire stress result.
   const tickerPeriodReturns: Record<string, number[]> = {}
+  const missingTickers: string[] = []
   for (const t of tickers) {
     const series = (historicalReturns[t] ?? []).filter(
       d => d.date >= startDate && d.date <= endDate,
     )
     tickerPeriodReturns[t] = series.map(d => d.return)
+    if (series.length === 0) missingTickers.push(t)
+  }
+  if (missingTickers.length > 0) {
+    warnings.push(
+      `Missing historical data for ${missingTickers.length} ticker(s) ` +
+      `in ${scenario.id} window: ${missingTickers.join(', ')}. ` +
+      `These positions are excluded from the stress computation; ` +
+      `result is partial.`,
+    )
   }
 
-  // Compute portfolio daily returns (weighted average)
-  const n = Math.min(...Object.values(tickerPeriodReturns).map(r => r.length))
+  // Compute portfolio daily returns. The window length is the maximum
+  // length across all NON-EMPTY tickers (not the minimum, which would
+  // silently truncate to zero if any one ticker had no data). Tickers
+  // with shorter histories contribute return = 0 for missing days,
+  // which is the documented partial-coverage convention.
+  const nonEmptyLengths = Object.values(tickerPeriodReturns).filter(r => r.length > 0).map(r => r.length)
+  const n = nonEmptyLengths.length > 0 ? Math.max(...nonEmptyLengths) : 0
   const portDailyReturns: number[] = new Array(n).fill(0)
   for (const t of tickers) {
-    const rets = tickerPeriodReturns[t].slice(0, n)
+    const rets = tickerPeriodReturns[t]
+    if (rets.length === 0) continue
     for (let i = 0; i < n; i++) {
       portDailyReturns[i] += weights[t] * (rets[i] ?? 0)
     }
@@ -167,6 +204,7 @@ export function runStressTest(
     worstTicker: worstEntry ? { ticker: worstEntry[0], return: worstEntry[1] } : null,
     bestTicker: bestEntry ? { ticker: bestEntry[0], return: bestEntry[1] } : null,
     estimatedLoss,
+    warnings,
   }
 }
 

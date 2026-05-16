@@ -94,4 +94,54 @@ describe('maxPain', () => {
     expect(mp).toBeGreaterThanOrEqual(90)
     expect(mp).toBeLessThanOrEqual(110)
   })
+
+  /**
+   * Phase 13 S2 regression: with zero total OI, every candidate strike's
+   * payout is 0 and the first strike trivially "wins". Returning that
+   * meaningless number was a fail-OPEN bug — caller would treat it as
+   * a real max-pain estimate. Now returns null on zero/empty OI.
+   */
+  it('returns null when total open interest is zero (fail-closed)', () => {
+    const calls = [
+      makeContract(90, 0, 0, 'call'),
+      makeContract(100, 0, 0, 'call'),
+      makeContract(110, 0, 0, 'call'),
+    ]
+    const puts = [
+      makeContract(90, 0, 0, 'put'),
+      makeContract(100, 0, 0, 'put'),
+      makeContract(110, 0, 0, 'put'),
+    ]
+    expect(maxPain(calls, puts)).toBeNull()
+  })
+
+  it('returns null when OI is undefined across all contracts', () => {
+    // Contracts without openInterest property set (typical of missing-data Yahoo response).
+    const calls = [
+      { ...makeContract(100, 0, 0, 'call'), openInterest: undefined },
+    ] as ReturnType<typeof makeContract>[]
+    const puts = [
+      { ...makeContract(100, 0, 0, 'put'), openInterest: undefined },
+    ] as ReturnType<typeof makeContract>[]
+    expect(maxPain(calls, puts)).toBeNull()
+  })
+
+  it('still computes when AT LEAST ONE contract has non-zero OI', () => {
+    // Even just one OI > 0 means a meaningful max-pain calculation is possible.
+    const calls = [
+      makeContract(90, 0, 0, 'call'),
+      makeContract(100, 0, 1000, 'call'), // single source of OI
+      makeContract(110, 0, 0, 'call'),
+    ]
+    const puts = [
+      makeContract(90, 0, 0, 'put'),
+      makeContract(100, 0, 0, 'put'),
+      makeContract(110, 0, 0, 'put'),
+    ]
+    const mp = maxPain(calls, puts)
+    expect(mp).not.toBeNull()
+    // The lone OI is at the 100 call. Pain is minimised where calls are OTM,
+    // i.e. at strikes ≤ 100. Pin to within the strike grid.
+    expect(mp).toBeLessThanOrEqual(100)
+  })
 })
