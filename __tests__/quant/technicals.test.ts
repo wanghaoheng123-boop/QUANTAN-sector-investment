@@ -129,6 +129,25 @@ describe('technicals.ts wrapper layer (F8.1)', () => {
     it('zero when price equals sma200', () => {
       expect(sma200DeviationPct(100, 100)).toBeCloseTo(0, 6)
     })
+
+    /**
+     * Phase 13 S2 hardening regression: matches the same guard in
+     * lib/backtest/signals.ts. A negative price has no semantic meaning
+     * for equity backtesting; allowing it produced a mathematically-
+     * finite-but-meaningless deviation (e.g. price=-50, sma=100 → -150)
+     * which downstream regime classifiers would treat as CRASH_ZONE and
+     * silently emit a real BUY/SELL from corrupted data.
+     */
+    it('returns null for non-positive price (fail-closed)', () => {
+      expect(sma200DeviationPct(0, 100)).toBeNull()
+      expect(sma200DeviationPct(-50, 100)).toBeNull()
+      expect(sma200DeviationPct(-0.01, 100)).toBeNull()
+    })
+
+    it('returns null for Infinity price', () => {
+      expect(sma200DeviationPct(Infinity, 100)).toBeNull()
+      expect(sma200DeviationPct(-Infinity, 100)).toBeNull()
+    })
   })
 
   describe('sma200Slope', () => {
