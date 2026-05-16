@@ -311,9 +311,15 @@ export function buildFundamentalsPayload(
   const slice52 = closes.length >= 60 ? closes.slice(-Math.min(252, closes.length)) : closes
   const high52w = slice52.length ? Math.max(...slice52) : null
   const low52w = slice52.length ? Math.min(...slice52) : null
+  // Phase 13 S2 audit (cross-cutting Pattern 1 — comment-vs-code drift):
+  // posIn52w previously used `lastClose` (yesterday's daily-bar close) but
+  // should use `price` (the LIVE intraday value) so the 52w-range position
+  // reflects current market state, not yesterday's close. Fall back to
+  // `lastClose` only when `price` is unavailable.
+  const pricePoint = price != null && price > 0 ? price : lastClose
   const posIn52w =
-    high52w != null && low52w != null && lastClose != null && high52w > low52w
-      ? (lastClose - low52w) / (high52w - low52w)
+    high52w != null && low52w != null && pricePoint != null && high52w > low52w
+      ? (pricePoint - low52w) / (high52w - low52w)
       : null
 
   const vol20d = closes.length >= 22 ? annualizedVolFromCloses(closes.slice(-22)) : null

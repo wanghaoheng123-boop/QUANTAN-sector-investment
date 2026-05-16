@@ -1173,7 +1173,7 @@ export default function QuantLabPanel({ ticker }: { ticker: string }) {
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   {llmBackendHealth.checked && llmBackendHealth.status === 'ready' ? (
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" aria-hidden />
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" aria-hidden="true" />
                   ) : (
                     <span
                       className={`inline-block h-2 w-2 rounded-full ${

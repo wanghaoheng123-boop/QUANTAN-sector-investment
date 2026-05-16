@@ -1,3 +1,28 @@
+/**
+ * Safe numeric formatter — returns a placeholder for null / undefined /
+ * NaN / ±Infinity instead of letting `.toFixed()` emit "NaN"/"Infinity"
+ * or throwing on undefined.
+ *
+ * Phase 13 S2 cross-cutting Pattern 3 audit (defensive UI clamps):
+ *   The codebase had local `safeToFixed` helpers in PriceTicker.tsx and
+ *   ad-hoc `Number.isFinite(...) ? x.toFixed(d) : '—'` inline checks in
+ *   many components. SSOT — every UI numeric render that originates
+ *   from upstream data (quotes, signals, indicators) should pass through
+ *   safeFixed so non-finite values render as a dash instead of breaking
+ *   layout with "NaN%" / "$Infinity" / blank cells.
+ *
+ * Use formatCurrency / formatPercent / formatSignedNumber when the
+ * specific semantic applies; use safeFixed for plain numeric display.
+ */
+export function safeFixed(
+  value: number | null | undefined,
+  digits = 2,
+  fallback = '—',
+): string {
+  if (value == null || !Number.isFinite(value)) return fallback
+  return value.toFixed(digits)
+}
+
 export function formatCurrency(value: number | null | undefined, digits = 2): string {
   if (value == null || !Number.isFinite(value)) return '—'
   return `$${value.toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits })}`

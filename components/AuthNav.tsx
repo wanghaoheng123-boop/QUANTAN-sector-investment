@@ -9,7 +9,7 @@ export default function AuthNav() {
 
   if (status === 'loading') {
     return (
-      <div className="h-8 w-20 rounded-md bg-slate-800/80 animate-pulse" aria-hidden />
+      <div className="h-8 w-20 rounded-md bg-slate-800/80 animate-pulse" aria-hidden="true" />
     )
   }
 

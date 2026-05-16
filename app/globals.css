@@ -38,6 +38,35 @@ body {
   color: white;
 }
 
+/*
+ * Phase 13 S2 cross-cutting Pattern 4 audit (F6.5 — sparse focus management):
+ *
+ * Project-wide `:focus-visible` indicator. Only fires when the element is
+ * focused via KEYBOARD (Tab navigation), never on mouse-click, so it
+ * doesn't introduce visual clutter for pointer users. Default browser
+ * focus rings on dark backgrounds are often near-invisible.
+ *
+ * Tailwind's `focus:ring-2` utility was applied to ~8 of 85+ focusable
+ * elements in the codebase. This CSS rule covers the remaining ~90%
+ * without touching every component. Components that DO need a custom
+ * focus style still override via Tailwind utilities (higher specificity).
+ *
+ * Citation: WCAG 2.2 SC 2.4.7 Focus Visible (Level AA).
+ */
+:focus-visible {
+  outline: 2px solid #60a5fa; /* blue-400 — matches the existing focus:ring-blue-400 */
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+/*
+ * Suppress the global ring when the element already declares a custom
+ * focus style via Tailwind's `focus:ring-*` (which sets `box-shadow`).
+ * The Tailwind utility's box-shadow remains visible underneath the
+ * outline; setting `outline: none` here would defeat the purpose. We
+ * leave the global outline in place and let Tailwind's ring stack
+ * visually — the small offset overlap is harmless and acceptable.
+ */
+
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
