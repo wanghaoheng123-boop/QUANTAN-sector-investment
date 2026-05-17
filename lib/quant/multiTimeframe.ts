@@ -55,6 +55,9 @@ export function aggregateToWeekly(daily: TimedBar[]): AggregatedBar[] {
   let current: AggregatedBar | null = null
 
   for (const bar of daily) {
+    // Phase 14: bar.time is assumed UTC-aligned (yahoo-finance2 returns UTC epoch).
+    // If a future data source returns local-tz epoch, weeks crossing DST boundaries
+    // may mis-bucket — re-validate this aggregation when integrating new vendors.
     const date = new Date(bar.time * 1000)
     // getDay: 0=Sun..6=Sat. ISO week starts Monday (1).
     // Use Monday as week boundary.

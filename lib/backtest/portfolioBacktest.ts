@@ -144,6 +144,32 @@ export function runPortfolioBacktest(
   // institutional risk reports for short-term correlation.
   const CORRELATION_WINDOW = 63
 
+  // Phase 14 wave 6: pre-seed correlation tape from the warm-up window so
+  // the first ~20 trading days don't fail-closed via maxCorrelationVsPeers.
+  // Without this, the tape is empty at di=220, maxCorrelationVsPeers
+  // returns null for <20 history, and correlationAdjustedKelly fail-closes
+  // to 0 — blocking ALL new positions for the first ~20 trading days.
+  // Seed using the unified-date window so per-ticker indices stay consistent.
+  const CORR_SEED_BARS = 25
+  const seedStartDi = Math.max(0, 220 - CORR_SEED_BARS)
+  for (const t of tickers) {
+    const rows = instrumentData[t] ?? []
+    const seed: number[] = []
+    for (let i = seedStartDi + 1; i < 220 && i < dates.length; i++) {
+      const prevTime = dates[i - 1]
+      const currTime = dates[i]
+      const prevIdx = priceIndex[t]?.get(prevTime)
+      const currIdx = priceIndex[t]?.get(currTime)
+      if (prevIdx == null || currIdx == null) continue
+      const prev = rows[prevIdx]?.close
+      const curr = rows[currIdx]?.close
+      if (prev && curr && prev > 0 && Number.isFinite(curr) && Number.isFinite(prev)) {
+        seed.push(curr / prev - 1)
+      }
+    }
+    tickerDailyReturns[t] = seed
+  }
+
   // Phase 12-A: Build per-ticker sector-gate map.
   // Resolution order:
   //   1) explicit cfg.tickerSectorGates override (per-ticker)

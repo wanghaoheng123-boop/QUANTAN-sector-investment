@@ -20,6 +20,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { SECTORS } from '@/lib/sectors'
 import { parseQuoteTime } from '@/lib/format'
 import { isSafeHttpUrl } from '@/lib/security/urlValidation'
+import { applyRateLimit } from '@/lib/api/rateLimit'
 
 const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] })
 
@@ -119,6 +120,12 @@ export async function GET(
   req: NextRequest,
   { params }: { params: { sector: string } }
 ): Promise<NextResponse<SectorBrief | { error: string }>> {
+  // Phase 14: rate limit — 30 req/min per IP. Brief endpoint hits Yahoo
+  // 3+ times per call (quote, summary, news, holdings); unprotected polling
+  // would multiply upstream load.
+  const rl = applyRateLimit(req, 'briefs-sector', { maxRequests: 30, windowSeconds: 60 })
+  if (rl) return rl as NextResponse<{ error: string }>
+
   const slug = (params.sector || '').trim()
   const sectorMeta = SECTORS.find(s => s.slug === slug)
 

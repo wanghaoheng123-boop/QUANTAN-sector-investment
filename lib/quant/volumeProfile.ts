@@ -63,6 +63,10 @@ export function volumeProfile(
   // Distribute volume across bins
   // For each bar, spread its volume across bins that overlap [low, high]
   for (const bar of slice) {
+    // Phase 14: Yahoo daily bars on holidays occasionally surface null/NaN
+    // volumes — skip them so NaN doesn't propagate through the histogram
+    // and silently corrupt POC / Value Area.
+    if (!Number.isFinite(bar.low) || !Number.isFinite(bar.high) || !Number.isFinite(bar.volume) || bar.volume < 0) continue
     const lowBin = Math.max(0, Math.floor((bar.low - minPrice) / binSize))
     const highBin = Math.min(numBins - 1, Math.floor((bar.high - minPrice) / binSize))
     const numOverlap = highBin - lowBin + 1

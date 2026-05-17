@@ -68,6 +68,21 @@ export async function GET(request: NextRequest) {
   const url = new URL(request.url)
   const queryTickers = url.searchParams.get('tickers')
 
+  // Phase 14: cap ticker count per request. Yahoo's `quote` endpoint accepts
+  // arbitrary list lengths but each ticker = upstream work; an unbounded
+  // request can exhaust the per-IP rate limit on Yahoo and our own retry
+  // budget. Cite: OWASP API4:2023 — Unrestricted Resource Consumption.
+  const MAX_TICKERS_PER_REQUEST = 50
+  if (queryTickers) {
+    const split = queryTickers.split(',')
+    if (split.length > MAX_TICKERS_PER_REQUEST) {
+      return NextResponse.json(
+        { error: 'too_many_tickers', message: `Maximum ${MAX_TICKERS_PER_REQUEST} tickers per request` },
+        { status: 400 },
+      )
+    }
+  }
+
   const tickers = queryTickers
     ? queryTickers.split(',').map(normalizeTicker)
     : [...SECTORS.map((s) => s.etf), 'SPY', 'QQQ']

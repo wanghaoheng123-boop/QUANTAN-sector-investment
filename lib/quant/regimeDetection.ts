@@ -18,7 +18,7 @@ export interface RegimeState {
   volatilityRegime: VolatilityRegime
   trendRegime: TrendRegime
   strategyHint: StrategyHint
-  volRatio: number       // vol20 / vol60
+  volRatio: number | null  // vol20 / vol60; null when vol20/vol60 unmeasurable (Phase 14)
   adxValue: number | null
   confidence: number     // 0-100, how clear the regime signal is
 }
@@ -149,7 +149,9 @@ export function detectRegime(closes: number[], bars: OhlcBar[]): RegimeState {
     volatilityRegime,
     trendRegime,
     strategyHint,
-    volRatio,
+    // Phase 14: surface null when unmeasured so callers don't get
+    // misleading "1.0 = normal" reading from insufficient data.
+    volRatio: volKnown ? volRatio : null,
     adxValue,
     confidence: Math.max(0, Math.min(100, confidence)),
   }
