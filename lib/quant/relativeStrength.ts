@@ -24,6 +24,23 @@ export function alignCloses(
   return { a, b }
 }
 
+/**
+ * Per-bar LOG returns r_i = ln(c_i / c_{i-1}).
+ *
+ * Convention (Phase 14 Q2-M-1 doc'd): used here because the consumers are
+ * Pearson correlation and other time-series statistics. Log returns are
+ * additive over time and have a more symmetric distribution, which makes
+ * the standard correlation/covariance moments better-behaved (especially
+ * at long horizons).
+ *
+ * Reference: Tsay (2010) "Analysis of Financial Time Series" pp 3–7 —
+ * "log returns aggregate over time, simple returns aggregate across
+ * portfolios." Sister conventions:
+ *   • `lib/quant/volatility.ts`, `lib/quant/regimeDetection.ts` — log
+ *     returns (time-aggregation problem).
+ *   • `lib/quant/indicators.ts::dailyReturns`, `trailingReturn` below —
+ *     simple returns (portfolio-aggregation / cumulative-performance).
+ */
 export function logReturns(closes: number[]): number[] {
   const r: number[] = []
   for (let i = 1; i < closes.length; i++) {
@@ -47,7 +64,19 @@ export function correlation(x: number[], y: number[]): number | null {
   return pearsonCorrelation(x.slice(-n), y.slice(-n))
 }
 
-/** Total return over last `days` trading sessions. */
+/**
+ * Total SIMPLE return over the last `days` trading sessions:
+ *   r = c_last / c_{last-days} - 1
+ *
+ * Convention (Phase 14 Q2-M-1 doc'd): simple returns are correct here
+ * because the consumers (relative-strength ranking, leadership analysis,
+ * `excessReturn` below) are cumulative-performance measures that need to
+ * compose multiplicatively across instruments / weights — i.e. the
+ * portfolio-aggregation case in Tsay (2010) pp 3–7. Using log returns
+ * here would silently distort percentile rankings whenever moves are
+ * large (a +10% simple return is 0.0953 in log space — small at the bar
+ * level, but the ordering of multi-month winners can flip).
+ */
 export function trailingReturn(closes: number[], days: number): number | null {
   if (closes.length < days + 1) return null
   const old = closes[closes.length - 1 - days]

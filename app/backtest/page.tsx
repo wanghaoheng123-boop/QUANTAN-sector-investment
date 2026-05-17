@@ -9,6 +9,7 @@ import InstrumentTable from '@/components/backtest/InstrumentTable'
 import TradeLog from '@/components/backtest/TradeLog'
 import type { BacktestResult } from '@/lib/backtest/engine'
 import { formatCurrency, formatFreshness, formatPercent } from '@/lib/format'
+import { SECTOR_COLORS_BY_NAME, DEFAULT_SECTOR_COLOR } from '@/lib/sectorColors'
 
 interface BacktestData {
   runId: string
@@ -124,12 +125,11 @@ export default function BacktestPage() {
   const sectorSummary = portfolio.sectorSummary
   const INITIAL_CAPITAL = 100_000
 
-  const sectorColors: Record<string, string> = {
-    Technology: '#3b82f6', Energy: '#f59e0b', Financials: '#10b981', Healthcare: '#ec4899',
-    'Consumer Disc.': '#f97316', Industrials: '#6366f1', Communication: '#8b5cf6',
-    Materials: '#84cc16', Utilities: '#06b6d4', 'Real Estate': '#a78bfa',
-    'Consumer Staples': '#34d399', Crypto: '#f7931a',
-  }
+  // Phase 14 (R5-M-2): sector colors now sourced from the lib/sectorColors
+  // SSOT (which itself derives from lib/sectors.ts) — the previous inline
+  // literal had drifted from the canonical palette for Materials, Utilities,
+  // Real Estate, and Consumer Staples.
+  const sectorColors = SECTOR_COLORS_BY_NAME
 
   return (
     <div className="min-h-screen bg-black">

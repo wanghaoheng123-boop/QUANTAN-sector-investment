@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { useRouter, usePathname } from 'next/navigation'
 
 interface Shortcut {
@@ -154,13 +155,20 @@ export default function KeyboardShortcuts() {
 
   if (!isOpen) return null
 
+  // Phase 14 (R5-M-4): render the modal through a portal to document.body so
+  // it escapes any ancestor stacking context (e.g. headers with
+  // position: sticky/relative + transforms) that would otherwise clip the
+  // overlay or fight its z-index. Guard for SSR — Next.js renders this
+  // component server-side as well.
+  if (typeof document === 'undefined') return null
+
   const grouped = SHORTCUTS.reduce<Record<string, Shortcut[]>>((acc, shortcut) => {
     if (!acc[shortcut.category]) acc[shortcut.category] = []
     acc[shortcut.category].push(shortcut)
     return acc
   }, {})
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm"
       onClick={close}
@@ -217,6 +225,7 @@ export default function KeyboardShortcuts() {
           </p>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

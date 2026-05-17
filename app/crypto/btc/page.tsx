@@ -21,6 +21,14 @@ const KLineChart = dynamic(() => import('@/components/KLineChart'), {
   ),
 })
 
+// Phase 14 (R5-C-6): module-scope singletons so React's referential equality
+// holds across renders. Passing fresh `[]` literals to KLineChart invalidated
+// its `useEffect([... darkPoolMarkers, newsMarkers ...])` every render and
+// triggered the full data-rebuild path. BTC currently never receives dark-pool
+// or news markers, but if that changes, hoist into a `useMemo` instead.
+const EMPTY_DARK_POOL_MARKERS: never[] = []
+const EMPTY_NEWS_MARKERS: never[] = []
+
 // Live spot price: Coinbase
 const COINBASE_WS = 'wss://ws-feed.exchange.coinbase.com'
 /** Kraken WS v2 OHLC — public, no Binance (see docs.kraken.com/api/docs/websocket-v2/ohlc) */
@@ -700,8 +708,8 @@ export default function BtcPage() {
                   <CryptoChartBoundary title="BTC chart crashed">
                     <KLineChart
                       candles={candles as any}
-                      darkPoolMarkers={[]}
-                      newsMarkers={[]}
+                      darkPoolMarkers={EMPTY_DARK_POOL_MARKERS}
+                      newsMarkers={EMPTY_NEWS_MARKERS}
                       color={color}
                       ticker="BTC"
                       range={activeRange}

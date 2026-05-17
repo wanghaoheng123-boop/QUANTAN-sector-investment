@@ -53,6 +53,27 @@ const MIN_UNUSUAL_VOLUME = 500
 export const MIN_ABSOLUTE_VOL_FOR_UNUSUAL = MIN_UNUSUAL_VOLUME
 
 /**
+ * Fraction of the bid–ask range at which a trade is classified as "near ask"
+ * (aggressor-side buy). The conventional Lee-Ready / EMO trade-classification
+ * threshold is the quote midpoint (50%); we tighten to 98% of the spread
+ * because retail brokers commonly route to internalizers that fill at
+ * mid-or-better, so a fill at "near the ask" is a much stronger signal of
+ * aggressive lifting than a fill above mid.
+ *
+ * Phase 14 (Q3-H-1): hoisted out of the inline expression so the threshold
+ * is explicit and tunable. Adjusting this materially shifts the BULLISH /
+ * BEARISH split for unusual flow — coordinate with the back-test in
+ * `__tests__/options/flow.test.ts` before changing.
+ *
+ * References:
+ *   • Lee & Ready (1991, J. Finance) — original tick / midpoint rule.
+ *   • Ellis, Michaely, O'Hara (2000, J. Fin. Quant. Anal.) — EMO rule that
+ *     prefers quote-based classification when the trade is at or near a
+ *     standing quote.
+ */
+const NEAR_ASK_FRACTION = 0.98
+
+/**
  * Returns contracts where volume is unusually high relative to open interest.
  * Sorted by volume descending.
  */
@@ -69,7 +90,8 @@ export function unusualFlow(calls: CallOrPut[], puts: CallOrPut[]): UnusualFlowI
 
       const bid = c.bid ?? null
       const ask = c.ask ?? null
-      // "Near ask" = last price ≥ 98% of ask. Two prior bugs in this gate:
+      // "Near ask" = last price ≥ NEAR_ASK_FRACTION · ask. Prior bugs in this
+      // gate:
       //   (a) the `mid != null` fallback was dead code — `mid = (bid+ask)/2`
       //       requires BOTH bid and ask, so when ask is null mid is also
       //       null and the branch never fired.
@@ -77,8 +99,17 @@ export function unusualFlow(calls: CallOrPut[], puts: CallOrPut[]): UnusualFlowI
       //       `lastPrice >= 0 * 0.98 = 0` always true, marking every
       //       illiquid trade as a near-ask buy → false BULLISH/BEARISH
       //       sentiment. Now we require ask > 0 explicitly.
-      const nearAsk = ask != null && ask > 0
-        ? c.lastPrice >= ask * 0.98
+      //   (c) Phase 14 (Q3-H-1): a closed / crossed book (bid >= ask) cannot
+      //       be classified — the trade-classification literature explicitly
+      //       skips trades when no valid two-sided quote exists (Lee-Ready
+      //       1991 §III, Ellis-Michaely-O'Hara 2000 §IV.B). We now also
+      //       refuse classification when (ask - bid) <= 0, defaulting to
+      //       NEUTRAL via `nearAsk = false`. This matters most around the
+      //       open/close where bids briefly cross asks during the matching
+      //       process and stale prints would otherwise be mis-tagged.
+      const spreadValid = bid != null && ask != null && ask - bid > 0
+      const nearAsk = ask != null && ask > 0 && spreadValid
+        ? c.lastPrice >= ask * NEAR_ASK_FRACTION
         : false
 
       // Sentiment: near-ask call buy = BULLISH; near-ask put buy = BEARISH
