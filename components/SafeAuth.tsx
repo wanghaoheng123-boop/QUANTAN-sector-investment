@@ -35,9 +35,10 @@ function AuthContent() {
         <button
           type="button"
           onClick={() => signOut({ callbackUrl: '/' })}
+          aria-label="Sign out"
           className="flex items-center gap-1 text-xs font-medium text-slate-400 hover:text-white px-2 py-1.5 rounded-md hover:bg-slate-800 transition-colors"
         >
-          <LogOut className="w-3.5 h-3.5" />
+          <LogOut className="w-3.5 h-3.5" aria-hidden="true" />
           <span className="hidden sm:inline">Sign out</span>
         </button>
       </div>

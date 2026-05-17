@@ -193,8 +193,12 @@ export async function GET(
       const strongSell = safeNum(current.strongSell as number) ?? 0
       const total = strongBuy + buy + hold + sell + strongSell
       if (total > 0) {
-        if ((strongBuy + buy) / total > 0.6) analystRating = 'BUY'
-        else if ((sell + strongSell) / total > 0.4) analystRating = 'SELL'
+        // R4-M-3 (Phase 14): use >= so exact-threshold ties (e.g. 60% bullish)
+        // land on the "stronger consensus" side. Strict-greater would silently
+        // demote a 60/40 buy-vs-rest split to HOLD, which contradicts the
+        // semantics of the threshold ("strong consensus AT 60%+").
+        if ((strongBuy + buy) / total >= 0.6) analystRating = 'BUY'
+        else if ((sell + strongSell) / total >= 0.4) analystRating = 'SELL'
         else analystRating = 'HOLD'
       }
     }
