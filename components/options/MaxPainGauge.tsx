@@ -1,11 +1,29 @@
 'use client'
 
 interface Props {
-  maxPain: number
+  /**
+   * Phase 14 wave 7: tightened to `number | null` because
+   * `lib/options/sentiment.ts:maxPain` actually returns `number | null` —
+   * the previous non-null type was a lie that surfaced as a `.toFixed`
+   * crash on every chain with no OI.
+   */
+  maxPain: number | null
   spot: number
 }
 
 export default function MaxPainGauge({ maxPain, spot }: Props) {
+  // Phase 14 wave 7: defensive guard. Without this, spot=0 → range=0 →
+  // (price-min)/(max-min) = 0/0 = NaN → invisible markers + a NaN-position
+  // CSS warning every render. Plus `(maxPain - spot)/spot` → Infinity at
+  // spot=0. A null maxPain (no OI on the chain) hit `.toFixed` and threw.
+  if (!Number.isFinite(spot) || spot <= 0 || maxPain == null || !Number.isFinite(maxPain)) {
+    return (
+      <div className="text-xs text-slate-500 py-2">
+        Max-pain data unavailable for this chain.
+      </div>
+    )
+  }
+
   const range = spot * 0.08  // ±8% around spot
   const min = spot - range
   const max = spot + range

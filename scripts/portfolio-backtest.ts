@@ -70,10 +70,21 @@ function loadAllInstruments(): {
   const instrumentData: Record<string, OhlcvRow[]> = {}
   const sectorMap: Record<string, string> = {}
 
+  // Phase 14 wave 7: only class-share filenames use dash→dot mangling.
+  // Crypto pairs like BTC-USD.json must stay as BTC-USD (matches the
+  // normalizeTicker regex updated in R4-M-2). Previously every dash was
+  // replaced unconditionally, mangling BTC-USD → BTC.USD and breaking the
+  // sector-attribution lookup for every crypto file.
+  const CLASS_SHARE_TICKERS = new Set(['BRK-B', 'BRK-A', 'BF-B', 'BF-A', 'RDS-B', 'RDS-A'])
+  function tickerFromFilename(filename: string): string {
+    const base = filename.replace('.json', '')
+    return CLASS_SHARE_TICKERS.has(base) ? base.replace('-', '.') : base
+  }
+
   for (const f of readdirSync(dataDir).filter(f => f.endsWith('.json'))) {
     const raw = readFileSync(join(dataDir, f), 'utf-8')
     const data = JSON.parse(raw) as CandleFile
-    const ticker = f.replace('.json', '').replace(/-/g, '.')
+    const ticker = tickerFromFilename(f)
     const rows: OhlcvRow[] = (data.candles ?? []).filter(
       c => Number.isFinite(c.time) && Number.isFinite(c.open) &&
            Number.isFinite(c.high) && Number.isFinite(c.low) && Number.isFinite(c.close),

@@ -277,6 +277,17 @@ export function runPortfolioBacktest(
           ? Math.floor(pos.currentShares * exitCheck.partialFraction)
           : pos.currentShares
 
+        // Phase 14 wave 7: skip zero-share partial exits.
+        // Bug: small positions (currentShares = 1 with partialFraction = 0.5)
+        // floor to exitShares = 0 but the prior code still pushed a "trade"
+        // record (shares=0, pnlDollar=0) and flipped partialExitDone=true,
+        // poisoning win-rate stats (zero-share trades count toward the
+        // denominator) and stripping the position of its profit-target exit
+        // path so it could only exit via trailing stop afterwards.
+        if (exitCheck.isPartial && exitShares <= 0) {
+          continue  // keep position intact, partialExitDone stays false
+        }
+
         const pnlPct = (exitPrice - pos.entryPrice) / pos.entryPrice
         const pnlDollar = exitShares * (exitPrice - pos.entryPrice)
 

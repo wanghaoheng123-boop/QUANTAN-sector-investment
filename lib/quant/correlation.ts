@@ -72,7 +72,25 @@ export function maxCorrelationVsPeers(
   minWindow = 20,
 ): number | null {
   if (candidate.length < minWindow) return null
-  let maxAbsRho = 0
+  // Phase 14 wave 7: track SIGNED maximum (most-positive rho) instead of |rho|.
+  // Markowitz (1952) "Portfolio Selection": a negatively-correlated holding
+  // is diversifying — it should NOT shrink Kelly. The prior implementation
+  // used `Math.abs(rho)`, which conflated a +0.9 momentum overlap (real risk)
+  // with a -0.7 gold-vs-equities hedge (variance reduction). Both got identical
+  // sizing penalties, systematically blocking the additions that most reduce
+  // portfolio variance.
+  //
+  // CAVEAT — tail-correlation flip: in extreme drawdowns, correlations often
+  // spike toward +1 across the book (e.g., 2008, 2020-Mar). A historically
+  // negative correlation provides less diversification than its long-run rho
+  // suggests when you need it most. The 0.20 gate in correlationAdjustedKelly
+  // is set conservatively to absorb some of this risk; if a future phase wants
+  // a stricter "tail-aware" model, switch to signed but adjust the gate down.
+  //
+  // Reference: Markowitz, H. (1952). "Portfolio Selection." Journal of
+  //            Finance 7(1), p77-91. Diversification benefit grows as
+  //            correlation decreases (and is maximised at rho = -1).
+  let maxRho = -Infinity
   let measured = false
   for (const peer of peers) {
     if (peer.length < minWindow) continue
@@ -83,14 +101,14 @@ export function maxCorrelationVsPeers(
     const rho = pearsonCorrelation(a, b)
     if (rho == null) continue
     measured = true
-    const abs = Math.abs(rho)
-    if (abs > maxAbsRho) maxAbsRho = abs
+    if (rho > maxRho) maxRho = rho
   }
   // If we couldn't measure correlation against ANY peer, return null —
   // the candidate is genuinely-isolated (e.g. brand-new portfolio with
   // no peers, or all peers are too short). Callers treat null per their
   // own fail-mode policy.
-  return measured ? maxAbsRho : (peers.length === 0 ? 0 : null)
+  if (!measured) return peers.length === 0 ? 0 : null
+  return maxRho
 }
 
 /**
