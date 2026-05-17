@@ -85,6 +85,25 @@ function buildAnalysis(
   const sharesOutstanding = safeNum(keyStats?.sharesOutstanding ?? financialData?.sharesOutstanding)
   const sharesFloat = safeNum(keyStats?.ordinarySharesNumber ?? financialData?.sharesOutstanding)
 
+  // Phase 14 (R4-H-4): silent null fallback hid Yahoo schema drift. When
+  // the quote came back populated but sharesFloat resolved to null, the
+  // route used to return null silently — operators never saw it, so a
+  // Yahoo field rename or coverage gap could degrade the float-based
+  // ratios across the user base without detection. Emit a single
+  // structured warn so log aggregation can alert on drift. Behavior is
+  // unchanged: downstream still treats null as "unknown" and proceeds.
+  const quoteHasPrice = quote && quote.price > 0
+  if (quoteHasPrice && sharesFloat === null) {
+    console.warn(JSON.stringify({
+      event: 'darkpool.shares_float_missing',
+      ticker,
+      keyStatsHasOrdinaryShares: keyStats?.ordinarySharesNumber !== undefined,
+      keyStatsHasSharesOutstanding: keyStats?.sharesOutstanding !== undefined,
+      financialDataHasSharesOutstanding: financialData?.sharesOutstanding !== undefined,
+      fetchedAt: new Date().toISOString(),
+    }))
+  }
+
   // Yahoo Finance does not publish per-ticker off-exchange share counts via public API.
   // offExchangePct would require Finra ADF aggregate data which is not accessible without a
   // dedicated data vendor (Bloomberg BVAL, Refinitiv, or Finra itself).

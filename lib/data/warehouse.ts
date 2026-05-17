@@ -71,6 +71,33 @@ function createSchema(db: Db): void {
 
     CREATE INDEX IF NOT EXISTS idx_candles_ticker_date ON candles(ticker, date);
   `)
+
+  // R4-H-6 / Phase 14 S1 — idempotent schema migration for the `quotes` table.
+  //
+  // The `CREATE TABLE IF NOT EXISTS` above only fires on a brand-new DB. Older
+  // dev/prod databases were created with just (ticker, price, updated_at) and
+  // never received the change_val / change_pct / volume / market_cap columns,
+  // breaking every upsertQuote call (test suite + production routes).
+  //
+  // SQLite's `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` exists from 3.35+
+  // (PRAGMA query is cheaper to validate). We use the PRAGMA approach so we
+  // remain compatible with older SQLite bindings.
+  const existing = new Set(
+    (db.prepare(`PRAGMA table_info(quotes)`).all() as { name: string }[])
+      .map(c => c.name),
+  )
+  const addIfMissing = (name: string, decl: string) => {
+    if (!existing.has(name)) {
+      db.exec(`ALTER TABLE quotes ADD COLUMN ${name} ${decl}`)
+    }
+  }
+  // Each ADD COLUMN must be NULL-defaultable (SQLite restriction: cannot add
+  // NOT NULL without a default). DEFAULT 0 is safe for change_val/change_pct
+  // (no info = "flat" rather than "missing"); NULL for the optional fields.
+  addIfMissing('change_val', 'REAL NOT NULL DEFAULT 0')
+  addIfMissing('change_pct', 'REAL NOT NULL DEFAULT 0')
+  addIfMissing('volume', 'REAL')
+  addIfMissing('market_cap', 'REAL')
 }
 
 // ─── Read Operations ─────────────────────────────────────────────────────────

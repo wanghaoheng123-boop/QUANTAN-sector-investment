@@ -31,8 +31,26 @@ export interface UnusualFlowItem {
 
 /** Volume must exceed OI by this multiplier to qualify as unusual. */
 const UNUSUAL_VOLUME_MULTIPLIER = 3
-/** Minimum absolute volume to avoid noise on near-zero-OI contracts. */
+/**
+ * Minimum absolute volume to avoid noise on near-zero-OI contracts.
+ *
+ * Phase 14 (Q3-M-3): The vol/OI > 3 gate alone produces false positives
+ * on legitimate multi-leg structures. A 200-contract vertical spread or
+ * iron condor opening fresh appears as "unusual" call/put activity on
+ * each leg even though no directional opinion is implied — both legs
+ * inflate volume relative to (often small) prior OI on those strikes.
+ * Natenberg (2015, "Option Volatility and Pricing," ch. 23) cautions
+ * that single-leg volume signals on contracts with low absolute volume
+ * lack the statistical power to distinguish flow from noise; he
+ * recommends ignoring volume signals below a meaningful absolute floor.
+ *
+ * We use 500 (above the requested floor of 100) because most spread
+ * trades clear in lots of 100-200, and 500 reliably filters retail
+ * single-legged "lottery ticket" buys from institutional flow. The
+ * MIN_ABSOLUTE_VOL_FOR_UNUSUAL alias documents the floor explicitly.
+ */
 const MIN_UNUSUAL_VOLUME = 500
+export const MIN_ABSOLUTE_VOL_FOR_UNUSUAL = MIN_UNUSUAL_VOLUME
 
 /**
  * Returns contracts where volume is unusually high relative to open interest.

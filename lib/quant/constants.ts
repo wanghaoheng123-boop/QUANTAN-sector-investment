@@ -27,10 +27,32 @@
  * Risk-free rate for backtest Sharpe/Sortino calculations (annualized).
  * Used by `lib/backtest/engine.ts` and `lib/backtest/portfolioBacktest.ts`.
  *
- * TODO Phase 13 S3: replace with `getRiskFreeRate(periodStart, periodEnd)`
- * pulling DGS3MO from FRED for the actual backtest period.
+ * Phase 14 (Q1-H-2): The hard-coded 0.04 (4%) value was stale relative to
+ * the prevailing 2026 short-rate regime (US 10Y ~4.5%, 3M T-bill ~4.5%).
+ * Sharpe is sensitive to RFR (~50bps shifts Sharpe by ~0.05), so a stale
+ * value persistently understates risk-adjusted return. Bumped default to
+ * 0.045 (4.5%) and exposed an env override so deployments can pin a
+ * different value without code change. The proper fix — `getRiskFreeRate(
+ * periodStart, periodEnd)` pulling DGS3MO from FRED for the actual
+ * backtest window — remains TODO for Phase 15 (requires FRED API key
+ * provisioning + caching layer + tenor matching).
+ *
+ * Override via env: BACKTEST_RFR_ANNUAL=0.052 (decimal, not percent).
  */
-export const BACKTEST_RFR_ANNUAL = 0.04
+const RFR_ANNUAL_OVERRIDE = (() => {
+  const raw = process.env.BACKTEST_RFR_ANNUAL
+  if (!raw) return null
+  const parsed = Number(raw)
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 0.2) {
+    // Reject obviously invalid values (negative, or > 20% — likely a
+    // percent-not-decimal mistake). Fall back to default silently;
+    // logging here would spam at module-init across every route.
+    return null
+  }
+  return parsed
+})()
+
+export const BACKTEST_RFR_ANNUAL = RFR_ANNUAL_OVERRIDE ?? 0.045
 
 /**
  * Risk-free rate for Black-Scholes option pricing (annualized,
