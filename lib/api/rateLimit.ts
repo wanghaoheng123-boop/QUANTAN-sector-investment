@@ -106,15 +106,40 @@ export function checkRateLimit(
 }
 
 /**
- * Extract a rate-limit key from a NextRequest. Uses x-forwarded-for header
- * (trusted in Vercel deployments) with a fallback to x-real-ip or a hash of
- * the request's properties.
+ * Extract a rate-limit key from a NextRequest.
+ *
+ * R7-C-2 (Phase 14 S1 Security fix): `x-forwarded-for` is ONLY trusted on
+ * Vercel, where the edge network sets it from the true client IP and strips
+ * any caller-supplied value. On Railway, self-hosted, or raw Node.js the
+ * header is spoofable: any client can set any IP, effectively bypassing per-IP
+ * rate limiting by rotating values.
+ *
+ * Guard: trust `x-forwarded-for` only when `process.env.VERCEL === '1'`.
+ * Otherwise fall back to `x-real-ip` (nginx proxy convention) or the literal
+ * "server" sentinel to avoid an attacker rotating keys.
+ *
+ * Citation: OWASP "Testing for IP Forwarding" (WSTG-ATHN-013) — "Only trust
+ * forwarding headers from known, controlled proxies."
+ * CWE-770: Allocation of Resources Without Limits or Throttling.
  */
 export function getRateLimitKey(request: Request, routeName: string): string {
-  const forwarded = request.headers.get('x-forwarded-for')
-  const ip = forwarded?.split(',')[0]?.trim()
-    || request.headers.get('x-real-ip')
-    || 'unknown'
+  const isVercel = process.env.VERCEL === '1'
+
+  let ip: string
+  if (isVercel) {
+    // Vercel sets x-forwarded-for from the true client IP (first entry).
+    // Safe to trust; any attacker-supplied value has been overwritten.
+    ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+      || request.headers.get('x-real-ip')
+      || 'unknown'
+  } else {
+    // Non-Vercel: x-forwarded-for is not controlled by our edge → do NOT trust it.
+    // Use x-real-ip (nginx/Caddy upstream) or a fixed "server" key which
+    // degrades to global (not per-IP) limiting — safer than trusting a
+    // spoofable header.
+    ip = request.headers.get('x-real-ip') || 'server'
+  }
+
   return `${routeName}:${ip}`
 }
 

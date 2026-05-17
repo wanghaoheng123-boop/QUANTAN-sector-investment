@@ -104,8 +104,28 @@ function newPortfolio(initialCapital: number): PortfolioState {
   }
 }
 
-function currentEquity(state: PortfolioState): number {
-  return state.capital + state.position * state.avgCost
+/**
+ * Mark-to-market equity.
+ *
+ * Q1-C-1 (Phase 14 S1): previously returned `capital + position * avgCost`
+ * (cost basis), meaning equity never changed while a position was open. The
+ * drawdown circuit breaker therefore fired only AFTER an exit, not while the
+ * position was bleeding.
+ *
+ * Correct formula: `capital + position × currentMarketPrice`.
+ * When no position is held (`position = 0`), both expressions are identical.
+ *
+ * Citation: Bacon, C. R. (2008). *Practical Risk-Adjusted Performance
+ * Measurement*. Wiley. p 9 — "market value of holdings at today's prices".
+ *
+ * @param currentPrice  Latest bar close price for open-position mark-to-market.
+ *                      Omit (or pass undefined) only when position is flat.
+ */
+function currentEquity(state: PortfolioState, currentPrice?: number): number {
+  const positionValue = state.position > 0 && currentPrice != null && Number.isFinite(currentPrice)
+    ? state.position * currentPrice
+    : state.position * state.avgCost
+  return state.capital + positionValue
 }
 
 // Phase 13 S2 fix (F1.6): tickers that trade 7 days a week need 365-day
@@ -174,14 +194,24 @@ export function backtestInstrument(
 
     // ── ATR-adaptive stop-loss + trailing stop ──
     if (state.openTrade) {
-      // ATR% at entry for adaptive stop (stored at entry)
-      const atrAtEntry = state.openTrade.atrAtrPctAtEntry ?? 0.10
+      // ATR% at entry for adaptive stop (stored at entry, PERCENT scale: e.g. 1.5 = 1.5%).
+      // Q1-H-4 (Phase 14 S1): both reads now use the same fallback of 1.0 (1% ATR).
+      // The prior code had two inconsistent fallbacks: 0.10 and 10.
+      const atrAtEntryPct = state.openTrade.atrAtrPctAtEntry ?? 1.0
       // Adaptive stop: 1.5x ATR%, capped at 15%.
-      // FIX P12-H2: Instrument-type-aware floor — ETF: 1.5% (XLK ATR ~1.8%, 3% was always active),
-      // Stock: 3% (still too low for high-vol like NVDA but prevents trivial noise exits on ETFs).
+      // Q1-H-4 (Phase 14 S1 Critical fix): atrAtrPctAtEntry is stored as PERCENTAGE (0–100 scale,
+      // e.g. 1.5 for a 1.5% ATR) because line L321 multiplies by 100. The prior code computed
+      //   1.5 * atrAtEntry  (treating the value as a decimal fraction)
+      // which for a typical 1.5% ATR gave  1.5 × 1.5 = 2.25 → capped to 0.15 (15%) always.
+      // The stop was therefore ALWAYS 15%, never adaptive. Correct formula divides by 100:
+      //   1.5 × (atrPct / 100) → 0.0225 (2.25%) → above ETF floor (1.5%), below stock floor (3%) so
+      //   the floor controls for low-volatility ETFs and the 1.5×ATR value controls for stocks.
+      //
+      // Citation: Wilder (1978) "New Concepts in Technical Trading Systems" ch.3 — ATR-based
+      // stop placement at 1–3× ATR measured in price units (dollars), not percentage-of-percentage.
       const ETF_STOP_FLOOR_TICKERS = ['XLK','XLE','XLV','XLF','XLI','XLU','XLB','XLP','XLY','XLRE','XLC','SPY','QQQ','TLT','UUP']
       const atrFloor = ETF_STOP_FLOOR_TICKERS.includes(ticker) ? 0.015 : 0.03
-      const atrStopPct = Math.max(atrFloor, Math.min(0.15, 1.5 * atrAtEntry))
+      const atrStopPct = Math.max(atrFloor, Math.min(0.15, 1.5 * atrAtEntryPct / 100))
       const stopPx = state.openTrade.action === 'BUY'
         ? state.openTrade.entryPrice * (1 - atrStopPct)
         : state.openTrade.entryPrice * (1 + atrStopPct)
@@ -193,7 +223,7 @@ export function backtestInstrument(
         // Profit measured from entry
         const profitFromEntry = (signalPrice - state.openTrade.entryPrice) / state.openTrade.entryPrice
         // Convert stored ATR% (at entry) back to dollar ATR: ATR% / 100 * entryPrice
-        const atrAtEntryDollar = ((state.openTrade.atrAtrPctAtEntry ?? 10) / 100) * state.openTrade.entryPrice
+        const atrAtEntryDollar = (atrAtEntryPct / 100) * state.openTrade.entryPrice
         const twoAtrProfit = (2 * atrAtEntryDollar) / state.openTrade.entryPrice
         const fourAtrProfit = (4 * atrAtEntryDollar) / state.openTrade.entryPrice
         if (profitFromEntry >= twoAtrProfit) {
@@ -269,7 +299,8 @@ export function backtestInstrument(
     }
 
     // ── Portfolio max-drawdown circuit breaker ──
-    const eq = currentEquity(state)
+    // Q1-C-1: pass signalPrice so open-position loss is reflected mark-to-market.
+    const eq = currentEquity(state, signalPrice)
     if (eq > state.peakEquity) state.peakEquity = eq
     const dd = (state.peakEquity - eq) / state.peakEquity
     if (dd >= cfg.maxDrawdownCap && state.openTrade) {
@@ -318,12 +349,14 @@ export function backtestInstrument(
         regime: signal.regime.label, dipSignal: signal.regime.dipSignal,
         confidence: signal.confidence, pnlPct: null, reason: signal.reason,
         // FIX P12-H3: Use atrVals[i-1] (prior bar) not atrVals[i] — signal bar's own TR not yet closed
-        atrAtrPctAtEntry: Number.isFinite(atrVals[Math.max(0, i - 1)]) ? (atrVals[Math.max(0, i - 1)] / signalPrice) * 100 : 0.10,
+        // Q1-H-4: fallback is 1.0 (1% ATR) — consistent with the percent-scale convention.
+        atrAtrPctAtEntry: Number.isFinite(atrVals[Math.max(0, i - 1)]) ? (atrVals[Math.max(0, i - 1)] / signalPrice) * 100 : 1.0,
         highestPriceAfterEntry: entryPrice,
       }
       state.confidenceSum += signal.confidence
       state.confidenceCount++
-      state.equityHistory.push(currentEquity(state))
+      // Q1-C-1: pass entryPrice — position just opened at this price (mark-to-market = cost basis).
+      state.equityHistory.push(currentEquity(state, entryPrice))
 
     } else if (signal.action === 'SELL' && state.openTrade) {
       // SELL exits at today's close (signal price) — realistic same-day exit on regime shift
@@ -341,7 +374,8 @@ export function backtestInstrument(
       state.equityHistory.push(currentEquity(state))
 
     } else {
-      state.equityHistory.push(currentEquity(state))
+      // Q1-C-1: HOLD — pass signalPrice so equity reflects open-position mark-to-market.
+      state.equityHistory.push(currentEquity(state, signalPrice))
     }
   }
 

@@ -24,6 +24,7 @@ function looksLikeDirectTicker(s: string): string | null {
 
 function getRecentSearches(): Quote[] {
   if (typeof window === 'undefined') return []
+  // R5-M-3: localStorage may throw in private/incognito mode or when storage quota is exceeded.
   try {
     const stored = localStorage.getItem(RECENT_SEARCHES_KEY)
     return stored ? JSON.parse(stored) : []
@@ -34,6 +35,7 @@ function getRecentSearches(): Quote[] {
 
 function addRecentSearch(quote: Quote): void {
   if (typeof window === 'undefined') return
+  // R5-M-3: localStorage may throw in private/incognito mode or when storage quota is exceeded.
   try {
     const recent = getRecentSearches().filter(r => r.symbol !== quote.symbol)
     const updated = [quote, ...recent].slice(0, MAX_RECENT)
@@ -43,6 +45,7 @@ function addRecentSearch(quote: Quote): void {
 
 function removeRecentSearch(symbol: string): void {
   if (typeof window === 'undefined') return
+  // R5-M-3: localStorage may throw in private/incognito mode or when storage quota is exceeded.
   try {
     const recent = getRecentSearches().filter(r => r.symbol !== symbol)
     localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(recent))

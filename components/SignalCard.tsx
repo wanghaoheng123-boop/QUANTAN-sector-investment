@@ -1,5 +1,6 @@
 'use client'
 
+import { memo } from 'react'
 import { PriceSignal } from '@/lib/sectors'
 import { MetricTooltip } from '@/components/MetricTooltip'
 import { safeFixed } from '@/lib/format'
@@ -50,7 +51,10 @@ function formatRiskReward(signal: PriceSignal): string {
   return 'N/A'
 }
 
-export default function SignalCard({ signal, color, compact = false }: SignalCardProps) {
+// R5-H-2 (Phase 14 S1): wrap with React.memo so SignalCard only re-renders when its props
+// change. Signal cards are rendered in lists; memo prevents cascading re-renders when
+// unrelated parent state (e.g. a timeframe selector or quote stream) updates.
+function SignalCard({ signal, color, compact = false }: SignalCardProps) {
   const config = DIRECTION_CONFIG[signal.direction]
   const riskPct = formatRiskReward(signal)
   const session = signal.source === 'yahoo-session'
@@ -204,3 +208,5 @@ export default function SignalCard({ signal, color, compact = false }: SignalCar
     </div>
   )
 }
+
+export default memo(SignalCard)

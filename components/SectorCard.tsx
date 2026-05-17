@@ -1,5 +1,6 @@
 'use client'
 
+import { memo } from 'react'
 import Link from 'next/link'
 import { Sector } from '@/lib/sectors'
 import { PriceSignal } from '@/lib/sectors'
@@ -24,7 +25,10 @@ const SIGNAL_CONFIG = {
   WATCH: { bg: 'bg-blue-900/20',   border: 'border-blue-500/30',   text: 'text-blue-400' },
 }
 
-export default function SectorCard({ sector, quote, signal }: SectorCardProps) {
+// R5-H-2 (Phase 14 S1): wrap with React.memo so SectorCard only re-renders when its props
+// change. The dashboard grid renders one card per sector — without memo, a parent state
+// update (e.g. a live-quote tick for a single sector) re-renders all N cards.
+function SectorCard({ sector, quote, signal }: SectorCardProps) {
   const isUp = (quote?.changePct ?? 0) >= 0
   const sparkData =
     quote && quote.price > 0 && Number.isFinite(quote.change)
@@ -166,3 +170,5 @@ export default function SectorCard({ sector, quote, signal }: SectorCardProps) {
     </Link>
   )
 }
+
+export default memo(SectorCard)

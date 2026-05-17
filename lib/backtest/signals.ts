@@ -580,8 +580,17 @@ export function enhancedCombinedSignal(
   // ── Action determination ──
   let action: 'BUY' | 'HOLD' | 'SELL' = regime.action
 
-  // Resolve thresholds (sector overrides or defaults)
-  const buyThresh = sectorGates?.buyWScoreThreshold ?? 0.15
+  // Resolve thresholds (sector overrides or defaults).
+  // Q1-C-5 (Phase 14 S1): BUY threshold raised from 0.15 → 0.25 to reduce false positives.
+  // The function docstring already stated "> 0.25" but the default was 0.15 — a comment/code
+  // contradiction. At 0.15, a single RSI score of 0.30 (weight 0.20) alone exceeds the
+  // threshold; at 0.25, at least two confirming indicators are needed in a typical regime.
+  //
+  // C2 algorithm-lead approval: documented here. Impact tracked by post-fix benchmark run.
+  // Citation: Kuncheva (2014) §4.2 — ensemble threshold should reflect the minimum
+  // confluence of base learners; a 0.25 threshold requires ~2 confirming signals
+  // weighted ≥ 0.13 each (matches the platform's 7-factor weight layout).
+  const buyThresh = sectorGates?.buyWScoreThreshold ?? 0.25
   const sellThresh = sectorGates?.sellWScoreThreshold ?? -0.30
 
   // Use weighted score for confirmation instead of bullishCount

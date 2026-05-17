@@ -611,6 +611,14 @@ export default function KLineChart({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // R5-C-1 (Phase 14 S1): stable primitive dep for `vis` state.
+  // JSON.stringify(vis) in a dep array is correct for change-detection (same content → same
+  // string → effect does not re-run), but it re-serialises on every render.
+  // Memoising avoids the per-render re-serialisation cost.
+  // Placed HERE — before the data useEffect that references it — to satisfy TypeScript's
+  // linear const-before-use requirement.
+  const visSerialised = useMemo(() => JSON.stringify(vis), [vis])
+
   // ── B. Data update ──────────────────────────────────────────────
   useEffect(() => {
     if (!candleRef.current || candles.length === 0) return
@@ -794,7 +802,7 @@ export default function KLineChart({
         /* ignore */
       }
     }
-  }, [candles, darkPoolMarkers, newsMarkers, showRSI, indicatorsProp, JSON.stringify(vis), chartReadyGen])
+  }, [candles, darkPoolMarkers, newsMarkers, showRSI, indicatorsProp, visSerialised, chartReadyGen])
 
   const toggleIndicator = useCallback((key: VisKey) => {
     let next = {} as Record<VisKey, boolean>

@@ -26,8 +26,13 @@ const US_INDEX_SYMBOLS: ReadonlySet<string> = new Set([
  * Strict allowable ticker character set. Phase 13 F7.3 (Security): defense
  * against attempts to embed URL parameters or paths in the ticker token.
  *   AAPL, BRK-B, BRK.B, 9988.HK, GC=F, ^VIX, ^GSPC
+ *
+ * R4-M-2 (Phase 14 S1): explicit support for crypto pair tickers like BTC-USDT.
+ * The first character class covers standard symbols (letters, digits, dot, equals);
+ * the optional (-[A-Z0-9]{1,10}) suffix captures crypto BASE-QUOTE pairs such as
+ * BTC-USDT and ETH-USD without opening the character whitelist to arbitrary input.
  */
-const TICKER_REGEX = /^\^?[A-Z0-9][A-Z0-9.\-=]{0,15}$/
+const TICKER_REGEX = /^\^?[A-Z0-9][A-Z0-9.=]{0,14}(-[A-Z0-9]{1,10})?$/
 
 /**
  * Normalize a single ticker token from a user-supplied string.
