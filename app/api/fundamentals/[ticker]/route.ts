@@ -53,9 +53,27 @@ export async function GET(req: NextRequest, { params }: { params: { ticker: stri
         () => yahooFinance.quoteSummary(symbol, { modules: [...MODULES] }) as Promise<Record<string, unknown>>,
         { attempts: 2, timeoutMs: 10_000, retryLabel: 'fundamentals summary' }
       ),
-      withRetry(() => yahooFinance.chart(symbol, { period1, interval: '1d' }), { attempts: 2, timeoutMs: 9000, retryLabel: 'fundamentals chart' }).catch(() => null),
-      withRetry(() => yahooFinance.chart('SPY', { period1, interval: '1d' }), { attempts: 2, timeoutMs: 9000, retryLabel: 'fundamentals spy chart' }).catch(() => null),
-      withRetry(() => yahooFinance.quote(symbol), { attempts: 2, timeoutMs: 6000, retryLabel: 'fundamentals quote' }).catch(() => null),
+      // Phase 14 wave 8: replace silent .catch(() => null) with diagnostic logging.
+      // Previously, three of the four Yahoo calls swallowed errors without ANY signal,
+      // so operators couldn't distinguish "Yahoo returned no chart for this ticker"
+      // from "Yahoo's chart endpoint is down" or "auth/quota error from yahoo-finance2".
+      // We still return null on failure (fail-open is the right call here — the route
+      // can still respond with summary-only data), but the failure is now visible.
+      withRetry(() => yahooFinance.chart(symbol, { period1, interval: '1d' }), { attempts: 2, timeoutMs: 9000, retryLabel: 'fundamentals chart' })
+        .catch((err) => {
+          console.warn(JSON.stringify({ event: 'fundamentals.chart_fetch_failed', ticker: symbol, message: (err as Error)?.message }))
+          return null
+        }),
+      withRetry(() => yahooFinance.chart('SPY', { period1, interval: '1d' }), { attempts: 2, timeoutMs: 9000, retryLabel: 'fundamentals spy chart' })
+        .catch((err) => {
+          console.warn(JSON.stringify({ event: 'fundamentals.spy_chart_fetch_failed', message: (err as Error)?.message }))
+          return null
+        }),
+      withRetry(() => yahooFinance.quote(symbol), { attempts: 2, timeoutMs: 6000, retryLabel: 'fundamentals quote' })
+        .catch((err) => {
+          console.warn(JSON.stringify({ event: 'fundamentals.quote_fetch_failed', ticker: symbol, message: (err as Error)?.message }))
+          return null
+        }),
     ])
 
     const quotes = chart?.quotes?.filter(hasPositiveClose) ?? []

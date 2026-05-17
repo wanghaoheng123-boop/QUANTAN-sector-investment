@@ -110,8 +110,23 @@ function formatLargeNum(n: number): string {
   return `$${n.toFixed(0)}`
 }
 
-function fetchWithFallback<T>(p: Promise<T>, fallback: T): Promise<T> {
-  return p.catch(() => fallback)
+/**
+ * Phase 14 wave 8: log fallback usage so operators can detect when Yahoo
+ * is returning errors for a brief's component fetches. Prior version
+ * silently swallowed everything — a chronically failing fetch looked
+ * indistinguishable from a healthy "no data on this ticker" response.
+ */
+function fetchWithFallback<T>(p: Promise<T>, fallback: T, label?: string): Promise<T> {
+  return p.catch((err: unknown) => {
+    if (label) {
+      console.warn(JSON.stringify({
+        event: 'briefs.fetch_fallback',
+        label,
+        message: (err as Error)?.message,
+      }))
+    }
+    return fallback
+  })
 }
 
 // ─── Main handler ─────────────────────────────────────────────────────────────
@@ -136,18 +151,21 @@ export async function GET(
   const etf = sectorMeta.etf
   const now = new Date()
 
-  // Parallel fetch: ETF quote, ETF summary stats, holdings quotes, news
+  // Parallel fetch: ETF quote, ETF summary stats, holdings quotes, news.
+  // Phase 14 wave 8: labels added so any fallback usage is observable.
   const [etfQuote, etfSummary, newsResult] = await Promise.allSettled([
-    fetchWithFallback(yf.quote(etf), null),
+    fetchWithFallback(yf.quote(etf), null, `quote:${etf}`),
     fetchWithFallback(
       yf.quoteSummary(etf, {
         modules: ['defaultKeyStatistics', 'financialData', 'recommendationTrend', 'earningsTrend'],
       }),
-      null
+      null,
+      `summary:${etf}`,
     ),
     fetchWithFallback(
       yf.search(etf, { newsCount: 8 }),
-      null
+      null,
+      `news:${etf}`,
     ),
   ])
 

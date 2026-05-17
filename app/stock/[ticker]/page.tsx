@@ -177,25 +177,41 @@ export default function StockPage({ params }: { params: { ticker: string } }) {
     setDarkPoolPrints(generateDarkPoolPrints(ticker))
   }, [ticker])
 
-  // Dark pool API (only when tab is active)
+  // Dark pool API (only when tab is active).
+  // Phase 14 wave 8: log the error so a silent fetch failure leaves a trace
+  // (prior `.catch(() => setLoading(false))` made debugging impossible).
   useEffect(() => {
     if (activeTab !== 'darkpool') return
+    let cancelled = false
     setDarkPoolApiLoading(true)
     setDarkPoolApiData(null)
     fetch(`/api/darkpool/${encodeURIComponent(ticker)}`)
       .then(r => r.json())
-      .then(data => { setDarkPoolApiData(data); setDarkPoolApiLoading(false) })
-      .catch(() => setDarkPoolApiLoading(false))
+      .then(data => {
+        if (cancelled) return
+        setDarkPoolApiData(data)
+        setDarkPoolApiLoading(false)
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return
+        console.warn('[stock/darkpool] fetch failed', ticker, err)
+        setDarkPoolApiLoading(false)
+      })
+    return () => { cancelled = true }
   }, [ticker, activeTab])
 
-  // Options chain (lazy — only when options tab is first activated)
+  // Options chain (lazy — only when options tab is first activated).
+  // Phase 14 wave 8: cancellation flag prevents a late response from a
+  // previous ticker from overwriting state after the user navigates.
   useEffect(() => {
     if (activeTab !== 'options') return
     if (optionsChain) return  // already loaded
+    let cancelled = false
     setOptionsLoading(true)
     fetch(`/api/options/${encodeURIComponent(ticker)}`)
       .then(r => r.json())
       .then(data => {
+        if (cancelled) return
         if (data.calls) {
           setOptionsChain({
             ticker: data.symbol,
@@ -211,7 +227,12 @@ export default function StockPage({ params }: { params: { ticker: string } }) {
         }
         setOptionsLoading(false)
       })
-      .catch(() => setOptionsLoading(false))
+      .catch((err: unknown) => {
+        if (cancelled) return
+        console.warn('[stock/options] fetch failed', ticker, err)
+        setOptionsLoading(false)
+      })
+    return () => { cancelled = true }
   }, [ticker, activeTab, optionsChain])
 
   const news = getNewsForSector(tickerSector?.slug ?? 'technology')
