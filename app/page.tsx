@@ -57,10 +57,16 @@ export default function HomePage() {
   const [newsLoading, setNewsLoading] = useState(true)
   const [activeFilter, setActiveFilter] = useState<string>('ALL')
 
-  const fetchPrices = useCallback(async () => {
+  // Phase 14 wave 10: signal-aware fetch.
+  // Prior code had two issues: (1) the 15-second poll could stack requests
+  // on slow networks (no abort of in-flight fetch when a new tick fired),
+  // and (2) setQuotes/setLastUpdate could fire on an unmounted component
+  // after page navigation away from the dashboard.
+  const fetchPrices = useCallback(async (signal?: AbortSignal) => {
     try {
-      const res = await fetch('/api/prices')
+      const res = await fetch('/api/prices', { signal })
       const data = await res.json()
+      if (signal?.aborted) return
       if (data.quotes) {
         const map: Record<string, Quote> = {}
         data.quotes.forEach((q: Quote) => { map[q.ticker] = q })
@@ -68,37 +74,55 @@ export default function HomePage() {
         setLastUpdate(new Date())
       }
     } catch (e: unknown) {
+      if (signal?.aborted || (e instanceof DOMException && e.name === 'AbortError')) return
       showToast(`Price refresh failed: ${e instanceof Error ? e.message : 'Network error'}`, 'warn', 4000)
     }
   }, [showToast])
 
   useEffect(() => {
-    fetchPrices()
+    // Each tick owns its own AbortController so a slow previous fetch
+    // doesn't race a new one. On unmount, the latest controller aborts.
+    let activeController = new AbortController()
+    void fetchPrices(activeController.signal)
     const interval = setInterval(() => {
-      fetchPrices()
+      activeController.abort()  // cancel any in-flight previous fetch
+      activeController = new AbortController()
+      void fetchPrices(activeController.signal)
       setCountdown(15)
     }, 15000)
-    return () => clearInterval(interval)
+    return () => {
+      clearInterval(interval)
+      activeController.abort()
+    }
   }, [fetchPrices])
 
-  // Fetch real news from Yahoo Finance
+  // Fetch real news from Yahoo Finance. Cancellation flag prevents the
+  // late `setNewsBriefs` / `setNewsLoading` updates from firing after unmount.
   useEffect(() => {
+    const controller = new AbortController()
     async function fetchNews() {
       try {
-        const res = await fetch('/api/briefs')
+        const res = await fetch('/api/briefs', { signal: controller.signal })
+        if (controller.signal.aborted) return
         if (res.ok) {
           const data = await res.json()
+          if (controller.signal.aborted) return
           if (data.briefs) {
             setNewsBriefs(data.briefs)
           }
         }
       } catch (e: unknown) {
+        if (controller.signal.aborted || (e instanceof DOMException && e.name === 'AbortError')) return
         showToast(`News feed failed: ${e instanceof Error ? e.message : 'Network error'}`, 'warn', 5000)
       } finally {
-        setNewsLoading(false)
+        if (!controller.signal.aborted) setNewsLoading(false)
       }
     }
-    fetchNews()
+    void fetchNews()
+    return () => controller.abort()
+    // showToast is intentionally excluded — it's stable from the error-toast hook
+    // and we don't want re-fetches when its identity occasionally changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Countdown timer
@@ -113,8 +137,20 @@ export default function HomePage() {
   const sellSignals = useMemo(() => signals.filter((s) => s.direction === 'SELL'), [signals])
   const holdSignals = useMemo(() => signals.filter((s) => s.direction === 'HOLD'), [signals])
 
-  const topBuy = useMemo(() => buySignals.sort((a, b) => Math.abs(b.sessionChangePct ?? 0) - Math.abs(a.sessionChangePct ?? 0)).slice(0, 3), [buySignals])
-  const topSell = useMemo(() => sellSignals.sort((a, b) => Math.abs(b.sessionChangePct ?? 0) - Math.abs(a.sessionChangePct ?? 0)).slice(0, 2), [sellSignals])
+  // Phase 14 wave 10: spread BEFORE sort to avoid mutating the memoized filter
+  // result. Array.prototype.sort mutates in place — without the spread, the
+  // useMemo cache for `buySignals` would be reordered as a side effect, and
+  // any later consumer that iterates `buySignals` (currently only `.length`
+  // is read, but future code could iterate) would silently observe sorted
+  // order instead of filter order.
+  const topBuy = useMemo(
+    () => [...buySignals].sort((a, b) => Math.abs(b.sessionChangePct ?? 0) - Math.abs(a.sessionChangePct ?? 0)).slice(0, 3),
+    [buySignals],
+  )
+  const topSell = useMemo(
+    () => [...sellSignals].sort((a, b) => Math.abs(b.sessionChangePct ?? 0) - Math.abs(a.sessionChangePct ?? 0)).slice(0, 2),
+    [sellSignals],
+  )
   const topSignals = useMemo(() => [...topBuy, ...topSell], [topBuy, topSell])
 
   const signalMap = useMemo(() => signals.reduce<Record<string, PriceSignal>>((acc, s) => {
