@@ -121,7 +121,15 @@ export function getCandles(ticker: string): DailyBar[] | null {
       'SELECT date, open, high, low, close, volume FROM candles WHERE ticker = ? ORDER BY date ASC'
     ).all(ticker) as DailyBar[]
     return rows.length > 0 ? rows : null
-  } catch {
+  } catch (err) {
+    // R4-H-1 (Phase 14): structured log so a corrupt DB or I/O failure can
+    // be distinguished from a legitimate "ticker not in warehouse" miss.
+    // Semantics unchanged: callers still see null.
+    console.warn(JSON.stringify({
+      event: 'warehouse.getCandles_error',
+      ticker,
+      message: (err as Error)?.message,
+    }))
     return null
   }
 }
@@ -147,7 +155,13 @@ export function getCachedQuote(ticker: string): QuoteSnapshot | null {
       marketCap: row.market_cap,
       updatedAt: row.updated_at,
     }
-  } catch {
+  } catch (err) {
+    // R4-H-1 (Phase 14): see getCandles for rationale.
+    console.warn(JSON.stringify({
+      event: 'warehouse.getCachedQuote_error',
+      ticker,
+      message: (err as Error)?.message,
+    }))
     return null
   }
 }
@@ -161,7 +175,12 @@ export function warehouseTickers(): string[] {
   try {
     const rows = db.prepare('SELECT DISTINCT ticker FROM candles ORDER BY ticker').all() as Array<{ ticker: string }>
     return rows.map((r) => r.ticker)
-  } catch {
+  } catch (err) {
+    // R4-H-1 (Phase 14): see getCandles for rationale.
+    console.warn(JSON.stringify({
+      event: 'warehouse.warehouseTickers_error',
+      message: (err as Error)?.message,
+    }))
     return []
   }
 }

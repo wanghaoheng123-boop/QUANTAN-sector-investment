@@ -79,7 +79,12 @@ describe('getRateLimitKey', () => {
 
   const withVercelEnv = (vercel: boolean, fn: () => void) => {
     const original = process.env.VERCEL
-    process.env.VERCEL = vercel ? '1' : ''
+    if (vercel) {
+      process.env.VERCEL = '1'
+    } else {
+      // Off-Vercel: delete so the `=== '1'` guard takes the false branch.
+      delete process.env.VERCEL
+    }
     try { fn() } finally {
       if (original === undefined) delete process.env.VERCEL
       else process.env.VERCEL = original

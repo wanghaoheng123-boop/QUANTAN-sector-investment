@@ -33,9 +33,13 @@ export interface Greeks {
  * Maximum absolute error < 7.5e-8.
  */
 export function normalCdf(x: number): number {
-  // For extreme values clamp to avoid underflow
-  if (x < -8) return 0
-  if (x > 8) return 1
+  // Q3-H-2 (Phase 14): explicit branches at |z| ≥ 8 document the saturation
+  // boundary instead of relying on silent Math.exp underflow downstream.
+  // Φ(8) ≈ 1 - 6.2e-16 is below double-precision resolution, so returning
+  // exactly 1 (resp. 0) at the boundary is mathematically faithful.
+  if (Number.isNaN(x)) return NaN
+  if (x >= 8) return 1
+  if (x <= -8) return 0
 
   // A&S 26.2.17 coefficients
   const p  =  0.2316419

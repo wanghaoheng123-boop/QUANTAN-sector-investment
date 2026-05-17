@@ -235,6 +235,19 @@ export default function KLineChart({
   onIndicatorsChange,
   onTimeframeChange,
 }: KLineChartProps) {
+  // R5-M-1 (Phase 14): warn when a caller passes a partial `indicators`
+  // object. The spread below silently fills missing keys with defaults,
+  // which masks bugs where a parent forgot to wire up a new flag. The
+  // warning fires once per render where the prop is partial — dev only.
+  if (process.env.NODE_ENV !== 'production' && indicatorsIn) {
+    for (const k of Object.keys(DEFAULT_INDICATORS)) {
+      if (!(k in indicatorsIn)) {
+        // eslint-disable-next-line no-console
+        console.warn(`KLineChart: indicators prop missing key "${k}" — using default`)
+      }
+    }
+  }
+
   const indicatorsProp = useMemo(
     () => ({ ...DEFAULT_INDICATORS, ...indicatorsIn }),
     [indicatorsIn]
