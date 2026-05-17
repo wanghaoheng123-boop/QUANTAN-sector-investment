@@ -69,7 +69,10 @@ export default function BacktestPage() {
   const [selectedTickers, setSelectedTickers] = useState<string[]>([])
   const [tickerQuery, setTickerQuery] = useState('')
 
-  const fetchData = useCallback(async (showRefresh = false, tickers?: string[]) => {
+  // Phase 14 wave 9: accept an optional AbortSignal so rapid selectedTickers
+  // changes don't race. Prior code could resolve out-of-order — the older
+  // fetch sometimes won the race and overwrote state with stale data.
+  const fetchData = useCallback(async (showRefresh = false, tickers?: string[], signal?: AbortSignal) => {
     if (showRefresh) setRefreshing(true)
     try {
       const url = tickers && tickers.length > 0
@@ -78,21 +81,31 @@ export default function BacktestPage() {
       const res = await fetch(url, {
         headers: { Accept: 'application/json' },
         cache: 'no-store',
+        signal,
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json: BacktestData = await res.json()
+      // Re-check signal before committing state — if the effect was torn down
+      // while the response was in flight, do NOT update.
+      if (signal?.aborted) return
       setData(json)
       setError(null)
     } catch (e) {
+      // AbortError is expected on rapid re-fetch — swallow silently.
+      if (signal?.aborted || (e instanceof DOMException && e.name === 'AbortError')) return
       setError(e instanceof Error ? e.message : 'Failed to load backtest data')
     } finally {
-      setLoading(false)
-      setRefreshing(false)
+      if (!signal?.aborted) {
+        setLoading(false)
+        setRefreshing(false)
+      }
     }
   }, [])
 
   useEffect(() => {
-    void fetchData(false, selectedTickers.length > 0 ? selectedTickers : undefined)
+    const controller = new AbortController()
+    void fetchData(false, selectedTickers.length > 0 ? selectedTickers : undefined, controller.signal)
+    return () => controller.abort()
   }, [fetchData, selectedTickers])
 
   if (loading) {
@@ -600,18 +613,28 @@ function LiveSignalsPanel() {
   const [filterSector, setFilterSector] = useState<string>('All')
   const [filterAction, setFilterAction] = useState<string>('All')
 
-  const fetchLive = useCallback(async () => {
+  // Phase 14 wave 9: signal-aware fetch with diagnostic logging on failure.
+  const fetchLive = useCallback(async (signal?: AbortSignal) => {
     try {
-      const res = await fetch(apiUrl('/api/backtest/live'), { cache: 'no-store' })
+      const res = await fetch(apiUrl('/api/backtest/live'), { cache: 'no-store', signal })
       if (!res.ok) return
       const json = await res.json()
+      if (signal?.aborted) return
       setSignals(json)
       setLastFetched(new Date().toLocaleTimeString())
-    } catch { /* ignore */ }
-    finally { setLoading(false) }
+    } catch (err) {
+      if (signal?.aborted || (err instanceof DOMException && err.name === 'AbortError')) return
+      console.warn('[backtest/LiveSignalsPanel] fetch failed', err)
+    } finally {
+      if (!signal?.aborted) setLoading(false)
+    }
   }, [])
 
-  useEffect(() => { void fetchLive() }, [fetchLive])
+  useEffect(() => {
+    const controller = new AbortController()
+    void fetchLive(controller.signal)
+    return () => controller.abort()
+  }, [fetchLive])
 
   if (loading) return (
     <div className="space-y-4">
