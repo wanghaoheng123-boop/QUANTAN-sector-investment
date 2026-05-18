@@ -51,10 +51,45 @@ interface InstrumentSignal {
   lastDate: string | null
 }
 
-// ─── Compute signal for one stock ────────────────────────────────────────────
+// ─── Shared regime → color mapping ───────────────────────────────────────────
+//
+// Phase 14 wave 33: hoisted from inside the (formerly duplicated) per-instrument
+// signal functions. Defining it at module scope means there's exactly ONE
+// authoritative palette — no risk that stock vs btc paths drift apart.
+const REGIME_COLORS: Record<string, string> = {
+  EXTREME_BULL: '#ef4444',
+  EXTENDED_BULL: '#f97316',
+  HEALTHY_BULL: '#22c55e',
+  FIRST_DIP: '#84cc16',
+  DEEP_DIP: '#eab308',
+  BEAR_ALERT: '#f97316',
+  CRASH_ZONE: '#ef4444',
+  INSUFFICIENT_DATA: '#64748b',
+}
 
-function stockSignal(ticker: string, sector: string): InstrumentSignal | null {
-  const rows = loadStockHistory(ticker)
+// ─── Compute signal for any instrument (shared by stock + BTC paths) ────────
+//
+// Phase 14 wave 33: extracted from two near-identical functions (stockSignal
+// + btcSignal). jscpd flagged a 21-line within-file clone; the two functions
+// were 90% byte-identical, differing only in the input loader (loadStockHistory
+// vs loadBtcHistory) and the (ticker, sector) labels. A single SSOT prevents
+// the inevitable divergence-by-accident when one path gets a fix the other
+// doesn't (we saw this exact pattern in the engine.ts intraday-stop fix in
+// Phase 13 — same bug had to be fixed in two places).
+
+interface InstrumentBar {
+  time: number
+  open: number
+  high: number
+  low: number
+  close: number
+}
+
+function computeInstrumentSignal(
+  rows: InstrumentBar[],
+  ticker: string,
+  sector: string,
+): InstrumentSignal | null {
   if (rows.length < 200) return null
 
   const closes = rows.map((r) => r.close)
@@ -106,12 +141,6 @@ function stockSignal(ticker: string, sector: string): InstrumentSignal | null {
     else kelly = 0.10
   } else if (action === 'SELL') kelly = 1.0
 
-  const colorMap: Record<string, string> = {
-    EXTREME_BULL: '#ef4444', EXTENDED_BULL: '#f97316', HEALTHY_BULL: '#22c55e',
-    FIRST_DIP: '#84cc16', DEEP_DIP: '#eab308', BEAR_ALERT: '#f97316',
-    CRASH_ZONE: '#ef4444', INSUFFICIENT_DATA: '#64748b',
-  }
-
   const lastDate = rows.length > 0
     ? new Date(rows[rows.length - 1].time * 1000).toISOString().split('T')[0]
     : null
@@ -126,89 +155,19 @@ function stockSignal(ticker: string, sector: string): InstrumentSignal | null {
     macdHist: Number.isFinite(macdHist) ? macdHist : null,
     bbPctB: Number.isFinite(bbPctB) ? bbPctB : null,
     action, confidence, KellyFraction: kelly,
-    regimeColor: colorMap[reg.zone] ?? '#64748b',
+    regimeColor: REGIME_COLORS[reg.zone] ?? '#64748b',
     candles: closes.length,
     lastDate,
   }
 }
 
-// ─── Compute signal for BTC ──────────────────────────────────────────────────
+// Thin wrappers — each one's responsibility is JUST the data-load step.
+function stockSignal(ticker: string, sector: string): InstrumentSignal | null {
+  return computeInstrumentSignal(loadStockHistory(ticker), ticker, sector)
+}
 
 function btcSignal(): InstrumentSignal | null {
-  const rows = loadBtcHistory()
-  if (rows.length < 200) return null
-
-  const closes = rows.map((r) => r.close)
-  const bars: OhlcBar[] = rows.map(({ open, high, low, close }) => ({ open, high, low, close }))
-  const price = closes[closes.length - 1]
-  const prevPrice = closes[closes.length - 2]
-  const changePct = prevPrice ? ((price - prevPrice) / prevPrice) * 100 : null
-
-  const rsiVals = rsi(closes)
-  const macdVals = macdFn(closes)
-  const atrVals = atr(bars)
-  const bbVals = bollinger(closes)
-
-  const rsi14 = rsiVals[rsiVals.length - 1]
-  const macdHist = macdVals.histogram[macdVals.histogram.length - 1]
-  const atrLast = atrVals[atrVals.length - 1]
-  const bbPctB = bbVals.pctB[bbVals.pctB.length - 1]
-
-  // ATR as % of price
-  const atrPct = Number.isFinite(atrLast) && Number.isFinite(price) && price > 0
-    ? (atrLast / price) * 100
-    : NaN
-
-  const reg = regimeSignal(price, closes, Number.isFinite(rsi14) ? rsi14 : undefined)
-
-  // Aligned with backtest: RSI < 35, MACD hist > 0, ATR% > 2, BB% < 0.20
-  const bullishCount =
-    (Number.isFinite(rsi14) && rsi14 < 35 ? 1 : 0) +
-    (Number.isFinite(macdHist) && macdHist > 0 ? 1 : 0) +
-    (Number.isFinite(atrPct) && atrPct > 2.0 ? 1 : 0) +
-    (Number.isFinite(bbPctB) && bbPctB < 0.20 ? 1 : 0)
-
-  let action: 'BUY' | 'HOLD' | 'SELL' = reg.action
-  if (action === 'BUY' && bullishCount < 2) action = 'HOLD'
-  if (action === 'HOLD' && reg.zone === 'HEALTHY_BULL' && Number.isFinite(rsi14) && rsi14 > 70) {
-    action = 'SELL'
-  }
-
-  const confidence = Math.min(100, reg.confidence + Math.round((bullishCount / 4) * 25))
-
-  if (confidence < DEFAULT_CONFIG.confidenceThreshold && action !== 'SELL') action = 'HOLD'
-
-  let kelly = 0.10
-  if (action === 'BUY') {
-    if (reg.dipSignal === 'STRONG_DIP' && bullishCount >= 3) kelly = 0.25
-    else if (reg.dipSignal === 'STRONG_DIP') kelly = 0.15
-    else kelly = 0.10
-  } else if (action === 'SELL') kelly = 1.0
-
-  const colorMap: Record<string, string> = {
-    EXTREME_BULL: '#ef4444', EXTENDED_BULL: '#f97316', HEALTHY_BULL: '#22c55e',
-    FIRST_DIP: '#84cc16', DEEP_DIP: '#eab308', BEAR_ALERT: '#f97316',
-    CRASH_ZONE: '#ef4444', INSUFFICIENT_DATA: '#64748b',
-  }
-
-  const lastDate = rows.length > 0
-    ? new Date(rows[rows.length - 1].time * 1000).toISOString().split('T')[0]
-    : null
-
-  return {
-    ticker: 'BTC', sector: 'Crypto', price, changePct,
-    zone: reg.zone, dipSignal: reg.dipSignal,
-    deviationPct: reg.deviationPct, slopePct: reg.slopePct, slopePositive: reg.slopePositive,
-    rsi14: Number.isFinite(rsi14) ? rsi14 : null,
-    atr14: Number.isFinite(atrLast) ? atrLast : null,
-    atrPct: Number.isFinite(atrPct) ? atrPct : null,
-    macdHist: Number.isFinite(macdHist) ? macdHist : null,
-    bbPctB: Number.isFinite(bbPctB) ? bbPctB : null,
-    action, confidence, KellyFraction: kelly,
-    regimeColor: colorMap[reg.zone] ?? '#64748b',
-    candles: closes.length,
-    lastDate,
-  }
+  return computeInstrumentSignal(loadBtcHistory(), 'BTC', 'Crypto')
 }
 
 // ─── Route handler ─────────────────────────────────────────────────────────
