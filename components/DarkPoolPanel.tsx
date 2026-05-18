@@ -167,14 +167,21 @@ export default function DarkPoolPanel({
                   ${apiData.quote.price.toFixed(2)}
                 </span>
               </span>
-              <span
-                className={
-                  apiData.quote.changePct >= 0 ? 'text-green-400' : 'text-red-400'
-                }
-              >
-                {apiData.quote.changePct >= 0 ? '+' : ''}
-                {apiData.quote.changePct.toFixed(2)}%
-              </span>
+              {/* Phase 14 wave 22: defensive Number.isFinite gate before .toFixed().
+                  The `price > 0` check one level up only gated the price span; the
+                  changePct branch dereferenced an unvalidated number and could
+                  crash the whole panel with "Cannot read properties of null
+                  (reading 'toFixed')" when Yahoo returned a halt quote. */}
+              {Number.isFinite(apiData.quote.changePct) && (
+                <span
+                  className={
+                    apiData.quote.changePct >= 0 ? 'text-green-400' : 'text-red-400'
+                  }
+                >
+                  {apiData.quote.changePct >= 0 ? '+' : ''}
+                  {apiData.quote.changePct.toFixed(2)}%
+                </span>
+              )}
               {apiData.quote.quoteTime && (
                 <span className="text-slate-400">
                   {new Date(apiData.quote.quoteTime).toLocaleString()}

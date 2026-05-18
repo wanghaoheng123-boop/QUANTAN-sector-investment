@@ -13,17 +13,15 @@ const yahooFinance = new YahooFinance()
 // Phase 13 S2 fix (F4.10): expanded index-symbol normalization. Previously only
 // `VIX` was mapped to `^VIX`; other US-index plain forms silently failed upstream
 // with empty results.
-const US_INDEX_SYMBOLS = new Set([
-  'VIX', 'GSPC', 'DJI', 'IXIC', 'NDX', 'TNX', 'IRX', 'TYX', 'RUT', 'SPX',
-])
-
-function normalizeTicker(raw: string): string {
-  const u = decodeURIComponent(raw.trim()).toUpperCase()
-  // Already prefixed with ^ — pass through.
-  if (u.startsWith('^')) return u
-  // Known plain index name → prepend ^ for Yahoo compatibility.
-  return US_INDEX_SYMBOLS.has(u) ? `^${u}` : u
-}
+//
+// Phase 14 wave 22: import the canonical, strict normalizeTicker from
+// @/lib/api/sanitize so every API route applies the same character whitelist
+// (Q3-H-3 hardening from Phase 13). The prior in-file normalizer skipped
+// the character whitelist — a caller could pass arbitrary characters
+// (slashes, quotes, parens) that bypassed the F7.3 ticker-validation
+// regression hardening present in the other routes. The strict version
+// returns `null` for invalid input; we then drop or 400 on the request.
+import { normalizeTicker as strictNormalizeTicker } from '@/lib/api/sanitize'
 
 // Phase 13 S2 fix (F4.6): explicit number-or-null. Falsy fallback to 0 silently
 // hid yahoo errors as "$0.00" on the UI.
@@ -83,9 +81,29 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // Phase 14 wave 22: strict per-token validation. Each ticker passes through
+  // the canonical normalizeTicker that enforces the F7.3 character whitelist
+  // (`^?[A-Z0-9][A-Z0-9.=]{0,14}(-[A-Z0-9]{1,10})?`). Invalid tokens are
+  // dropped. If every supplied ticker is invalid, return 400 so the caller
+  // sees the typed-error envelope instead of an empty `quotes: []`.
   const tickers = queryTickers
-    ? queryTickers.split(',').map(normalizeTicker)
+    ? (() => {
+        const raw = queryTickers.split(',')
+        const cleaned: string[] = []
+        for (const t of raw) {
+          const norm = strictNormalizeTicker(t)
+          if (norm) cleaned.push(norm)
+        }
+        return cleaned
+      })()
     : [...SECTORS.map((s) => s.etf), 'SPY', 'QQQ']
+
+  if (queryTickers && tickers.length === 0) {
+    return NextResponse.json(
+      { error: 'invalid_tickers', message: 'No valid ticker symbols in request.' },
+      { status: 400 },
+    )
+  }
 
   // F4.1 (Phase 13 S2): Bloomberg-bridge fetch was previously wrapped in a
   // silent .catch(() => null), so when the bridge degraded the response
