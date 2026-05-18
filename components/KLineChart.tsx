@@ -35,7 +35,13 @@ const TIMEFRAMES = ['1D', '1W', '1M', '3M', '6M', '1Y', 'ALL'] as const
 type Timeframe = typeof TIMEFRAMES[number]
 
 interface Candle {
-  time: string
+  // Phase 14 wave 29: widened to `string | number` to remove the
+  // `candles={candles as any}` cast in app/crypto/btc/page.tsx. The
+  // lightweight-charts `Time` type accepts both: a string like '2024-05-15'
+  // (BusinessDay form) OR a UTCTimestamp number (Unix seconds). BTC candles
+  // arrive as Unix seconds; equity candles arrive as YYYY-MM-DD strings.
+  // Both paths funnel through here, so the type must accept both.
+  time: string | number
   open: number
   high: number
   low: number

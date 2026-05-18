@@ -77,7 +77,16 @@ export async function GET(
         if (!result3?.quotes?.length) {
           return NextResponse.json({ error: 'No historical data found for ticker' }, { status: 404 })
         }
-        const agg = aggregateMinuteQuotesToN(result3.quotes as any, 3)
+        // Phase 14 wave 29: replace blanket `as any` with a narrowed cast to the
+        // helper's expected YahooQuote shape. yahoo-finance2's typings list
+        // chart-quote fields as required, but the runtime payload can have
+        // null OHLC on holiday minutes — the helper handles those. Cast to
+        // `unknown` first to escape the structural-narrowing check, then to
+        // the helper's input type.
+        const agg = aggregateMinuteQuotesToN(
+          result3.quotes as unknown as Parameters<typeof aggregateMinuteQuotesToN>[0],
+          3,
+        )
         const candles = agg.map((c) => ({
           time: c.time,
           open: c.open,
@@ -87,7 +96,9 @@ export async function GET(
           volume: c.volume,
         }))
         const darkPoolMarkers = generateDarkPoolMarkers(
-          candles.map((c) => ({ time: c.time as any, close: c.close })),
+          // Phase 14 wave 29: `as any` removed after generateDarkPoolMarkers
+          // accepted `time: string | number`.
+          candles.map((c) => ({ time: c.time, close: c.close })),
           ticker
         )
         evictCacheIfNeeded()
@@ -192,7 +203,8 @@ export async function GET(
       })
 
     const darkPoolMarkers = generateDarkPoolMarkers(
-      candles.map((c: { time: string | number; close: number }) => ({ time: c.time as any, close: c.close })),
+      // Phase 14 wave 29: `as any` removed — generateDarkPoolMarkers accepts string | number.
+      candles.map((c: { time: string | number; close: number }) => ({ time: c.time, close: c.close })),
       ticker
     )
 

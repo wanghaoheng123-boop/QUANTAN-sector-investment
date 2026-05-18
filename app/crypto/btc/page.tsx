@@ -740,7 +740,9 @@ export default function BtcPage() {
                 ) : candles.length > 0 ? (
                   <CryptoChartBoundary title="BTC chart crashed">
                     <KLineChart
-                      candles={candles as any}
+                      // Phase 14 wave 29: cast removed after KLineChart's Candle
+                      // type widened to accept `time: string | number`.
+                      candles={candles}
                       darkPoolMarkers={EMPTY_DARK_POOL_MARKERS}
                       newsMarkers={EMPTY_NEWS_MARKERS}
                       color={color}
