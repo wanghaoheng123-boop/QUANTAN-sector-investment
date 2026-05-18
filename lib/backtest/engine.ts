@@ -128,6 +128,56 @@ function currentEquity(state: PortfolioState, currentPrice?: number): number {
   return state.capital + positionValue
 }
 
+/**
+ * Close the current open position at `fillPrice` and book the trade.
+ *
+ * Phase 14 wave 35 (SSOT extraction): this exit-bookkeeping sequence was
+ * INLINED FIVE TIMES in this file (trailing stop, 4× ATR lock stop, primary
+ * stop, DD circuit breaker, SELL signal). The 12-line block was the largest
+ * regression-hazard pattern in the engine — every copy is a place where a
+ * future fix would have to be duplicated, and where the SAME bug could live
+ * in N places (we saw this exact pattern with the F1.3 intraday-stop fix
+ * during Phase 13, which had to be applied in two places).
+ *
+ * This helper handles:
+ *   1. Compute proceeds, transaction cost, net proceeds
+ *   2. Compute realized pnl% (side-aware — long vs short)
+ *   3. Update tradeWins/Losses + grossProfit/Loss aggregates
+ *   4. Credit capital
+ *   5. Stamp openTrade with exitPrice + pnlPct
+ *   6. Push the closed trade onto closedTrades
+ *   7. Reset position / avgCost / openTrade to flat
+ *   8. Push the new equity-history row (mark-to-market with the post-exit
+ *      position, which is flat — so `currentEquity(state)` is exact)
+ *
+ * @param state      PortfolioState (mutated in place — internal helper only).
+ * @param fillPrice  The realised exit fill (already gap-aware from
+ *                   `evaluateStopHit` where applicable).
+ * @returns true when an exit happened; false if there was no open trade
+ *                (defensive — callers gate on state.openTrade before calling).
+ */
+function closePosition(state: PortfolioState, fillPrice: number): boolean {
+  const open = state.openTrade
+  if (!open) return false
+  const proceeds = state.position * fillPrice
+  const txCost = proceeds * TX_COST_PCT_PER_SIDE
+  const netProceeds = proceeds - txCost
+  const pnlPct = open.action === 'BUY'
+    ? (fillPrice - open.entryPrice) / open.entryPrice
+    : (open.entryPrice - fillPrice) / open.entryPrice
+  if (pnlPct > 0) { state.tradeWins++; state.grossProfit += pnlPct }
+  else { state.tradeLosses++; state.grossLoss += Math.abs(pnlPct) }
+  state.capital += netProceeds
+  open.exitPrice = fillPrice
+  open.pnlPct = pnlPct
+  state.closedTrades.push({ ...open })
+  state.position = 0
+  state.avgCost = 0
+  state.openTrade = null
+  state.equityHistory.push(currentEquity(state))
+  return true
+}
+
 // Phase 13 S2 fix (F1.6): tickers that trade 7 days a week need 365-day
 // annualization; equities use 252. The detection is conservative — only
 // known crypto symbols and futures get 365. New crypto tickers default to
@@ -232,18 +282,7 @@ export function backtestInstrument(
           const trailStopPx = state.openTrade.entryPrice * (1 + 0.005)
           const fillPrice = evaluateStopHit(rows[i], trailStopPx, 'long', 'stop')
           if (fillPrice != null) {
-            const proceeds = state.position * fillPrice
-            const txCost = proceeds * TX_COST_PCT_PER_SIDE
-            const netProceeds = proceeds - txCost
-            const pnlPct = (fillPrice - state.openTrade.entryPrice) / state.openTrade.entryPrice
-            if (pnlPct > 0) { state.tradeWins++; state.grossProfit += pnlPct }
-            else { state.tradeLosses++; state.grossLoss += Math.abs(pnlPct) }
-            state.capital += netProceeds
-            state.openTrade.exitPrice = fillPrice
-            state.openTrade.pnlPct = pnlPct
-            state.closedTrades.push({ ...state.openTrade })
-            state.position = 0; state.avgCost = 0; state.openTrade = null
-            state.equityHistory.push(currentEquity(state))
+            closePosition(state, fillPrice)
             continue
           }
         }
@@ -253,18 +292,7 @@ export function backtestInstrument(
           const lockStopPx = state.openTrade.entryPrice + atrAtEntryDollar  // lock 1x ATR from entry
           const fillPrice = evaluateStopHit(rows[i], lockStopPx, 'long', 'stop')
           if (fillPrice != null) {
-            const proceeds = state.position * fillPrice
-            const txCost = proceeds * TX_COST_PCT_PER_SIDE
-            const netProceeds = proceeds - txCost
-            const pnlPct = (fillPrice - state.openTrade.entryPrice) / state.openTrade.entryPrice
-            if (pnlPct > 0) { state.tradeWins++; state.grossProfit += pnlPct }
-            else { state.tradeLosses++; state.grossLoss += Math.abs(pnlPct) }
-            state.capital += netProceeds
-            state.openTrade.exitPrice = fillPrice
-            state.openTrade.pnlPct = pnlPct
-            state.closedTrades.push({ ...state.openTrade })
-            state.position = 0; state.avgCost = 0; state.openTrade = null
-            state.equityHistory.push(currentEquity(state))
+            closePosition(state, fillPrice)
             continue
           }
         }
@@ -279,21 +307,7 @@ export function backtestInstrument(
       const tradeSide: 'long' | 'short' = state.openTrade.action === 'BUY' ? 'long' : 'short'
       const fillPrice = evaluateStopHit(rows[i], stopPx, tradeSide, 'stop')
       if (fillPrice != null) {
-        const proceeds = state.position * fillPrice
-        const txCost = proceeds * TX_COST_PCT_PER_SIDE
-        const netProceeds = proceeds - txCost
-        const pnlPct = state.openTrade.action === 'BUY'
-          ? (fillPrice - state.openTrade.entryPrice) / state.openTrade.entryPrice
-          : (state.openTrade.entryPrice - fillPrice) / state.openTrade.entryPrice
-        if (pnlPct > 0) { state.tradeWins++; state.grossProfit += pnlPct }
-        else { state.tradeLosses++; state.grossLoss += Math.abs(pnlPct) }
-        state.capital += netProceeds
-        state.openTrade.exitPrice = fillPrice
-        state.openTrade.pnlPct = pnlPct
-        state.closedTrades.push({ ...state.openTrade })
-        state.position = 0; state.avgCost = 0; state.openTrade = null
-        const eq = currentEquity(state)
-        state.equityHistory.push(eq)
+        closePosition(state, fillPrice)
         continue
       }
     }
@@ -304,20 +318,7 @@ export function backtestInstrument(
     if (eq > state.peakEquity) state.peakEquity = eq
     const dd = (state.peakEquity - eq) / state.peakEquity
     if (dd >= cfg.maxDrawdownCap && state.openTrade) {
-      const proceeds = state.position * signalPrice
-      const txCost = proceeds * TX_COST_PCT_PER_SIDE
-      const netProceeds = proceeds - txCost
-      const pnlPct = state.openTrade.action === 'BUY'
-        ? (signalPrice - state.openTrade.entryPrice) / state.openTrade.entryPrice
-        : (state.openTrade.entryPrice - signalPrice) / state.openTrade.entryPrice
-      if (pnlPct > 0) { state.tradeWins++; state.grossProfit += pnlPct }
-      else { state.tradeLosses++; state.grossLoss += Math.abs(pnlPct) }
-      state.capital += netProceeds
-      state.openTrade.exitPrice = signalPrice
-      state.openTrade.pnlPct = pnlPct
-      state.closedTrades.push({ ...state.openTrade })
-      state.position = 0; state.avgCost = 0; state.openTrade = null
-      state.equityHistory.push(currentEquity(state))
+      closePosition(state, signalPrice)
       continue
     }
 
@@ -359,19 +360,9 @@ export function backtestInstrument(
       state.equityHistory.push(currentEquity(state, entryPrice))
 
     } else if (signal.action === 'SELL' && state.openTrade) {
-      // SELL exits at today's close (signal price) — realistic same-day exit on regime shift
-      const proceeds = state.position * signalPrice
-      const txCost = proceeds * TX_COST_PCT_PER_SIDE
-      const netProceeds = proceeds - txCost
-      const pnlPct = (signalPrice - state.openTrade.entryPrice) / state.openTrade.entryPrice
-      if (pnlPct > 0) { state.tradeWins++; state.grossProfit += pnlPct }
-      else { state.tradeLosses++; state.grossLoss += Math.abs(pnlPct) }
-      state.capital += netProceeds
-      state.openTrade.exitPrice = signalPrice
-      state.openTrade.pnlPct = pnlPct
-      state.closedTrades.push({ ...state.openTrade })
-      state.position = 0; state.avgCost = 0; state.openTrade = null
-      state.equityHistory.push(currentEquity(state))
+      // SELL exits at today's close (signal price) — realistic same-day exit on regime shift.
+      // Phase 14 wave 35: bookkeeping via the shared closePosition primitive.
+      closePosition(state, signalPrice)
 
     } else {
       // Q1-C-1: HOLD — pass signalPrice so equity reflects open-position mark-to-market.
@@ -380,19 +371,10 @@ export function backtestInstrument(
   }
 
   // ── Close remaining open position at final price ──
+  // Phase 14 wave 35: bookkeeping via the shared closePosition primitive.
   const finalPrice = rows[rows.length - 1].close
   if (state.openTrade) {
-    const proceeds = state.position * finalPrice
-    const txCost = proceeds * TX_COST_PCT_PER_SIDE
-    const netProceeds = proceeds - txCost
-    const pnlPct = (finalPrice - state.openTrade.entryPrice) / state.openTrade.entryPrice
-    if (pnlPct > 0) { state.tradeWins++; state.grossProfit += pnlPct }
-    else { state.tradeLosses++; state.grossLoss += Math.abs(pnlPct) }
-    state.capital += netProceeds
-    state.openTrade.exitPrice = finalPrice
-    state.openTrade.pnlPct = pnlPct
-    state.closedTrades.push({ ...state.openTrade })
-    state.position = 0
+    closePosition(state, finalPrice)
   }
 
   const finalEquity = state.capital
