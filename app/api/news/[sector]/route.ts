@@ -11,6 +11,9 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import YahooFinance from 'yahoo-finance2'
+import { applyRateLimit } from '@/lib/api/rateLimit'
+import { sanitizeError } from '@/lib/api/sanitize'
+import { isSafeHttpUrl } from '@/lib/security/urlValidation'
 
 const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] })
 
@@ -56,11 +59,15 @@ async function fetchNewsForTickers(tickers: string[], sector: string): Promise<N
 
       for (const item of result.news as Record<string, unknown>[]) {
         const link = String(item.link ?? '')
-        if (!link || seen.has(link)) continue
+        // Phase 14 wave 25: validate news links are http(s) before emitting.
+        // The UI renders these as <a href={link}>; without validation, an
+        // upstream `javascript:` / `data:` link is an XSS vector. Drop
+        // unsafe URLs entirely rather than passing them through.
+        if (!link || seen.has(link) || !isSafeHttpUrl(link)) continue
         seen.add(link)
         results.push({
-          title: String(item.title ?? ''),
-          publisher: String(item.publisher ?? 'Unknown'),
+          title: String(item.title ?? '').slice(0, 300),
+          publisher: String(item.publisher ?? 'Unknown').slice(0, 100),
           link,
           publishedAt: (item.publishedAt as string) || null,
           snippet: item.summary ? String(item.summary).slice(0, 200) : null,
@@ -68,7 +75,16 @@ async function fetchNewsForTickers(tickers: string[], sector: string): Promise<N
           tickers: Array.isArray(item.relatedTickers) ? (item.relatedTickers as string[]).slice(0, 5) : [],
         })
       }
-    } catch {
+    } catch (err) {
+      // Phase 14 wave 25: log instead of silent continue. A failed search
+      // for one ticker shouldn't kill the whole loop, but a chronic Yahoo
+      // outage was previously invisible.
+      console.warn(JSON.stringify({
+        event: 'news.sector_ticker_search_failed',
+        sector,
+        ticker,
+        message: (err as Error)?.message,
+      }))
       continue
     }
   }
@@ -80,9 +96,23 @@ export async function GET(
   req: NextRequest,
   { params }: { params: { sector: string } }
 ): Promise<NextResponse<{ news: NewsItem[]; sector: string; fetchedAt: string; source: string } | { error: string }>> {
+  // Phase 14 wave 25: rate limit (30 req/min/IP). News fans out to 5 Yahoo
+  // search calls per request — unprotected polling could saturate the upstream
+  // and inflate Vercel function bills.
+  const rl = applyRateLimit(req, 'news-sector', { maxRequests: 30, windowSeconds: 60 })
+  if (rl) return rl as NextResponse<{ error: string }>
+
   const sector = (params.sector || '').trim()
   if (!sector) {
     return NextResponse.json({ error: 'sector is required' }, { status: 400 })
+  }
+
+  // Phase 14 wave 25: validate sector against the allow-list BEFORE echoing
+  // it back in the response. Without this, a client could pass any string
+  // and have it reflected in fetchedAt JSON — minor XSS surface (JSON-safe
+  // but still incorrect data flow).
+  if (!(sector in SECTOR_QUERY_MAP)) {
+    return NextResponse.json({ error: `Unknown sector: ${sector}` }, { status: 404 })
   }
 
   try {
@@ -106,6 +136,11 @@ export async function GET(
     )
   } catch (err) {
     console.error(`[News API] sector=${sector}:`, err)
-    return NextResponse.json({ error: 'Failed to fetch news', details: String(err) }, { status: 502 })
+    // Phase 14 wave 25: sanitizeError instead of raw String(err) so stack
+    // traces / internal hostnames don't leak to clients in production.
+    return NextResponse.json(
+      { error: 'Failed to fetch news', details: sanitizeError(err) ?? 'fetch_failed' },
+      { status: 502 },
+    )
   }
 }
