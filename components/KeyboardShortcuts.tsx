@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useRouter, usePathname } from 'next/navigation'
+import { useDialogA11y } from '@/hooks/useDialogA11y'
 
 interface Shortcut {
   keys: string[]
@@ -24,12 +25,17 @@ export default function KeyboardShortcuts() {
   const router = useRouter()
   const pathname = usePathname()
 
-  // F6.7 (WAI-ARIA APG Dialog): refs for focus management.
+  // F6.7 (WAI-ARIA APG Dialog): refs for focus management. The actual
+  // focus-trap / scroll-lock / return-focus contract now lives in
+  // `useDialogA11y` (Phase 14 wave 31 SSOT extraction).
   const dialogRef = useRef<HTMLDivElement>(null)
   const closeBtnRef = useRef<HTMLButtonElement>(null)
-  const returnFocusRef = useRef<HTMLElement | null>(null)
 
   const close = useCallback(() => setIsOpen(false), [])
+
+  // WAI-ARIA APG Dialog primitive — initial focus, focus trap, scroll lock,
+  // return focus. Runs on every isOpen transition.
+  useDialogA11y({ open: isOpen, dialogRef, initialFocusRef: closeBtnRef })
 
   useEffect(() => {
     let gPressed = false
@@ -104,54 +110,6 @@ export default function KeyboardShortcuts() {
   useEffect(() => {
     close()
   }, [pathname, close])
-
-  // F6.7 (WAI-ARIA APG Dialog) — initial focus, focus trap, return-focus,
-  // body scroll lock. Runs on every isOpen change.
-  useEffect(() => {
-    if (!isOpen) return
-
-    // Remember which element had focus when the modal opened — restore on close.
-    returnFocusRef.current = (document.activeElement as HTMLElement) ?? null
-
-    // Move focus to the close button on open so keyboard / screen-reader
-    // users land inside the dialog immediately.
-    closeBtnRef.current?.focus()
-
-    // Body scroll lock — prevent the underlying page from scrolling while
-    // the modal is open. Cache + restore the original overflow value.
-    const prevOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-
-    // Focus trap — intercept Tab/Shift+Tab to keep focus inside the dialog.
-    const trapFocus = (e: KeyboardEvent) => {
-      if (e.key !== 'Tab') return
-      const dialog = dialogRef.current
-      if (!dialog) return
-      const focusable = dialog.querySelectorAll<HTMLElement>(
-        'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"]), input:not([disabled]), textarea:not([disabled]), select:not([disabled])',
-      )
-      if (focusable.length === 0) return
-      const first = focusable[0]
-      const last = focusable[focusable.length - 1]
-      const active = document.activeElement as HTMLElement | null
-      if (e.shiftKey && active === first) {
-        e.preventDefault()
-        last.focus()
-      } else if (!e.shiftKey && active === last) {
-        e.preventDefault()
-        first.focus()
-      }
-    }
-    document.addEventListener('keydown', trapFocus)
-
-    return () => {
-      document.removeEventListener('keydown', trapFocus)
-      document.body.style.overflow = prevOverflow
-      // Return focus to the previously-focused element so keyboard users
-      // resume where they were rather than jumping to body / first tabstop.
-      returnFocusRef.current?.focus?.()
-    }
-  }, [isOpen])
 
   if (!isOpen) return null
 

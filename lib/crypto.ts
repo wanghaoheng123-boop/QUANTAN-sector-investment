@@ -5,7 +5,6 @@ import {
   macdArray,
   bollingerArray,
   atrArray,
-  vwapArray,
   type OhlcBar,
 } from './quant/indicators'
 
@@ -157,21 +156,17 @@ export function calcBollingerBands(prices: number[], period = 20, stdDev = 2): B
 }
 
 /**
- * VWAP for crypto — delegates to canonical vwapArray with output adapter.
- * The shape `{time, value}[]` is what consumers (BtcQuantLab, BTC page)
- * expect for plotting via lightweight-charts.
+ * VWAP for crypto — re-exported from `lib/quant/btc-indicators.ts`.
+ *
+ * Phase 14 wave 32 (jscpd duplication fix): the wrapper logic here was
+ * byte-identical to `btc-indicators.ts:calcVWAP` (17-line clone per jscpd).
+ * Two copies of the same time-conversion adapter were a regression hazard —
+ * a fix in one would silently miss the other. Now `lib/crypto.ts` re-exports
+ * the canonical version. The wrapper produces `{time, value}[]` for
+ * lightweight-charts; both files import the math from canonical
+ * `lib/quant/indicators.ts::vwapArray`.
  */
-export function calcVWAP(candles: BtcCandle[]): { time: number; value: number }[] {
-  const highs = candles.map((c) => c.high)
-  const lows = candles.map((c) => c.low)
-  const closes = candles.map((c) => c.close)
-  const volumes = candles.map((c) => c.volume)
-  const values = vwapArray(highs, lows, closes, volumes)
-  return candles.map((c, i) => ({
-    time: typeof c.time === 'string' ? Math.floor(new Date(c.time).getTime() / 1000) : c.time,
-    value: values[i],
-  }))
-}
+export { calcVWAP } from './quant/btc-indicators'
 
 /**
  * Funding rate interpretation (Binance-style decimal).
