@@ -470,15 +470,21 @@ export default function BtcPage() {
     }
   }, [])
 
-  /** When Coinbase ticker WS has not fired yet, hydrate header from same-origin quote / CoinGecko. */
+  /** When Coinbase ticker WS has not fired yet, hydrate header from same-origin quote / CoinGecko.
+   *  Phase 14 wave 19: cancellation flag + diagnostic logging.
+   *  Previously the catch was silent, so a chronically failing CoinGecko
+   *  (rate-limit / network outage) was indistinguishable from "WS has fired and
+   *  we do not need the REST fallback". */
   useEffect(() => {
+    let cancelled = false
     const loadRestQuote = async () => {
-      if (priceFromBinanceWsRef.current) return
+      if (priceFromBinanceWsRef.current || cancelled) return
       try {
         const r = await fetch(apiUrl('/api/crypto/btc/quote'), {
           cache: 'no-store',
           headers: { Accept: 'application/json' },
         })
+        if (cancelled) return
         if (r.ok) {
           const d = (await r.json()) as {
             price?: number
@@ -488,6 +494,7 @@ export default function BtcPage() {
             low24h?: number
             volume24h?: number
           }
+          if (cancelled) return
           if (!d.price || !Number.isFinite(d.price)) return
           setBtcPrice({
             price: d.price,
@@ -504,8 +511,10 @@ export default function BtcPage() {
           'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true&include_24hr_vol=true',
           { cache: 'no-store' }
         )
+        if (cancelled) return
         if (!cg.ok) return
         const q = (await cg.json()) as { bitcoin?: { usd?: number; usd_24h_change?: number; usd_24h_vol?: number } }
+        if (cancelled) return
         const p = Number(q.bitcoin?.usd)
         if (!Number.isFinite(p) || p <= 0) return
         setBtcPrice({
@@ -516,13 +525,15 @@ export default function BtcPage() {
           low24h: p,
           volume24h: Number(q.bitcoin?.usd_24h_vol) || 0,
         })
-      } catch {
-        /* ignore */
+      } catch (err) {
+        if (cancelled) return
+        console.warn('[btc] REST quote fallback failed', err)
       }
     }
     const t = setTimeout(loadRestQuote, 4000)
     const iv = setInterval(loadRestQuote, 60_000)
     return () => {
+      cancelled = true
       clearTimeout(t)
       clearInterval(iv)
     }
