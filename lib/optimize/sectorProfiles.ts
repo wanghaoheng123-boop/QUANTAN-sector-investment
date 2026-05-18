@@ -76,7 +76,11 @@ export const SECTOR_PROFILES: Record<string, SectorProfile> = {
     maxHoldDays: 30,
     confidenceThreshold: 55,           // lowered from 60
     atrStopMultiplier: 2.0,
-    optimizationNotes: 'Golden cross gate disabled — was producing 1 signal across 5 stocks. Need sufficient signal frequency to evaluate quality. Relax thresholds and re-evaluate.',
+    // Phase 14 wave 22 doc cleanup: prior note claimed "Golden cross gate
+    // disabled" but goldenCrossGate=true was reinstated above (the inline
+    // comment on that field says "re-enabled: tech trends need EMA
+    // confirmation"). Updated to match the actual configuration.
+    optimizationNotes: 'Golden cross gate ENABLED — requires EMA50>EMA200 confirmation. buyWScoreThreshold relaxed to 0.22 (vs platform default 0.25) and slopeThreshold to 0.004 to admit enough signals during tech-sector corrections.',
   },
 
   Healthcare: {
