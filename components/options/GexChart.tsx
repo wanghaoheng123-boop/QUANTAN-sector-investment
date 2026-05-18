@@ -130,19 +130,52 @@ export default function GexChart({ gex, spot }: Props) {
             strokeWidth={1}
           />
 
-          {/* Flip point marker */}
-          {flipPoint != null && (
-            <line
-              x1={0}
-              y1={((flipPoint - minStrike) / strikeRange) * chartHeight}
-              x2={BAR_MAX_WIDTH * 2 + 80}
-              y2={((flipPoint - minStrike) / strikeRange) * chartHeight}
-              stroke="#fbbf24"
-              strokeWidth={1}
-              strokeDasharray="4,3"
-              opacity={0.8}
-            />
-          )}
+          {/* Flip point marker — Phase 14 wave 16 fix.
+              Prior code positioned the flip line by `(flipPoint − minStrike) / strikeRange × chartHeight`,
+              i.e. proportional to STRIKE VALUE. But the bars are positioned by INDEX
+              (`y = i × (BAR_HEIGHT + 2)`), and strikes are typically NON-uniformly spaced
+              (e.g. $5 below $100, $10 to $500, $25 above). Result: the flip-point line
+              pointed at a completely different bar from the one it should annotate.
+              Fix: locate the index brackets that contain flipPoint among the sorted strikes,
+              interpolate the within-bracket fraction, and convert THAT to a y-pixel. */}
+          {flipPoint != null && (() => {
+            // Find the index brackets that contain flipPoint in the sorted strikes.
+            // strikeGex is in ascending strike order (sorted in computeGex).
+            const n = strikeGex.length
+            let y: number
+            if (n === 0) {
+              y = 0
+            } else if (flipPoint <= strikeGex[0].strike) {
+              y = 0  // above first bar — clamp to top
+            } else if (flipPoint >= strikeGex[n - 1].strike) {
+              y = (n - 1) * (BAR_HEIGHT + 2)  // below last bar — clamp to bottom
+            } else {
+              // Binary search for upper bound to keep the lookup O(log n) for large chains.
+              let lo = 0, hi = n - 1
+              while (lo + 1 < hi) {
+                const mid = (lo + hi) >> 1
+                if (strikeGex[mid].strike <= flipPoint) lo = mid
+                else hi = mid
+              }
+              // Now strikes[lo] <= flipPoint < strikes[hi]; lo + 1 === hi.
+              const sLo = strikeGex[lo].strike
+              const sHi = strikeGex[hi].strike
+              const frac = sHi > sLo ? (flipPoint - sLo) / (sHi - sLo) : 0
+              y = (lo + frac) * (BAR_HEIGHT + 2)
+            }
+            return (
+              <line
+                x1={0}
+                y1={y}
+                x2={BAR_MAX_WIDTH * 2 + 80}
+                y2={y}
+                stroke="#fbbf24"
+                strokeWidth={1}
+                strokeDasharray="4,3"
+                opacity={0.8}
+              />
+            )
+          })()}
         </svg>
       </div>
 
