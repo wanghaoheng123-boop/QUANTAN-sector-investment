@@ -218,11 +218,20 @@ export function computeResearchScore(i: ResearchScoreInput): {
  *
  *   ≤ buyHigh  → 0.15  (clamped — deep buy zone)
  *   ≥ sellLow  → 0.85  (clamped — at/above sell zone)
- *   in-band    → linear interpolation
+ *   in-band    → CONTINUOUS linear interpolation between 0.15 and 0.85
  *
  * The fixed 0.15 / 0.85 endpoints (rather than 0 / 1) intentionally
  * cap the contribution from extreme bands so a single deep-discount
  * reading cannot drive the pillar to 100 by itself.
+ *
+ * Phase 14 wave 14 fix: prior interior used `(price - buyHigh) / (sellLow - buyHigh)`,
+ * which mapped [buyHigh, sellLow] → [0, 1] — DISCONTINUOUS with the [0.15, 0.85]
+ * clamps. A price one cent above buyHigh returned ~0 (deeper-than-deep-buy),
+ * but a price one cent BELOW buyHigh returned 0.15 (deep-buy). Crossing the
+ * boundary from below produced a *decrease* in the position scalar (wrong
+ * direction). Fix: interior now interpolates between the SAME endpoints as
+ * the clamps, removing the jump and preserving the "position grows with
+ * extension" invariant.
  *
  * `fair` is required as a sanity gate (we refuse to score when fair
  * value is missing) but is otherwise not used in the position math.
@@ -240,7 +249,9 @@ export function bandPosition(
   if (buyHigh > sellLow) return null
   if (price <= buyHigh) return 0.15
   if (price >= sellLow) return 0.85
-  // Pure linear interpolation: at price = buyHigh we get 0, at price = sellLow we get 1.
-  // (Both endpoints are unreachable here because the gates above take precedence.)
-  return (price - buyHigh) / (sellLow - buyHigh)
+  // Continuous linear interpolation: at price = buyHigh we get 0.15
+  // (matching the clamp), at price = sellLow we get 0.85 (matching the
+  // sell-zone clamp). Interior monotonically increases through this range.
+  const frac = (price - buyHigh) / (sellLow - buyHigh)
+  return 0.15 + frac * (0.85 - 0.15)
 }
