@@ -6,7 +6,7 @@
  * Cached for 60 seconds.
  */
 
-import { NextResponse } from 'next/server'
+import { NextResponse, type NextRequest } from 'next/server'
 import { SECTORS } from '@/lib/sectors'
 import { loadStockHistory, loadBtcHistory, availableTickers } from '@/lib/backtest/dataLoader'
 import {
@@ -18,6 +18,8 @@ import {
   DEFAULT_CONFIG,
 } from '@/lib/backtest/signals'
 import type { OhlcBar } from '@/lib/quant/technicals'
+import { applyRateLimit } from '@/lib/api/rateLimit'
+import { normalizeTicker as strictNormalizeTicker } from '@/lib/api/sanitize'
 
 // ─── In-memory cache ──────────────────────────────────────────────────────────
 
@@ -211,11 +213,28 @@ function btcSignal(): InstrumentSignal | null {
 
 // ─── Route handler ─────────────────────────────────────────────────────────
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
+  // Phase 14 wave 27: rate limit. This route does NOT call upstream Yahoo
+  // (all data is local pre-fetched JSON) so the limit can be more permissive,
+  // but unbounded polling still wastes Lambda CPU on the in-memory cache
+  // miss path. 60 req/min/IP matches /api/prices.
+  const rl = applyRateLimit(request, 'backtest-live', { maxRequests: 60, windowSeconds: 60 })
+  if (rl) return rl
+
   const { searchParams } = new URL(request.url)
   const tickersParam = searchParams.get('tickers')
+  // Phase 14 wave 27: strict per-token validation. The previous permissive
+  // upcase-trim allowed arbitrary characters into the comparison against
+  // local availableTickers(), which couldn't cause harm in THIS route
+  // (the localSet check filters out anything not in our data files), but
+  // making this strict keeps the parameter-handling convention uniform
+  // across the API surface and prevents future contributors from copy-
+  // pasting this loose pattern into a route that DOES forward upstream.
   const specificTickers = tickersParam
-    ? tickersParam.split(',').map((t) => t.trim().toUpperCase())
+    ? tickersParam
+        .split(',')
+        .map((t) => strictNormalizeTicker(t))
+        .filter((t): t is string => t !== null)
     : null
 
   // Serve from cache if fresh
