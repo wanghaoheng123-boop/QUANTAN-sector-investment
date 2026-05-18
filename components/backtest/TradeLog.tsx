@@ -29,11 +29,17 @@ export default function TradeLog({ trades, sectorColors }: Props) {
   }, [trades])
 
   const filtered = useMemo(() => {
+    // Phase 14 wave 10: copy via spread before sort. Prior code did
+    //   let rows = trades; ...; return rows.sort(...)
+    // which — when no filters were applied — mutated the `trades` PROP
+    // directly. That's a React-Anti-pattern: a parent component passing the
+    // same `trades` array to multiple children would have the array silently
+    // reordered to date-descending by this child.
     let rows = trades
     if (filterSector !== 'All') rows = rows.filter(t => t.sector === filterSector)
     if (filterAction !== 'All') rows = rows.filter(t => t.action === filterAction)
     if (filterTicker) rows = rows.filter(t => t.ticker.toLowerCase().includes(filterTicker.toLowerCase()))
-    return rows.sort((a, b) => (a.date < b.date ? 1 : -1))
+    return [...rows].sort((a, b) => (a.date < b.date ? 1 : -1))
   }, [trades, filterSector, filterAction, filterTicker])
 
   const winningTrades = filtered.filter(t => (t.pnlPct ?? 0) > 0)

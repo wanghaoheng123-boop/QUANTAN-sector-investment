@@ -20,6 +20,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { SECTORS } from '@/lib/sectors'
 import { parseQuoteTime } from '@/lib/format'
 import { isSafeHttpUrl } from '@/lib/security/urlValidation'
+import { applyRateLimit } from '@/lib/api/rateLimit'
 
 const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] })
 
@@ -109,8 +110,23 @@ function formatLargeNum(n: number): string {
   return `$${n.toFixed(0)}`
 }
 
-function fetchWithFallback<T>(p: Promise<T>, fallback: T): Promise<T> {
-  return p.catch(() => fallback)
+/**
+ * Phase 14 wave 8: log fallback usage so operators can detect when Yahoo
+ * is returning errors for a brief's component fetches. Prior version
+ * silently swallowed everything — a chronically failing fetch looked
+ * indistinguishable from a healthy "no data on this ticker" response.
+ */
+function fetchWithFallback<T>(p: Promise<T>, fallback: T, label?: string): Promise<T> {
+  return p.catch((err: unknown) => {
+    if (label) {
+      console.warn(JSON.stringify({
+        event: 'briefs.fetch_fallback',
+        label,
+        message: (err as Error)?.message,
+      }))
+    }
+    return fallback
+  })
 }
 
 // ─── Main handler ─────────────────────────────────────────────────────────────
@@ -119,6 +135,12 @@ export async function GET(
   req: NextRequest,
   { params }: { params: { sector: string } }
 ): Promise<NextResponse<SectorBrief | { error: string }>> {
+  // Phase 14: rate limit — 30 req/min per IP. Brief endpoint hits Yahoo
+  // 3+ times per call (quote, summary, news, holdings); unprotected polling
+  // would multiply upstream load.
+  const rl = applyRateLimit(req, 'briefs-sector', { maxRequests: 30, windowSeconds: 60 })
+  if (rl) return rl as NextResponse<{ error: string }>
+
   const slug = (params.sector || '').trim()
   const sectorMeta = SECTORS.find(s => s.slug === slug)
 
@@ -129,18 +151,21 @@ export async function GET(
   const etf = sectorMeta.etf
   const now = new Date()
 
-  // Parallel fetch: ETF quote, ETF summary stats, holdings quotes, news
+  // Parallel fetch: ETF quote, ETF summary stats, holdings quotes, news.
+  // Phase 14 wave 8: labels added so any fallback usage is observable.
   const [etfQuote, etfSummary, newsResult] = await Promise.allSettled([
-    fetchWithFallback(yf.quote(etf), null),
+    fetchWithFallback(yf.quote(etf), null, `quote:${etf}`),
     fetchWithFallback(
       yf.quoteSummary(etf, {
         modules: ['defaultKeyStatistics', 'financialData', 'recommendationTrend', 'earningsTrend'],
       }),
-      null
+      null,
+      `summary:${etf}`,
     ),
     fetchWithFallback(
       yf.search(etf, { newsCount: 8 }),
-      null
+      null,
+      `news:${etf}`,
     ),
   ])
 
@@ -193,8 +218,12 @@ export async function GET(
       const strongSell = safeNum(current.strongSell as number) ?? 0
       const total = strongBuy + buy + hold + sell + strongSell
       if (total > 0) {
-        if ((strongBuy + buy) / total > 0.6) analystRating = 'BUY'
-        else if ((sell + strongSell) / total > 0.4) analystRating = 'SELL'
+        // R4-M-3 (Phase 14): use >= so exact-threshold ties (e.g. 60% bullish)
+        // land on the "stronger consensus" side. Strict-greater would silently
+        // demote a 60/40 buy-vs-rest split to HOLD, which contradicts the
+        // semantics of the threshold ("strong consensus AT 60%+").
+        if ((strongBuy + buy) / total >= 0.6) analystRating = 'BUY'
+        else if ((sell + strongSell) / total >= 0.4) analystRating = 'SELL'
         else analystRating = 'HOLD'
       }
     }

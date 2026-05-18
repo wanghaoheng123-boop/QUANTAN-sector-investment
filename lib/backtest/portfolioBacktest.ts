@@ -144,6 +144,32 @@ export function runPortfolioBacktest(
   // institutional risk reports for short-term correlation.
   const CORRELATION_WINDOW = 63
 
+  // Phase 14 wave 6: pre-seed correlation tape from the warm-up window so
+  // the first ~20 trading days don't fail-closed via maxCorrelationVsPeers.
+  // Without this, the tape is empty at di=220, maxCorrelationVsPeers
+  // returns null for <20 history, and correlationAdjustedKelly fail-closes
+  // to 0 — blocking ALL new positions for the first ~20 trading days.
+  // Seed using the unified-date window so per-ticker indices stay consistent.
+  const CORR_SEED_BARS = 25
+  const seedStartDi = Math.max(0, 220 - CORR_SEED_BARS)
+  for (const t of tickers) {
+    const rows = instrumentData[t] ?? []
+    const seed: number[] = []
+    for (let i = seedStartDi + 1; i < 220 && i < dates.length; i++) {
+      const prevTime = dates[i - 1]
+      const currTime = dates[i]
+      const prevIdx = priceIndex[t]?.get(prevTime)
+      const currIdx = priceIndex[t]?.get(currTime)
+      if (prevIdx == null || currIdx == null) continue
+      const prev = rows[prevIdx]?.close
+      const curr = rows[currIdx]?.close
+      if (prev && curr && prev > 0 && Number.isFinite(curr) && Number.isFinite(prev)) {
+        seed.push(curr / prev - 1)
+      }
+    }
+    tickerDailyReturns[t] = seed
+  }
+
   // Phase 12-A: Build per-ticker sector-gate map.
   // Resolution order:
   //   1) explicit cfg.tickerSectorGates override (per-ticker)
@@ -235,7 +261,16 @@ export function runPortfolioBacktest(
           sectorGateByTicker[ticker],
         )
         signalAction = sig.action
-      } catch { /* keep HOLD on error */ }
+      } catch (err) {
+        // Phase 14 wave 21: log the signal-generation error so a regression
+        // (e.g. a NaN bar that throws inside an indicator) leaves a trace.
+        // We still keep HOLD as the conservative fallback, but the warn
+        // surfaces what would otherwise be a silent algorithm failure.
+        console.warn(
+          `[portfolioBacktest] signal generation failed for ${ticker} on ${currentDate}:`,
+          err instanceof Error ? err.message : err,
+        )
+      }
 
       // Check exit conditions — F1.3 (Phase 13 S2): pass the full bar so
       // stop-loss and profit-target evaluation uses bar.low / bar.high
@@ -250,6 +285,17 @@ export function runPortfolioBacktest(
         const exitShares = exitCheck.isPartial
           ? Math.floor(pos.currentShares * exitCheck.partialFraction)
           : pos.currentShares
+
+        // Phase 14 wave 7: skip zero-share partial exits.
+        // Bug: small positions (currentShares = 1 with partialFraction = 0.5)
+        // floor to exitShares = 0 but the prior code still pushed a "trade"
+        // record (shares=0, pnlDollar=0) and flipped partialExitDone=true,
+        // poisoning win-rate stats (zero-share trades count toward the
+        // denominator) and stripping the position of its profit-target exit
+        // path so it could only exit via trailing stop afterwards.
+        if (exitCheck.isPartial && exitShares <= 0) {
+          continue  // keep position intact, partialExitDone stays false
+        }
 
         const pnlPct = (exitPrice - pos.entryPrice) / pos.entryPrice
         const pnlDollar = exitShares * (exitPrice - pos.entryPrice)

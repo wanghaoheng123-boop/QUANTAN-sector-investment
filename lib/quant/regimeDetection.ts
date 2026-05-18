@@ -18,7 +18,7 @@ export interface RegimeState {
   volatilityRegime: VolatilityRegime
   trendRegime: TrendRegime
   strategyHint: StrategyHint
-  volRatio: number       // vol20 / vol60
+  volRatio: number | null  // vol20 / vol60; null when vol20/vol60 unmeasurable (Phase 14)
   adxValue: number | null
   confidence: number     // 0-100, how clear the regime signal is
 }
@@ -27,7 +27,15 @@ export interface RegimeState {
 
 /**
  * Annualized realized volatility over `period` days.
- * Uses log returns, annualized by sqrt(252).
+ *
+ * Convention (Phase 14 Q2-M-1 doc'd): LOG RETURNS r_i = ln(c_i / c_{i-1}),
+ * annualized by √252.
+ *
+ * Volatility is a time-aggregation problem (T-day σ = √T · daily σ), and
+ * log returns aggregate additively over time while simple returns do not.
+ * See Tsay (2010) "Analysis of Financial Time Series" pp 3–7: "log returns
+ * aggregate over time, simple returns aggregate across portfolios." Sister
+ * implementation in `lib/quant/volatility.ts` follows the same convention.
  */
 function realizedVol(closes: number[], period: number): number | null {
   if (closes.length < period + 1) return null
@@ -141,7 +149,9 @@ export function detectRegime(closes: number[], bars: OhlcBar[]): RegimeState {
     volatilityRegime,
     trendRegime,
     strategyHint,
-    volRatio,
+    // Phase 14: surface null when unmeasured so callers don't get
+    // misleading "1.0 = normal" reading from insufficient data.
+    volRatio: volKnown ? volRatio : null,
     adxValue,
     confidence: Math.max(0, Math.min(100, confidence)),
   }

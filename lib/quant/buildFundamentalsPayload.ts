@@ -108,17 +108,35 @@ export function buildFundamentalsPayload(
   const shares = num(keyStats?.sharesOutstanding) ?? num(keyStats?.ordinarySharesNumber)
   const fcf0 = pickFcf0(cashModule, financialData)
 
-  // Net debt = long-term debt − cash & equivalents (most-recent balance sheet).
-  // Required for the FCFF→equity bridge in runDcf. When the balance-sheet
-  // module is unavailable we fall back to undefined → runDcf assumes 0
-  // (preserves the previous behaviour for those tickers, but every ticker
-  // with a Yahoo balance sheet now gets the correct equity-value bridge).
+  // Net debt = (long-term debt + short-term debt) − cash & equivalents
+  // (most-recent balance sheet). Required for the FCFF→equity bridge in runDcf.
+  //
+  // Phase 14 wave 13: was using LTD alone, which understates net debt for
+  // companies with material short-term obligations (commercial-paper-heavy
+  // financials, REITs with revolving credit lines, retailers with seasonal
+  // working-capital financing). The Damodaran (2012) FCFF→equity bridge
+  // explicitly subtracts ALL interest-bearing debt, not just long-term.
+  //
+  // Also adds `shortLongTermDebt` (Yahoo's name for the current portion of
+  // long-term debt). When the balance-sheet module is unavailable we fall
+  // back to undefined → runDcf assumes netDebt=0 (preserves prior behaviour
+  // for those tickers).
+  //
+  // Citation: Damodaran, A. (2012). Investment Valuation (3rd ed.), Wiley,
+  //           ch.2 — "subtract all interest-bearing debt obligations from EV
+  //           to derive equity value".
   let netDebt: number | undefined
   if (balanceHist.length > 0) {
     const latest = balanceHist[0] as AnyRec
     const ltd = num(latest?.longTermDebt) ?? 0
+    // Short-term debt may surface under different Yahoo names. Try the
+    // common ones; default to 0 if none present.
+    const std = num(latest?.shortLongTermDebt)
+              ?? num(latest?.shortTermDebt)
+              ?? num(latest?.currentDebt)
+              ?? 0
     const cash = num(latest?.cash) ?? 0
-    netDebt = ltd - cash
+    netDebt = ltd + std - cash
   }
 
   const dcfBear =

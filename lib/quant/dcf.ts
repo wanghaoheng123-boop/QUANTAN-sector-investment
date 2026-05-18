@@ -72,6 +72,10 @@ export function runDcf(input: DcfInputs): DcfResult | null {
   // FCFF → equity bridge: subtract net debt. Net-cash companies have
   // negative netDebt and equity exceeds EV (correct).
   const equityValue = enterpriseValue - netDebt
+  // Q1-C-4 (Phase 14 S1): explicit insolvency rejection.
+  // EV < netDebt means the company's debt exceeds its asset value — no equity to value.
+  // Citation: Damodaran, A. (2012). Investment Valuation (3rd ed.), Wiley, ch.2 — insolvency.
+  if (equityValue <= 0) return null
   const valuePerShare = equityValue / shares
 
   if (!Number.isFinite(valuePerShare) || valuePerShare <= 0) return null

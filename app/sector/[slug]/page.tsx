@@ -62,18 +62,24 @@ export default function SectorPage({ params }: { params: { slug: string } }) {
   const [activeRange, setActiveRange] = useState('6M')
   const [quoteError, setQuoteError] = useState<string | null>(null)
 
+  // Phase 14 wave 18: AbortSignal-aware fetch. Prior code was vulnerable to
+  // the same race conditions fixed in stock/[ticker]/page.tsx (waves 8/9) —
+  // rapid sector navigation could leave stale responses in flight that
+  // overwrote state for the new sector.
   const fetchChartData = useCallback(
-    (range: string) => {
-      fetch(`/api/chart/${encodeURIComponent(sector.etf)}?range=${encodeURIComponent(range)}`)
+    (range: string, signal?: AbortSignal) => {
+      fetch(`/api/chart/${encodeURIComponent(sector.etf)}?range=${encodeURIComponent(range)}`, { signal })
         .then((r) => {
           if (!r.ok) return Promise.reject(new Error(`HTTP ${r.status}`))
           return r.json()
         })
         .then((data) => {
+          if (signal?.aborted) return
           setCandles(data.candles ?? [])
           setDarkPoolMarkers(data.darkPoolMarkers ?? [])
         })
         .catch((err) => {
+          if (signal?.aborted || (err instanceof DOMException && err.name === 'AbortError')) return
           // Phase 13 S2 fix (F5.4): chart data fetch failure now surfaces as a
           // diagnostic in console; UI shows last-known candles unchanged.
           console.warn('[sector] chart fetch failed for', sector.etf, err)
@@ -83,36 +89,58 @@ export default function SectorPage({ params }: { params: { slug: string } }) {
   )
 
   useEffect(() => {
-    fetchChartData(activeRange)
+    const controller = new AbortController()
+    fetchChartData(activeRange, controller.signal)
+    return () => controller.abort()
   }, [sector.etf, activeRange, fetchChartData])
 
   useEffect(() => {
     if (activeTab !== 'chart') return
     if (!isStockIntradayPollRange(activeRange)) return
     const ms = CHART_POLL_MS(activeRange)
-    const id = setInterval(() => fetchChartData(activeRange), ms)
-    return () => clearInterval(id)
+    let activeController = new AbortController()
+    const id = setInterval(() => {
+      activeController.abort()
+      activeController = new AbortController()
+      fetchChartData(activeRange, activeController.signal)
+    }, ms)
+    return () => {
+      clearInterval(id)
+      activeController.abort()
+    }
   }, [activeTab, activeRange, fetchChartData])
 
   useEffect(() => {
-    const pull = () => {
-      fetch(`/api/prices?tickers=${encodeURIComponent(sector.etf)}`)
+    let activeController = new AbortController()
+    const pull = (signal: AbortSignal) => {
+      fetch(`/api/prices?tickers=${encodeURIComponent(sector.etf)}`, { signal })
         .then((r) => {
           if (!r.ok) return Promise.reject(new Error(`HTTP ${r.status}`))
           return r.json()
         })
         .then((data) => {
+          if (signal.aborted) return
           const q = data.quotes?.find((x: { ticker: string }) => x.ticker === sector.etf)
           if (q) {
             setQuote(q)
             setQuoteError(null)
           }
         })
-        .catch((e) => setQuoteError(e instanceof Error ? e.message : 'Quote unavailable'))
+        .catch((e) => {
+          if (signal.aborted || (e instanceof DOMException && e.name === 'AbortError')) return
+          setQuoteError(e instanceof Error ? e.message : 'Quote unavailable')
+        })
     }
-    pull()
-    const id = setInterval(pull, 15000)
-    return () => clearInterval(id)
+    pull(activeController.signal)
+    const id = setInterval(() => {
+      activeController.abort()
+      activeController = new AbortController()
+      pull(activeController.signal)
+    }, 15000)
+    return () => {
+      clearInterval(id)
+      activeController.abort()
+    }
   }, [sector.etf])
 
   useEffect(() => {
@@ -121,19 +149,23 @@ export default function SectorPage({ params }: { params: { slug: string } }) {
 
   useEffect(() => {
     if (activeTab !== 'darkpool') return
+    const controller = new AbortController()
     setDarkPoolApiLoading(true)
     setDarkPoolApiData(null)
-    fetch(`/api/darkpool/${encodeURIComponent(sector.etf)}`)
+    fetch(`/api/darkpool/${encodeURIComponent(sector.etf)}`, { signal: controller.signal })
       .then((r) => r.json())
       .then((data) => {
+        if (controller.signal.aborted) return
         setDarkPoolApiData(data)
         setDarkPoolApiLoading(false)
       })
       .catch((err) => {
+        if (controller.signal.aborted || (err instanceof DOMException && err.name === 'AbortError')) return
         // Phase 13 S2 fix (F5.4): dark-pool fetch failure now diagnosable.
         console.warn('[sector] dark-pool fetch failed for', sector.etf, err)
         setDarkPoolApiLoading(false)
       })
+    return () => controller.abort()
   }, [sector.etf, activeTab])
 
   const signal = useMemo(

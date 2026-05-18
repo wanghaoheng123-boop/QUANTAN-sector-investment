@@ -72,25 +72,76 @@ describe('checkRateLimit', () => {
 })
 
 describe('getRateLimitKey', () => {
-  it('uses x-forwarded-for first IP when present', () => {
-    const req = new Request('http://localhost/x', {
-      headers: { 'x-forwarded-for': '1.2.3.4, 5.6.7.8' },
+  // R7-C-2 (Phase 14 S1): `x-forwarded-for` is now only trusted when running on
+  // Vercel (process.env.VERCEL === '1'). On any other host (Railway, raw Node,
+  // self-hosted) the header is attacker-controllable and ignored. Tests now
+  // exercise both branches explicitly via env-var manipulation.
+
+  const withVercelEnv = (vercel: boolean, fn: () => void) => {
+    const original = process.env.VERCEL
+    if (vercel) {
+      process.env.VERCEL = '1'
+    } else {
+      // Off-Vercel: delete so the `=== '1'` guard takes the false branch.
+      delete process.env.VERCEL
+    }
+    try { fn() } finally {
+      if (original === undefined) delete process.env.VERCEL
+      else process.env.VERCEL = original
+    }
+  }
+
+  it('uses x-forwarded-for first IP when running on Vercel', () => {
+    withVercelEnv(true, () => {
+      const req = new Request('http://localhost/x', {
+        headers: { 'x-forwarded-for': '1.2.3.4, 5.6.7.8' },
+      })
+      expect(getRateLimitKey(req, 'route-x')).toBe('route-x:1.2.3.4')
     })
-    const key = getRateLimitKey(req, 'route-x')
-    expect(key).toBe('route-x:1.2.3.4')
   })
 
-  it('falls back to x-real-ip when forwarded missing', () => {
-    const req = new Request('http://localhost/x', {
-      headers: { 'x-real-ip': '9.9.9.9' },
+  it('IGNORES x-forwarded-for off-Vercel (spoofable header)', () => {
+    withVercelEnv(false, () => {
+      const req = new Request('http://localhost/x', {
+        headers: { 'x-forwarded-for': '1.2.3.4, 5.6.7.8' },
+      })
+      // Off-Vercel, the spoofable XFF must NOT be the key — degrade to 'server'.
+      expect(getRateLimitKey(req, 'route-x')).toBe('route-x:server')
     })
-    const key = getRateLimitKey(req, 'route-y')
-    expect(key).toBe('route-y:9.9.9.9')
   })
 
-  it('uses "unknown" when neither header is present', () => {
-    const req = new Request('http://localhost/x')
-    const key = getRateLimitKey(req, 'route-z')
-    expect(key).toBe('route-z:unknown')
+  it('falls back to x-real-ip when forwarded missing (Vercel)', () => {
+    withVercelEnv(true, () => {
+      const req = new Request('http://localhost/x', {
+        headers: { 'x-real-ip': '9.9.9.9' },
+      })
+      expect(getRateLimitKey(req, 'route-y')).toBe('route-y:9.9.9.9')
+    })
+  })
+
+  it('uses x-real-ip off-Vercel when provided by trusted upstream proxy', () => {
+    withVercelEnv(false, () => {
+      const req = new Request('http://localhost/x', {
+        headers: { 'x-real-ip': '9.9.9.9' },
+      })
+      // x-real-ip is set by upstream proxies (nginx/Caddy) and is conventionally
+      // single-valued, so it is honoured even off-Vercel.
+      expect(getRateLimitKey(req, 'route-y')).toBe('route-y:9.9.9.9')
+    })
+  })
+
+  it('falls back to "unknown" when no headers present on Vercel', () => {
+    withVercelEnv(true, () => {
+      const req = new Request('http://localhost/x')
+      expect(getRateLimitKey(req, 'route-z')).toBe('route-z:unknown')
+    })
+  })
+
+  it('falls back to "server" when no headers present off-Vercel', () => {
+    withVercelEnv(false, () => {
+      const req = new Request('http://localhost/x')
+      // Off-Vercel without a trusted upstream → degrade to single global bucket.
+      expect(getRateLimitKey(req, 'route-z')).toBe('route-z:server')
+    })
   })
 })

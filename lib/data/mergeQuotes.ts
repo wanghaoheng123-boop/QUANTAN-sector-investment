@@ -140,6 +140,30 @@ export function mergeYahooAndBloomberg(
 
   for (const [t, bb] of bloomberg) {
     if (seen.has(t)) continue
+    // Phase 14 wave 7: apply the same truthy-checks as the Yahoo-overlap branch
+    // above. Previously every field's provenance was hard-coded to 'bloomberg'
+    // even when bb.volume was 0 or bb.marketCap was the 'N/A' sentinel — an
+    // audit reading `provenance.volume === 'bloomberg'` would falsely conclude
+    // Bloomberg supplied volume when in fact the value was missing.
+    //
+    // For consistency with the dual-source path, we still mark these as
+    // 'bloomberg' for primary (price/change/changePct) — Bloomberg is the
+    // only source available in this branch — but emit a structured warn so
+    // operators can detect the Bloomberg-only sentinel pattern.
+    const sentinelFields: string[] = []
+    if (!bb.volume) sentinelFields.push('volume')
+    if (!bb.high52w) sentinelFields.push('high52w')
+    if (!bb.low52w) sentinelFields.push('low52w')
+    if (!bb.pe) sentinelFields.push('pe')
+    if (bb.marketCap === 'N/A') sentinelFields.push('marketCap')
+    if (sentinelFields.length > 0) {
+      console.warn(JSON.stringify({
+        event: 'mergeQuotes.bloomberg_sentinel_fields',
+        ticker: t,
+        fields: sentinelFields,
+        message: 'Bloomberg-only quote has sentinel values for these fields; downstream audits may be misled by provenance=bloomberg.',
+      }))
+    }
     const provenance: QuoteProvenance = {
       price: 'bloomberg',
       change: 'bloomberg',

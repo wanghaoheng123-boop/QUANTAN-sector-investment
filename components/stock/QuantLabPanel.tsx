@@ -387,13 +387,18 @@ export default function QuantLabPanel({ ticker }: { ticker: string }) {
     [ticker]
   )
 
-  // Persist API key to sessionStorage (cleared when tab closes)
+  // Persist API key to sessionStorage (cleared when tab closes).
+  // Phase 14 wave 21: log catch errors instead of silent suppression so
+  // a chronic sessionStorage failure (incognito mode, disabled storage)
+  // is diagnosable. The user still gets in-memory state if storage fails.
   const handleApiKeyChange = useCallback((key: string) => {
     setLlmApiKey(key)
     try {
       if (key.trim()) sessionStorage.setItem('llm_api_key', key)
       else sessionStorage.removeItem('llm_api_key')
-    } catch {}
+    } catch (err) {
+      console.warn('[QuantLabPanel] sessionStorage write failed', err)
+    }
   }, [])
 
   // Load API key from sessionStorage on mount
@@ -401,7 +406,9 @@ export default function QuantLabPanel({ ticker }: { ticker: string }) {
     try {
       const saved = sessionStorage.getItem('llm_api_key')
       if (saved) setLlmApiKey(saved)
-    } catch {}
+    } catch (err) {
+      console.warn('[QuantLabPanel] sessionStorage read failed', err)
+    }
   }, [])
 
   useEffect(() => {
@@ -1459,35 +1466,58 @@ export default function QuantLabPanel({ ticker }: { ticker: string }) {
             )}
 
             {/* Result */}
-            {llmHasRun && llmResult && !llmError && (
+            {llmHasRun && llmResult && !llmError && (() => {
+              // R5-C-5 (Phase 14): replace `as any` with a runtime-validated
+              // narrow accessor. We do NOT trust the LLM backend response
+              // shape — every field is read via getStr() which returns ''
+              // for missing/non-string fields. This keeps TS strict and
+              // prevents silent runtime errors on schema drift.
+              const r = llmResult as Record<string, unknown>
+              const getStr = (k: string): string => {
+                const v = r[k]
+                return typeof v === 'string' ? v : ''
+              }
+              const getNum = (k: string): number | null => {
+                const v = r[k]
+                return typeof v === 'number' && Number.isFinite(v) ? v : null
+              }
+              const decision = getStr('decision')
+              const decisionGrade = getStr('decision_grade')
+              const confidenceLabel = getStr('confidence_label')
+              const elapsedSeconds = getNum('elapsed_seconds')
+              const llmProviderField = getStr('llm_provider')
+              const modelUsed = getStr('model_used')
+              const investmentPlan = getStr('investment_plan')
+              const finalTradeDecision = getStr('final_trade_decision')
+              return (
               <div className="space-y-4">
                 {/* Decision banner */}
-                {(llmResult as any).decision && (
+                {decision && (
                   <div
                     className={`rounded-xl border p-5 text-center ${
-                      (llmResult as any).decision_grade === 'BUY'
+                      decisionGrade === 'BUY'
                         ? 'border-green-500/40 bg-green-950/20'
-                        : (llmResult as any).decision_grade === 'SELL'
+                        : decisionGrade === 'SELL'
                           ? 'border-red-500/40 bg-red-950/20'
                           : 'border-yellow-500/40 bg-yellow-950/10'
                     }`}
                   >
                     <div className="text-[10px] uppercase tracking-widest text-slate-400 mb-2">Final decision</div>
                     <div className="text-4xl font-bold font-mono text-white">
-                      {(llmResult as any).decision_grade}
+                      {decisionGrade}
                     </div>
                     <div className="text-xs text-slate-400 mt-1">
-                      {(llmResult as any).confidence_label} confidence &middot;{' '}
-                      {(llmResult as any).elapsed_seconds}s &middot;{' '}
-                      {(llmResult as any).llm_provider}/{(llmResult as any).model_used || '—'}
+                      {confidenceLabel} confidence &middot;{' '}
+                      {elapsedSeconds != null ? `${elapsedSeconds}s` : '—'} &middot;{' '}
+                      {llmProviderField}/{modelUsed || '—'}
                     </div>
                   </div>
                 )}
 
                 {/* Analyst reports */}
-                {['market_report', 'sentiment_report', 'news_report', 'fundamentals_report'].map(
+                {(['market_report', 'sentiment_report', 'news_report', 'fundamentals_report'] as const).map(
                   (field) => {
-                    const val = (llmResult as any)[field]
+                    const val = getStr(field)
                     if (!val) return null
                     return (
                       <div key={field} className="rounded-xl border border-slate-800 p-4">
@@ -1501,26 +1531,27 @@ export default function QuantLabPanel({ ticker }: { ticker: string }) {
                 )}
 
                 {/* Investment plan */}
-                {(llmResult as any).investment_plan && (
+                {investmentPlan && (
                   <div className="rounded-xl border border-blue-500/20 bg-blue-950/10 p-4">
                     <div className="text-[10px] uppercase tracking-widest text-blue-400 mb-2">Investment plan</div>
                     <p className="text-xs text-slate-300 leading-relaxed whitespace-pre-wrap">
-                      {(llmResult as any).investment_plan}
+                      {investmentPlan}
                     </p>
                   </div>
                 )}
 
                 {/* Risk debate + final decision */}
-                {(llmResult as any).final_trade_decision && (
+                {finalTradeDecision && (
                   <div className="rounded-xl border border-violet-500/20 bg-violet-950/10 p-4">
                     <div className="text-[10px] uppercase tracking-widest text-violet-400 mb-2">Risk debate + final decision</div>
                     <p className="text-xs text-slate-300 leading-relaxed whitespace-pre-wrap">
-                      {(llmResult as any).final_trade_decision}
+                      {finalTradeDecision}
                     </p>
                   </div>
                 )}
               </div>
-            )}
+              )
+            })()}
 
             {/* Not run yet */}
             {!llmHasRun && !llmError && !llmLoading && (

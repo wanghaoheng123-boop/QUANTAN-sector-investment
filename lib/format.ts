@@ -64,17 +64,40 @@ export function formatFreshness(iso: string | null | undefined): string {
 /**
  * Parse a Yahoo Finance quote timestamp into an ISO string.
  * Shared by darkpool and briefs API routes.
+ *
+ * Phase 14 wave 17: defensive bounds + try/catch around `.toISOString()`.
+ * V8 throws RangeError when the date is outside ±100 million days from
+ * the epoch (≈ year -271820 to year 275760). A negative or impossibly-large
+ * timestamp from a misconfigured upstream would crash the route. We now
+ * clamp to the V8 valid range and swallow the throw as a defensive
+ * fallback.
  */
+const MS_MAX = 8.64e15  // V8 max date: ±100 million days from epoch
+const MS_MIN = -8.64e15
+
+function safeToIso(ms: number): string | null {
+  if (!Number.isFinite(ms)) return null
+  if (ms < MS_MIN || ms > MS_MAX) return null
+  try {
+    return new Date(ms).toISOString()
+  } catch {
+    return null
+  }
+}
+
 export function parseQuoteTime(ts: unknown): string | null {
   if (ts == null) return null
-  if (ts instanceof Date) return ts.toISOString()
+  if (ts instanceof Date) {
+    const t = ts.getTime()
+    return Number.isFinite(t) ? safeToIso(t) : null
+  }
   if (typeof ts === 'string') {
     const d = new Date(ts)
-    return Number.isFinite(d.getTime()) ? d.toISOString() : null
+    return Number.isFinite(d.getTime()) ? safeToIso(d.getTime()) : null
   }
   if (typeof ts === 'number') {
     const ms = ts > 1e12 ? ts : ts * 1000
-    return Number.isFinite(ms) ? new Date(ms).toISOString() : null
+    return safeToIso(ms)
   }
   return null
 }

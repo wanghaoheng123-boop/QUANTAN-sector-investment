@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Rocket, ExternalLink, Copy, Check, X, CheckCircle2 } from 'lucide-react'
+import { useDialogA11y } from '@/hooks/useDialogA11y'
 
 /** Subfolder that contains `server_trading_agents.py` when the Git repo is the monorepo root. */
 const DEFAULT_ROOT_DIR = 'antigravity-sectors'
@@ -23,9 +24,10 @@ export function LlmDeployAssistant({ repoServiceRoot = DEFAULT_ROOT_DIR, backend
   const [open, setOpen] = useState(false)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   // Phase 13 S2 (F6.7 WAI-ARIA Dialog) — refs for full focus management.
+  // Phase 14 wave 31: the previously-inlined effect now lives in
+  // `useDialogA11y` (called below) — SSOT shared with KeyboardShortcuts.
   const dialogRef = useRef<HTMLDivElement>(null)
   const closeBtnRef = useRef<HTMLButtonElement>(null)
-  const returnFocusRef = useRef<HTMLElement | null>(null)
 
   const copy = useCallback(async (text: string, id: string) => {
     try {
@@ -47,42 +49,9 @@ export function LlmDeployAssistant({ repoServiceRoot = DEFAULT_ROOT_DIR, backend
     return () => window.removeEventListener('keydown', onKey)
   }, [open])
 
-  // F6.7 WAI-ARIA Dialog full pattern (mirrors KeyboardShortcuts.tsx):
-  //   initial focus on close button · focus trap · body scroll lock ·
-  //   return focus to previously-focused element on close.
-  useEffect(() => {
-    if (!open) return
-    returnFocusRef.current = (document.activeElement as HTMLElement) ?? null
-    closeBtnRef.current?.focus()
-    const prevOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-
-    const trapFocus = (e: KeyboardEvent) => {
-      if (e.key !== 'Tab') return
-      const dialog = dialogRef.current
-      if (!dialog) return
-      const focusable = dialog.querySelectorAll<HTMLElement>(
-        'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"]), input:not([disabled]), textarea:not([disabled]), select:not([disabled])',
-      )
-      if (focusable.length === 0) return
-      const first = focusable[0]
-      const last = focusable[focusable.length - 1]
-      const active = document.activeElement as HTMLElement | null
-      if (e.shiftKey && active === first) {
-        e.preventDefault()
-        last.focus()
-      } else if (!e.shiftKey && active === last) {
-        e.preventDefault()
-        first.focus()
-      }
-    }
-    document.addEventListener('keydown', trapFocus)
-    return () => {
-      document.removeEventListener('keydown', trapFocus)
-      document.body.style.overflow = prevOverflow
-      returnFocusRef.current?.focus?.()
-    }
-  }, [open])
+  // F6.7 WAI-ARIA Dialog full pattern via the shared useDialogA11y primitive:
+  // initial focus · focus trap · body scroll lock · return focus on close.
+  useDialogA11y({ open, dialogRef, initialFocusRef: closeBtnRef })
 
   const openRailway = useCallback(() => {
     window.open(RAILWAY_NEW, '_blank', 'noopener,noreferrer')

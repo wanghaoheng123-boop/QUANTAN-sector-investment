@@ -1,7 +1,9 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { useRouter, usePathname } from 'next/navigation'
+import { useDialogA11y } from '@/hooks/useDialogA11y'
 
 interface Shortcut {
   keys: string[]
@@ -23,12 +25,17 @@ export default function KeyboardShortcuts() {
   const router = useRouter()
   const pathname = usePathname()
 
-  // F6.7 (WAI-ARIA APG Dialog): refs for focus management.
+  // F6.7 (WAI-ARIA APG Dialog): refs for focus management. The actual
+  // focus-trap / scroll-lock / return-focus contract now lives in
+  // `useDialogA11y` (Phase 14 wave 31 SSOT extraction).
   const dialogRef = useRef<HTMLDivElement>(null)
   const closeBtnRef = useRef<HTMLButtonElement>(null)
-  const returnFocusRef = useRef<HTMLElement | null>(null)
 
   const close = useCallback(() => setIsOpen(false), [])
+
+  // WAI-ARIA APG Dialog primitive — initial focus, focus trap, scroll lock,
+  // return focus. Runs on every isOpen transition.
+  useDialogA11y({ open: isOpen, dialogRef, initialFocusRef: closeBtnRef })
 
   useEffect(() => {
     let gPressed = false
@@ -104,55 +111,14 @@ export default function KeyboardShortcuts() {
     close()
   }, [pathname, close])
 
-  // F6.7 (WAI-ARIA APG Dialog) — initial focus, focus trap, return-focus,
-  // body scroll lock. Runs on every isOpen change.
-  useEffect(() => {
-    if (!isOpen) return
-
-    // Remember which element had focus when the modal opened — restore on close.
-    returnFocusRef.current = (document.activeElement as HTMLElement) ?? null
-
-    // Move focus to the close button on open so keyboard / screen-reader
-    // users land inside the dialog immediately.
-    closeBtnRef.current?.focus()
-
-    // Body scroll lock — prevent the underlying page from scrolling while
-    // the modal is open. Cache + restore the original overflow value.
-    const prevOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-
-    // Focus trap — intercept Tab/Shift+Tab to keep focus inside the dialog.
-    const trapFocus = (e: KeyboardEvent) => {
-      if (e.key !== 'Tab') return
-      const dialog = dialogRef.current
-      if (!dialog) return
-      const focusable = dialog.querySelectorAll<HTMLElement>(
-        'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"]), input:not([disabled]), textarea:not([disabled]), select:not([disabled])',
-      )
-      if (focusable.length === 0) return
-      const first = focusable[0]
-      const last = focusable[focusable.length - 1]
-      const active = document.activeElement as HTMLElement | null
-      if (e.shiftKey && active === first) {
-        e.preventDefault()
-        last.focus()
-      } else if (!e.shiftKey && active === last) {
-        e.preventDefault()
-        first.focus()
-      }
-    }
-    document.addEventListener('keydown', trapFocus)
-
-    return () => {
-      document.removeEventListener('keydown', trapFocus)
-      document.body.style.overflow = prevOverflow
-      // Return focus to the previously-focused element so keyboard users
-      // resume where they were rather than jumping to body / first tabstop.
-      returnFocusRef.current?.focus?.()
-    }
-  }, [isOpen])
-
   if (!isOpen) return null
+
+  // Phase 14 (R5-M-4): render the modal through a portal to document.body so
+  // it escapes any ancestor stacking context (e.g. headers with
+  // position: sticky/relative + transforms) that would otherwise clip the
+  // overlay or fight its z-index. Guard for SSR — Next.js renders this
+  // component server-side as well.
+  if (typeof document === 'undefined') return null
 
   const grouped = SHORTCUTS.reduce<Record<string, Shortcut[]>>((acc, shortcut) => {
     if (!acc[shortcut.category]) acc[shortcut.category] = []
@@ -160,7 +126,7 @@ export default function KeyboardShortcuts() {
     return acc
   }, {})
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm"
       onClick={close}
@@ -182,7 +148,10 @@ export default function KeyboardShortcuts() {
             className="text-slate-500 hover:text-white transition-colors p-1 rounded-md hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-400"
             aria-label="Close shortcuts"
           >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            {/* Phase 14 wave 24 Pattern D: aria-hidden on decorative SVG so
+                screen readers don't read raw path data alongside the
+                aria-label. */}
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true" focusable="false">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
@@ -217,6 +186,7 @@ export default function KeyboardShortcuts() {
           </p>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

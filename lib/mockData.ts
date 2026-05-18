@@ -128,7 +128,16 @@ export function generateDarkPoolPrints(ticker: string, count: number = 12): Dark
 }
 
 // ─── Dark Pool Chart Markers ────────────────────────────────────────────────
-export function generateDarkPoolMarkers(candles: { time: string; close: number }[], ticker: string = 'X') {
+//
+// Phase 14 wave 29: `time` widened from `string` to `string | number`. Daily-bar
+// callers pass YYYY-MM-DD strings; intraday-bar callers (3m aggregator in
+// the chart route) pass Unix seconds as numbers. Both are valid lightweight-
+// charts `Time` formats. Removing this constraint allowed two `as any` casts
+// in `app/api/chart/[ticker]/route.ts` to be deleted.
+export function generateDarkPoolMarkers(
+  candles: { time: string | number; close: number }[],
+  ticker: string = 'X',
+) {
   const rng = mulberry32(ticker.charCodeAt(0) * 13 + 99)
   return candles
     .filter(() => rng() < 0.10)

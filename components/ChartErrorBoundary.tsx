@@ -57,11 +57,17 @@ export class ChartErrorBoundary extends React.Component<Props, State> {
       const label = this.props.label ?? 'Chart'
 
       return (
+        // Phase 14 wave 28: role="alert" announces the error state when the
+        // boundary catches a render error mid-page (screen-reader users would
+        // otherwise see the chart silently disappear). aria-live="assertive"
+        // makes it interrupt other announcements (errors should preempt).
         <div
           className="flex flex-col items-center justify-center rounded-xl border border-amber-500/20 bg-surface gap-3"
           style={{ height }}
+          role="alert"
+          aria-live="assertive"
         >
-          <AlertTriangle className="w-8 h-8 text-amber-400 opacity-70" />
+          <AlertTriangle className="w-8 h-8 text-amber-400 opacity-70" aria-hidden="true" />
           <p className="text-slate-400 text-sm font-medium">
             {label} unavailable
           </p>
@@ -71,10 +77,11 @@ export class ChartErrorBoundary extends React.Component<Props, State> {
             </p>
           )}
           <button
+            type="button"
             onClick={this.handleRetry}
-            className="mt-1 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface border border-white/10 text-slate-300 text-xs hover:border-amber-500/40 hover:text-amber-400 transition-colors"
+            className="mt-1 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface border border-white/10 text-slate-300 text-xs hover:border-amber-500/40 hover:text-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400 transition-colors"
           >
-            <RefreshCw className="w-3 h-3" />
+            <RefreshCw className="w-3 h-3" aria-hidden="true" />
             Retry
           </button>
         </div>

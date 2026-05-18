@@ -61,6 +61,23 @@ function toDate(d: unknown): Date {
 }
 
 function normaliseContract(raw: Record<string, unknown>): CallOrPut {
+  // Q3-H-3 (Phase 14): Yahoo returns IV as decimal (0.25 = 25%). If we see
+  // > 5.0, it's almost certainly a percentage-vs-decimal upstream bug — a
+  // raw value like 25 would propagate to Black-Scholes and blow up every
+  // Greek for the contract. Clamp to 0 (Greeks reported as zeros) and log
+  // for forensics so we can spot upstream schema drift early.
+  let ivRaw = Number(raw.impliedVolatility ?? 0)
+  if (Number.isFinite(ivRaw) && ivRaw > 5.0) {
+    // eslint-disable-next-line no-console
+    console.warn(JSON.stringify({
+      event: 'options.iv_out_of_range',
+      symbol: String(raw.contractSymbol ?? ''),
+      raw: ivRaw,
+    }))
+    ivRaw = 0
+  }
+  if (!Number.isFinite(ivRaw)) ivRaw = 0
+
   return {
     contractSymbol: String(raw.contractSymbol ?? ''),
     strike: Number(raw.strike ?? 0),
@@ -75,7 +92,7 @@ function normaliseContract(raw: Record<string, unknown>): CallOrPut {
     contractSize: String(raw.contractSize ?? 'REGULAR'),
     expiration: toDate(raw.expiration),
     lastTradeDate: toDate(raw.lastTradeDate ?? raw.expiration),
-    impliedVolatility: Number(raw.impliedVolatility ?? 0),
+    impliedVolatility: ivRaw,
     inTheMoney: Boolean(raw.inTheMoney),
   }
 }

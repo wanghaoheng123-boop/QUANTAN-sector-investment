@@ -79,7 +79,16 @@ export function createPortfolio(name: string, initialCapital: number): Portfolio
 
 export function savePortfolio(portfolio: Portfolio): void {
   if (typeof localStorage === 'undefined') return
-  localStorage.setItem(storageKey(portfolio.id), JSON.stringify(portfolio))
+  // Phase 14 wave 15: localStorage.setItem throws QuotaExceededError in
+  // private/incognito mode and when storage quota (5–10 MB) is exceeded.
+  // Without this guard, a failed save would propagate up and crash the
+  // calling UI component. We silently degrade — saving fails, the in-memory
+  // portfolio state is preserved, and we log so operators can diagnose.
+  try {
+    localStorage.setItem(storageKey(portfolio.id), JSON.stringify(portfolio))
+  } catch (err) {
+    console.warn('[portfolio.tracker] savePortfolio failed', err)
+  }
 }
 
 export function loadPortfolio(portfolioId: string): Portfolio | null {
@@ -166,12 +175,21 @@ export function closePosition(
   portfolio.cash += proceeds
   portfolio.realizedPnl += realizedPnl
 
+  // Phase 14 wave 15: defensive date validation. Invalid date strings make
+  // `new Date().getTime()` return NaN, so the subtraction → NaN → Math.round
+  // would emit NaN as holdingDays. ClosedTrade JSON-serialized with NaN
+  // becomes `null` on the way back through localStorage → confusing display.
+  const exitTime = new Date(exitDate).getTime()
+  const entryTime = new Date(pos.entryDate).getTime()
+  const holdingDays = Number.isFinite(exitTime) && Number.isFinite(entryTime)
+    ? Math.max(0, Math.round((exitTime - entryTime) / 86400000))
+    : 0
   const trade: ClosedTrade = {
     ticker, sector: pos.sector,
     entryDate: pos.entryDate, exitDate,
     shares, entryPrice: pos.avgCost, exitPrice,
     realizedPnl, realizedPnlPct,
-    holdingDays: Math.round((new Date(exitDate).getTime() - new Date(pos.entryDate).getTime()) / 86400000),
+    holdingDays,
     exitReason,
   }
 
@@ -235,7 +253,14 @@ export function appendClosedTrade(portfolioId: string, trade: ClosedTrade): void
     existing = []
   }
   existing.push(trade)
-  localStorage.setItem(key, JSON.stringify(existing))
+  // Phase 14 wave 15: setItem can throw QuotaExceededError in private mode
+  // or when storage quota is exceeded (5–10 MB depending on browser). A long
+  // history of closed trades could plausibly hit this. Soft-fail with a log.
+  try {
+    localStorage.setItem(key, JSON.stringify(existing))
+  } catch (err) {
+    console.warn('[portfolio.tracker] appendClosedTrade failed', err)
+  }
 }
 
 export function loadClosedTrades(portfolioId: string): ClosedTrade[] {

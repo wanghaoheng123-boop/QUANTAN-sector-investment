@@ -68,6 +68,90 @@ describe('atrAdaptiveStop', () => {
     const { stopLossPrice } = atrAdaptiveStop(100, bars, 1.5, 0.05, 0.15)
     expect(stopLossPrice).toBeCloseTo(100 * (1 - 0.15), 2)
   })
+
+  /**
+   * R8-C-2 (Phase 14): property test — atrAdaptiveStop should hold its
+   * advertised invariants for any input bar series and any entry > 0.
+   *
+   * For a long position with default params (multiplier 1.5, floor 5%,
+   * ceiling 15%):
+   *   • stopLossPrice ∈ (0, entry)
+   *   • atrPct ≥ 0
+   *   • (entry - stopLossPrice) / entry ∈ [floor, ceiling]
+   *
+   * We exercise five deterministic seeds rather than randomised input
+   * to keep CI failures debuggable.
+   */
+  describe('R8-C-2: property invariants across random scenarios', () => {
+    const SEEDS = [3, 17, 88, 256, 7777]
+
+    function makeRng(seed: number): () => number {
+      let s = seed >>> 0
+      return () => {
+        s = (s * 1664525 + 1013904223) >>> 0
+        return s / 0xFFFFFFFF
+      }
+    }
+
+    function randomBars(rng: () => number, count: number, startPrice: number): OhlcBar[] {
+      const bars: OhlcBar[] = []
+      let p = startPrice
+      for (let i = 0; i < count; i++) {
+        const noise = (rng() - 0.5) * 0.04 * p   // ~±2% per bar
+        const open = p
+        const close = Math.max(p + noise, 1)
+        const range = Math.abs(noise) + p * 0.005
+        bars.push({
+          open,
+          close,
+          high: Math.max(open, close) + range,
+          low: Math.max(Math.min(open, close) - range, 0.5),
+        })
+        p = close
+      }
+      return bars
+    }
+
+    for (const seed of SEEDS) {
+      it(`seed ${seed}: stop lies inside (0, entry) and stop% ∈ [floor, ceiling]`, () => {
+        const rng = makeRng(seed)
+        const startPrice = 50 + rng() * 200    // entry in [50, 250]
+        const bars = randomBars(rng, 60, startPrice)
+        const entry = startPrice
+
+        const floor = 0.05
+        const ceiling = 0.15
+        const { stopLossPrice, atrPct } = atrAdaptiveStop(entry, bars, 1.5, floor, ceiling)
+
+        // atrPct must be a finite, non-negative number (fallback is 0.05).
+        expect(Number.isFinite(atrPct)).toBe(true)
+        expect(atrPct).toBeGreaterThanOrEqual(0)
+
+        // Stop must be strictly positive and tighter than entry (long stop).
+        expect(stopLossPrice).toBeGreaterThan(0)
+        expect(stopLossPrice).toBeLessThan(entry)
+
+        // Stop-distance percentage must respect floor/ceiling.
+        const stopDistPct = (entry - stopLossPrice) / entry
+        // Allow tiny floating-point slop at the boundaries.
+        expect(stopDistPct).toBeGreaterThanOrEqual(floor - 1e-9)
+        expect(stopDistPct).toBeLessThanOrEqual(ceiling + 1e-9)
+      })
+    }
+
+    it('zero / negative entry price returns floor-bounded stop (degenerate input)', () => {
+      // Documented behaviour: atrPct falls back to floor when entry <= 0
+      // (since the per-share ATR% can't be computed without a denominator).
+      // The returned stopLossPrice equals entry * (1 - floor), which for
+      // entry = 0 is also 0 — caller is responsible for guarding entry > 0.
+      const bars = makeBars([100, 100, 100], 0)
+      const { stopLossPrice, atrPct } = atrAdaptiveStop(0, bars)
+      expect(Number.isFinite(atrPct)).toBe(true)
+      expect(atrPct).toBeGreaterThanOrEqual(0)
+      // For zero entry, stop also ends up at zero — but never NaN/-Infinity.
+      expect(Number.isFinite(stopLossPrice)).toBe(true)
+    })
+  })
 })
 
 // ─── checkExitConditions ────────────────────────────────────────────────────

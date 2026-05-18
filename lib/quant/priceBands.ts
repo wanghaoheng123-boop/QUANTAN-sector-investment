@@ -21,7 +21,15 @@ export interface PriceBands {
 
 export function computeAdaptiveBands(i: BandInputs): PriceBands {
   const anchors = i.anchors.filter((x): x is number => typeof x === 'number' && Number.isFinite(x) && x > 0)
-  const vol = Math.max(0.05, Math.min(0.8, i.annualizedVol || 0.2))
+  // Phase 14 wave 12 (Q2-M-3): vol cap raised 0.8 → 1.5 to admit crisis-regime
+  // volatility. The 80% cap silently suppressed crypto crash periods (2018,
+  // 2022 — both hit 100%+ realized 30-day annualized vol) and equity stress
+  // periods (March 2020 VIX-adjusted vol on small-caps exceeded 120%). The
+  // band-width thus understated MOS during the regimes where MOS matters most.
+  // Explicit NaN handling preserves intent: missing vol → 0.20 default; a true
+  // 0 vol (degenerate flat series) is still floored at 0.05.
+  const volInput = Number.isFinite(i.annualizedVol) ? i.annualizedVol : 0.20
+  const vol = Math.max(0.05, Math.min(1.5, volInput))
   const baseM = i.baseMargin ?? 0.08
 
   if (anchors.length === 0 || !Number.isFinite(i.currentPrice) || i.currentPrice <= 0) {

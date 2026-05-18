@@ -144,14 +144,38 @@ describe('Band Position', () => {
     expect(bandPosition(0, 100, 150, 125)).toBeNull()
   })
 
+  // Phase 14 wave 14: interior interpolation is now CONTINUOUS with the
+  // [0.15, 0.85] clamps. At the midpoint of the band the position is still
+  // 0.5 (by symmetry of the linear map 0.15 + frac × 0.70 at frac = 0.5),
+  // but interior points scale relative to the clamped endpoints, not 0/1.
+  //
+  // Old (buggy) interior: [buyHigh, sellLow] → [0, 1]
+  // New interior:         [buyHigh, sellLow] → [0.15, 0.85]
+  // Without the fix, price = buyHigh + ε returned ~0 (deeper-than-deep-buy),
+  // creating a discontinuous downward jump at the band's lower boundary.
   it('mid-band linear interpolation: at midpoint of band, position = 0.5', () => {
-    // buyHigh=100, sellLow=200 → midpoint=150 → position = (150-100)/(200-100) = 0.5
+    // buyHigh=100, sellLow=200 → midpoint=150 → 0.15 + 0.5 × 0.70 = 0.5
     expect(bandPosition(150, 100, 200, 175)).toBe(0.5)
   })
 
-  it('mid-band linear interpolation: 25% into the band', () => {
-    // buyHigh=100, sellLow=200 → 25% in = 125 → position = 0.25
-    expect(bandPosition(125, 100, 200, 150)).toBe(0.25)
+  it('mid-band linear interpolation: 25% into the band (continuous semantics)', () => {
+    // buyHigh=100, sellLow=200 → 25% in = 125 → 0.15 + 0.25 × 0.70 = 0.325
+    expect(bandPosition(125, 100, 200, 150)).toBeCloseTo(0.325, 10)
+  })
+
+  it('mid-band linear interpolation: continuous with the lower clamp', () => {
+    // A price just above buyHigh should return just above 0.15, NOT just above 0.
+    // Catches the prior discontinuity bug.
+    const justAbove = bandPosition(100.01, 100, 200, 150)!
+    expect(justAbove).toBeGreaterThan(0.15)
+    expect(justAbove).toBeLessThan(0.16)
+  })
+
+  it('mid-band linear interpolation: continuous with the upper clamp', () => {
+    // A price just below sellLow should return just below 0.85, NOT just below 1.
+    const justBelow = bandPosition(199.99, 100, 200, 150)!
+    expect(justBelow).toBeGreaterThan(0.84)
+    expect(justBelow).toBeLessThan(0.85)
   })
 
   it('returns null for inverted band (buyHigh > sellLow malformed input)', () => {

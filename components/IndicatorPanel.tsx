@@ -81,14 +81,23 @@ export default function IndicatorPanel({
                   key={p}
                   type="button"
                   onClick={() => onToggle(key)}
-                  className={`group relative px-1.5 py-0.5 rounded text-[10px] font-mono border transition-all duration-200 ${
+                  // Phase 14 wave 24 Pattern D: aria-pressed conveys toggle
+                  // state to screen readers + aria-label disambiguates the
+                  // numeric label ("9" is announced as "EMA 9" instead of
+                  // just a bare number).
+                  aria-pressed={on}
+                  aria-label={`${on ? 'Hide' : 'Show'} EMA${p}`}
+                  className={`group relative px-1.5 py-0.5 rounded text-[10px] font-mono border transition-all duration-200 focus:outline-none focus:ring-1 focus:ring-blue-400 ${
                     on
                       ? `${EMA_COLOR[p] ?? 'bg-slate-600'} text-white border-transparent shadow-sm`
                       : 'border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-200'
                   }`}
                 >
                   {on && (
-                    <span className={`absolute -left-0.5 -top-0.5 w-1.5 h-1.5 rounded-full ${EMA_COLOR[p] ?? 'bg-slate-400'} opacity-70`} />
+                    <span
+                      className={`absolute -left-0.5 -top-0.5 w-1.5 h-1.5 rounded-full ${EMA_COLOR[p] ?? 'bg-slate-400'} opacity-70`}
+                      aria-hidden="true"
+                    />
                   )}
                   {p}
                 </button>
@@ -109,14 +118,16 @@ export default function IndicatorPanel({
                   key={d.key}
                   type="button"
                   onClick={() => onToggle(d.key as VisKey)}
-                  className={`flex items-center gap-2 px-2 py-1.5 rounded text-[11px] font-mono border transition-all duration-200 text-left ${
+                  // Phase 14 wave 24 Pattern D: aria-pressed + label.
+                  aria-pressed={on}
+                  className={`flex items-center gap-2 px-2 py-1.5 rounded text-[11px] font-mono border transition-all duration-200 text-left focus:outline-none focus:ring-1 focus:ring-blue-400 ${
                     on
                       ? 'bg-slate-800/80 border-slate-700 text-slate-200'
                       : 'border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
                   }`}
                 >
-                  <span className={`w-2 h-2 rounded-full ${on ? d.dotColor : 'bg-slate-700'} transition-colors duration-200 shrink-0`} />
-                  <span className={`w-5 h-0.5 ${d.color} inline-block rounded transition-all duration-200 ${!on ? 'opacity-30' : 'opacity-100'}`} />
+                  <span className={`w-2 h-2 rounded-full ${on ? d.dotColor : 'bg-slate-700'} transition-colors duration-200 shrink-0`} aria-hidden="true" />
+                  <span className={`w-5 h-0.5 ${d.color} inline-block rounded transition-all duration-200 ${!on ? 'opacity-30' : 'opacity-100'}`} aria-hidden="true" />
                   <span className="flex-1">{d.label}</span>
                   <span className={`text-[9px] ml-2 transition-opacity duration-200 ${on ? 'text-cyan-400/70' : 'text-slate-700'}`}>
                     {on ? 'ON' : 'OFF'}

@@ -54,10 +54,30 @@ function estimateReadTime(text: string): number {
   return Math.max(1, Math.round(words / 200))
 }
 
+// Phase 14 (R4-H-2): per-call timeout for the Yahoo search fan-out. A
+// single slow upstream ticker could otherwise stall the entire 33-call
+// briefs payload (11 sectors × 3 tickers). 4s caps the worst-case wait;
+// Yahoo p99 search latency is typically <1s.
+const NEWS_FETCH_TIMEOUT_MS = 4000
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
+    promise.then(
+      (v) => { clearTimeout(t); resolve(v) },
+      (e) => { clearTimeout(t); reject(e) },
+    )
+  })
+}
+
 async function fetchNewsForTicker(ticker: string): Promise<NewsBrief[]> {
   const results: NewsBrief[] = []
   try {
-    const searchResult = await yahooFinance.search(ticker, { newsCount: 5 })
+    const searchResult = await withTimeout(
+      yahooFinance.search(ticker, { newsCount: 5 }),
+      NEWS_FETCH_TIMEOUT_MS,
+      `briefs.search(${ticker})`,
+    )
     if (!searchResult?.news || !Array.isArray(searchResult.news)) return results
 
     for (const item of searchResult.news as Record<string, unknown>[]) {
@@ -100,6 +120,7 @@ export async function GET(request: Request): Promise<NextResponse<{
   fetchedAt: string
   sectorCount: number
   source: string
+  degraded?: boolean
 } | { error: string }>> {
   // Phase 13 S2: rate-limit. This route fans out to ~33 yahoo search() calls
   // per request (11 sectors × 3 tickers each). Tighter limit to prevent
@@ -114,14 +135,33 @@ export async function GET(request: Request): Promise<NextResponse<{
     const seenLinks = new Set<string>()
     const allBriefs: NewsBrief[] = []
 
-    // Fetch news for top holdings from each sector in parallel
+    // Phase 14 (R4-H-2): fan-out amplification mitigation.
+    //   • Promise.allSettled (not Promise.all) so a single timeout or
+    //     reject doesn't poison the whole batch.
+    //   • Per-call timeout via withTimeout() above caps tail latency.
+    //   • Track per-ticker failures; if more than half of the 33 calls
+    //     failed, surface `degraded: true` so clients can warn the user
+    //     and refetch later instead of caching an impoverished payload
+    //     for 5 minutes via the CDN.
     const sectorEntries = Object.entries(SECTOR_QUERY_MAP)
+    let totalCalls = 0
+    let failedCalls = 0
     const newsBySector = await Promise.all(
       sectorEntries.map(async ([slug, config]) => {
-        const tickerNews = await Promise.all(
-          config.tickers.slice(0, 3).map(t => fetchNewsForTicker(t))
+        const targetTickers = config.tickers.slice(0, 3)
+        const settled = await Promise.allSettled(
+          targetTickers.map(t => fetchNewsForTicker(t))
         )
-        const sectorNews = tickerNews.flat()
+        const sectorNews: NewsBrief[] = []
+        for (const r of settled) {
+          totalCalls++
+          if (r.status === 'fulfilled') {
+            sectorNews.push(...r.value)
+          } else {
+            failedCalls++
+            console.warn('[briefs] sector ticker fetch failed', slug, r.reason)
+          }
+        }
 
         // Tag each brief with sector info
         return sectorNews.map(brief => ({
@@ -132,6 +172,7 @@ export async function GET(request: Request): Promise<NextResponse<{
         }))
       })
     )
+    const degraded = totalCalls > 0 && failedCalls * 2 > totalCalls
 
     // Flatten and deduplicate
     for (const sectorBriefs of newsBySector) {
@@ -156,10 +197,15 @@ export async function GET(request: Request): Promise<NextResponse<{
         fetchedAt: new Date().toISOString(),
         sectorCount: sectorEntries.length,
         source: 'Yahoo Finance',
+        ...(degraded ? { degraded: true } : {}),
       },
       {
         headers: {
-          'Cache-Control': 's-maxage=300, stale-while-revalidate=600',
+          // Phase 14 (R4-H-2): shorter CDN cache on degraded payloads so a
+          // bad minute doesn't pin a poor result for the full window.
+          'Cache-Control': degraded
+            ? 's-maxage=30, stale-while-revalidate=60'
+            : 's-maxage=300, stale-while-revalidate=600',
         },
       }
     )

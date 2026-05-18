@@ -25,7 +25,10 @@ function AuthContent() {
             className="w-7 h-7 rounded-full border border-slate-700"
           />
         ) : (
-          <span className="w-7 h-7 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center">
+          <span
+            className="w-7 h-7 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center"
+            aria-hidden="true"
+          >
             <User className="w-4 h-4 text-slate-400" />
           </span>
         )}
@@ -35,9 +38,10 @@ function AuthContent() {
         <button
           type="button"
           onClick={() => signOut({ callbackUrl: '/' })}
+          aria-label="Sign out"
           className="flex items-center gap-1 text-xs font-medium text-slate-400 hover:text-white px-2 py-1.5 rounded-md hover:bg-slate-800 transition-colors"
         >
-          <LogOut className="w-3.5 h-3.5" />
+          <LogOut className="w-3.5 h-3.5" aria-hidden="true" />
           <span className="hidden sm:inline">Sign out</span>
         </button>
       </div>
@@ -49,7 +53,7 @@ function AuthContent() {
       href="/auth/signin"
       className="flex items-center gap-1.5 text-xs font-medium text-blue-400 hover:text-blue-300 px-2.5 py-1.5 rounded-md border border-blue-500/30 hover:bg-blue-500/10 transition-colors"
     >
-      <LogIn className="w-3.5 h-3.5" />
+      <LogIn className="w-3.5 h-3.5" aria-hidden="true" />
       Sign in
     </Link>
   )
@@ -70,7 +74,7 @@ class AuthErrorBoundary extends Component<{ children: ReactNode }> {
           href="/auth/signin"
           className="flex items-center gap-1.5 text-xs font-medium text-blue-400 hover:text-blue-300 px-2.5 py-1.5 rounded-md border border-blue-500/30 hover:bg-blue-500/10 transition-colors"
         >
-          <LogIn className="w-3.5 h-3.5" />
+          <LogIn className="w-3.5 h-3.5" aria-hidden="true" />
           Sign in
         </Link>
       )

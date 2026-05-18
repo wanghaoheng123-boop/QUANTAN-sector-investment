@@ -241,13 +241,25 @@ export async function POST(
     queryParams.set('quick_think_llm', defaults.quick)
   }
 
-  if (typeof body.max_debate_rounds === 'number') {
-    queryParams.set('max_debate_rounds', String(body.max_debate_rounds))
+  // Phase 14 wave 22 (R7-MED): clamp debate / risk-discuss rounds to a sane
+  // range. Previously these were forwarded verbatim with only `typeof number`.
+  // The Python sidecar honours whatever value we pass; a hostile client could
+  // request 1,000,000 rounds and burn CPU + LLM-API credits before the 5-minute
+  // TIMEOUT_MS triggered. Per-IP rate-limit (10/min) still allows expensive
+  // sustained abuse without this clamp.
+  //
+  // Sensible bounds based on the upstream model: 1-5 rounds. Reject NaN /
+  // non-integer / out-of-range with silent fallback to default.
+  const clampRound = (v: unknown): number | null => {
+    if (typeof v !== 'number' || !Number.isFinite(v)) return null
+    const i = Math.floor(v)
+    if (i < 1 || i > 5) return null
+    return i
   }
-
-  if (typeof body.max_risk_discuss_rounds === 'number') {
-    queryParams.set('max_risk_discuss_rounds', String(body.max_risk_discuss_rounds))
-  }
+  const mdr = clampRound(body.max_debate_rounds)
+  if (mdr !== null) queryParams.set('max_debate_rounds', String(mdr))
+  const mrd = clampRound(body.max_risk_discuss_rounds)
+  if (mrd !== null) queryParams.set('max_risk_discuss_rounds', String(mrd))
 
   if (body.data_vendor) queryParams.set('data_vendor', String(body.data_vendor))
 

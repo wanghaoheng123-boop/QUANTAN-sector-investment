@@ -75,7 +75,16 @@ async function resolveDirectQuote(raw: string) {
       typeDisp: q.quoteType,
       quoteType: q.quoteType,
     })
-  } catch {
+  } catch (err) {
+    // Phase 14 wave 25: log silently-swallowed direct-quote failures so a
+    // chronic Yahoo outage on this fallback path is diagnosable. We still
+    // return null (the caller treats null as "no match found", which is the
+    // correct UX for a search that yields no results).
+    console.warn(JSON.stringify({
+      event: 'search.directQuote_failed',
+      symbol,
+      message: (err as Error)?.message,
+    }))
     return null
   }
 }

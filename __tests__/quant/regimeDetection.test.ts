@@ -110,7 +110,9 @@ describe('detectRegime', () => {
 
     // Should still return a valid result
     expect(result.volatilityRegime).toBeDefined()
-    expect(result.volRatio).toBe(1.0) // default when insufficient data
+    // Phase 14: volRatio is null when vol20/vol60 cannot be measured
+    // (insufficient data) — previously returned the misleading 1.0 default.
+    expect(result.volRatio).toBeNull()
   })
 
   it('trend_following hint with strong ADX and non-crisis vol', () => {

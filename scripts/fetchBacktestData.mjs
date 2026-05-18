@@ -83,23 +83,41 @@ function saveResult(ticker, sector, candles) {
   writeFileSync(filePath, JSON.stringify(output, null, 2), 'utf8');
 }
 
+/**
+ * Phase 14 wave 22: filter out illiquid / missing-data rows so the saved JSON
+ * files contain only finite-OHLC entries. Yahoo returns nulls for holiday
+ * rows and brief outage minutes; saving them propagates NaN downstream
+ * through any consumer that doesn't apply the exact filter that
+ * `optimize-grid.ts:79–82` does.
+ */
+function isFiniteRow(q) {
+  return (
+    Number.isFinite(q.open) &&
+    Number.isFinite(q.high) &&
+    Number.isFinite(q.low) &&
+    Number.isFinite(q.close)
+  );
+}
+
 async function fetchYahoo(ticker, sector) {
   const result = await yf.chart(ticker, {
     period1: new Date(Date.now() - PERIOD_DAYS * 86400000),
     interval: '1d',
   });
 
-  const candles = (result.quotes || []).map((q) => ({
+  const rawRows = result.quotes || [];
+  const candles = rawRows.filter(isFiniteRow).map((q) => ({
     time: Math.floor(new Date(q.date).getTime() / 1000),
     open:   q.open,
     high:   q.high,
     low:    q.low,
     close:  q.close,
-    volume: q.volume,
+    volume: Number.isFinite(q.volume) ? q.volume : 0,
   }));
 
   saveResult(ticker, sector, candles);
-  console.log(`[${ticker}] Saved ${candles.length} candles`);
+  const dropped = rawRows.length - candles.length;
+  console.log(`[${ticker}] Saved ${candles.length} candles${dropped > 0 ? ` (dropped ${dropped} non-finite rows)` : ''}`);
 }
 
 async function fetchBTC(sector = 'Crypto') {
@@ -109,17 +127,19 @@ async function fetchBTC(sector = 'Crypto') {
     interval: '1d',
   });
 
-  const candles = (result.quotes || []).map((q) => ({
+  const rawRows = result.quotes || [];
+  const candles = rawRows.filter(isFiniteRow).map((q) => ({
     time:  Math.floor(new Date(q.date).getTime() / 1000),
     open:   q.open,
     high:   q.high,
     low:    q.low,
     close:  q.close,
-    volume: q.volume ?? 0,
+    volume: Number.isFinite(q.volume) ? q.volume : 0,
   }));
 
   saveResult('BTC', sector, candles);
-  console.log(`[BTC] Saved ${candles.length} candles`);
+  const dropped = rawRows.length - candles.length;
+  console.log(`[BTC] Saved ${candles.length} candles${dropped > 0 ? ` (dropped ${dropped} non-finite rows)` : ''}`);
 }
 
 async function main() {
