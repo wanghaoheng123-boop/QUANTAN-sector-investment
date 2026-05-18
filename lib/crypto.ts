@@ -34,9 +34,18 @@ export interface BtcCandle {
   volume: number
 }
 
-/** On-chain MVRV ratio — flags overvaluation / undervaluation zones */
-export function calcMVRV(price: number, realizedCap: number): number {
-  return realizedCap > 0 ? price / realizedCap : 1
+/**
+ * On-chain MVRV ratio — flags overvaluation / undervaluation zones.
+ *
+ * Phase 14 wave 11: returns null when inputs are unmeasurable, matching the
+ * SSOT in lib/quant/btc-indicators.ts (kept in sync via the cross-source
+ * test in __tests__/quant/cryptoIndicators.test.ts).
+ * Citation: Puell (2018) — MVRV undefined when RC = 0.
+ */
+export function calcMVRV(price: number, realizedCap: number): number | null {
+  if (!Number.isFinite(price) || !Number.isFinite(realizedCap)) return null
+  if (realizedCap <= 0 || price <= 0) return null
+  return price / realizedCap
 }
 
 /**
@@ -49,8 +58,12 @@ export function calcMVRV(price: number, realizedCap: number): number {
  * Original PlanB regression: price ≈ exp(-1.84) × sf^3.36
  * The simplified form below (sf^3 × 0.001) approximates within an order of
  * magnitude in the historical fit window.
+ *
+ * Phase 14 wave 11: returns null on non-finite or negative input
+ * (matching btc-indicators.ts SSOT).
  */
-export function calcS2FPrice(totalS2F: number): number {
+export function calcS2FPrice(totalS2F: number): number | null {
+  if (!Number.isFinite(totalS2F) || totalS2F < 0) return null
   return Math.pow(totalS2F, 3) * 0.001
 }
 
