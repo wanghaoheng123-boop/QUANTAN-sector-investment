@@ -35,21 +35,27 @@ function getRecentSearches(): Quote[] {
 
 function addRecentSearch(quote: Quote): void {
   if (typeof window === 'undefined') return
-  // R5-M-3: localStorage may throw in private/incognito mode or when storage quota is exceeded.
+  // R5-M-3 + Phase 14 wave 21: localStorage may throw QuotaExceededError in
+  // private/incognito mode or when the 5–10 MB storage quota is exceeded.
+  // Log the warn instead of silent suppression so chronic quota issues are
+  // visible during development.
   try {
     const recent = getRecentSearches().filter(r => r.symbol !== quote.symbol)
     const updated = [quote, ...recent].slice(0, MAX_RECENT)
     localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(updated))
-  } catch {}
+  } catch (err) {
+    console.warn('[GlobalSearch] addRecentSearch failed', err)
+  }
 }
 
 function removeRecentSearch(symbol: string): void {
   if (typeof window === 'undefined') return
-  // R5-M-3: localStorage may throw in private/incognito mode or when storage quota is exceeded.
   try {
     const recent = getRecentSearches().filter(r => r.symbol !== symbol)
     localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(recent))
-  } catch {}
+  } catch (err) {
+    console.warn('[GlobalSearch] removeRecentSearch failed', err)
+  }
 }
 
 export default function GlobalSearch() {

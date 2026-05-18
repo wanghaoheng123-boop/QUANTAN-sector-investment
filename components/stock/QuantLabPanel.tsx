@@ -387,13 +387,18 @@ export default function QuantLabPanel({ ticker }: { ticker: string }) {
     [ticker]
   )
 
-  // Persist API key to sessionStorage (cleared when tab closes)
+  // Persist API key to sessionStorage (cleared when tab closes).
+  // Phase 14 wave 21: log catch errors instead of silent suppression so
+  // a chronic sessionStorage failure (incognito mode, disabled storage)
+  // is diagnosable. The user still gets in-memory state if storage fails.
   const handleApiKeyChange = useCallback((key: string) => {
     setLlmApiKey(key)
     try {
       if (key.trim()) sessionStorage.setItem('llm_api_key', key)
       else sessionStorage.removeItem('llm_api_key')
-    } catch {}
+    } catch (err) {
+      console.warn('[QuantLabPanel] sessionStorage write failed', err)
+    }
   }, [])
 
   // Load API key from sessionStorage on mount
@@ -401,7 +406,9 @@ export default function QuantLabPanel({ ticker }: { ticker: string }) {
     try {
       const saved = sessionStorage.getItem('llm_api_key')
       if (saved) setLlmApiKey(saved)
-    } catch {}
+    } catch (err) {
+      console.warn('[QuantLabPanel] sessionStorage read failed', err)
+    }
   }, [])
 
   useEffect(() => {
