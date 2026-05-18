@@ -218,17 +218,26 @@ export async function GET(
       (q as Record<string, unknown>).regularMarketChangePercent
     )
 
+    // Phase 14 wave 24 (Pattern C — defensive clamps): every numeric field
+    // emitted to the UI must be finite. Prior code used `?? 0` which only
+    // catches null/undefined, NOT NaN/Infinity. Yahoo halt rows occasionally
+    // surface NaN in change / changePct fields, which then JSON-serialised
+    // to `null` and crashed `.toFixed` on the consumer side. Now we guard
+    // with Number.isFinite at the API boundary so the UI gets a real number
+    // OR an explicit 0 (never NaN/Infinity).
+    const finiteOrZero = (v: unknown): number =>
+      typeof v === 'number' && Number.isFinite(v) ? v : 0
+
     const price: PricePoint =
-      rawPrice != null && rawPrice > 0
+      rawPrice != null && Number.isFinite(rawPrice) && rawPrice > 0
         ? {
             price: rawPrice,
-            change: rawChange ?? 0,
-            changePct:
-              rawChangePct != null
-                ? rawChangePct
-                : rawChange != null && rawPrice > 0
-                  ? (100 * rawChange) / rawPrice
-                  : 0,
+            change: finiteOrZero(rawChange),
+            changePct: Number.isFinite(rawChangePct)
+              ? (rawChangePct as number)
+              : Number.isFinite(rawChange) && rawPrice > 0
+                ? (100 * (rawChange as number)) / rawPrice
+                : 0,
             quoteTime: parseQuoteTime(q.regularMarketTime),
           }
         : {

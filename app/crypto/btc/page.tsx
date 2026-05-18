@@ -294,8 +294,13 @@ export default function BtcPage() {
           setFetchError(null)
           return
         }
-      } catch {
-        /* ignore fallback failure */
+      } catch (err) {
+        // Phase 14 wave 24: CoinGecko client-side fallback failed. The lastErr
+        // path below will surface the most-recent server error to the UI; log
+        // the fallback failure so chronic CG outages are diagnosable.
+        if (err instanceof Error && err.name !== 'AbortError') {
+          console.warn('[btc/fallback] CoinGecko client fetch failed', err)
+        }
       }
       setFetchError(lastErr?.message ?? 'Failed to load candles')
     })()
@@ -400,12 +405,21 @@ export default function BtcPage() {
           }
           applyCandle(candle)
         }
-      } catch {
-        /* ignore malformed frames */
+      } catch (err) {
+        // Phase 14 wave 24: malformed Kraken kline frame. Log on first
+        // occurrence; suppress further to avoid flooding when Kraken
+        // briefly degrades.
+        if (wsConnected) {
+          console.warn('[btc/kline-ws] frame parse failed', err)
+        }
       }
     }
 
-    ws.onerror = () => setWsConnected(false)
+    ws.onerror = (event) => {
+      // Phase 14 wave 24: log onerror event type (network / CSP).
+      console.warn('[btc/kline-ws] WebSocket error', event.type)
+      setWsConnected(false)
+    }
     ws.onclose = () => {
       setWsConnected(false)
       if (gen !== klineGenRef.current) return
@@ -455,12 +469,20 @@ export default function BtcPage() {
             volume24h: parseFloat(String(d.volume_24h)) || 0,
           })
         }
-      } catch {
-        /* ignore */
+      } catch (err) {
+        // Phase 14 wave 24: WS messages occasionally arrive malformed during
+        // reconnect / Coinbase server-side restarts. Log so chronic parse
+        // failures are diagnosable instead of silently dropping every tick.
+        // Only log first occurrence per reconnect to avoid log flooding.
+        if (!priceFromBinanceWsRef.current) {
+          console.warn('[btc/price-ws] message parse failed', err)
+        }
       }
     }
-    ws.onerror = () => {
-      /* onclose will reconnect */
+    ws.onerror = (event) => {
+      // Phase 14 wave 24: log WS errors. onclose will trigger reconnect, but
+      // a chronic onerror (CSP block, network down) was previously invisible.
+      console.warn('[btc/price-ws] WebSocket error event', event.type)
     }
     ws.onclose = () => {
       priceReconnectTimerRef.current = setTimeout(() => {

@@ -13,7 +13,10 @@ function safeParse(raw: string | null): string[] {
     const v = JSON.parse(raw) as unknown
     if (!Array.isArray(v)) return []
     return v.filter((x): x is string => typeof x === 'string').map((s) => normalizeTicker(s))
-  } catch {
+  } catch (err) {
+    // Phase 14 wave 24: corrupted localStorage entry. Logging makes the
+    // condition diagnosable instead of silently resetting the watchlist.
+    console.warn('[useWatchlist] safeParse: corrupted localStorage entry', err)
     return []
   }
 }
@@ -32,7 +35,10 @@ export function useWatchlist() {
     setHydrated(false)
     try {
       setItems(safeParse(typeof window !== 'undefined' ? localStorage.getItem(storageKey) : null))
-    } catch {
+    } catch (err) {
+      // Phase 14 wave 24: localStorage.getItem can throw in some sandbox /
+      // disabled-storage environments. Falls back to empty list and logs.
+      console.warn('[useWatchlist] hydrate failed', err)
       setItems([])
     }
     setHydrated(true)
@@ -44,8 +50,11 @@ export function useWatchlist() {
       setItems(capped)
       try {
         localStorage.setItem(storageKey, JSON.stringify(capped))
-      } catch {
-        /* quota / private mode */
+      } catch (err) {
+        // Phase 14 wave 24: QuotaExceededError (private/incognito mode or
+        // exceeded 5–10 MB quota). The in-memory state survives; only the
+        // persistence step fails. Surfaced via warn for diagnosability.
+        console.warn('[useWatchlist] persist failed', err)
       }
     },
     [storageKey]

@@ -190,7 +190,10 @@ export default function KeyboardShortcuts() {
             className="text-slate-500 hover:text-white transition-colors p-1 rounded-md hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-400"
             aria-label="Close shortcuts"
           >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            {/* Phase 14 wave 24 Pattern D: aria-hidden on decorative SVG so
+                screen readers don't read raw path data alongside the
+                aria-label. */}
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true" focusable="false">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>

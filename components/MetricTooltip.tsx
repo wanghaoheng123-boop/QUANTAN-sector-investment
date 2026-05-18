@@ -78,7 +78,9 @@ export function MetricTooltip({ metricKey, label, content, compact = false }: Pr
         aria-label={`Explain ${displayLabel}`}
         aria-expanded={open}
       >
-        <Info className={iconSize} />
+        {/* Phase 14 wave 24 Pattern D: aria-hidden on decorative icon so the
+            button's aria-label is the only announced text. */}
+        <Info className={iconSize} aria-hidden="true" />
       </button>
       {open && (
         <span
