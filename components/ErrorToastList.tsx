@@ -66,7 +66,7 @@ export function ErrorToastList({ toasts, onDismiss }: Props) {
               className="text-slate-500 hover:text-slate-300 transition-colors shrink-0 mt-0.5 focus:outline-none focus:ring-2 focus:ring-blue-400 rounded"
               aria-label={`Dismiss ${toast.level} notification`}
             >
-              <X className="w-3.5 h-3.5" />
+              <X className="w-3.5 h-3.5" aria-hidden="true" />
             </button>
           </div>
         )
