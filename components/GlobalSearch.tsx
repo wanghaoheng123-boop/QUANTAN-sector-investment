@@ -226,14 +226,27 @@ export default function GlobalSearch() {
           </div>
           <ul role="listbox" aria-label="Recent searches">
             {recentSearches.map((quote) => (
-              <li key={quote.symbol}>
+              // Phase 14 wave 26 Pattern D: split nested <button> into a
+              // flex row with the select-button + remove-button as SIBLINGS.
+              // Nested <button> inside <button> is invalid HTML; browsers
+              // render it but click ordering is undefined and assistive tech
+              // treats it inconsistently. Now the row uses two adjacent
+              // sibling buttons sharing a hover state via `group` on the li.
+              <li key={quote.symbol} className="group flex items-center hover:bg-slate-800 transition-colors">
                 <button
                   type="button"
                   onClick={() => handleSelectResult(quote)}
-                  className="w-full text-left px-4 py-2.5 hover:bg-slate-800 transition-colors flex items-center justify-between group"
+                  className="flex-1 text-left px-4 py-2.5 flex items-center min-w-0 focus:outline-none focus:bg-slate-800"
                 >
                   <div className="flex items-center gap-3 min-w-0">
-                    <svg className="w-3.5 h-3.5 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg
+                      className="w-3.5 h-3.5 text-slate-400 shrink-0"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      aria-hidden="true"
+                      focusable="false"
+                    >
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                     <div className="min-w-0">
@@ -241,16 +254,23 @@ export default function GlobalSearch() {
                       <div className="text-xs text-slate-500 truncate max-w-[180px]">{quote.shortname}</div>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={(e) => handleRemoveRecent(e, quote.symbol)}
-                    className="opacity-0 group-hover:opacity-100 p-1 text-slate-500 hover:text-white transition-all"
-                    aria-label={`Remove ${quote.symbol} from recent searches`}
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => handleRemoveRecent(e, quote.symbol)}
+                  className="opacity-0 group-hover:opacity-100 focus:opacity-100 p-1 mr-2 text-slate-500 hover:text-white focus:outline-none focus:ring-1 focus:ring-blue-400 rounded transition-all"
+                  aria-label={`Remove ${quote.symbol} from recent searches`}
+                >
+                  <svg
+                    className="w-3.5 h-3.5"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    aria-hidden="true"
+                    focusable="false"
                   >
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
                 </button>
               </li>
             ))}
