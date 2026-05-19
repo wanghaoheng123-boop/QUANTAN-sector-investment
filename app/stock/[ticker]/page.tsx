@@ -10,6 +10,7 @@ import NewsFeed from '@/components/NewsFeed'
 import IndicatorPanel from '@/components/IndicatorPanel'
 import OptionsChainTable from '@/components/options/OptionsChainTable'
 import GexChart from '@/components/options/GexChart'
+import { useLiveQuote } from '@/hooks/useLiveQuote'
 import MaxPainGauge from '@/components/options/MaxPainGauge'
 import FlowScanner from '@/components/options/FlowScanner'
 import { getNewsForSector, generateDarkPoolPrints } from '@/lib/mockData'
@@ -133,6 +134,11 @@ export default function StockPage({ params }: { params: { ticker: string } }) {
       .finally(() => setLoading(false))
   }, [ticker])
 
+  // Phase 14 wave 36 (real-time platform initiative):
+  //   Initial REST fetch — wakes the page with a current quote while the
+  //   SSE stream is connecting (typical first-event latency: ~1-2 s).
+  //   The 15-second setInterval below is REPLACED by `useLiveQuote` SSE
+  //   subscription further down (lines 175-189). REST is now boot-only.
   const fetchQuote = useCallback(() => {
     fetch(`/api/prices?tickers=${encodeURIComponent(ticker)}`)
       .then((r) => {
@@ -165,12 +171,35 @@ export default function StockPage({ params }: { params: { ticker: string } }) {
     return () => clearInterval(poll)
   }, [activeTab, activeRange, fetchChartData])
 
-  // Quote polling: every 15 seconds
+  // Phase 14 wave 36 — REAL-TIME QUOTE STREAM (replaces 15 s polling).
+  //
+  // The SSE endpoint /api/stream/:ticker delivers quotes ~every 15 s during
+  // market hours and a 30 s heartbeat outside of them — but DOES NOT depend
+  // on the client to poll. Reconnect, market-hours awareness, and the
+  // soft-close warning are all handled inside useLiveQuote. We keep the
+  // REST fetchQuote() for the initial paint (line 156 calls it once on
+  // mount); thereafter the SSE updates take over.
   useEffect(() => {
-    fetchQuote()
-    const poll = setInterval(fetchQuote, 15_000)
-    return () => clearInterval(poll)
+    fetchQuote()  // Boot-only — populates the UI before SSE first event.
   }, [fetchQuote])
+
+  // Subscribe to the SSE stream. State propagates to the existing `quote`
+  // state via the live-quote merge effect below.
+  const live = useLiveQuote(ticker)
+
+  // Merge live quote into the page's quote state. Preserves the marketCap
+  // field from the initial REST fetch (SSE payloads don't include it).
+  useEffect(() => {
+    if (!live.quote) return
+    setQuote((prev) => ({
+      price: live.quote!.price,
+      change: live.quote!.change,
+      changePct: live.quote!.changePct,
+      marketCap: prev?.marketCap ?? '',
+      quoteTime: live.quote!.timestamp,
+    }))
+    setQuoteError(null)
+  }, [live.quote])
 
   // Dark pool prints generation
   useEffect(() => {
@@ -277,7 +306,41 @@ export default function StockPage({ params }: { params: { ticker: string } }) {
                     {isUp ? '▲' : '▼'} {formatSignedNumber(quote.change)} ({Math.abs(quote.changePct).toFixed(2)}%)
                   </div>
                   <div className="text-xs text-slate-500 mt-1 font-mono">Market Cap: {quote.marketCap}</div>
-                  <div className="text-[10px] text-slate-400 mt-1">Quote: {formatFreshness(quote.quoteTime)}</div>
+                  {/* Phase 14 wave 36: real-time stream status pill. */}
+                  <div className="flex items-center justify-end gap-2 mt-1">
+                    <span
+                      className={`inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
+                        live.connected
+                          ? live.marketOpen
+                            ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                            : 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                          : 'bg-slate-700/40 text-slate-400 border border-slate-600/40'
+                      }`}
+                      title={
+                        live.connected
+                          ? live.marketOpen
+                            ? 'Live stream connected — market open'
+                            : 'Live stream connected — market closed (snapshot)'
+                          : live.supported
+                            ? 'Reconnecting…'
+                            : 'Polling (SSE unavailable)'
+                      }
+                      role="status"
+                    >
+                      <span
+                        className={`inline-block w-1.5 h-1.5 rounded-full ${
+                          live.connected && live.marketOpen
+                            ? 'bg-emerald-400 animate-pulse'
+                            : live.connected
+                              ? 'bg-amber-400'
+                              : 'bg-slate-500'
+                        }`}
+                        aria-hidden="true"
+                      />
+                      {live.connected ? (live.marketOpen ? 'LIVE' : 'CLOSED') : 'RECONNECT'}
+                    </span>
+                    <span className="text-[10px] text-slate-400">{formatFreshness(quote.quoteTime)}</span>
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-2 text-right w-32">
