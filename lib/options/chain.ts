@@ -130,9 +130,31 @@ function enrichContract(
   const T = Math.max(0, (contract.expiration.getTime() - today) / (365 * 24 * 60 * 60 * 1000))
   const sigma = contract.impliedVolatility
 
-  const g: Greeks = sigma > 0 && T > 0
-    ? greeks(spot, contract.strike, T, RISK_FREE_RATE, sigma, type, q)
-    : { delta: 0, gamma: 0, theta: 0, vega: 0, rho: 0 }
+  // Phase 14 wave 39 — OPTIONS CHAIN GREEKS FIX.
+  //
+  // Bug: the prior gate `sigma > 0 && T > 0` returned `{delta:0,...all zeros}`
+  // whenever EITHER condition failed. This made the intrinsic-delta logic
+  // inside greeks() (greeks.ts:145-150 — returns delta=1 for ITM call at
+  // expiry, -1 for ITM put, 0 for OTM) DEAD CODE, never reached.
+  //
+  // Real-world impact: every contract in the closest expiry of a stock's
+  // chain reports delta=0 for the entire trading day of expiration because
+  // Yahoo sets `expiration` to midnight UTC of the expiry day, so by any
+  // mid-day request `(expiration - today)` is already negative → T=0 → gate
+  // returns all zeros. Deep-ITM calls expiring today reported delta=0
+  // instead of 1. The MaxPainGauge / GexChart / FlowScanner all rendered
+  // degenerate values because their inputs were these zero-Greek contracts.
+  //
+  // Fix: call greeks() unconditionally. The function correctly handles
+  // every edge case internally:
+  //   - T <= 0 (expired):    intrinsic delta (1/0/-1) + other Greeks 0
+  //   - sigma <= 0:           all Greeks 0
+  //   - S <= 0 or K <= 0:     all Greeks 0
+  //   - normal path:          full Black-Scholes-Merton
+  //
+  // Reference: Hull (2017) op cit. p373 — at expiry, delta is the
+  //   intrinsic indicator (sign of moneyness), not zero.
+  const g: Greeks = greeks(spot, contract.strike, T, RISK_FREE_RATE, sigma, type, q)
 
   return { ...contract, ...g }
 }
