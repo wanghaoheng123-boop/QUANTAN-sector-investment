@@ -20,6 +20,7 @@ import { ChartErrorBoundary } from '@/components/ChartErrorBoundary'
 import { DashboardGuide } from '@/components/DashboardGuide'
 import { MetricTooltip } from '@/components/MetricTooltip'
 import { DataFreshnessIndicator } from '@/components/DataFreshnessIndicator'
+import { useLiveQuote } from '@/hooks/useLiveQuote'
 
 const CHART_POLL_MS = (range: string) =>
   ['1m', '3m', '5m'].includes(range) ? 30_000 : 60_000
@@ -110,38 +111,57 @@ export default function SectorPage({ params }: { params: { slug: string } }) {
     }
   }, [activeTab, activeRange, fetchChartData])
 
+  // Phase 14 wave 37 — REAL-TIME QUOTE STREAM (replaces 15 s polling).
+  //
+  // Same pattern as app/stock/[ticker]/page.tsx wave 36: a one-shot REST
+  // boot fetch populates the UI on first render (typical SSE first-event
+  // latency: 1-2 s), then `useLiveQuote(sector.etf)` takes over via SSE.
+  //
+  // Why keep the REST boot path? SSE first-event arrival is bounded only
+  // by the upstream Yahoo fetch — if Yahoo is slow we'd otherwise paint a
+  // blank header for several seconds. The boot fetch gives instant feedback.
   useEffect(() => {
-    let activeController = new AbortController()
-    const pull = (signal: AbortSignal) => {
-      fetch(`/api/prices?tickers=${encodeURIComponent(sector.etf)}`, { signal })
-        .then((r) => {
-          if (!r.ok) return Promise.reject(new Error(`HTTP ${r.status}`))
-          return r.json()
-        })
-        .then((data) => {
-          if (signal.aborted) return
-          const q = data.quotes?.find((x: { ticker: string }) => x.ticker === sector.etf)
-          if (q) {
-            setQuote(q)
-            setQuoteError(null)
-          }
-        })
-        .catch((e) => {
-          if (signal.aborted || (e instanceof DOMException && e.name === 'AbortError')) return
-          setQuoteError(e instanceof Error ? e.message : 'Quote unavailable')
-        })
-    }
-    pull(activeController.signal)
-    const id = setInterval(() => {
-      activeController.abort()
-      activeController = new AbortController()
-      pull(activeController.signal)
-    }, 15000)
-    return () => {
-      clearInterval(id)
-      activeController.abort()
-    }
+    const controller = new AbortController()
+    fetch(`/api/prices?tickers=${encodeURIComponent(sector.etf)}`, { signal: controller.signal })
+      .then((r) => {
+        if (!r.ok) return Promise.reject(new Error(`HTTP ${r.status}`))
+        return r.json()
+      })
+      .then((data) => {
+        if (controller.signal.aborted) return
+        const q = data.quotes?.find((x: { ticker: string }) => x.ticker === sector.etf)
+        if (q) {
+          setQuote(q)
+          setQuoteError(null)
+        }
+      })
+      .catch((e) => {
+        if (controller.signal.aborted || (e instanceof DOMException && e.name === 'AbortError')) return
+        setQuoteError(e instanceof Error ? e.message : 'Quote unavailable')
+      })
+    return () => controller.abort()
   }, [sector.etf])
+
+  // SSE subscription: real-time quote updates.
+  const live = useLiveQuote(sector.etf)
+
+  // Merge live quote into the page's quote state. Preserves the volume /
+  // 52w / pe fields from the boot REST fetch (SSE payloads carry just
+  // price / change / volume / marketOpen).
+  useEffect(() => {
+    if (!live.quote) return
+    setQuote((prev) => ({
+      price: live.quote!.price,
+      change: live.quote!.change,
+      changePct: live.quote!.changePct,
+      volume: live.quote!.volume ?? prev?.volume ?? 0,
+      high52w: prev?.high52w ?? 0,
+      low52w: prev?.low52w ?? 0,
+      pe: prev?.pe ?? 0,
+      quoteTime: live.quote!.timestamp,
+    }))
+    setQuoteError(null)
+  }, [live.quote])
 
   useEffect(() => {
     setDarkPoolPrints(generateDarkPoolPrints(sector.etf))
@@ -225,7 +245,41 @@ export default function SectorPage({ params }: { params: { slug: string } }) {
                     {isUp ? '▲' : '▼'} {formatSignedNumber(quote.change)} ({Math.abs(quote.changePct).toFixed(2)}%)
                   </div>
                   <div className="text-xs text-slate-400 mt-1 font-mono">ETF: {sector.etf}</div>
-                  <div className="text-[10px] text-slate-400 mt-1">Quote: {formatFreshness(quote.quoteTime)}</div>
+                  {/* Phase 14 wave 37: real-time SSE stream status pill. */}
+                  <div className="flex items-center justify-end gap-2 mt-1">
+                    <span
+                      className={`inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
+                        live.connected
+                          ? live.marketOpen
+                            ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                            : 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                          : 'bg-slate-700/40 text-slate-400 border border-slate-600/40'
+                      }`}
+                      title={
+                        live.connected
+                          ? live.marketOpen
+                            ? 'Live stream connected — market open'
+                            : 'Live stream connected — market closed (snapshot)'
+                          : live.supported
+                            ? 'Reconnecting…'
+                            : 'Polling (SSE unavailable)'
+                      }
+                      role="status"
+                    >
+                      <span
+                        className={`inline-block w-1.5 h-1.5 rounded-full ${
+                          live.connected && live.marketOpen
+                            ? 'bg-emerald-400 animate-pulse'
+                            : live.connected
+                              ? 'bg-amber-400'
+                              : 'bg-slate-500'
+                        }`}
+                        aria-hidden="true"
+                      />
+                      {live.connected ? (live.marketOpen ? 'LIVE' : 'CLOSED') : 'RECONNECT'}
+                    </span>
+                    <span className="text-[10px] text-slate-400">{formatFreshness(quote.quoteTime)}</span>
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-2 text-right w-32">

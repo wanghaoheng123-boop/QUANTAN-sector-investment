@@ -10,6 +10,7 @@ import { PriceSignal } from '@/lib/sectors'
 import { buildSessionSignalsFromQuotes } from '@/lib/sessionSignalsFromQuotes'
 import { useErrorToast } from '@/hooks/useErrorToast'
 import { ErrorToastList } from '@/components/ErrorToastList'
+import { useLiveQuotes } from '@/hooks/useLiveQuotes'
 
 // Real news brief from Yahoo Finance API
 interface NewsBrief {
@@ -52,7 +53,10 @@ export default function HomePage() {
   const { toasts, showToast, dismissToast } = useErrorToast()
   const [quotes, setQuotes] = useState<Record<string, Quote>>({})
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
-  const [countdown, setCountdown] = useState(15)
+  // Phase 14 wave 38: removed legacy `countdown` state. The 15 s polling
+  // countdown was tied to setInterval and the badge that displayed it.
+  // The new LIVE badge sourced from useLiveQuotes replaces both — no
+  // countdown to track because SSE is push-based.
   const [newsBriefs, setNewsBriefs] = useState<NewsBrief[]>([])
   const [newsLoading, setNewsLoading] = useState(true)
   const [activeFilter, setActiveFilter] = useState<string>('ALL')
@@ -79,22 +83,68 @@ export default function HomePage() {
     }
   }, [showToast])
 
+  // Phase 14 wave 38 — REAL-TIME DASHBOARD via useLiveQuotes (replaces 15 s polling).
+  //
+  // The REST boot fetch runs ONCE on mount to populate the dashboard before
+  // the SSE streams hand off their first events (typical: 1-2 s). After that,
+  // useLiveQuotes maintains N parallel EventSource connections — one per
+  // ETF — and merges each tick into the `quotes` state map.
+  //
+  // The countdown timer below stays informational (15 → 0 visual) but no
+  // longer triggers a fetch. We may remove it in a future wave once users
+  // are accustomed to the LIVE badge as the freshness indicator.
   useEffect(() => {
-    // Each tick owns its own AbortController so a slow previous fetch
-    // doesn't race a new one. On unmount, the latest controller aborts.
-    let activeController = new AbortController()
-    void fetchPrices(activeController.signal)
-    const interval = setInterval(() => {
-      activeController.abort()  // cancel any in-flight previous fetch
-      activeController = new AbortController()
-      void fetchPrices(activeController.signal)
-      setCountdown(15)
-    }, 15000)
-    return () => {
-      clearInterval(interval)
-      activeController.abort()
-    }
+    const controller = new AbortController()
+    void fetchPrices(controller.signal)
+    return () => controller.abort()
   }, [fetchPrices])
+
+  // Memoize the ticker list so useLiveQuotes' effect dep is stable.
+  // SECTORS is a module-level constant, so the .map result is also stable
+  // across renders — but useMemo makes the intent explicit and protects
+  // against future refactors that might reshape SECTORS dynamically.
+  const liveTickers = useMemo(
+    () => [...SECTORS.map((s) => s.etf), 'SPY', 'QQQ'],
+    [],
+  )
+  const live = useLiveQuotes(liveTickers)
+
+  // Merge live updates into the `quotes` state map. We don't replace the
+  // whole map (the boot REST fetch may carry fields the SSE payload doesn't,
+  // e.g. dataSource/provenance) — instead we overlay price/change/changePct
+  // per ticker as each tick arrives.
+  useEffect(() => {
+    const entries = Object.entries(live.quotes)
+    if (entries.length === 0) return
+    setQuotes((prev) => {
+      let touched = false
+      const next = { ...prev }
+      for (const [ticker, q] of entries) {
+        if (!q) continue
+        const old = next[ticker]
+        // Skip if the live tick is identical to what we already have (avoids
+        // pointless re-renders of every SectorCard on every heartbeat).
+        if (
+          old &&
+          old.price === q.price &&
+          old.change === q.change &&
+          old.changePct === q.changePct
+        ) {
+          continue
+        }
+        next[ticker] = {
+          ticker,
+          price: q.price,
+          change: q.change,
+          changePct: q.changePct,
+          quoteTime: q.timestamp,
+        }
+        touched = true
+      }
+      if (touched) setLastUpdate(new Date())
+      return touched ? next : prev
+    })
+  }, [live.quotes])
 
   // Fetch real news from Yahoo Finance. Cancellation flag prevents the
   // late `setNewsBriefs` / `setNewsLoading` updates from firing after unmount.
@@ -125,11 +175,9 @@ export default function HomePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Countdown timer
-  useEffect(() => {
-    const t = setInterval(() => setCountdown(c => Math.max(0, c - 1)), 1000)
-    return () => clearInterval(t)
-  }, [])
+  // Phase 14 wave 38: countdown setInterval removed. Live SSE streams have
+  // no poll cadence to count down to — the LIVE / MARKET CLOSED / CONNECTING
+  // badge plus the `lastUpdate` timestamp already communicate freshness.
 
   const signals = useMemo(() => buildSessionSignalsFromQuotes(quotes), [quotes])
 
@@ -191,10 +239,42 @@ export default function HomePage() {
 
         {/* Hero */}
         <div className="text-center space-y-4 py-6">
-          <div className="inline-flex items-center gap-2.5 bg-amber-500/10 border border-amber-500/30 rounded-full px-4 py-1.5 text-xs text-amber-400 mb-2 shadow-lg shadow-amber-900/20">
-            <span className="w-1.5 h-1.5 bg-amber-400 rounded-full animate-pulse" />
-            Live · {lastUpdate ? `Updated ${lastUpdate.toLocaleTimeString()}` : 'Connecting…'}
-            <span className="ml-1 text-amber-600 font-mono">↻ {countdown}s</span>
+          {/* Phase 14 wave 38: status pill reflects live-stream state instead of
+              the legacy "Live" claim. Three states keyed off useLiveQuotes:
+                • emerald + pulsing  — all SSE connections healthy, market open
+                • amber              — connected, market closed (snapshot only)
+                • slate              — reconnecting / EventSource unavailable */}
+          <div
+            className={`inline-flex items-center gap-2.5 rounded-full px-4 py-1.5 text-xs mb-2 shadow-lg ${
+              live.marketOpen && Object.values(live.connections).some(Boolean)
+                ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 shadow-emerald-900/20'
+                : Object.values(live.connections).some(Boolean)
+                  ? 'bg-amber-500/10 border border-amber-500/30 text-amber-400 shadow-amber-900/20'
+                  : 'bg-slate-700/30 border border-slate-600/40 text-slate-400'
+            }`}
+            role="status"
+            aria-live="polite"
+          >
+            <span
+              className={`w-1.5 h-1.5 rounded-full ${
+                live.marketOpen && Object.values(live.connections).some(Boolean)
+                  ? 'bg-emerald-400 animate-pulse'
+                  : Object.values(live.connections).some(Boolean)
+                    ? 'bg-amber-400'
+                    : 'bg-slate-500'
+              }`}
+              aria-hidden="true"
+            />
+            {live.marketOpen && Object.values(live.connections).some(Boolean)
+              ? 'LIVE'
+              : Object.values(live.connections).some(Boolean)
+                ? 'MARKET CLOSED'
+                : 'CONNECTING'}
+            <span className="text-slate-400">·</span>
+            {lastUpdate ? `Updated ${lastUpdate.toLocaleTimeString()}` : 'Awaiting first tick…'}
+            <span className="ml-1 text-slate-500 font-mono text-[10px]">
+              {Object.values(live.connections).filter(Boolean).length}/{live.active} streams
+            </span>
           </div>
           <h1 className="text-4xl sm:text-5xl font-bold tracking-tight">
             <span className="gradient-text">Sector Intelligence</span>
