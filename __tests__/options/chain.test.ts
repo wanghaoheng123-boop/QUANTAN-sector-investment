@@ -191,15 +191,50 @@ describe('fetchOptionsChain', () => {
     expect(chain.calls[0]).toMatchObject({ delta: 0, gamma: 0, theta: 0, vega: 0, rho: 0 })
   })
 
-  it('zeroes out greeks for already-expired contracts (T = 0)', async () => {
-    const expiredAt = Date.now() - 24 * 60 * 60 * 1000 // yesterday
+  // Phase 14 wave 39: regression coverage for the fix to the chain.ts T=0 gate.
+  // PRIOR BEHAVIOUR (buggy): contracts expiring TODAY or already expired
+  //   reported delta=0 for every contract — including deep-ITM calls that
+  //   should have delta=1. The chain.ts gate `sigma > 0 && T > 0` returned
+  //   { delta: 0, ... } before the greeks() function's intrinsic-delta
+  //   logic could fire.
+  // CORRECT BEHAVIOUR: at expiry, delta is the intrinsic indicator —
+  //   1 for ITM call, 0 for OTM call, -1 for ITM put, 0 for OTM put.
+  //   Other Greeks (gamma/theta/vega/rho) remain 0 at expiry by definition.
+
+  it('expired ITM call returns intrinsic delta = 1 (not 0)', async () => {
+    const expiredAt = Date.now() - 60_000 // expired 1 minute ago
     optionsMock.mockResolvedValue(
       makeRawChain({
-        spot: 100,
+        spot: 150,        // S > K → ITM call
         expirationMs: expiredAt,
         calls: [
           {
-            contractSymbol: 'AAPL_EXPIRED',
+            contractSymbol: 'AAPL_EXPIRED_ITM_C',
+            strike: 100,
+            lastPrice: 0,
+            change: 0,
+            contractSize: 'REGULAR',
+            expiration: new Date(expiredAt),
+            lastTradeDate: new Date(expiredAt),
+            impliedVolatility: 0.25,
+            inTheMoney: true,
+          },
+        ],
+      })
+    )
+    const chain = await fetchOptionsChain('AAPL')
+    expect(chain.calls[0]).toMatchObject({ delta: 1, gamma: 0, theta: 0, vega: 0, rho: 0 })
+  })
+
+  it('expired OTM call returns intrinsic delta = 0', async () => {
+    const expiredAt = Date.now() - 60_000
+    optionsMock.mockResolvedValue(
+      makeRawChain({
+        spot: 80,         // S < K → OTM call
+        expirationMs: expiredAt,
+        calls: [
+          {
+            contractSymbol: 'AAPL_EXPIRED_OTM_C',
             strike: 100,
             lastPrice: 0,
             change: 0,
@@ -214,6 +249,32 @@ describe('fetchOptionsChain', () => {
     )
     const chain = await fetchOptionsChain('AAPL')
     expect(chain.calls[0]).toMatchObject({ delta: 0, gamma: 0, theta: 0, vega: 0, rho: 0 })
+  })
+
+  it('expired ITM put returns intrinsic delta = -1 (not 0)', async () => {
+    const expiredAt = Date.now() - 60_000
+    optionsMock.mockResolvedValue(
+      makeRawChain({
+        spot: 80,         // S < K → ITM put
+        expirationMs: expiredAt,
+        calls: [],
+        puts: [
+          {
+            contractSymbol: 'AAPL_EXPIRED_ITM_P',
+            strike: 100,
+            lastPrice: 0,
+            change: 0,
+            contractSize: 'REGULAR',
+            expiration: new Date(expiredAt),
+            lastTradeDate: new Date(expiredAt),
+            impliedVolatility: 0.25,
+            inTheMoney: true,
+          },
+        ],
+      })
+    )
+    const chain = await fetchOptionsChain('AAPL')
+    expect(chain.puts[0]).toMatchObject({ delta: -1, gamma: 0, theta: 0, vega: 0, rho: 0 })
   })
 
   it('coerces missing/optional fields gracefully', async () => {
