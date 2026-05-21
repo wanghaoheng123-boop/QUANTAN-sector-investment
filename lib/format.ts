@@ -101,3 +101,30 @@ export function parseQuoteTime(ts: unknown): string | null {
   }
   return null
 }
+
+/**
+ * Safe YYYY-MM-DD date formatter.
+ *
+ * Phase 14 wave 41 — SSOT for the common pattern in options components:
+ *
+ *   value instanceof Date ? value.toISOString().slice(0,10) : new Date(value).toISOString().slice(0,10)
+ *
+ * That ternary was duplicated in OptionsChainTable (twice) and was MISSING
+ * entirely in FlowScanner — where the unconditional `item.expiration.toISOString()`
+ * crashed the whole panel because after `fetch().then(r => r.json())` the
+ * `expiration: Date` field is actually a string at runtime (Date is not
+ * a JSON-native type — it serialises to a string).
+ *
+ * This helper accepts Date instances, ISO strings, or epoch numbers
+ * (seconds or ms via the 1e12 heuristic) and returns YYYY-MM-DD. Invalid
+ * input returns the supplied fallback (default empty string) — callers
+ * can use that to render "—" or hide the cell entirely.
+ *
+ * Reference: HTML §4.10.6 Date inputs — YYYY-MM-DD is the canonical
+ *            machine-readable form; sliced from ISO 8601.
+ */
+export function toIsoDate(value: unknown, fallback = ''): string {
+  const iso = parseQuoteTime(value)
+  if (iso == null) return fallback
+  return iso.slice(0, 10)
+}

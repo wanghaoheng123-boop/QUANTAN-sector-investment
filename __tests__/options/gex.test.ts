@@ -64,34 +64,47 @@ describe('computeGex', () => {
   })
 
   it('detects flip point between two strikes', () => {
-    // Low strikes: puts > calls → negative GEX
-    // High strikes: calls > puts → positive GEX
-    // Cumulative from low to high: starts negative, crosses to positive somewhere
-    const calls = [
-      makeEnriched(90,  100, 0.05, 'call'),   // low call OI → negative contribution
-      makeEnriched(110, 2000, 0.05, 'call'),  // high call OI → positive contribution
-    ]
-    const puts = [
-      makeEnriched(90,  2000, 0.05, 'put'),   // high put OI
-      makeEnriched(110,  100, 0.05, 'put'),   // low put OI
-    ]
-    // Cumulative from 90→110: 90 is negative, 110 pushes it positive
-    // We look for negative→positive transition... our code looks for positive→negative
-    // Let's reverse: calls dominate at low strike
+    // Phase 14 wave 41 (F3): flip detection now requires STRICT sign change
+    // (prev > 0 && cumulative < 0). The prior test used symmetric OIs
+    // (2000 vs 100 mirrored) which produced cumulative exactly = 0 at
+    // strike 110 — and the buggy `cumulative <= 0` predicate counted that
+    // as a flip. With strict comparison the cumulative must actually go
+    // negative. Use asymmetric OIs so the second strike's contribution
+    // overpowers the first by a clear margin.
     const calls2 = [
-      makeEnriched(90,  2000, 0.05, 'call'),
-      makeEnriched(110,  100, 0.05, 'call'),
+      makeEnriched(90,  2000, 0.05, 'call'),  // strong call dominance at low strike
+      makeEnriched(110,   50, 0.05, 'call'),  // weak call at high strike
     ]
     const puts2 = [
-      makeEnriched(90,   100, 0.05, 'put'),
-      makeEnriched(110, 2000, 0.05, 'put'),
+      makeEnriched(90,    50, 0.05, 'put'),   // weak put at low strike
+      makeEnriched(110, 5000, 0.05, 'put'),   // strong put dominance at high strike
     ]
     const result = computeGex(calls2, puts2, SPOT)
-    // Cumulative at 90: positive (calls >> puts)
-    // Cumulative at 110: might go negative (puts >> calls)
+    // Cumulative at 90: positive (calls 2000 vs puts 50)
+    // Cumulative at 110: strongly negative (puts 5000 vs calls 50) — overwhelms the 90 surplus
     expect(result.flipPoint).not.toBeNull()
     expect(result.flipPoint!).toBeGreaterThan(90)
     expect(result.flipPoint!).toBeLessThanOrEqual(110)
+  })
+
+  // Phase 14 wave 41 (F3) regression: cumulative landing exactly on 0
+  // is NOT a flip — it's a carry-through. The prior `<= 0` predicate fired
+  // here, contaminating flipPoints with spurious entries.
+  it('does NOT register a false flip when cumulative lands exactly on zero (F3)', () => {
+    // Symmetric OIs → call surplus at low strike exactly cancels put
+    // surplus at high strike → cumulative ends at 0, but never went
+    // strictly negative.
+    const calls = [
+      makeEnriched(90,  2000, 0.05, 'call'),
+      makeEnriched(110,  100, 0.05, 'call'),
+    ]
+    const puts = [
+      makeEnriched(90,   100, 0.05, 'put'),
+      makeEnriched(110, 2000, 0.05, 'put'),
+    ]
+    const result = computeGex(calls, puts, SPOT)
+    expect(result.flipPoints).toEqual([])
+    expect(result.flipPoint).toBeNull()
   })
 
   it('returns null flipPoint when GEX stays uniformly positive', () => {
@@ -120,16 +133,24 @@ describe('computeGex', () => {
     })
 
     it('returns single-flip array when only one sign change', () => {
-      // Lower strikes negative (puts dominate), upper strikes positive (calls)
+      // Phase 14 wave 41 (F3): asymmetric OIs so cumulative crosses
+      // STRICTLY (`prev < 0 && cum > 0`, not just `<= 0`).
+      //
+      // Layout — net GEX contribution per strike (call OI − put OI):
+      //   K=90:  −4950 (puts dominate)
+      //   K=100: +5050 (calls dominate, slightly bigger than 90 net)
+      //   K=110: +4950 (calls dominate)
+      //
+      // Cumulative: −4950 → +100 → +5050. STRICT positive crossing at 100.
       const calls = [
-        makeEnriched(90, 100, 0.05, 'call'),
-        makeEnriched(100, 2000, 0.05, 'call'),
-        makeEnriched(110, 2000, 0.05, 'call'),
+        makeEnriched(90,    50, 0.05, 'call'),
+        makeEnriched(100, 5100, 0.05, 'call'),  // 100 more than the put surplus at K=90
+        makeEnriched(110, 5000, 0.05, 'call'),
       ]
       const puts = [
-        makeEnriched(90, 2000, 0.05, 'put'),
-        makeEnriched(100, 100, 0.05, 'put'),
-        makeEnriched(110, 100, 0.05, 'put'),
+        makeEnriched(90,  5000, 0.05, 'put'),
+        makeEnriched(100,   50, 0.05, 'put'),
+        makeEnriched(110,   50, 0.05, 'put'),
       ]
       const result = computeGex(calls, puts, SPOT)
       expect(result.flipPoints).toHaveLength(1)

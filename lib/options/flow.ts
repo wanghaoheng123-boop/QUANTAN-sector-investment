@@ -31,6 +31,18 @@ export interface UnusualFlowItem {
 
 /** Volume must exceed OI by this multiplier to qualify as unusual. */
 const UNUSUAL_VOLUME_MULTIPLIER = 3
+
+/**
+ * Phase 14 wave 41 (F6) — JSON-safe sentinel for "vol >> OI" cases.
+ *
+ * When openInterest == 0 but volume meets the unusual threshold (line 88),
+ * the raw ratio is Infinity. JSON.stringify(Infinity) === "null", which then
+ * appears as `null` in the API response and crashes any downstream arithmetic
+ * (e.g. UI .toFixed). 9_999 is large enough to dominate any percentile sort
+ * AND serialises cleanly. UI components can test against this sentinel to
+ * render an "∞" badge instead of a numeric value.
+ */
+export const MAX_VOL_OI_RATIO = 9_999
 /**
  * Minimum absolute volume to avoid noise on near-zero-OI contracts.
  *
@@ -108,17 +120,36 @@ export function unusualFlow(calls: CallOrPut[], puts: CallOrPut[]): UnusualFlowI
       //       open/close where bids briefly cross asks during the matching
       //       process and stale prints would otherwise be mis-tagged.
       const spreadValid = bid != null && ask != null && ask - bid > 0
-      const nearAsk = ask != null && ask > 0 && spreadValid
-        ? c.lastPrice >= ask * NEAR_ASK_FRACTION
-        : false
 
-      // Sentiment: near-ask call buy = BULLISH; near-ask put buy = BEARISH
-      // Far from ask (near bid) suggests closing / selling: call sell = BEARISH, put sell = BULLISH
+      // Phase 14 wave 41 (F4): three-state classification, NOT binary.
+      //
+      // Prior code forced `nearAsk = false` when the spread couldn't be
+      // classified (single-sided quote, halted symbol, after-hours).
+      // Falling through to the binary sentiment branch then flipped the
+      // sign — call → BEARISH and put → BULLISH — i.e. the OPPOSITE of
+      // a truly ambiguous classification. The function had no NEUTRAL
+      // output, so every unclassifiable item became a confident wrong
+      // signal.
+      //
+      // Now: tri-state. When the quote is missing/crossed/zero-spread,
+      // sentiment is NEUTRAL and downstream `flowSentiment` ignores it.
+      // Reference: Lee-Ready (1991) §III, Ellis-Michaely-O'Hara (2000) §IV.B
+      // — when no valid two-sided quote exists, trade-direction is undefined.
       let sentiment: FlowSentimentLabel
-      if (side === 'CALL') {
-        sentiment = nearAsk ? 'BULLISH' : 'BEARISH'
+      let nearAsk: boolean
+      if (!spreadValid || ask == null || ask <= 0) {
+        nearAsk = false
+        sentiment = 'NEUTRAL'
       } else {
-        sentiment = nearAsk ? 'BEARISH' : 'BULLISH'
+        nearAsk = c.lastPrice >= ask * NEAR_ASK_FRACTION
+        // Near-ask call buy = BULLISH; near-ask put buy = BEARISH.
+        // Far from ask (near bid) suggests closing / selling: call sell
+        // = BEARISH, put sell = BULLISH.
+        if (side === 'CALL') {
+          sentiment = nearAsk ? 'BULLISH' : 'BEARISH'
+        } else {
+          sentiment = nearAsk ? 'BEARISH' : 'BULLISH'
+        }
       }
 
       items.push({
@@ -128,7 +159,11 @@ export function unusualFlow(calls: CallOrPut[], puts: CallOrPut[]): UnusualFlowI
         expiration: c.expiration instanceof Date ? c.expiration : new Date(c.expiration),
         volume: vol,
         openInterest: oi,
-        volumeToOI: ratio,
+        // Phase 14 wave 41 (F6): cap Infinity at a documented sentinel.
+        // JSON serialises Infinity as null, which breaks any downstream
+        // arithmetic. MAX_VOL_OI_RATIO is a sentinel "extreme" value that
+        // serialises cleanly and is easy to test against in the UI.
+        volumeToOI: ratio === Infinity ? MAX_VOL_OI_RATIO : ratio,
         impliedVolatility: c.impliedVolatility,
         lastPrice: c.lastPrice,
         bid,

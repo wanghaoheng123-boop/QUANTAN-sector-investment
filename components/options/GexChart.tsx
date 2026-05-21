@@ -22,7 +22,40 @@ export default function GexChart({ gex, spot }: Props) {
     return <p className="text-xs text-gray-500">No GEX data available.</p>
   }
 
-  const maxAbs = Math.max(...strikeGex.map((s) => Math.abs(s.gex)), 1)
+  // Phase 14 wave 40: graceful fallback when every strike has zero GEX.
+  // Pre-wave-40 the chain.ts picker selected the front-month even when it
+  // was expiring today; every contract's gamma was zero (correct at T=0)
+  // and totalGex collapsed to 0. Even after the picker fix in chain.ts,
+  // illiquid symbols (mid-cap stocks with thin options) can still produce
+  // all-zero GEX if the picked expiration has zero open interest. Surface
+  // that explicitly rather than rendering an empty chart of zero-width
+  // bars that look indistinguishable from "data is loading".
+  const nonZeroStrikes = strikeGex.filter((s) => s.gex !== 0).length
+  if (nonZeroStrikes === 0 || totalGex === 0) {
+    return (
+      <div className="space-y-1 py-2">
+        <p className="text-xs text-gray-400">
+          No gamma exposure to chart — the picked expiration has{' '}
+          {strikeGex.length > 0 ? 'no open interest with measurable gamma' : 'no contracts'}.
+        </p>
+        <p className="text-[10px] text-gray-500">
+          This is common at expiration day for the front-month, or on illiquid mid-cap symbols.
+        </p>
+      </div>
+    )
+  }
+
+  // Phase 14 wave 41 (UX-F5): replace spread-based `Math.max(...)` with a
+  // reducer. Two reasons:
+  //   1. `Math.max(...veryLargeArray)` blows the JS call-stack at ~100k args.
+  //      Deep chains for index symbols (SPX/SPY) can approach this scale.
+  //   2. The spread evaluates Math.abs(NaN) → NaN, and Math.max(NaN, x) → NaN
+  //      for any x. A single non-finite strike GEX would yield maxAbs=NaN
+  //      and every subsequent bar width = NaN.
+  const maxAbs = strikeGex.reduce(
+    (m, s) => (Number.isFinite(s.gex) && Math.abs(s.gex) > m ? Math.abs(s.gex) : m),
+    1,
+  )
   const BAR_HEIGHT = 18
   const BAR_MAX_WIDTH = 180
   const chartHeight = strikeGex.length * (BAR_HEIGHT + 2)
@@ -43,7 +76,11 @@ export default function GexChart({ gex, spot }: Props) {
         <span className={totalGex >= 0 ? 'text-emerald-400' : 'text-red-400'}>
           {totalGex >= 0 ? '+' : ''}{fmtGex(totalGex)}
         </span>
-        {flipPoint != null && (
+        {/* Phase 14 wave 41 (UX-F4): finite-guard every .toFixed. flipPoint
+            and spot are both nominally `number` but can arrive as NaN from
+            halted symbols or degenerate compute. The prior unconditional
+            `.toFixed` crashed the chart. */}
+        {flipPoint != null && Number.isFinite(flipPoint) && (
           <>
             <span className="text-gray-400 inline-flex items-center">
               Flip:<MetricTooltip metricKey="gammaFlip" compact />
@@ -52,7 +89,9 @@ export default function GexChart({ gex, spot }: Props) {
           </>
         )}
         <span className="text-gray-400">Spot:</span>
-        <span className="text-gray-300">${spot.toFixed(2)}</span>
+        <span className="text-gray-300">
+          {Number.isFinite(spot) && spot > 0 ? `$${spot.toFixed(2)}` : '—'}
+        </span>
       </div>
 
       {/* Bar chart — F6.2 (Phase 13 S2): chart text alternative for screen readers (WCAG 1.1.1). */}
@@ -65,8 +104,8 @@ export default function GexChart({ gex, spot }: Props) {
           aria-label={
             `Gamma exposure by strike — ${strikeGex.length} strikes from ${minStrike} to ${maxStrike}, ` +
             `total GEX ${fmtGex(totalGex)}` +
-            (flipPoint != null ? `, gamma flip at ${flipPoint.toFixed(2)}` : '') +
-            `. Spot ${spot.toFixed(2)}.`
+            (flipPoint != null && Number.isFinite(flipPoint) ? `, gamma flip at ${flipPoint.toFixed(2)}` : '') +
+            (Number.isFinite(spot) && spot > 0 ? `. Spot ${spot.toFixed(2)}.` : '.')
           }
         >
           {strikeGex.map((item, i) => {

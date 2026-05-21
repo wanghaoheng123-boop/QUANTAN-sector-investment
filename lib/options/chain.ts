@@ -207,7 +207,51 @@ export async function fetchOptionsChain(
   const expirationDates = expirationDatesRaw.map(toDate)
 
   const optionsArr = (raw.options as Record<string, unknown>[]) ?? []
-  const firstExpiration = optionsArr[0] ?? null
+
+  // Phase 14 wave 40 — OPTIONS PICK-EXPIRY FIX.
+  //
+  // Bug (user-reported as "options-related functions still broken" after wave 39):
+  //   The "first expiration" Yahoo returns is the EARLIEST one in the chain —
+  //   which is typically the current week's Friday. Mid-day on expiration day,
+  //   T <= 0 for every contract in that expiry, so every contract has gamma = 0
+  //   (correct intrinsic behaviour). GexChart then shows totalGex = 0 with no
+  //   flip point and the per-strike bars are all empty.
+  //
+  // Fix: skip expirations whose contracts are already expired (T <= 0). Pick
+  // the first expiration with at least one contract that still has measurable
+  // gamma exposure — i.e. T > MIN_TRADABLE_TIME_YEARS (1 hour in calendar years).
+  //
+  // This does NOT change the UX for normal trading days — the front month is
+  // still selected on Mondays through Thursdays, and on Fridays before the
+  // expiration cut-off. It ONLY shifts the chain on Fridays POST-expiration
+  // (or weekly cycles where today IS the expiry day) — exactly the scenario
+  // that produced the user's bug.
+  //
+  // Reference: CBOE settlement rules — equity options expire 4 pm ET on the
+  // third Friday of the month (or designated weekly expiry days). Yahoo's
+  // `expiration` field is set to midnight UTC of that day; by 4 pm ET the
+  // option has already settled. We adopt T <= 0 as the conservative cutoff.
+  const MIN_TRADABLE_TIME_YEARS = 1 / (365 * 24) // 1 hour
+  type ExpirationBlock = {
+    calls?: Record<string, unknown>[]
+    puts?: Record<string, unknown>[]
+    expirationDate?: unknown
+  }
+
+  function blockIsTradable(block: Record<string, unknown> | undefined): boolean {
+    if (!block) return false
+    const expDate = toDate((block as ExpirationBlock).expirationDate ?? null)
+    if (!Number.isFinite(expDate.getTime())) return false
+    const T = (expDate.getTime() - today) / (365 * 24 * 60 * 60 * 1000)
+    return T > MIN_TRADABLE_TIME_YEARS
+  }
+
+  // Find the first tradable (non-expired) expiration; fall back to the
+  // earliest expiration in the chain if EVERY block is expired (defensive —
+  // would be a strange Yahoo response but possible for halted symbols).
+  const tradableIdx = optionsArr.findIndex(blockIsTradable)
+  const chosenIdx = tradableIdx >= 0 ? tradableIdx : 0
+  const firstExpiration = (optionsArr[chosenIdx] ?? null) as ExpirationBlock | null
 
   const rawCalls = (firstExpiration?.calls as Record<string, unknown>[]) ?? []
   const rawPuts  = (firstExpiration?.puts  as Record<string, unknown>[]) ?? []

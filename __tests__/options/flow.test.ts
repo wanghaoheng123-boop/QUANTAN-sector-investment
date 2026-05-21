@@ -40,11 +40,17 @@ describe('unusualFlow', () => {
     expect(result[0].strike).toBe(100)
   })
 
-  it('flags contracts where OI is 0 and volume >= MIN_UNUSUAL_VOLUME', () => {
+  it('flags contracts where OI is 0 and volume >= MIN_UNUSUAL_VOLUME (caps Infinity → MAX_VOL_OI_RATIO)', () => {
+    // Phase 14 wave 41 (F6): JSON.stringify(Infinity) === "null". The route
+    // returned `null` for volumeToOI on zero-OI rows, breaking any UI
+    // arithmetic. Now Infinity is capped at the documented MAX_VOL_OI_RATIO
+    // sentinel (9_999) which serialises cleanly and dominates percentile sorts.
     const calls = [makeContract(100, 1500, 0, 1.0, 0.9, 1.1, 'call')]
     const result = unusualFlow(calls, [])
     expect(result).toHaveLength(1)
-    expect(result[0].volumeToOI).toBe(Infinity)
+    expect(result[0].volumeToOI).toBe(9_999)
+    // Ensure no Infinity slipped through.
+    expect(Number.isFinite(result[0].volumeToOI)).toBe(true)
   })
 
   it('ignores contracts below min volume threshold', () => {
@@ -79,31 +85,45 @@ describe('unusualFlow', () => {
   })
 
   /**
-   * Regression: previously when ask === 0 (illiquid contract with no
-   * quoted spread), `lastPrice >= 0 * 0.98 = 0` was always true,
-   * marking every illiquid contract as near-ask → BULLISH/BEARISH.
-   * Now requires ask > 0 explicitly so the sentiment is left in the
-   * "far from ask" branch (correctly ambiguous, not false-positive bullish).
+   * Phase 14 wave 41 (F4): when the quote is not classifiable (no valid
+   * two-sided spread), sentiment MUST be NEUTRAL — not coerced into the
+   * binary BULLISH/BEARISH branches.
+   *
+   * Prior code: ask === 0 → spreadValid=false → nearAsk=false → sentiment
+   * fell through to the binary branch (CALL → BEARISH / PUT → BULLISH),
+   * which is the OPPOSITE of "ambiguous". Confidently wrong is worse
+   * than honest "unknown".
+   *
+   * Reference: Lee-Ready (1991) §III — when no valid two-sided quote
+   * exists, trade-direction classification is undefined.
    */
-  it('does NOT mark near-ask when ask === 0 (illiquid contract)', () => {
+  it('marks NEUTRAL when ask === 0 (illiquid contract — no valid spread)', () => {
     const calls = [
       makeContract(100, 5000, 1000, 0.05, 0, 0, 'call'),
     ]
     const result = unusualFlow(calls, [])
     expect(result).toHaveLength(1)
     expect(result[0].nearAsk).toBe(false)
-    // Sentiment falls to the "far from ask" branch — for a CALL that
-    // means BEARISH (call selling pressure), not BULLISH. Either way,
-    // the previous code's BULLISH classification was wrong.
-    expect(result[0].sentiment).toBe('BEARISH')
+    expect(result[0].sentiment).toBe('NEUTRAL')
   })
 
-  it('does NOT mark near-ask when ask is undefined', () => {
+  it('marks NEUTRAL when ask is undefined (halted symbol / single-sided quote)', () => {
     const calls = [
       makeContract(100, 5000, 1000, 1.50, 1.40, undefined, 'call'),
     ]
     const result = unusualFlow(calls, [])
     expect(result[0].nearAsk).toBe(false)
+    expect(result[0].sentiment).toBe('NEUTRAL')
+  })
+
+  it('marks NEUTRAL when bid >= ask (crossed book around open/close)', () => {
+    // Crossed book — stale prints during exchange matching cycle.
+    const calls = [
+      makeContract(100, 5000, 1000, 1.50, 2.10, 2.00, 'call'),
+    ]
+    const result = unusualFlow(calls, [])
+    expect(result[0].nearAsk).toBe(false)
+    expect(result[0].sentiment).toBe('NEUTRAL')
   })
 
   it('marks BULLISH when put is near bid', () => {

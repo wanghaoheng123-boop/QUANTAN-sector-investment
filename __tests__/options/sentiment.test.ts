@@ -35,16 +35,40 @@ describe('putCallRatio', () => {
     expect(oiRatio).toBeCloseTo(0.5, 4)
   })
 
-  it('returns null volumeRatio when no call volume', () => {
+  // Phase 14 wave 41 (F1): the prior contract returned null whenever calls
+  // had zero volume — silently dropping a strongly bearish signal when
+  // puts had real activity. New contract returns PCR_MAX (= 99) when only
+  // one side has activity. Pure-null is reserved for the BOTH-empty case.
+  it('returns PCR_MAX (99) volumeRatio when no call volume but puts have volume', () => {
     const calls = [makeContract(100, 0, 1000, 'call')]
     const puts  = [makeContract(95, 500, 1000, 'put')]
-    expect(putCallRatio(calls, puts).volumeRatio).toBeNull()
+    expect(putCallRatio(calls, puts).volumeRatio).toBe(99)
   })
 
-  it('returns null for empty arrays', () => {
+  it('returns null for empty arrays (both sides truly empty)', () => {
     const { volumeRatio, oiRatio } = putCallRatio([], [])
     expect(volumeRatio).toBeNull()
     expect(oiRatio).toBeNull()
+  })
+
+  it('returns null for two-sided chain with zero activity on both sides', () => {
+    const calls = [makeContract(100, 0, 0, 'call')]
+    const puts  = [makeContract(95, 0, 0, 'put')]
+    const { volumeRatio, oiRatio } = putCallRatio(calls, puts)
+    expect(volumeRatio).toBeNull()
+    expect(oiRatio).toBeNull()
+  })
+
+  it('rejects NaN volume / OI in the fold (F7 defensive guard)', () => {
+    // A single malformed row with NaN volume must not poison the sum.
+    const calls = [
+      makeContract(100, NaN, 100, 'call'),   // NaN volume — should be skipped
+      makeContract(100, 200, 100, 'call'),
+    ]
+    const puts  = [makeContract(95, 100, 50, 'put')]
+    const { volumeRatio } = putCallRatio(calls, puts)
+    // Only the 200-volume call counts → 100 / 200 = 0.5
+    expect(volumeRatio).toBeCloseTo(0.5, 4)
   })
 })
 

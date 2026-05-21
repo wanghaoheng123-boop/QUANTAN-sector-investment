@@ -156,8 +156,19 @@ export function computeGex(
   for (let i = 0; i < strikeGex.length; i++) {
     const prev = cumulative
     cumulative += strikeGex[i].gex
-    // Check both sign-change directions: positive→negative OR negative→positive
-    if ((prev > 0 && cumulative <= 0) || (prev < 0 && cumulative >= 0)) {
+    // Phase 14 wave 41 (F3): require STRICT sign change.
+    //
+    // Prior `cumulative <= 0` / `cumulative >= 0` fired on every strike
+    // where the running sum landed exactly on zero — common when both
+    // sides have zero OI at that strike, OR when a strike's GEX exactly
+    // cancels the running sum. Pre-wave-41 this produced spurious
+    // flipPoints, sometimes multiple in a row, contaminating the chart.
+    //
+    // Strict comparison: only flip when the sign actually changes
+    // (positive → strictly negative, negative → strictly positive).
+    // A landing on exactly zero is treated as carry-through; the next
+    // non-zero contribution decides direction.
+    if ((prev > 0 && cumulative < 0) || (prev < 0 && cumulative > 0)) {
       const s0 = i > 0 ? strikeGex[i - 1].strike : strikeGex[i].strike
       const s1 = strikeGex[i].strike
       const denom = Math.abs(prev) + Math.abs(cumulative)

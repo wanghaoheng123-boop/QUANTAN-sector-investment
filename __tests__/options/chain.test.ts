@@ -277,6 +277,106 @@ describe('fetchOptionsChain', () => {
     expect(chain.puts[0]).toMatchObject({ delta: -1, gamma: 0, theta: 0, vega: 0, rho: 0 })
   })
 
+  // Phase 14 wave 40: regression coverage for the front-month picker.
+  //
+  // Pre-wave-40 the picker always took optionsArr[0] — the earliest
+  // expiration. When the earliest expiration was expiring today (T<=0 for
+  // all contracts), every contract had gamma=0 → GexChart showed flat zero.
+  // The fix in fetchOptionsChain skips expired blocks and picks the first
+  // tradable expiration. The test exercises the WHOLE selection path: a
+  // chain with TWO expirations where the front is expired, expecting the
+  // back to be the picked chain.
+  it('picks the first tradable expiration when front-month is already expired', async () => {
+    const expiredAt = Date.now() - 60_000        // expired
+    const futureExpiry = Date.now() + oneYearMs * 0.1  // future
+    optionsMock.mockResolvedValue({
+      underlyingSymbol: 'AAPL',
+      quote: { regularMarketPrice: 200 },
+      expirationDates: [new Date(expiredAt), new Date(futureExpiry)],
+      options: [
+        // Block 1: expired — pre-wave-40 this was picked, returning gamma=0.
+        {
+          expirationDate: new Date(expiredAt),
+          calls: [{
+            contractSymbol: 'EXPIRED_C',
+            strike: 200, lastPrice: 0, change: 0,
+            contractSize: 'REGULAR',
+            expiration: new Date(expiredAt),
+            lastTradeDate: new Date(expiredAt),
+            impliedVolatility: 0.25,
+            inTheMoney: false,
+          }],
+          puts: [],
+        },
+        // Block 2: tradable — this is what the fix selects.
+        {
+          expirationDate: new Date(futureExpiry),
+          calls: [{
+            contractSymbol: 'TRADABLE_C',
+            strike: 200, lastPrice: 5, change: 0,
+            contractSize: 'REGULAR',
+            expiration: new Date(futureExpiry),
+            lastTradeDate: new Date(),
+            impliedVolatility: 0.30,
+            inTheMoney: false,
+          }],
+          puts: [],
+        },
+      ],
+    })
+    const chain = await fetchOptionsChain('AAPL')
+    expect(chain.calls).toHaveLength(1)
+    expect(chain.calls[0].contractSymbol).toBe('TRADABLE_C')
+    // The tradable contract has gamma > 0 (live option, not expired) so
+    // a downstream GEX computation would produce non-zero strikeGex.
+    expect(chain.calls[0].gamma).toBeGreaterThan(0)
+  })
+
+  it('falls back to first expiration when EVERY block is expired (defensive)', async () => {
+    // Pathological case — would only happen for a halted symbol whose chain
+    // hasn't been updated. We pick the earliest expired block so the route
+    // still returns SOMETHING rather than crashing on an empty chain.
+    const expired1 = Date.now() - 7 * 86_400_000
+    const expired2 = Date.now() - 86_400_000
+    optionsMock.mockResolvedValue({
+      underlyingSymbol: 'AAPL',
+      quote: { regularMarketPrice: 200 },
+      expirationDates: [new Date(expired1), new Date(expired2)],
+      options: [
+        {
+          expirationDate: new Date(expired1),
+          calls: [{
+            contractSymbol: 'EXP1_C',
+            strike: 200, lastPrice: 0, change: 0,
+            contractSize: 'REGULAR',
+            expiration: new Date(expired1),
+            lastTradeDate: new Date(expired1),
+            impliedVolatility: 0.25,
+            inTheMoney: false,
+          }],
+          puts: [],
+        },
+        {
+          expirationDate: new Date(expired2),
+          calls: [{
+            contractSymbol: 'EXP2_C',
+            strike: 200, lastPrice: 0, change: 0,
+            contractSize: 'REGULAR',
+            expiration: new Date(expired2),
+            lastTradeDate: new Date(expired2),
+            impliedVolatility: 0.25,
+            inTheMoney: false,
+          }],
+          puts: [],
+        },
+      ],
+    })
+    const chain = await fetchOptionsChain('AAPL')
+    expect(chain.calls).toHaveLength(1)
+    // Falls back to the earliest expiration when nothing is tradable.
+    expect(chain.calls[0].contractSymbol).toBe('EXP1_C')
+  })
+
   it('coerces missing/optional fields gracefully', async () => {
     const expiry = Date.now() + oneYearMs * 0.5
     optionsMock.mockResolvedValue(
