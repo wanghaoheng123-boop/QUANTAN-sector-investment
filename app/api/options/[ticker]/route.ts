@@ -44,7 +44,9 @@ export async function GET(req: Request, { params }: { params: { ticker: string }
     const chain = await fetchOptionsChain(symbol, undefined, dividendYield)
 
     const pcRatio = putCallRatio(chain.calls, chain.puts)
-    const mp = maxPain(chain.calls, chain.puts)
+    // Phase 14 wave 41 F2: pass spot so tied minima resolve to the strike
+    // nearest current price instead of the (often deep-OTM) lowest strike.
+    const mp = maxPain(chain.calls, chain.puts, chain.underlyingPrice)
     const gex = computeGex(chain.calls, chain.puts, chain.underlyingPrice)
     const flow = unusualFlow(chain.calls, chain.puts)
     const sentiment = flowSentiment(flow)

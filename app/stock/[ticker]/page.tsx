@@ -434,60 +434,110 @@ export default function StockPage({ params }: { params: { ticker: string } }) {
 
               {activeTab === 'options' && (
                 <div className="space-y-6">
+                  {/* Phase 14 wave 41 UX-F6: distinguishable loading state with a spinner
+                      so users see "still working" vs the gray "no data" empty state. */}
                   {optionsLoading && (
-                    <div className="text-center py-12 text-gray-400 text-sm">Loading options chain...</div>
+                    <div className="flex items-center justify-center gap-3 py-12 text-gray-400 text-sm">
+                      <span
+                        className="inline-block w-4 h-4 border-2 border-slate-500 border-t-cyan-400 rounded-full animate-spin"
+                        aria-hidden="true"
+                      />
+                      Loading options chain…
+                    </div>
                   )}
                   {!optionsLoading && !optionsChain && (
-                    <div className="text-center py-12 text-gray-500 text-sm">No options data available for {ticker}.</div>
+                    <div className="text-center py-12 text-gray-500 text-sm" role="status">
+                      No options data available for {ticker}.
+                    </div>
                   )}
                   {optionsChain && (
                     <>
                       {/* Chain table */}
-                      <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-4">
-                        <h3 className="text-sm font-semibold text-white mb-4">Options Chain</h3>
-                        <OptionsChainTable chain={optionsChain} />
-                      </div>
+                      {/* Phase 14 wave 41 (UX-F1): every options panel is now wrapped
+                          in ChartErrorBoundary individually so one panel's crash
+                          can never blank the whole stock page. Each boundary has
+                          a `label` for the fallback message and a small fallbackHeight
+                          appropriate for the panel size. */}
+                      <ChartErrorBoundary label="Options Chain" fallbackHeight={360}>
+                        <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-4">
+                          <h3 className="text-sm font-semibold text-white mb-4">Options Chain</h3>
+                          <OptionsChainTable chain={optionsChain} />
+                        </div>
+                      </ChartErrorBoundary>
 
                       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         {/* GEX chart */}
                         {optionsGex && (
-                          <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-4">
-                            <h3 className="text-sm font-semibold text-white mb-4">Gamma Exposure (GEX)</h3>
-                            <GexChart gex={optionsGex} spot={optionsChain.underlyingPrice} />
-                          </div>
+                          <ChartErrorBoundary label="Gamma Exposure (GEX)" fallbackHeight={320}>
+                            <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-4">
+                              <h3 className="text-sm font-semibold text-white mb-4">Gamma Exposure (GEX)</h3>
+                              <GexChart
+                                gex={optionsGex}
+                                // Phase 14 wave 41 (UX-F4): defensive spot guard at call site.
+                                // GexChart's internal .toFixed call assumed finite spot; a halted
+                                // symbol returning NaN/0 would crash the panel.
+                                spot={Number.isFinite(optionsChain.underlyingPrice) && optionsChain.underlyingPrice > 0
+                                  ? optionsChain.underlyingPrice
+                                  : 0}
+                              />
+                            </div>
+                          </ChartErrorBoundary>
                         )}
 
-                        {/* Max Pain */}
-                        {optionsSentiment?.maxPain != null && (
-                          <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-4">
-                            <h3 className="text-sm font-semibold text-white mb-4">Max Pain</h3>
-                            <MaxPainGauge maxPain={optionsSentiment.maxPain} spot={optionsChain.underlyingPrice} />
-                            <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
-                              <div>
-                                <span className="text-gray-500">P/C Vol Ratio: </span>
-                                <span className="text-gray-300 font-mono">
-                                  {optionsSentiment.putCallVolumeRatio?.toFixed(2) ?? '—'}
-                                </span>
-                              </div>
-                              <div>
-                                <span className="text-gray-500">P/C OI Ratio: </span>
-                                <span className="text-gray-300 font-mono">
-                                  {optionsSentiment.putCallOiRatio?.toFixed(2) ?? '—'}
-                                </span>
+                        {/* Max Pain / Sentiment card */}
+                        {/* Phase 14 wave 41 (UX-F3): render the card whenever ANY
+                            sentiment field exists. Previously the entire card was
+                            gated on `maxPain != null`, which hid the still-useful
+                            P/C ratios whenever max pain was degraded. The
+                            MaxPainGauge component has its own null-guard for the
+                            gauge subtree. */}
+                        {optionsSentiment && (
+                          <ChartErrorBoundary label="Max Pain & Sentiment" fallbackHeight={320}>
+                            <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-4">
+                              <h3 className="text-sm font-semibold text-white mb-4">Max Pain</h3>
+                              <MaxPainGauge
+                                maxPain={optionsSentiment.maxPain}
+                                spot={Number.isFinite(optionsChain.underlyingPrice) && optionsChain.underlyingPrice > 0
+                                  ? optionsChain.underlyingPrice
+                                  : 0}
+                              />
+                              <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
+                                <div>
+                                  <span className="text-gray-500">P/C Vol Ratio: </span>
+                                  <span className="text-gray-300 font-mono">
+                                    {/* Phase 14 wave 41 (UX-F2): explicit Number.isFinite guard.
+                                        The prior `?.toFixed(2) ?? '—'` did NOT catch NaN or
+                                        Infinity (PCR_MAX = 99 from the sentiment.ts F1 fix,
+                                        plus pre-fix Infinity slip-through). */}
+                                    {Number.isFinite(optionsSentiment.putCallVolumeRatio)
+                                      ? (optionsSentiment.putCallVolumeRatio as number).toFixed(2)
+                                      : '—'}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-gray-500">P/C OI Ratio: </span>
+                                  <span className="text-gray-300 font-mono">
+                                    {Number.isFinite(optionsSentiment.putCallOiRatio)
+                                      ? (optionsSentiment.putCallOiRatio as number).toFixed(2)
+                                      : '—'}
+                                  </span>
+                                </div>
                               </div>
                             </div>
-                          </div>
+                          </ChartErrorBoundary>
                         )}
                       </div>
 
                       {/* Unusual Flow */}
-                      <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-4">
-                        <h3 className="text-sm font-semibold text-white mb-4">Unusual Flow Scanner</h3>
-                        <FlowScanner
-                          items={optionsFlow}
-                          sentiment={optionsSentiment?.flowLabel ?? 'NEUTRAL'}
-                        />
-                      </div>
+                      <ChartErrorBoundary label="Unusual Flow Scanner" fallbackHeight={280}>
+                        <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-4">
+                          <h3 className="text-sm font-semibold text-white mb-4">Unusual Flow Scanner</h3>
+                          <FlowScanner
+                            items={optionsFlow}
+                            sentiment={optionsSentiment?.flowLabel ?? 'NEUTRAL'}
+                          />
+                        </div>
+                      </ChartErrorBoundary>
                     </>
                   )}
                 </div>
