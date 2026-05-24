@@ -170,7 +170,17 @@ export function closePosition(
 
   const proceeds = shares * exitPrice
   const realizedPnl = (exitPrice - pos.avgCost) * shares
-  const realizedPnlPct = (exitPrice - pos.avgCost) / pos.avgCost
+  // Phase 16 audit (2026-05-24): div-by-zero guard. addPosition validates
+  // `cost = shares × price` against cash and throws on insufficient cash,
+  // and `cost > 0` requires price > 0 — so avgCost > 0 in normal flow. BUT
+  // a corrupted localStorage payload (manually edited, or surviving a buggy
+  // upgrade) could load a position with avgCost === 0; the prior unguarded
+  // division emitted Infinity, JSON.stringify cast it to null, and the
+  // ClosedTrade record was stored with realizedPnlPct: null — confusing for
+  // analytics.
+  const realizedPnlPct = pos.avgCost > 0
+    ? (exitPrice - pos.avgCost) / pos.avgCost
+    : 0
 
   portfolio.cash += proceeds
   portfolio.realizedPnl += realizedPnl

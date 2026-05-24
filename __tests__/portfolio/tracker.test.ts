@@ -134,6 +134,35 @@ describe('closePosition', () => {
     expect(trade.exitReason).toBe('stop_loss')
     expect(trade.realizedPnl).toBe(-100) // (90-100)*10
   })
+
+  it('closing a position with avgCost=0 produces realizedPnlPct=0, not Infinity (Phase 16 div-by-zero guard)', () => {
+    // Simulate a corrupted-state position with avgCost=0. addPosition would
+    // never produce this in normal flow (it requires price > 0), but
+    // localStorage corruption / a buggy upgrade migration could.
+    const p = createPortfolio('T', 100_000)
+    p.positions.push({
+      ticker: 'CORRUPT',
+      sector: 'Tech',
+      shares: 10,
+      avgCost: 0, // ← the toxic value
+      currentPrice: 100,
+      unrealizedPnl: 0,
+      unrealizedPnlPct: 0,
+      weight: 0,
+      entryDate: '2026-01-01',
+      stopLossPrice: null,
+      targetPrice: null,
+    })
+    const { trade } = closePosition(p, 'CORRUPT', 10, 150, '2026-01-31')
+    // Pre-fix: (150-0)/0 = Infinity → JSON.stringify → null.
+    // Post-fix: realizedPnlPct = 0 (the only finite value that signals
+    // "undefined % return on a zero-cost position").
+    expect(trade.realizedPnlPct).toBe(0)
+    expect(Number.isFinite(trade.realizedPnlPct)).toBe(true)
+    // realizedPnl = (150 - 0) × 10 = 1500 — this is still meaningful even
+    // when the percentage isn't.
+    expect(trade.realizedPnl).toBe(1500)
+  })
 })
 
 describe('updatePrices + recomputePortfolio invariants', () => {

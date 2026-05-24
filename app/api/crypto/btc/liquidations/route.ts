@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server'
+import { sanitizeError } from '@/lib/api/sanitize'
+
 export const dynamic = 'force-dynamic'
 
 const OKX_BASE = 'https://www.okx.com'
@@ -134,7 +136,11 @@ export async function GET() {
         fetchedAt: new Date().toISOString(),
         degraded: true as const,
         userMessage: 'Liquidation feed failed to load.',
-        error: String(error),
+        // Phase 16 audit: was `error: String(error)` (CWE-209 leak). SSOT
+        // sanitizeError returns undefined in production so the production
+        // payload omits the `error` field entirely; dev still sees details
+        // for diagnosability.
+        ...(sanitizeError(error) ? { error: sanitizeError(error) } : {}),
       },
       { status: 200, headers: { 'Cache-Control': 'no-store' } }
     )
