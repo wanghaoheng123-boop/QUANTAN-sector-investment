@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import YahooFinance from 'yahoo-finance2'
-import { yahooSymbolFromParam } from '@/lib/quant/yahooSymbol'
 import { buildFundamentalsPayload, type FundamentalsQuery } from '@/lib/quant/buildFundamentalsPayload'
 import { fetchBloombergQuotesViaBridge, isBloombergBridgeConfigured } from '@/lib/data/bloomberg/bridgeClient'
 import { hasPositiveClose } from '@/lib/quant/chartQuoteFilter'
 import { errorResponse, withRetry } from '@/lib/api/reliability'
-import { sanitizeError } from '@/lib/api/sanitize'
+import { normalizeTicker, sanitizeError } from '@/lib/api/sanitize'
 
 const yahooFinance = new YahooFinance()
 
@@ -24,7 +23,13 @@ const MODULES = [
 ] as const
 
 export async function GET(req: NextRequest, { params }: { params: { ticker: string } }) {
-  const symbol = yahooSymbolFromParam(params.ticker)
+  // Phase 16 audit (2026-05-24): strict ticker validation via SSOT
+  // normalizeTicker. The prior yahooSymbolFromParam was permissive and would
+  // forward any uppercased path-encoded string to Yahoo (F7.3 risk).
+  const symbol = normalizeTicker(params.ticker)
+  if (!symbol) {
+    return NextResponse.json({ error: 'Invalid ticker symbol' }, { status: 400 })
+  }
   // Phase 13 S2 cleanup: explicit parentheses on the index-skip predicate.
   // Without them, JS evaluates `&&` before `||` — works correctly today but
   // brittle to refactor. The intent is: skip if it's ^VIX or any short index.

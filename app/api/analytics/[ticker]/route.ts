@@ -1,11 +1,10 @@
 import { NextResponse } from 'next/server'
 import YahooFinance from 'yahoo-finance2'
-import { yahooSymbolFromParam } from '@/lib/quant/yahooSymbol'
 import { dailyReturns } from '@/lib/quant/technicals'
 import { alignCloses, logReturns, correlation } from '@/lib/quant/relativeStrength'
 import { hasPositiveClose } from '@/lib/quant/chartQuoteFilter'
 import { errorResponse, withRetry } from '@/lib/api/reliability'
-import { sanitizeError } from '@/lib/api/sanitize'
+import { normalizeTicker, sanitizeError } from '@/lib/api/sanitize'
 
 const yahooFinance = new YahooFinance()
 
@@ -18,7 +17,12 @@ const finiteOrNull = (v: unknown): number | null =>
 
 /** Extra analytics (win rate, up/down days, beta proxy) — complements `/api/fundamentals`. */
 export async function GET(_req: Request, { params }: { params: { ticker: string } }) {
-  const symbol = yahooSymbolFromParam(params.ticker)
+  // Phase 16 audit (2026-05-24): strict ticker validation via SSOT
+  // normalizeTicker (was permissive yahooSymbolFromParam — F7.3 risk).
+  const symbol = normalizeTicker(params.ticker)
+  if (!symbol) {
+    return NextResponse.json({ error: 'Invalid ticker symbol' }, { status: 400 })
+  }
   if (symbol.startsWith('^')) {
     return NextResponse.json({ error: 'Use a stock/ETF symbol for analytics.' }, { status: 422 })
   }

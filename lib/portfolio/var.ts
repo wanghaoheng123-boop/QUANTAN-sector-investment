@@ -165,10 +165,10 @@ export function computePortfolioVaR(dailyLogReturns: number[]): PortfolioVaR {
  *   - heuristicPass: simple 3× expected-rate check (legacy, kept for back-compat)
  *   - kupiec: formal Kupiec (1995) POF likelihood-ratio test result
  *
- * Phase 13 S2: previously this function only emitted the 3× heuristic,
- * with the Kupiec test documented as a TODO. The formal test is now
- * embedded so callers get a statistically-grounded verdict alongside
- * the legacy heuristic.
+ * Phase 13 S2: previously this function only emitted the 3× heuristic.
+ * The formal Kupiec (1995) POF likelihood-ratio test is now embedded so
+ * callers get a statistically-grounded verdict alongside the legacy
+ * heuristic.
  *
  * @param dailyLogReturns  Full return series
  * @param lookback         Rolling window for VaR estimation (default 252)

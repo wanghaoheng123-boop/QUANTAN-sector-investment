@@ -1,12 +1,11 @@
 import { NextResponse } from 'next/server'
 import YahooFinance from 'yahoo-finance2'
-import { yahooSymbolFromParam } from '@/lib/quant/yahooSymbol'
 import { fetchOptionsChain } from '@/lib/options/chain'
 import { putCallRatio, maxPain } from '@/lib/options/sentiment'
 import { computeGex } from '@/lib/options/gex'
 import { unusualFlow, flowSentiment } from '@/lib/options/flow'
 import { applyRateLimit } from '@/lib/api/rateLimit'
-import { sanitizeError } from '@/lib/api/sanitize'
+import { normalizeTicker, sanitizeError } from '@/lib/api/sanitize'
 
 const yahooFinance = new YahooFinance()
 
@@ -14,7 +13,15 @@ export async function GET(req: Request, { params }: { params: { ticker: string }
   // Rate limit: 30 req/min per IP
   const rateLimitResponse = await applyRateLimit(req, 'options', { maxRequests: 30, windowSeconds: 60 })
   if (rateLimitResponse) return rateLimitResponse
-  const symbol = yahooSymbolFromParam(params.ticker)
+
+  // Phase 16 audit (2026-05-24): switched from the permissive
+  // yahooSymbolFromParam (no character whitelist — F7.3 risk) to the strict
+  // normalizeTicker SSOT in lib/api/sanitize.ts. Routes accepting a ticker
+  // path param MUST validate it before reaching the upstream Yahoo client.
+  const symbol = normalizeTicker(params.ticker)
+  if (!symbol) {
+    return NextResponse.json({ error: 'Invalid ticker symbol' }, { status: 400 })
+  }
 
   // Options data is only meaningful for equities/ETFs
   if (symbol.startsWith('^')) {

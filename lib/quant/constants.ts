@@ -32,10 +32,15 @@
  * Sharpe is sensitive to RFR (~50bps shifts Sharpe by ~0.05), so a stale
  * value persistently understates risk-adjusted return. Bumped default to
  * 0.045 (4.5%) and exposed an env override so deployments can pin a
- * different value without code change. The proper fix — `getRiskFreeRate(
- * periodStart, periodEnd)` pulling DGS3MO from FRED for the actual
- * backtest window — remains TODO for Phase 15 (requires FRED API key
- * provisioning + caching layer + tenor matching).
+ * different value without code change.
+ *
+ * Phase 15 Q-052-NEW (LANDED 2026-05-24): the tenor-matched FRED helper
+ * `getRiskFreeRate(tenorDays)` now lives in `lib/quant/riskFreeRate.ts` and
+ * is wired through `engine.ts`, `portfolioBacktest.ts`, and `chain.ts`.
+ * Production activation requires `QUANTAN_FRED_PREWARM=1` in the deploy env
+ * (off by default for test/CI/benchmark reproducibility). When unset, the
+ * sync accessor falls back to BACKTEST_RFR_ANNUAL below — so this constant
+ * still functions as the authoritative fallback.
  *
  * Override via env: BACKTEST_RFR_ANNUAL=0.052 (decimal, not percent).
  */
@@ -56,10 +61,19 @@ export const BACKTEST_RFR_ANNUAL = RFR_ANNUAL_OVERRIDE ?? 0.045
 
 /**
  * Risk-free rate for Black-Scholes option pricing (annualized,
- * continuously compounded).  Used by `lib/options/chain.ts:fetchOptionsChain`.
+ * continuously compounded). Used by `lib/options/chain.ts:fetchOptionsChain`
+ * as the FALLBACK when the FRED-backed `getRiskFreeRateSync(daysToExpiry)`
+ * has a cold cache (Phase 15 Q-052-NEW LANDED 2026-05-24).
  *
- * TODO Phase 13 S3: replace with tenor-matched rate from FRED's
- * Treasury yield curve (DGS3MO for ≤90d, DGS1 for ≤1y, DGS2 for ≤2y).
+ * Tenor routing (per `lib/quant/riskFreeRate.ts:SERIES_BY_TENOR`):
+ *   ≤90d   → DGS3MO   (fallback = OPTIONS_RFR_ANNUAL, this constant)
+ *   ≤365d  → DGS1     (fallback = BACKTEST_RFR_ANNUAL above)
+ *   ≤730d  → DGS2     (fallback = BACKTEST_RFR_ANNUAL above)
+ *    >730d → DGS10    (fallback = BACKTEST_RFR_ANNUAL above)
+ *
+ * Set `QUANTAN_FRED_PREWARM=1` in production to fetch the real rates at
+ * module init. When unset (tests, CI, canonical benchmark), this constant
+ * is what the options pricer uses.
  */
 export const OPTIONS_RFR_ANNUAL = 0.0525
 
