@@ -4,6 +4,7 @@ import { getAuthOptions } from '@/lib/auth'
 import { SUPPORTED_PROVIDERS, DEFAULT_MODELS, type LLMProvider, resolveTradingAgentsBase, type TradingAgentsResolved } from '@/lib/trading-agents-config'
 import { applyRateLimit } from '@/lib/api/rateLimit'
 import { normalizeTicker, sanitizeError } from '@/lib/api/sanitize'
+import { validateCsrf } from '@/lib/api/csrf'
 
 const TIMEOUT_MS = 5 * 60 * 1000 // 5 minutes — TradingAgents can be slow
 const TA_RATE_LIMIT = { maxRequests: 10, windowSeconds: 60 }
@@ -56,7 +57,7 @@ export async function GET(
   { params }: { params: { ticker: string } }
 ) {
   // Rate limit: 10 req/min per IP
-  const rateLimitResponse = applyRateLimit(req, 'trading-agents', TA_RATE_LIMIT)
+  const rateLimitResponse = await applyRateLimit(req, 'trading-agents', TA_RATE_LIMIT)
   if (rateLimitResponse) return rateLimitResponse
   // Phase 13 S2 (F7.3): canonical ticker validation — rejects scripts/paths
   // before they reach the upstream Python service.
@@ -151,13 +152,29 @@ export async function POST(
   req: NextRequest,
   { params }: { params: { ticker: string } }
 ) {
+  // Phase 15 Q-055-NEW: CSRF guard before any other work. The double-submit
+  // pattern (cookie + matching x-quantan-csrf header) ensures the request
+  // came from a same-origin context. Cookie is issued by middleware.ts on
+  // first page load; client must read it and echo it in the header.
+  //
+  // Allow X-API-Key callers to bypass — they're server-to-server, not
+  // browser-initiated, and use a different authentication discipline
+  // (the API key itself proves origin authority). Note CSRF is browser-
+  // session protection; out-of-band API integrations are out of scope.
+  const apiKeyHeader = req.headers.get('x-api-key')
+  if (!apiKeyHeader && !validateCsrf(req)) {
+    return NextResponse.json(
+      { error: 'csrf_invalid', message: 'Missing or invalid CSRF token. Reload the page and retry.' },
+      { status: 403 },
+    )
+  }
+
   // Rate limit: 10 req/min per IP
-  const rateLimitResponse = applyRateLimit(req, 'trading-agents', TA_RATE_LIMIT)
+  const rateLimitResponse = await applyRateLimit(req, 'trading-agents', TA_RATE_LIMIT)
   if (rateLimitResponse) return rateLimitResponse
 
   // Auth check: require valid session OR API key header (X-API-Key)
   const session = await getServerSession(getAuthOptions())
-  const apiKeyHeader = req.headers.get('x-api-key')
   if (!session?.user && !apiKeyHeader) {
     return NextResponse.json(
       { error: 'unauthorized', message: 'Authentication required. Sign in or provide X-API-Key header.' },

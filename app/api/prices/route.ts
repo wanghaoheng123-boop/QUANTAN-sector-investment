@@ -21,7 +21,7 @@ const yahooFinance = new YahooFinance()
 // (slashes, quotes, parens) that bypassed the F7.3 ticker-validation
 // regression hardening present in the other routes. The strict version
 // returns `null` for invalid input; we then drop or 400 on the request.
-import { normalizeTicker as strictNormalizeTicker } from '@/lib/api/sanitize'
+import { normalizeTicker as strictNormalizeTicker, sanitizeError } from '@/lib/api/sanitize'
 
 // Phase 13 S2 fix (F4.6): explicit number-or-null. Falsy fallback to 0 silently
 // hid yahoo errors as "$0.00" on the UI.
@@ -60,7 +60,7 @@ function isoQuoteTime(q: { regularMarketTime?: unknown }): string | null {
  */
 export async function GET(request: NextRequest) {
   // Rate limit: 60 req/min per IP (prices poll frequently).
-  const rateLimitResponse = applyRateLimit(request, 'prices', { maxRequests: 60, windowSeconds: 60 })
+  const rateLimitResponse = await applyRateLimit(request, 'prices', { maxRequests: 60, windowSeconds: 60 })
   if (rateLimitResponse) return rateLimitResponse
 
   const url = new URL(request.url)
@@ -190,10 +190,15 @@ export async function GET(request: NextRequest) {
     )
   } catch (error) {
     console.error('[Prices API] Error fetching from Yahoo Finance:', error)
-    // Sanitize error before returning (CWE-209) — don't leak stack traces / file paths.
-    const safeMessage = process.env.NODE_ENV === 'production'
-      ? undefined
-      : (error instanceof Error ? error.message : String(error))
-    return errorResponse('prices_fetch_failed', 'Failed to fetch live prices', safeMessage, 500)
+    // Phase 15 Q-023: use SSOT sanitizeError from lib/api/sanitize instead of
+    // an inline NODE_ENV ternary. Identical behaviour, but routes through the
+    // canonical helper so any future hardening (e.g. always-omit-stack, or
+    // structured error code mapping) lands in one place.
+    return errorResponse(
+      'prices_fetch_failed',
+      'Failed to fetch live prices',
+      sanitizeError(error),
+      500,
+    )
   }
 }

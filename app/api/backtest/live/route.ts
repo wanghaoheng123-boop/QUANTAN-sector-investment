@@ -177,7 +177,7 @@ export async function GET(request: NextRequest) {
   // (all data is local pre-fetched JSON) so the limit can be more permissive,
   // but unbounded polling still wastes Lambda CPU on the in-memory cache
   // miss path. 60 req/min/IP matches /api/prices.
-  const rl = applyRateLimit(request, 'backtest-live', { maxRequests: 60, windowSeconds: 60 })
+  const rl = await applyRateLimit(request, 'backtest-live', { maxRequests: 60, windowSeconds: 60 })
   if (rl) return rl
 
   const { searchParams } = new URL(request.url)

@@ -138,7 +138,7 @@ export async function GET(
   // Phase 14: rate limit — 30 req/min per IP. Brief endpoint hits Yahoo
   // 3+ times per call (quote, summary, news, holdings); unprotected polling
   // would multiply upstream load.
-  const rl = applyRateLimit(req, 'briefs-sector', { maxRequests: 30, windowSeconds: 60 })
+  const rl = await applyRateLimit(req, 'briefs-sector', { maxRequests: 30, windowSeconds: 60 })
   if (rl) return rl as NextResponse<{ error: string }>
 
   const slug = (params.sector || '').trim()

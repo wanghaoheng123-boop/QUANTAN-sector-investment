@@ -76,7 +76,7 @@ export async function GET(
 ): Promise<Response> {
   // Phase 13 S2: rate-limit SSE — connections are expensive (long-lived,
   // each consumes a serverless slot). Tighter than POST routes.
-  const rateLimitResponse = applyRateLimit(req, 'stream', { maxRequests: 10, windowSeconds: 60 })
+  const rateLimitResponse = await applyRateLimit(req, 'stream', { maxRequests: 10, windowSeconds: 60 })
   if (rateLimitResponse) return rateLimitResponse
 
   // Phase 13 S2 fix (F4.10 + F7.3): canonical normalizer with strict char
@@ -195,6 +195,14 @@ export async function GET(
       //   • At T - 30 s, emit `closing_soon` so the UI can pre-warm a reconnect.
       //   • At T, emit `close` then controller.close().
       // Total budget is 9 minutes, well under Vercel Pro's 10-minute ceiling.
+      //
+      // P15-NEW-7 (Phase 15, 2026-05-23): unify the two chained setTimeouts
+      // into a single warn-then-close timer. Prior code armed `closeWarnTimer`
+      // and `autoCloseTimer` independently — under clock skew (NTP adjust,
+      // system suspend resume, container migration) the autoclose could fire
+      // BEFORE the warn, so a client never saw `closing_soon` and reconnected
+      // late. With a single sequence, the warn-then-close ordering is
+      // guaranteed by structured-construction, not by wall-clock comparison.
       closeWarnTimer = setTimeout(() => {
         if (closed) return
         try {
@@ -204,18 +212,21 @@ export async function GET(
             timestamp: new Date().toISOString(),
           })))
         } catch { /* client already gone; close() will handle it */ }
+        // Inner timer — chained inside the warn handler so the order is
+        // structurally guaranteed: closing_soon emit → wait warn-lead →
+        // close emit + close(). Reassigning `autoCloseTimer` keeps the
+        // `close()` cleanup loop unchanged.
+        autoCloseTimer = setTimeout(() => {
+          if (closed) return
+          try {
+            controller.enqueue(encode(sseMessage('close', {
+              reason: 'auto_close_max_duration',
+              timestamp: new Date().toISOString(),
+            })))
+          } catch { /* ignore */ }
+          close()
+        }, STREAM_CLOSE_WARN_LEAD_MS)
       }, STREAM_AUTO_CLOSE_MS - STREAM_CLOSE_WARN_LEAD_MS)
-
-      autoCloseTimer = setTimeout(() => {
-        if (closed) return
-        try {
-          controller.enqueue(encode(sseMessage('close', {
-            reason: 'auto_close_max_duration',
-            timestamp: new Date().toISOString(),
-          })))
-        } catch { /* ignore */ }
-        close()
-      }, STREAM_AUTO_CLOSE_MS)
     },
   })
 

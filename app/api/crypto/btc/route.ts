@@ -225,7 +225,7 @@ export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {
   // Rate limit: 30 req/min per IP
-  const rateLimitResponse = applyRateLimit(req, 'crypto-btc', { maxRequests: 30, windowSeconds: 60 })
+  const rateLimitResponse = await applyRateLimit(req, 'crypto-btc', { maxRequests: 30, windowSeconds: 60 })
   if (rateLimitResponse) return rateLimitResponse
 
   const { searchParams } = new URL(req.url)

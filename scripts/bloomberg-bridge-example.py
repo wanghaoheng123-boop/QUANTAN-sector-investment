@@ -21,6 +21,7 @@ Legal: You must comply with the Bloomberg Terminal Agreement and any Data Licens
 
 from __future__ import annotations
 
+import hmac
 import json
 import os
 import sys
@@ -68,7 +69,8 @@ class Handler(BaseHTTPRequestHandler):
     def _auth_ok(self) -> bool:
         if not SECRET:
             return True
-        return self.headers.get("X-Bridge-Secret") == SECRET
+        provided = self.headers.get("X-Bridge-Secret") or ""
+        return hmac.compare_digest(provided.encode("utf-8"), SECRET.encode("utf-8"))
 
     def do_GET(self):
         p = urlparse(self.path)

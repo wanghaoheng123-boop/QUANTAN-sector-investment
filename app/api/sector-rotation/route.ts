@@ -45,7 +45,7 @@ async function fetchCloses(etf: string): Promise<FetchResult> {
 export async function GET(request: Request) {
   // Phase 13 S2: rate-limit. Each request triggers 11 yahoo chart calls
   // (one per sector ETF), so abuse amplifies upstream load 11×.
-  const rateLimitResponse = applyRateLimit(request, 'sector-rotation', {
+  const rateLimitResponse = await applyRateLimit(request, 'sector-rotation', {
     maxRequests: 10,
     windowSeconds: 60,
   })

@@ -91,7 +91,7 @@ async function resolveDirectQuote(raw: string) {
 
 export async function GET(request: NextRequest) {
   // Rate limit: 30 req/min per IP
-  const rateLimitResponse = applyRateLimit(request, 'search', { maxRequests: 30, windowSeconds: 60 })
+  const rateLimitResponse = await applyRateLimit(request, 'search', { maxRequests: 30, windowSeconds: 60 })
   if (rateLimitResponse) return rateLimitResponse
 
   try {

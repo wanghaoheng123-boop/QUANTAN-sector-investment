@@ -99,7 +99,7 @@ export async function GET(
   // Phase 14 wave 25: rate limit (30 req/min/IP). News fans out to 5 Yahoo
   // search calls per request — unprotected polling could saturate the upstream
   // and inflate Vercel function bills.
-  const rl = applyRateLimit(req, 'news-sector', { maxRequests: 30, windowSeconds: 60 })
+  const rl = await applyRateLimit(req, 'news-sector', { maxRequests: 30, windowSeconds: 60 })
   if (rl) return rl as NextResponse<{ error: string }>
 
   const sector = (params.sector || '').trim()

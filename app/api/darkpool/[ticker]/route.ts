@@ -183,7 +183,7 @@ export async function GET(
   { params }: { params: { ticker: string } }
 ): Promise<NextResponse<DarkPoolAnalysis | { error: string }>> {
   // Phase 13 S2: rate-limit + canonical ticker validation.
-  const rateLimitResponse = applyRateLimit(req, 'darkpool', {
+  const rateLimitResponse = await applyRateLimit(req, 'darkpool', {
     maxRequests: 30,
     windowSeconds: 60,
   })

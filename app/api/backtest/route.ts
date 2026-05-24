@@ -11,6 +11,7 @@ import { NextResponse } from 'next/server'
 import { SECTORS } from '@/lib/sectors'
 import { loadStockHistory, loadBtcHistory, availableTickers } from '@/lib/backtest/dataLoader'
 import { backtestInstrument, aggregatePortfolio } from '@/lib/backtest/engine'
+import { validateCsrf } from '@/lib/api/csrf'
 import { applyRateLimit } from '@/lib/api/rateLimit'
 import { normalizeTicker, sanitizeError } from '@/lib/api/sanitize'
 
@@ -115,7 +116,7 @@ async function runBacktest(filterTickers?: string[]): Promise<{
 
 export async function GET(request: Request) {
   // Rate limit: 30 req/min per IP
-  const rateLimitResponse = applyRateLimit(request, 'backtest', { maxRequests: 30, windowSeconds: 60 })
+  const rateLimitResponse = await applyRateLimit(request, 'backtest', { maxRequests: 30, windowSeconds: 60 })
   if (rateLimitResponse) return rateLimitResponse
 
   const { searchParams } = new URL(request.url)
@@ -152,7 +153,10 @@ export async function GET(request: Request) {
 // full recompute. Tighter rate limit than GET — anyone hitting POST forces
 // expensive aggregation across 56 instruments. Rate-limited at 3 req/min.
 export async function POST(request: Request) {
-  const rateLimitResponse = applyRateLimit(request, 'backtest-recompute', {
+  if (!validateCsrf(request)) {
+    return NextResponse.json({ error: 'csrf_invalid' }, { status: 403 })
+  }
+  const rateLimitResponse = await applyRateLimit(request, 'backtest-recompute', {
     maxRequests: 3,
     windowSeconds: 60,
   })

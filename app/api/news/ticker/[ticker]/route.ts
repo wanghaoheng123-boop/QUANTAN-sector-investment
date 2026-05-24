@@ -38,7 +38,7 @@ export async function GET(
   req: NextRequest,
   { params }: { params: { ticker: string } }
 ): Promise<NextResponse<{ news: NewsItem[]; ticker: string; fetchedAt: string } | { error: string }>> {
-  const rl = applyRateLimit(req, 'news-ticker', { maxRequests: 30, windowSeconds: 60 })
+  const rl = await applyRateLimit(req, 'news-ticker', { maxRequests: 30, windowSeconds: 60 })
   if (rl) return rl as NextResponse<{ error: string }>
 
   const ticker = normalizeTicker(params.ticker)

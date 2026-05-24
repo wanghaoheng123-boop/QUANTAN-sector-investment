@@ -125,7 +125,7 @@ export async function GET(request: Request): Promise<NextResponse<{
   // Phase 13 S2: rate-limit. This route fans out to ~33 yahoo search() calls
   // per request (11 sectors × 3 tickers each). Tighter limit to prevent
   // amplification of upstream load.
-  const rateLimitResponse = applyRateLimit(request, 'briefs', {
+  const rateLimitResponse = await applyRateLimit(request, 'briefs', {
     maxRequests: 6,
     windowSeconds: 60,
   })

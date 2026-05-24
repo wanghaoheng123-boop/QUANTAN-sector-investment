@@ -80,6 +80,33 @@ export async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Pr
   }
 }
 
+/**
+ * Phase 15 Q-023 / F7.2 (CWE-209 Information Exposure Through Error Message):
+ *
+ * Prior implementation emitted `"details": null` whenever the caller passed
+ * `undefined`, which signals "an error occurred but we're hiding the details"
+ * — a forensic leak that helps an attacker map error-producing inputs even
+ * when the message itself is generic. Per Phase 14 §S2.10, the correct
+ * behaviour is to omit the key entirely when no details are available.
+ *
+ * `buildErrorBody` is the SSOT used by both `degradedResponse` and
+ * `errorResponse`. Production callers should pass `sanitizeError(e)` from
+ * `@/lib/api/sanitize` (NOT raw `error.message`) so stack traces and file
+ * paths never reach the wire.
+ */
+function buildErrorBody(degraded: boolean, code: string, message: string, details?: string) {
+  return {
+    degraded,
+    error: {
+      code,
+      message,
+      // Spread-guard: only include `details` when truthy.
+      ...(details ? { details } : {}),
+    },
+    timestamp: new Date().toISOString(),
+  }
+}
+
 export function degradedResponse(
   code: string,
   message: string,
@@ -87,22 +114,14 @@ export function degradedResponse(
   status = 200
 ): NextResponse {
   return NextResponse.json(
-    {
-      degraded: true,
-      error: { code, message, details: details ?? null },
-      timestamp: new Date().toISOString(),
-    },
+    buildErrorBody(true, code, message, details),
     { status, headers: { 'Cache-Control': 'no-store' } }
   )
 }
 
 export function errorResponse(code: string, message: string, details?: string, status = 502): NextResponse {
   return NextResponse.json(
-    {
-      degraded: false,
-      error: { code, message, details: details ?? null },
-      timestamp: new Date().toISOString(),
-    },
+    buildErrorBody(false, code, message, details),
     { status, headers: { 'Cache-Control': 'no-store' } }
   )
 }

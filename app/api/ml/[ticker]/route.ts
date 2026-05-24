@@ -21,7 +21,7 @@ import { applyRateLimit } from '@/lib/api/rateLimit'
 export async function GET(request: NextRequest, { params }: { params: { ticker: string } }) {
   // Rate limit — 30 req/min/IP. ML predictions are expensive (model
   // inference); even a small attack can saturate the sidecar.
-  const rateLimitResponse = applyRateLimit(request, 'ml-prediction', { maxRequests: 30, windowSeconds: 60 })
+  const rateLimitResponse = await applyRateLimit(request, 'ml-prediction', { maxRequests: 30, windowSeconds: 60 })
   if (rateLimitResponse) return rateLimitResponse
 
   // Strict ticker validation. normalizeTicker returns null for any

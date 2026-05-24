@@ -31,7 +31,7 @@ export async function GET(
   { params }: { params: { ticker: string } }
 ) {
   // Rate limit: 60 req/min per IP
-  const rateLimitResponse = applyRateLimit(req, 'chart', { maxRequests: 60, windowSeconds: 60 })
+  const rateLimitResponse = await applyRateLimit(req, 'chart', { maxRequests: 60, windowSeconds: 60 })
   if (rateLimitResponse) return rateLimitResponse
 
   // Phase 13 S2 fix (F4.10 + F7.3): full US-index whitelist + strict ticker

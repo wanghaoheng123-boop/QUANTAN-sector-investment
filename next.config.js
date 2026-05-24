@@ -57,12 +57,36 @@ const SECURITY_HEADERS = [
 
 const nextConfig = {
   images: {
-    // TODO Phase 13 F7.6 (Security): restrict remotePatterns to specific
-    // image CDNs (currently allows ANY https host — SSRF amplification risk).
-    // Known callers: yahoo finance logo CDNs, news provider thumbs.
+    // Phase 15 Q-029 / R7-C-4 (Security, CWE-918 SSRF amplification):
+    //
+    // Prior config `hostname: '**'` made Next.js' image-optimization endpoint
+    // a generic image proxy: `/_next/image?url=https://internal/admin&w=...`
+    // could pull responses from arbitrary endpoints through our origin. The
+    // Next.js security advisory and Vercel docs both prescribe an explicit
+    // allowlist; '**' is documented as "use only for prototypes."
+    //
+    // Current callers of <Image> in this codebase: NONE (verified 2026-05-23
+    // via `grep -rln "from 'next/image'" app components hooks`). The allowlist
+    // below pre-approves the hostnames we EXPECT to need when <Image> adoption
+    // begins:
+    //   • lh3.googleusercontent.com    — Google OAuth profile photos
+    //   • avatars.githubusercontent.com — GitHub OAuth profile photos
+    //   • s.yimg.com / *.yimg.com       — Yahoo Finance logos + thumbnails
+    //   • finance.yahoo.com             — Yahoo embed previews
+    //   • static2.finviz.com            — Finviz sector logos (if/when used)
+    //   • images.financialcontent.com   — Common finance CDN for news thumbs
+    //
+    // To add a new host: append a pattern + require security-track reviewer
+    // ack in the PR (Phase 15 S1 gate). Do NOT re-introduce '**'.
     remotePatterns: [
-      { protocol: 'https', hostname: '**' }
-    ]
+      { protocol: 'https', hostname: 'lh3.googleusercontent.com' },
+      { protocol: 'https', hostname: 'avatars.githubusercontent.com' },
+      { protocol: 'https', hostname: 's.yimg.com' },
+      { protocol: 'https', hostname: '*.yimg.com' },
+      { protocol: 'https', hostname: 'finance.yahoo.com' },
+      { protocol: 'https', hostname: 'static2.finviz.com' },
+      { protocol: 'https', hostname: 'images.financialcontent.com' },
+    ],
   },
   // Prevent Next.js from bundling yahoo-finance2 and its broken ESM shim.
   // Resolved by Node.js natively at runtime instead.

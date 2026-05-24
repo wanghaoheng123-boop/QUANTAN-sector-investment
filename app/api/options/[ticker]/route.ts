@@ -12,7 +12,7 @@ const yahooFinance = new YahooFinance()
 
 export async function GET(req: Request, { params }: { params: { ticker: string } }) {
   // Rate limit: 30 req/min per IP
-  const rateLimitResponse = applyRateLimit(req, 'options', { maxRequests: 30, windowSeconds: 60 })
+  const rateLimitResponse = await applyRateLimit(req, 'options', { maxRequests: 30, windowSeconds: 60 })
   if (rateLimitResponse) return rateLimitResponse
   const symbol = yahooSymbolFromParam(params.ticker)
 
