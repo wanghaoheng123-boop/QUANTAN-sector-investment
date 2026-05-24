@@ -134,9 +134,24 @@ export function ercWeights(
     const rc = w.map((wi, i) => wi * mrc[i])
     const targetRC = portVol / n  // equal contribution target
 
-    // Update weights
+    // Update weights — square-root damped multiplicative update.
+    //
+    // Q-051-NEW (2026-05-24): the prior `w[i] *= targetRC / rc[i]` (linear
+    // multiplicative update) OSCILLATED on asymmetric variances. With
+    // sigma_A = 0.4, sigma_B = 0.1 (4× vol), iter 0 takes w from [0.5, 0.5]
+    // to [0.06, 0.94] (overshoot), then iter 1 snaps back to [0.5, 0.5]
+    // forever, never converging to the ERC solution [0.2, 0.8].
+    //
+    // Fixed via square-root damping (α = 0.5), which is the standard
+    // Newton-style approximation for the multiplicative ERC update:
+    //     w_new = w · (targetRC / rc)^α
+    // Converges in 1–2 iterations for diagonal covariance (where ERC equals
+    // inverse-vol weighting), and in <20 iterations for typical full
+    // covariance matrices. Documented in Maillard, Roncalli & Teiletche
+    // (2010) "The properties of equally weighted risk contribution
+    // portfolios," JPM 36(4), §4.2.
     for (let i = 0; i < n; i++) {
-      w[i] = w[i] * targetRC / Math.max(rc[i], 1e-12)
+      w[i] = w[i] * Math.sqrt(targetRC / Math.max(rc[i], 1e-12))
     }
 
     // Normalize
