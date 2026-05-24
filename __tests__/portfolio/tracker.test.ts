@@ -1,22 +1,41 @@
 /**
- * lib/portfolio/tracker.ts tests (Q-051-NEW).
+ * lib/portfolio/tracker.ts tests (Q-051-NEW + Phase 16 schema-validation guard).
  *
  * Coverage: createPortfolio, addPosition (new + average-up), closePosition
  * (full + partial), updatePrices (incl. invalid-price rejection),
- * recomputePortfolio invariants, holdingDays date validation, error paths.
+ * recomputePortfolio invariants, holdingDays date validation, error paths,
+ * loadPortfolio boundary validation (the Phase 16 guard against corrupted
+ * localStorage payloads).
  *
- * Skips localStorage tests since this lib gracefully degrades when
- * `typeof localStorage === 'undefined'` (Node env).
+ * We use `vi.stubGlobal('localStorage', ...)` rather than the jsdom env
+ * pragma so the test runs deterministically under both Node and jsdom
+ * environments. tracker.ts checks `typeof localStorage === 'undefined'`
+ * at every entry point, so providing a real Storage-like stub here gives
+ * the load/save tests a controlled fixture.
  */
-
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import {
   createPortfolio,
   addPosition,
   closePosition,
   updatePrices,
+  savePortfolio,
+  loadPortfolio,
   type Portfolio,
 } from '@/lib/portfolio/tracker'
+
+/** Minimal localStorage stub — string-keyed Map with the four methods tracker.ts uses. */
+function makeStorageStub(): Storage {
+  const store = new Map<string, string>()
+  return {
+    get length() { return store.size },
+    clear: () => store.clear(),
+    getItem: (k) => store.has(k) ? store.get(k)! : null,
+    setItem: (k, v) => { store.set(k, String(v)) },
+    removeItem: (k) => { store.delete(k) },
+    key: (i) => Array.from(store.keys())[i] ?? null,
+  }
+}
 
 describe('createPortfolio', () => {
   it('initializes with all-cash NAV and zero P&L', () => {
@@ -133,6 +152,83 @@ describe('closePosition', () => {
     const { trade } = closePosition(p, 'AAPL', 10, 90, '2026-01-05', 'stop_loss')
     expect(trade.exitReason).toBe('stop_loss')
     expect(trade.realizedPnl).toBe(-100) // (90-100)*10
+  })
+
+  // Phase 16 (2026-05-24): boundary-validation regression tests for loadPortfolio.
+  describe('loadPortfolio schema validation', () => {
+    let stub: Storage
+    beforeEach(() => {
+      stub = makeStorageStub()
+      vi.stubGlobal('localStorage', stub)
+    })
+    afterEach(() => {
+      vi.unstubAllGlobals()
+    })
+
+    it('round-trips a well-formed portfolio (positive path)', () => {
+      let p = createPortfolio('Round', 50_000)
+      p = addPosition(p, 'AAPL', 'Tech', 10, 100, '2026-01-01')
+      savePortfolio(p)
+      const loaded = loadPortfolio(p.id)
+      expect(loaded).not.toBeNull()
+      expect(loaded!.positions).toHaveLength(1)
+      expect(loaded!.positions[0].avgCost).toBe(100)
+    })
+
+    it('rejects a payload with avgCost=0 (the corruption that triggered the div-by-zero bug)', () => {
+      const id = 'p-corrupt-1'
+      const bad = {
+        id,
+        name: 'Bad',
+        positions: [{
+          ticker: 'CORRUPT', sector: 'Tech', shares: 10, avgCost: 0,
+          currentPrice: 100, unrealizedPnl: 0, unrealizedPnlPct: 0, weight: 0,
+          entryDate: '2026-01-01', stopLossPrice: null, targetPrice: null,
+        }],
+        cash: 50_000, initialCapital: 100_000, totalValue: 100_000,
+        unrealizedPnl: 0, totalReturnPct: 0, realizedPnl: 0,
+        createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z',
+      }
+      stub.setItem(`quantan-portfolio-${id}`, JSON.stringify(bad))
+      expect(loadPortfolio(id)).toBeNull()
+    })
+
+    it('rejects payloads with NaN or Infinity in numeric fields', () => {
+      for (const taint of [{ cash: NaN }, { cash: Infinity }, { initialCapital: -1 }, { initialCapital: 0 }]) {
+        const id = `p-corrupt-${JSON.stringify(taint)}`
+        const bad = {
+          id, name: 'Bad', positions: [],
+          cash: 100, initialCapital: 100, totalValue: 100,
+          unrealizedPnl: 0, totalReturnPct: 0, realizedPnl: 0,
+          createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z',
+          ...taint,
+        }
+        stub.setItem(`quantan-portfolio-${id}`, JSON.stringify(bad))
+        expect(loadPortfolio(id), `should reject ${JSON.stringify(taint)}`).toBeNull()
+      }
+    })
+
+    it('rejects payloads with non-array positions', () => {
+      const id = 'p-corrupt-2'
+      const bad = {
+        id, name: 'Bad', positions: 'not-an-array',
+        cash: 100, initialCapital: 100, totalValue: 100,
+        unrealizedPnl: 0, totalReturnPct: 0, realizedPnl: 0,
+        createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z',
+      }
+      stub.setItem(`quantan-portfolio-${id}`, JSON.stringify(bad))
+      expect(loadPortfolio(id)).toBeNull()
+    })
+
+    it('rejects truncated/malformed JSON (private-mode quota-exceeded mid-write)', () => {
+      const id = 'p-corrupt-3'
+      localStorage.setItem(`quantan-portfolio-${id}`, '{"id":"p-corrupt-3","na')
+      expect(loadPortfolio(id)).toBeNull()
+    })
+
+    it('returns null when no payload exists for the id (not an error)', () => {
+      expect(loadPortfolio('does-not-exist')).toBeNull()
+    })
   })
 
   it('closing a position with avgCost=0 produces realizedPnlPct=0, not Infinity (Phase 16 div-by-zero guard)', () => {

@@ -91,15 +91,69 @@ export function savePortfolio(portfolio: Portfolio): void {
   }
 }
 
+/**
+ * Phase 16 audit (2026-05-24): boundary validator. Reject portfolios with
+ * non-finite or negative-where-impossible numeric fields, or with positions
+ * that have avgCost === 0 (the same corruption pattern that triggered the
+ * tracker.ts div-by-zero bug we patched in commit 629bd07). Garbage in →
+ * `null` returned → caller treats as "no portfolio" → user can recreate
+ * cleanly instead of operating on Infinity / NaN values.
+ *
+ * Not a full schema validator (would justify a Zod dependency); a focused
+ * runtime guard against the corruption modes we've actually observed:
+ *   - hand-edited localStorage
+ *   - in-flight migration from an older schema
+ *   - private-mode quota-exceeded mid-write (truncated JSON)
+ *   - third-party browser extensions tampering with storage
+ */
+function isValidPortfolio(p: unknown): p is Portfolio {
+  if (!p || typeof p !== 'object') return false
+  const o = p as Record<string, unknown>
+  if (typeof o.id !== 'string' || !o.id) return false
+  if (typeof o.name !== 'string') return false
+  // Required finite numerics
+  const numericFields = ['cash', 'initialCapital', 'totalValue', 'unrealizedPnl', 'totalReturnPct', 'realizedPnl'] as const
+  for (const field of numericFields) {
+    const v = o[field]
+    if (typeof v !== 'number' || !Number.isFinite(v)) return false
+  }
+  // initialCapital must be strictly positive (totalReturnPct divides by it).
+  if ((o.initialCapital as number) <= 0) return false
+  // Positions array shape + per-position non-corrupt invariants.
+  if (!Array.isArray(o.positions)) return false
+  for (const raw of o.positions) {
+    if (!raw || typeof raw !== 'object') return false
+    const pos = raw as Record<string, unknown>
+    if (typeof pos.ticker !== 'string' || !pos.ticker) return false
+    if (typeof pos.shares !== 'number' || !Number.isFinite(pos.shares) || pos.shares <= 0) return false
+    // avgCost > 0 is the critical invariant — see commit 629bd07 div-by-zero
+    if (typeof pos.avgCost !== 'number' || !Number.isFinite(pos.avgCost) || pos.avgCost <= 0) return false
+    if (typeof pos.currentPrice !== 'number' || !Number.isFinite(pos.currentPrice) || pos.currentPrice < 0) return false
+  }
+  return true
+}
+
 export function loadPortfolio(portfolioId: string): Portfolio | null {
   if (typeof localStorage === 'undefined') return null
   const raw = localStorage.getItem(storageKey(portfolioId))
   if (!raw) return null
+  let parsed: unknown
   try {
-    return JSON.parse(raw) as Portfolio
+    parsed = JSON.parse(raw)
   } catch {
     return null
   }
+  // Phase 16: validate at the boundary; corrupted state surfaces here, not
+  // in downstream business logic (closePosition, recomputePortfolio, etc).
+  if (!isValidPortfolio(parsed)) {
+    console.warn(JSON.stringify({
+      event: 'portfolio.tracker.load_rejected',
+      reason: 'schema_invalid',
+      portfolioId,
+    }))
+    return null
+  }
+  return parsed
 }
 
 export function listPortfolioIds(): string[] {
