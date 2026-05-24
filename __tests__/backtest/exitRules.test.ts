@@ -69,6 +69,18 @@ describe('atrAdaptiveStop', () => {
     expect(stopLossPrice).toBeCloseTo(100 * (1 - 0.15), 2)
   })
 
+  it('AT-F1.22-atr-prior-bar: forming entry bar does not affect ATR window', () => {
+    const completed = makeBars(Array.from({ length: 25 }, () => 100), 2)
+    const wildEntryBar: OhlcBar = { open: 100, high: 500, low: 1, close: 100 }
+    const withWildEntry = [...completed, wildEntryBar]
+
+    const baseline = atrAdaptiveStop(100, completed)
+    const withEntry = atrAdaptiveStop(100, withWildEntry)
+
+    expect(withEntry.stopLossPrice).toBeCloseTo(baseline.stopLossPrice, 6)
+    expect(withEntry.atrPct).toBeCloseTo(baseline.atrPct, 6)
+  })
+
   /**
    * R8-C-2 (Phase 14): property test — atrAdaptiveStop should hold its
    * advertised invariants for any input bar series and any entry > 0.

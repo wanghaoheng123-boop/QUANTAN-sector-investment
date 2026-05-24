@@ -1,5 +1,11 @@
 name: CI
 
+# Phase 15 Q-001 (2026-05-23):
+# Expands CI from typecheck-only to a quality gate covering typecheck, tests,
+# benchmark floor, and smoke verification. Each job is independent so failures
+# surface granularly. Benchmark gates at WR < 55.85% (50 bps below the 56.35%
+# baseline, matching the invariants-baseline.md floor).
+
 on:
   push:
     branches: [main]
@@ -11,15 +17,101 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
-
       - name: Install dependencies
         run: npm ci
-
       - name: Typecheck
         run: npm run typecheck
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Run vitest
+        run: npm run test
+      # Floor: 798 tests (per reviews/invariants-baseline.md §3 as of 2026-05-23)
+
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Run vitest with coverage thresholds
+        run: npm run test:coverage
+      # Q-022: enforces vitest.config.ts thresholds (80/80/80/70).
+      # Q-051-NEW: hooks, lib/ml, lib/optimize, lib/portfolio, data/providers
+      # temporarily excluded until tests land.
+
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Run canonical benchmark
+        run: npm run benchmark
+      - name: Enforce WR floor (>= 55.85%)
+        run: |
+          # Phase 15 Q-001: hard-block PRs that drop aggregate WR below the
+          # canonical floor. Baseline 56.35% (reviews/invariants-baseline.md);
+          # 50 bps tolerance = 55.85%. Drops between 55.85% and 56.35% pass CI
+          # but require a C2 review note per the invariants doc.
+          node -e "
+            const fs = require('fs');
+            const r = JSON.parse(fs.readFileSync('scripts/benchmark-results.json', 'utf8'));
+            const wr = r.aggregate?.aggregateWinRate;
+            if (typeof wr !== 'number') {
+              console.error('FAIL: benchmark JSON missing aggregate.aggregateWinRate');
+              process.exit(1);
+            }
+            const FLOOR = 55.85;
+            console.log('Aggregate Win Rate:', wr.toFixed(2) + '%');
+            console.log('Floor:', FLOOR.toFixed(2) + '%');
+            if (wr < FLOOR) {
+              console.error('FAIL: aggregate WR ' + wr.toFixed(2) + '% below floor ' + FLOOR.toFixed(2) + '%');
+              process.exit(1);
+            }
+            if (wr < 56.35) {
+              console.warn('WARN: aggregate WR ' + wr.toFixed(2) + '% in soft-fail band (55.85-56.35); requires C2 sign-off.');
+            }
+            console.log('PASS');
+          "
+
+  smoke:
+    runs-on: ubuntu-latest
+    needs: [typecheck, test]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Verify scripts (logic + indicators + btc)
+        run: npm run verify:data
+      # Note: full check:smoke (production HTTP probes) is run on deploy, not on PR.
+      # See package.json scripts for the canonical command list.
