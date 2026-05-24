@@ -12,7 +12,7 @@
  *   // Apply best.params to signal config
  */
 
-import type { OhlcvRow } from '@/scripts/backtest/dataLoader'
+import type { OhlcvRow } from '@/lib/backtest/dataLoader'
 
 export interface ParamGrid {
   slopeThreshold: number[]

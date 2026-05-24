@@ -95,6 +95,7 @@ export default function SectorPage({ params }: { params: { slug: string } }) {
     return () => controller.abort()
   }, [sector.etf, activeRange, fetchChartData])
 
+  // Intraday chart candles only — quote header uses useLiveQuote (SSE), not this interval.
   useEffect(() => {
     if (activeTab !== 'chart') return
     if (!isStockIntradayPollRange(activeRange)) return

@@ -4,9 +4,9 @@
  */
 
 import type { OhlcBar } from '@/lib/quant/technicals'
-import { enhancedCombinedSignal, DEFAULT_CONFIG, atr, type BacktestConfig } from './signals'
+import { resolveBacktestSignal, DEFAULT_CONFIG, atr, type BacktestConfig } from './signals'
 import { sortinoRatio } from '@/lib/quant/indicators'
-import { BACKTEST_RFR_ANNUAL } from '@/lib/quant/constants'
+import { getRiskFreeRateSync } from '@/lib/quant/riskFreeRate'
 import { evaluateStopHit } from './exitRules'
 
 // ─── Transaction cost model ─────────────────────────────────────────────────────
@@ -28,6 +28,22 @@ export const TX_COST_PCT_PER_SIDE = TX_COST_BPS_PER_SIDE / 10000  // as decimal
 export interface OhlcvRow extends OhlcBar {
   time: number
   volume: number
+  /** Optional cash dividend per bar (Q-021). Yahoo split-adjusted close embeds most dividend effect. */
+  dividend?: number
+}
+
+/** Total-return buy-and-hold including optional per-bar dividends (F1.5). */
+export function computeBuyAndHoldReturn(rows: OhlcvRow[]): number {
+  if (rows.length < 2) return 0
+  const initial = rows[0].close
+  if (initial <= 0) return 0
+  let shares = 1
+  for (let i = 1; i < rows.length; i++) {
+    const div = rows[i].dividend ?? 0
+    if (div > 0 && rows[i].close > 0) shares += div / rows[i].close
+  }
+  const finalValue = shares * rows[rows.length - 1].close
+  return (finalValue - initial) / initial
 }
 
 export interface Trade {
@@ -324,7 +340,7 @@ export function backtestInstrument(
 
     // ── Signal generation (uses today's close data, no look-ahead) ──
     const lookbackOhlcv = rows.slice(0, i + 1)
-    const signal = enhancedCombinedSignal(ticker, signalDate, signalPrice, lookbackCloses, lookbackBars, lookbackOhlcv, cfg)
+    const signal = resolveBacktestSignal(ticker, signalDate, signalPrice, lookbackCloses, lookbackBars, lookbackOhlcv, cfg)
 
     if (signal.action === 'BUY' && !state.openTrade) {
       const kellyFrac = Math.min(signal.KellyFraction, 0.50)
@@ -385,7 +401,7 @@ export function backtestInstrument(
   const years = days / annualization
   const totalReturn = (finalEquity - initialCapital) / initialCapital
   const annualizedReturn = years > 0 ? (1 + totalReturn) ** (1 / years) - 1 : 0
-  const bnhReturn = (finalPrice - rows[0].close) / rows[0].close
+  const bnhReturn = computeBuyAndHoldReturn(rows)
 
   // Equity curve metrics
   let peak = initialCapital, maxDd = 0
@@ -415,7 +431,7 @@ export function backtestInstrument(
     const v = dailyReturns.reduce((s, x) => s + (x - mean) ** 2, 0) / Math.max(1, dailyReturns.length - 1)
     const sd = Math.sqrt(Math.max(v, 0))
     if (sd > 1e-10) {
-      const rfD = BACKTEST_RFR_ANNUAL / annualization
+      const rfD = getRiskFreeRateSync() / annualization
       sharpe = ((mean - rfD) / sd) * Math.sqrt(annualization)
     }
   }
@@ -426,7 +442,7 @@ export function backtestInstrument(
   // Uses MAR = rfDaily, n_d denominator (Sortino & van der Meer 1991),
   // and minimum n_d ≥ 30 (Bacon 2008 p107). Annualization matches instrument.
   // F1.4 (Phase 13 S2 partial): rate sourced from canonical constant; FRED hookup TBD.
-  const rfDaily = BACKTEST_RFR_ANNUAL / annualization
+  const rfDaily = getRiskFreeRateSync() / annualization
   const sortino = sortinoRatio(dailyReturns, rfDaily, annualization)
 
   return {
@@ -572,7 +588,7 @@ export function aggregatePortfolio(results: BacktestResult[], initialCapital: nu
         const mean = portfolioDailyReturns.reduce((a, b) => a + b, 0) / n
         const variance = portfolioDailyReturns.reduce((s, x) => s + (x - mean) ** 2, 0) / Math.max(1, n - 1)
         const sd = Math.sqrt(Math.max(variance, 0))
-        const rfD = BACKTEST_RFR_ANNUAL / 252
+        const rfD = getRiskFreeRateSync() / 252
         if (sd > 1e-10) {
           sharpe = ((mean - rfD) / sd) * Math.sqrt(252)
         }
@@ -626,11 +642,19 @@ export interface WFWWindow {
   periodLabel: string
   startDate: string
   endDate: string
-  isReturn: number      // in-sample annualized return
+  isReturn: number
   isSharpe: number | null
-  osReturn: number      // out-of-sample annualized return
+  osReturn: number
   osSharpe: number | null
-  oosRatio: number      // OOS/IS ratio (1.0 = perfect out-of-sample, <0.5 = overfit suspicion)
+  /** Clamped for UI stability (±1..2). See oosRatioRaw for metric truth. */
+  oosRatio: number
+  oosRatioRaw: number
+}
+
+/** F1.15 — raw OOS/IS ratio plus display clamp for tail overfit warnings. */
+export function computeOosRatio(isAnn: number, osAnn: number): { raw: number; display: number } {
+  const raw = isAnn !== 0 ? osAnn / isAnn : 0
+  return { raw, display: Math.min(2, Math.max(-1, raw)) }
 }
 
 function annualized(totalReturn: number, days: number): number {
@@ -644,7 +668,7 @@ function windowSharpe(dailyReturns: number[]): number | null {
   const variance = dailyReturns.reduce((s, x) => s + (x - mean) ** 2, 0) / Math.max(1, dailyReturns.length - 1)
   const sd = Math.sqrt(Math.max(variance, 0))
   if (sd < 1e-10) return null
-  const rfD = BACKTEST_RFR_ANNUAL / 252
+  const rfD = getRiskFreeRateSync() / 252
   return ((mean - rfD) / sd) * Math.sqrt(252)
 }
 
@@ -747,7 +771,7 @@ export function walkForwardAnalysis(
     const isSharpe = windowSharpe(isReturns)
     const osSharpe = windowSharpe(osReturns)
 
-    const oosRatio = isAnn !== 0 ? Math.min(2, Math.max(-1, osAnn / isAnn)) : 0
+    const { raw: oosRatioRaw, display: oosRatio } = computeOosRatio(isAnn, osAnn)
 
     windows.push({
       periodLabel: `${trainStartDate.slice(0, 7)} – ${testEndDate.slice(0, 7)}`,
@@ -758,6 +782,7 @@ export function walkForwardAnalysis(
       osReturn: osAnn,
       osSharpe,
       oosRatio,
+      oosRatioRaw,
     })
 
     trainStart += testDays

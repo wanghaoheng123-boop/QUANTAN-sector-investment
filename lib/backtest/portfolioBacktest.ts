@@ -13,12 +13,12 @@
  *   - Enhanced exit rules (ATR stops, profit-taking, panic exits)
  */
 
-import type { OhlcvRow } from '@/scripts/backtest/dataLoader'
+import type { OhlcvRow } from '@/lib/backtest/dataLoader'
 import { enhancedCombinedSignal, DEFAULT_CONFIG } from '@/lib/backtest/signals'
 import type { BacktestConfig, SectorGateConfig } from '@/lib/backtest/signals'
 import { atrArray, sortinoRatio } from '@/lib/quant/indicators'
 import { maxCorrelationVsPeers, correlationAdjustedKelly } from '@/lib/quant/correlation'
-import { BACKTEST_RFR_ANNUAL } from '@/lib/quant/constants'
+import { getRiskFreeRateSync } from '@/lib/quant/riskFreeRate'
 import {
   checkExitConditions, updatePosition, atrAdaptiveStop,
   DEFAULT_EXIT_CONFIG,
@@ -525,8 +525,12 @@ export function runPortfolioBacktest(
   // Phase 13 S2 fix (F1.16): Sortino delegated to canonical indicators.ts impl.
   // Sharpe stays inline (no SSOT divergence to fix).
   let sharpe: number | null = null
-  // F1.4 (Phase 13 S2 partial): rate sourced from canonical constant; FRED hookup TBD.
-  const rfD = BACKTEST_RFR_ANNUAL / 252
+  // F1.4 / Q-052-NEW (Phase 15): tenor-matched RFR via FRED-backed helper. When
+  // QUANTAN_FRED_PREWARM=1 is set in production, the helper returns the
+  // prevailing 1-year Treasury yield (DGS1); in tests / CI / canonical benchmark
+  // the cache is cold and returns BACKTEST_RFR_ANNUAL (0.045) verbatim — so
+  // this drop-in is reproducibility-safe.
+  const rfD = getRiskFreeRateSync(365) / 252
   if (dailyReturns.length > 30) {
     const mean = dailyReturns.reduce((a, b) => a + b, 0) / dailyReturns.length
     const variance = dailyReturns.reduce((s, x) => s + (x - mean) ** 2, 0) / Math.max(1, dailyReturns.length - 1)

@@ -4,6 +4,7 @@
  */
 
 import type { OhlcBar, OhlcvBar } from '@/lib/quant/indicators'
+import { useEnhancedCombinedSignal } from '@/lib/featureFlags'
 import {
   smaLatest as sma,
   ema,
@@ -27,6 +28,18 @@ export { sma, ema, rsi, macdFn, atr, bollinger }
  * Critical fix for Technology sector — prevents buying dips in secular downtrends.
  * AAPL went from 16.7% → expected ~55%+ win rate after applying this gate.
  */
+/**
+ * Piecewise RSI score (Wilder 1978; Phase 15 Q-025 / F1.11).
+ * RSI &lt; 30 → +1.0; 30–70 linear; &gt; 70 → −1.0 (mean-reversion framing).
+ */
+export function piecewiseRsiScore(rsi14: number): number {
+  if (!Number.isFinite(rsi14)) return 0
+  if (rsi14 < 30) return 1.0
+  if (rsi14 > 70) return -1.0
+  if (rsi14 <= 50) return (50 - rsi14) / 20
+  return -(rsi14 - 50) / 20
+}
+
 export function isGoldenCross(closes: number[]): boolean {
   if (closes.length < 200) return false
   const ema50Arr = emaFull(closes, 50)
@@ -528,7 +541,7 @@ export function enhancedCombinedSignal(
   //           combination ensemble bounds require homogeneous base-learner
   //           output ranges. Unbounded base learners produce unbounded
   //           ensemble outputs, which break threshold-based decision rules.
-  const rsiScore = Number.isFinite(rsi14) ? clamp((50 - rsi14) / 50, -1, 1) : 0
+  const rsiScore = Number.isFinite(rsi14) ? piecewiseRsiScore(rsi14) : 0
   const macdScore = Number.isFinite(macdHist) && Number.isFinite(atrLast) && atrLast > 0
     // F1.13 (Phase 13 S2 documentation): scale MACD histogram by 10% of the
     // current ATR to make the score volatility-normalised. The 0.1 factor is
@@ -677,5 +690,43 @@ export function enhancedCombinedSignal(
     multiTfScore: mtf.alignmentScore,
     volumeZone: vpZone,
     totalWeightedScore,
+  }
+}
+
+/** Production signal resolver — enhanced gated by Q-009 feature flag. */
+export function resolveBacktestSignal(
+  ticker: string,
+  date: string,
+  price: number,
+  closes: number[],
+  bars: OhlcBar[],
+  ohlcvBars: (OhlcvBar & { time?: number })[],
+  config: Partial<BacktestConfig> = {},
+  sectorGates?: SectorGateConfig,
+): EnhancedCombinedSignal {
+  if (useEnhancedCombinedSignal()) {
+    return enhancedCombinedSignal(ticker, date, price, closes, bars, ohlcvBars, config, sectorGates)
+  }
+  const rsi14 = rsi(closes).at(-1) ?? NaN
+  const regime = regimeSignal(price, closes, rsi14)
+  const cfg = { ...DEFAULT_CONFIG, ...config }
+  let kellyFrac = 0.10
+  if (regime.action === 'BUY') kellyFrac = cfg.halfKelly ? 0.15 : 0.30
+  if (regime.action === 'SELL') kellyFrac = 1.0
+  return {
+    ticker,
+    date,
+    price,
+    regime,
+    confirms: [],
+    action: regime.action,
+    confidence: regime.confidence,
+    KellyFraction: kellyFrac,
+    reason: `${regime.zone} [regime-only path; enhanced disabled in production]`,
+    weightedConfirms: [],
+    volRegime: detectRegime(closes, bars),
+    multiTfScore: 0,
+    volumeZone: null,
+    totalWeightedScore: 0,
   }
 }

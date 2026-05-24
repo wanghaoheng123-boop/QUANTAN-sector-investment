@@ -82,7 +82,9 @@ export function atrAdaptiveStop(
   floor = 0.05,
   ceiling = 0.15,
 ): { stopLossPrice: number; atrPct: number } {
-  const atrVals = atrArray(bars, 14)
+  // F1.22: exclude the still-forming entry bar — ATR uses only completed bars.
+  const completedBars = bars.length > 1 ? bars.slice(0, -1) : bars
+  const atrVals = atrArray(completedBars, 14)
   const lastATR = atrVals[atrVals.length - 1]
   const atrPct = Number.isFinite(lastATR) && entryPrice > 0 ? lastATR / entryPrice : 0.05
 

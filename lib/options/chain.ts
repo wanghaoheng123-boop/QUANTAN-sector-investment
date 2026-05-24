@@ -51,9 +51,15 @@ export interface EnrichedChain {
 
 const yahooFinance = new YahooFinance()
 
-// Phase 13 S2 (F1.4 partial): centralized in lib/quant/constants.ts.
-// Eventual FRED-backed getRiskFreeRate(tenorDays) will be a 1-line change.
-import { OPTIONS_RFR_ANNUAL as RISK_FREE_RATE } from '@/lib/quant/constants'
+// Phase 13 S2 (F1.4 partial) + Phase 15 Q-052-NEW (2026-05-24):
+// Switched from the static OPTIONS_RFR_ANNUAL constant to the tenor-matched
+// FRED-backed `getRiskFreeRateSync(daysToExpiry)`. When QUANTAN_FRED_PREWARM=1
+// is set in the production env, the cache is warmed at module init and per-
+// contract Greeks reflect the prevailing tenor-matched Treasury yield. When
+// unset (tests, CI, canonical benchmark), the sync helper returns the static
+// fallback (5.25% for ≤90d via OPTIONS_RFR_ANNUAL, 4.5% otherwise via
+// BACKTEST_RFR_ANNUAL) — identical pre-Q-052 behaviour.
+import { getRiskFreeRateSync } from '@/lib/quant/riskFreeRate'
 
 function toDate(d: unknown): Date {
   if (d instanceof Date) return d
@@ -129,6 +135,13 @@ function enrichContract(
 ): EnrichedContract {
   const T = Math.max(0, (contract.expiration.getTime() - today) / (365 * 24 * 60 * 60 * 1000))
   const sigma = contract.impliedVolatility
+
+  // Q-052-NEW: tenor-matched risk-free rate. T is in years; convert to days
+  // for the seriesId lookup (DGS3MO / DGS1 / DGS2 / DGS10). When the FRED
+  // cache is cold, this returns the static OPTIONS_RFR_ANNUAL / BACKTEST_
+  // RFR_ANNUAL fallback so behaviour matches pre-Q-052 in tests / CI.
+  const daysToExpiry = T * 365
+  const RISK_FREE_RATE = getRiskFreeRateSync(daysToExpiry)
 
   // Phase 14 wave 39 — OPTIONS CHAIN GREEKS FIX.
   //

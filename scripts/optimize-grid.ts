@@ -10,6 +10,11 @@
  *
  * Output: scripts/optimization-results-loop1.json
  *
+ * Loop 1 summary (2026-04-29 run — see reviews/optimization-loop1.md):
+ *   - Aggregate OOS win rate ~25.7% — far below 56.35% production floor.
+ *   - Do NOT ship grid winners as production defaults until enhanced path recovers.
+ *   - Best sector rollup: Utilities ~52% OOS; many sectors flagged CRITICAL.
+ *
  * Usage: npm run optimize:grid
  */
 
@@ -19,6 +24,7 @@ import { fileURLToPath } from 'url'
 
 import { gridSearch, aggregateGridResults } from '../lib/optimize/gridSearch'
 import type { GridSearchSummary, GridSearchResult } from '../lib/optimize/gridSearch'
+import type { OhlcvRow } from '../lib/backtest/dataLoader'
 import {
   LOOP1_GRID,
   LOOP2_GRID,
@@ -49,19 +55,28 @@ const SECTORS_MAP: Record<string, string> = {
 
 // ─── Data loading ─────────────────────────────────────────────────────────────
 
-interface OhlcvRow {
-  time: number
-  open: number
-  high: number
-  low: number
-  close: number
-  volume: number | undefined
-}
-
 interface CandleFile {
   ticker?: string
   sector?: string
-  candles: OhlcvRow[]
+  candles: Array<Omit<OhlcvRow, 'volume'> & { volume?: number }>
+}
+
+function normalizeRows(
+  candles: CandleFile['candles'],
+): OhlcvRow[] {
+  return candles
+    .filter(
+      (c) =>
+        Number.isFinite(c.time) &&
+        Number.isFinite(c.open) &&
+        Number.isFinite(c.high) &&
+        Number.isFinite(c.low) &&
+        Number.isFinite(c.close),
+    )
+    .map((c) => ({
+      ...c,
+      volume: typeof c.volume === 'number' && Number.isFinite(c.volume) ? c.volume : 0,
+    }))
 }
 
 function loadAllTickers(): Array<{ ticker: string; sector: string; rows: OhlcvRow[] }> {
@@ -76,10 +91,7 @@ function loadAllTickers(): Array<{ ticker: string; sector: string; rows: OhlcvRo
       const data = JSON.parse(raw) as CandleFile
       const ticker = f.replace('.json', '').replace(/-/g, '.')
       const sector = SECTORS_MAP[ticker] ?? data.sector ?? 'Unknown'
-      const rows: OhlcvRow[] = (data.candles ?? []).filter(
-        c => Number.isFinite(c.time) && Number.isFinite(c.open) &&
-             Number.isFinite(c.high) && Number.isFinite(c.low) && Number.isFinite(c.close),
-      )
+      const rows = normalizeRows(data.candles ?? [])
       return { ticker, sector, rows }
     })
     .filter(d => d.rows.length >= 252)

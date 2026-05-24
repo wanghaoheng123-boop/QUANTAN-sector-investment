@@ -151,6 +151,7 @@ export default function BtcPage() {
   const priceReconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   /** True after Coinbase ticker WS delivered a price — skip redundant REST header quote. */
   const priceFromBinanceWsRef = useRef(false)
+  const lastWsMessageRef = useRef(Date.now())
   /** Always the interval the user selected (fixes reconnect after timeframe change) */
   const activeRangeRef = useRef(activeRange)
   /** Invalidates in-flight REST responses when interval changes or unmounts. */
@@ -457,6 +458,7 @@ export default function BtcPage() {
           const price = parseFloat(String(d.price))
           if (!Number.isFinite(price) || price <= 0) return
           priceFromBinanceWsRef.current = true
+          lastWsMessageRef.current = Date.now()
           const open24 = parseFloat(String(d.open_24h ?? '0'))
           const chg = open24 > 0 ? price - open24 : 0
           const chgPct = open24 > 0 ? ((price - open24) / open24) * 100 : 0
@@ -552,8 +554,12 @@ export default function BtcPage() {
         console.warn('[btc] REST quote fallback failed', err)
       }
     }
-    const t = setTimeout(loadRestQuote, 4000)
-    const iv = setInterval(loadRestQuote, 60_000)
+    const t = setTimeout(() => {
+      if (Date.now() - lastWsMessageRef.current > 120_000) loadRestQuote()
+    }, 120_000)
+    const iv = setInterval(() => {
+      if (Date.now() - lastWsMessageRef.current > 120_000) loadRestQuote()
+    }, 60_000)
     return () => {
       cancelled = true
       clearTimeout(t)
