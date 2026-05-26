@@ -2,7 +2,7 @@
 <#
   Sync this project to a local folder so npm install / next build work (avoids EBADF on synced G: paths).
 
-  Examples (run from repo root: antigravity-sectors):
+  Examples (run from repo root: QUANTAN-sector-investment):
     powershell -ExecutionPolicy Bypass -File .\scripts\sync-to-local-build.ps1
     .\scripts\sync-to-local-build.ps1 -Install -Dev
 
@@ -16,7 +16,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-$Dest = Join-Path $env:LOCALAPPDATA 'Temp\antigravity-sectors-build'
+$Dest = Join-Path $env:LOCALAPPDATA 'Temp\quantan-sector-build'
 
 $env:Path = "$env:ProgramFiles\nodejs;$env:Path"
 

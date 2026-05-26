@@ -203,7 +203,7 @@ export default function DeskPage() {
                         {/* F6.3 (Phase 13 S2): sign prefix + arrow glyph so direction
                             is clear without relying on color (WCAG 2.2 SC 1.4.1). */}
                         <td
-                          className={`px-2 py-1 text-right ${q ? (up ? 'text-emerald-400' : 'text-red-400') : 'text-slate-600'}`}
+                          className={`px-2 py-1 text-right ${q ? (up ? 'text-emerald-400' : 'text-red-400') : 'text-slate-400'}`}
                           aria-label={q ? `${up ? 'up' : 'down'} ${Math.abs(q.change).toFixed(2)}` : 'no change data'}
                         >
                           {q ? (
@@ -214,12 +214,12 @@ export default function DeskPage() {
                           ) : '—'}
                         </td>
                         <td
-                          className={`px-2 py-1 text-right hidden sm:table-cell ${q ? (up ? 'text-emerald-400' : 'text-red-400') : 'text-slate-600'}`}
+                          className={`px-2 py-1 text-right hidden sm:table-cell ${q ? (up ? 'text-emerald-400' : 'text-red-400') : 'text-slate-400'}`}
                           aria-label={q ? `${up ? 'up' : 'down'} ${Math.abs(q.changePct).toFixed(2)} percent` : 'no change data'}
                         >
                           {q ? `${up ? '+' : '−'}${Math.abs(q.changePct).toFixed(2)}%` : '—'}
                         </td>
-                        <td className="px-2 py-1 text-right text-slate-600 hidden md:table-cell">
+                        <td className="px-2 py-1 text-right text-slate-400 hidden md:table-cell">
                           {q && q.volume ? formatCompactNumber(q.volume) : '—'}
                         </td>
                         <td className="px-2 py-1 text-center text-amber-500/90">{has(t) ? '★' : ''}</td>

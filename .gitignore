@@ -59,3 +59,12 @@ __pycache__/
 # ─── Claude / Cursor agent artifacts ─────────────────────────────────────────
 .claude/
 .cursor/
+
+# ─── Phase 14 wave 30: parallel-worktree leak directory ──────────────────────
+# CI agents running side-by-side can leave a `.clone/worktrees/<branch>/`
+# directory in the active worktree. Ignored to prevent re-tracking.
+.clone/
+
+# Stryker (mutation testing) outputs
+/reports/mutation/
+/.stryker-tmp/

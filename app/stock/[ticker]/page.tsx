@@ -10,6 +10,7 @@ import NewsFeed from '@/components/NewsFeed'
 import IndicatorPanel from '@/components/IndicatorPanel'
 import OptionsChainTable from '@/components/options/OptionsChainTable'
 import GexChart from '@/components/options/GexChart'
+import { useLiveQuote } from '@/hooks/useLiveQuote'
 import MaxPainGauge from '@/components/options/MaxPainGauge'
 import FlowScanner from '@/components/options/FlowScanner'
 import { getNewsForSector, generateDarkPoolPrints } from '@/lib/mockData'
@@ -133,6 +134,11 @@ export default function StockPage({ params }: { params: { ticker: string } }) {
       .finally(() => setLoading(false))
   }, [ticker])
 
+  // Phase 14 wave 36 (real-time platform initiative):
+  //   Initial REST fetch — wakes the page with a current quote while the
+  //   SSE stream is connecting (typical first-event latency: ~1-2 s).
+  //   The 15-second setInterval below is REPLACED by `useLiveQuote` SSE
+  //   subscription further down (lines 175-189). REST is now boot-only.
   const fetchQuote = useCallback(() => {
     fetch(`/api/prices?tickers=${encodeURIComponent(ticker)}`)
       .then((r) => {
@@ -165,37 +171,76 @@ export default function StockPage({ params }: { params: { ticker: string } }) {
     return () => clearInterval(poll)
   }, [activeTab, activeRange, fetchChartData])
 
-  // Quote polling: every 15 seconds
+  // Phase 14 wave 36 — REAL-TIME QUOTE STREAM (replaces 15 s polling).
+  //
+  // The SSE endpoint /api/stream/:ticker delivers quotes ~every 15 s during
+  // market hours and a 30 s heartbeat outside of them — but DOES NOT depend
+  // on the client to poll. Reconnect, market-hours awareness, and the
+  // soft-close warning are all handled inside useLiveQuote. We keep the
+  // REST fetchQuote() for the initial paint (line 156 calls it once on
+  // mount); thereafter the SSE updates take over.
   useEffect(() => {
-    fetchQuote()
-    const poll = setInterval(fetchQuote, 15_000)
-    return () => clearInterval(poll)
+    fetchQuote()  // Boot-only — populates the UI before SSE first event.
   }, [fetchQuote])
+
+  // Subscribe to the SSE stream. State propagates to the existing `quote`
+  // state via the live-quote merge effect below.
+  const live = useLiveQuote(ticker)
+
+  // Merge live quote into the page's quote state. Preserves the marketCap
+  // field from the initial REST fetch (SSE payloads don't include it).
+  useEffect(() => {
+    if (!live.quote) return
+    setQuote((prev) => ({
+      price: live.quote!.price,
+      change: live.quote!.change,
+      changePct: live.quote!.changePct,
+      marketCap: prev?.marketCap ?? '',
+      quoteTime: live.quote!.timestamp,
+    }))
+    setQuoteError(null)
+  }, [live.quote])
 
   // Dark pool prints generation
   useEffect(() => {
     setDarkPoolPrints(generateDarkPoolPrints(ticker))
   }, [ticker])
 
-  // Dark pool API (only when tab is active)
+  // Dark pool API (only when tab is active).
+  // Phase 14 wave 8: log the error so a silent fetch failure leaves a trace
+  // (prior `.catch(() => setLoading(false))` made debugging impossible).
   useEffect(() => {
     if (activeTab !== 'darkpool') return
+    let cancelled = false
     setDarkPoolApiLoading(true)
     setDarkPoolApiData(null)
     fetch(`/api/darkpool/${encodeURIComponent(ticker)}`)
       .then(r => r.json())
-      .then(data => { setDarkPoolApiData(data); setDarkPoolApiLoading(false) })
-      .catch(() => setDarkPoolApiLoading(false))
+      .then(data => {
+        if (cancelled) return
+        setDarkPoolApiData(data)
+        setDarkPoolApiLoading(false)
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return
+        console.warn('[stock/darkpool] fetch failed', ticker, err)
+        setDarkPoolApiLoading(false)
+      })
+    return () => { cancelled = true }
   }, [ticker, activeTab])
 
-  // Options chain (lazy — only when options tab is first activated)
+  // Options chain (lazy — only when options tab is first activated).
+  // Phase 14 wave 8: cancellation flag prevents a late response from a
+  // previous ticker from overwriting state after the user navigates.
   useEffect(() => {
     if (activeTab !== 'options') return
     if (optionsChain) return  // already loaded
+    let cancelled = false
     setOptionsLoading(true)
     fetch(`/api/options/${encodeURIComponent(ticker)}`)
       .then(r => r.json())
       .then(data => {
+        if (cancelled) return
         if (data.calls) {
           setOptionsChain({
             ticker: data.symbol,
@@ -211,7 +256,12 @@ export default function StockPage({ params }: { params: { ticker: string } }) {
         }
         setOptionsLoading(false)
       })
-      .catch(() => setOptionsLoading(false))
+      .catch((err: unknown) => {
+        if (cancelled) return
+        console.warn('[stock/options] fetch failed', ticker, err)
+        setOptionsLoading(false)
+      })
+    return () => { cancelled = true }
   }, [ticker, activeTab, optionsChain])
 
   const news = getNewsForSector(tickerSector?.slug ?? 'technology')
@@ -256,7 +306,41 @@ export default function StockPage({ params }: { params: { ticker: string } }) {
                     {isUp ? '▲' : '▼'} {formatSignedNumber(quote.change)} ({Math.abs(quote.changePct).toFixed(2)}%)
                   </div>
                   <div className="text-xs text-slate-500 mt-1 font-mono">Market Cap: {quote.marketCap}</div>
-                  <div className="text-[10px] text-slate-600 mt-1">Quote: {formatFreshness(quote.quoteTime)}</div>
+                  {/* Phase 14 wave 36: real-time stream status pill. */}
+                  <div className="flex items-center justify-end gap-2 mt-1">
+                    <span
+                      className={`inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
+                        live.connected
+                          ? live.marketOpen
+                            ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                            : 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                          : 'bg-slate-700/40 text-slate-400 border border-slate-600/40'
+                      }`}
+                      title={
+                        live.connected
+                          ? live.marketOpen
+                            ? 'Live stream connected — market open'
+                            : 'Live stream connected — market closed (snapshot)'
+                          : live.supported
+                            ? 'Reconnecting…'
+                            : 'Polling (SSE unavailable)'
+                      }
+                      role="status"
+                    >
+                      <span
+                        className={`inline-block w-1.5 h-1.5 rounded-full ${
+                          live.connected && live.marketOpen
+                            ? 'bg-emerald-400 animate-pulse'
+                            : live.connected
+                              ? 'bg-amber-400'
+                              : 'bg-slate-500'
+                        }`}
+                        aria-hidden="true"
+                      />
+                      {live.connected ? (live.marketOpen ? 'LIVE' : 'CLOSED') : 'RECONNECT'}
+                    </span>
+                    <span className="text-[10px] text-slate-400">{formatFreshness(quote.quoteTime)}</span>
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-2 text-right w-32">
@@ -342,7 +426,7 @@ export default function StockPage({ params }: { params: { ticker: string } }) {
                     </ChartErrorBoundary>
                   ) : (
                     <div className="h-[480px] bg-slate-800/10 rounded-xl flex items-center justify-center border border-dashed border-slate-800">
-                      <span className="text-slate-600 text-sm">No historical data available for {ticker}</span>
+                      <span className="text-slate-400 text-sm">No historical data available for {ticker}</span>
                     </div>
                   )}
                 </div>
@@ -350,60 +434,110 @@ export default function StockPage({ params }: { params: { ticker: string } }) {
 
               {activeTab === 'options' && (
                 <div className="space-y-6">
+                  {/* Phase 14 wave 41 UX-F6: distinguishable loading state with a spinner
+                      so users see "still working" vs the gray "no data" empty state. */}
                   {optionsLoading && (
-                    <div className="text-center py-12 text-gray-400 text-sm">Loading options chain...</div>
+                    <div className="flex items-center justify-center gap-3 py-12 text-gray-400 text-sm">
+                      <span
+                        className="inline-block w-4 h-4 border-2 border-slate-500 border-t-cyan-400 rounded-full animate-spin"
+                        aria-hidden="true"
+                      />
+                      Loading options chain…
+                    </div>
                   )}
                   {!optionsLoading && !optionsChain && (
-                    <div className="text-center py-12 text-gray-500 text-sm">No options data available for {ticker}.</div>
+                    <div className="text-center py-12 text-gray-500 text-sm" role="status">
+                      No options data available for {ticker}.
+                    </div>
                   )}
                   {optionsChain && (
                     <>
                       {/* Chain table */}
-                      <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-4">
-                        <h3 className="text-sm font-semibold text-white mb-4">Options Chain</h3>
-                        <OptionsChainTable chain={optionsChain} />
-                      </div>
+                      {/* Phase 14 wave 41 (UX-F1): every options panel is now wrapped
+                          in ChartErrorBoundary individually so one panel's crash
+                          can never blank the whole stock page. Each boundary has
+                          a `label` for the fallback message and a small fallbackHeight
+                          appropriate for the panel size. */}
+                      <ChartErrorBoundary label="Options Chain" fallbackHeight={360}>
+                        <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-4">
+                          <h3 className="text-sm font-semibold text-white mb-4">Options Chain</h3>
+                          <OptionsChainTable chain={optionsChain} />
+                        </div>
+                      </ChartErrorBoundary>
 
                       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         {/* GEX chart */}
                         {optionsGex && (
-                          <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-4">
-                            <h3 className="text-sm font-semibold text-white mb-4">Gamma Exposure (GEX)</h3>
-                            <GexChart gex={optionsGex} spot={optionsChain.underlyingPrice} />
-                          </div>
+                          <ChartErrorBoundary label="Gamma Exposure (GEX)" fallbackHeight={320}>
+                            <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-4">
+                              <h3 className="text-sm font-semibold text-white mb-4">Gamma Exposure (GEX)</h3>
+                              <GexChart
+                                gex={optionsGex}
+                                // Phase 14 wave 41 (UX-F4): defensive spot guard at call site.
+                                // GexChart's internal .toFixed call assumed finite spot; a halted
+                                // symbol returning NaN/0 would crash the panel.
+                                spot={Number.isFinite(optionsChain.underlyingPrice) && optionsChain.underlyingPrice > 0
+                                  ? optionsChain.underlyingPrice
+                                  : 0}
+                              />
+                            </div>
+                          </ChartErrorBoundary>
                         )}
 
-                        {/* Max Pain */}
-                        {optionsSentiment?.maxPain != null && (
-                          <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-4">
-                            <h3 className="text-sm font-semibold text-white mb-4">Max Pain</h3>
-                            <MaxPainGauge maxPain={optionsSentiment.maxPain} spot={optionsChain.underlyingPrice} />
-                            <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
-                              <div>
-                                <span className="text-gray-500">P/C Vol Ratio: </span>
-                                <span className="text-gray-300 font-mono">
-                                  {optionsSentiment.putCallVolumeRatio?.toFixed(2) ?? '—'}
-                                </span>
-                              </div>
-                              <div>
-                                <span className="text-gray-500">P/C OI Ratio: </span>
-                                <span className="text-gray-300 font-mono">
-                                  {optionsSentiment.putCallOiRatio?.toFixed(2) ?? '—'}
-                                </span>
+                        {/* Max Pain / Sentiment card */}
+                        {/* Phase 14 wave 41 (UX-F3): render the card whenever ANY
+                            sentiment field exists. Previously the entire card was
+                            gated on `maxPain != null`, which hid the still-useful
+                            P/C ratios whenever max pain was degraded. The
+                            MaxPainGauge component has its own null-guard for the
+                            gauge subtree. */}
+                        {optionsSentiment && (
+                          <ChartErrorBoundary label="Max Pain & Sentiment" fallbackHeight={320}>
+                            <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-4">
+                              <h3 className="text-sm font-semibold text-white mb-4">Max Pain</h3>
+                              <MaxPainGauge
+                                maxPain={optionsSentiment.maxPain}
+                                spot={Number.isFinite(optionsChain.underlyingPrice) && optionsChain.underlyingPrice > 0
+                                  ? optionsChain.underlyingPrice
+                                  : 0}
+                              />
+                              <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
+                                <div>
+                                  <span className="text-gray-500">P/C Vol Ratio: </span>
+                                  <span className="text-gray-300 font-mono">
+                                    {/* Phase 14 wave 41 (UX-F2): explicit Number.isFinite guard.
+                                        The prior `?.toFixed(2) ?? '—'` did NOT catch NaN or
+                                        Infinity (PCR_MAX = 99 from the sentiment.ts F1 fix,
+                                        plus pre-fix Infinity slip-through). */}
+                                    {Number.isFinite(optionsSentiment.putCallVolumeRatio)
+                                      ? (optionsSentiment.putCallVolumeRatio as number).toFixed(2)
+                                      : '—'}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-gray-500">P/C OI Ratio: </span>
+                                  <span className="text-gray-300 font-mono">
+                                    {Number.isFinite(optionsSentiment.putCallOiRatio)
+                                      ? (optionsSentiment.putCallOiRatio as number).toFixed(2)
+                                      : '—'}
+                                  </span>
+                                </div>
                               </div>
                             </div>
-                          </div>
+                          </ChartErrorBoundary>
                         )}
                       </div>
 
                       {/* Unusual Flow */}
-                      <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-4">
-                        <h3 className="text-sm font-semibold text-white mb-4">Unusual Flow Scanner</h3>
-                        <FlowScanner
-                          items={optionsFlow}
-                          sentiment={optionsSentiment?.flowLabel ?? 'NEUTRAL'}
-                        />
-                      </div>
+                      <ChartErrorBoundary label="Unusual Flow Scanner" fallbackHeight={280}>
+                        <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-4">
+                          <h3 className="text-sm font-semibold text-white mb-4">Unusual Flow Scanner</h3>
+                          <FlowScanner
+                            items={optionsFlow}
+                            sentiment={optionsSentiment?.flowLabel ?? 'NEUTRAL'}
+                          />
+                        </div>
+                      </ChartErrorBoundary>
                     </>
                   )}
                 </div>
@@ -440,7 +574,7 @@ export default function StockPage({ params }: { params: { ticker: string } }) {
                       <span className={`text-sm font-mono font-medium ${quote.changePct >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                         {quote.changePct >= 0 ? '+' : ''}{quote.changePct.toFixed(2)}%
                       </span>
-                    ) : <span className="text-sm text-slate-600">—</span>}
+                    ) : <span className="text-sm text-slate-400">—</span>}
                   </div>
                   <p className="text-xs text-slate-500 leading-relaxed">
                     Open <strong className="text-slate-400">Quant Lab</strong> for live fundamentals, DCF bear/base/bull, volatility-aware buy/sell bands, and Codex-style allocator checklists (not trade advice).
@@ -462,7 +596,7 @@ export default function StockPage({ params }: { params: { ticker: string } }) {
                       <div className="text-xs text-slate-500 mb-1">Bullish Prints</div>
                       <div className="text-lg font-bold text-green-400 font-mono">
                         {darkPoolPrints.filter(p => p.sentiment === 'BULLISH').length}
-                        <span className="text-slate-600 text-sm font-normal">/{darkPoolPrints.length}</span>
+                        <span className="text-slate-400 text-sm font-normal">/{darkPoolPrints.length}</span>
                       </div>
                     </div>
                   </div>

@@ -99,9 +99,15 @@ describe('on-chain models', () => {
     expect(calcMVRV(50_000, 50_000)).toBe(1)
   })
 
-  it('calcMVRV defaults to 1 on zero/negative realizedCap', () => {
-    expect(calcMVRV(50_000, 0)).toBe(1)
-    expect(calcMVRV(50_000, -1)).toBe(1)
+  // Phase 14 wave 11: calcMVRV now returns null (not 1) on unmeasurable input
+  // so callers distinguish "no data" from "fairly valued at 1.0".
+  // Citation: Puell (2018) Coinmetrics — MVRV is undefined when RC = 0.
+  it('calcMVRV returns null on zero/negative realizedCap (Phase 14)', () => {
+    expect(calcMVRV(50_000, 0)).toBeNull()
+    expect(calcMVRV(50_000, -1)).toBeNull()
+    expect(calcMVRV(0, 50_000)).toBeNull()
+    expect(calcMVRV(NaN, 50_000)).toBeNull()
+    expect(calcMVRV(50_000, NaN)).toBeNull()
   })
 
   it('calcMVRV identical across both sources (lib/crypto and btc-indicators)', () => {

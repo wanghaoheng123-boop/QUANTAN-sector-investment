@@ -35,7 +35,13 @@ const TIMEFRAMES = ['1D', '1W', '1M', '3M', '6M', '1Y', 'ALL'] as const
 type Timeframe = typeof TIMEFRAMES[number]
 
 interface Candle {
-  time: string
+  // Phase 14 wave 29: widened to `string | number` to remove the
+  // `candles={candles as any}` cast in app/crypto/btc/page.tsx. The
+  // lightweight-charts `Time` type accepts both: a string like '2024-05-15'
+  // (BusinessDay form) OR a UTCTimestamp number (Unix seconds). BTC candles
+  // arrive as Unix seconds; equity candles arrive as YYYY-MM-DD strings.
+  // Both paths funnel through here, so the type must accept both.
+  time: string | number
   open: number
   high: number
   low: number
@@ -235,6 +241,19 @@ export default function KLineChart({
   onIndicatorsChange,
   onTimeframeChange,
 }: KLineChartProps) {
+  // R5-M-1 (Phase 14): warn when a caller passes a partial `indicators`
+  // object. The spread below silently fills missing keys with defaults,
+  // which masks bugs where a parent forgot to wire up a new flag. The
+  // warning fires once per render where the prop is partial — dev only.
+  if (process.env.NODE_ENV !== 'production' && indicatorsIn) {
+    for (const k of Object.keys(DEFAULT_INDICATORS)) {
+      if (!(k in indicatorsIn)) {
+        // eslint-disable-next-line no-console
+        console.warn(`KLineChart: indicators prop missing key "${k}" — using default`)
+      }
+    }
+  }
+
   const indicatorsProp = useMemo(
     () => ({ ...DEFAULT_INDICATORS, ...indicatorsIn }),
     [indicatorsIn]
@@ -611,6 +630,14 @@ export default function KLineChart({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // R5-C-1 (Phase 14 S1): stable primitive dep for `vis` state.
+  // JSON.stringify(vis) in a dep array is correct for change-detection (same content → same
+  // string → effect does not re-run), but it re-serialises on every render.
+  // Memoising avoids the per-render re-serialisation cost.
+  // Placed HERE — before the data useEffect that references it — to satisfy TypeScript's
+  // linear const-before-use requirement.
+  const visSerialised = useMemo(() => JSON.stringify(vis), [vis])
+
   // ── B. Data update ──────────────────────────────────────────────
   useEffect(() => {
     if (!candleRef.current || candles.length === 0) return
@@ -794,7 +821,7 @@ export default function KLineChart({
         /* ignore */
       }
     }
-  }, [candles, darkPoolMarkers, newsMarkers, showRSI, indicatorsProp, JSON.stringify(vis), chartReadyGen])
+  }, [candles, darkPoolMarkers, newsMarkers, showRSI, indicatorsProp, visSerialised, chartReadyGen])
 
   const toggleIndicator = useCallback((key: VisKey) => {
     let next = {} as Record<VisKey, boolean>
@@ -878,7 +905,7 @@ export default function KLineChart({
         ))}
         <div className="ml-auto flex items-center gap-2">
           {/* VP hint */}
-          <span className="text-[10px] text-slate-600 font-mono">VP</span>
+          <span className="text-[10px] text-slate-400 font-mono">VP</span>
           <span className="text-[10px] text-slate-700">|</span>
           {/* Crosshair OHLCV display */}
           {crosshairData ? (
@@ -900,7 +927,7 @@ export default function KLineChart({
               </span>
             </div>
           ) : (
-            <div className="text-[10px] font-mono text-slate-600">
+            <div className="text-[10px] font-mono text-slate-400">
               {priceStr} {isUp ? '+' : ''}{chgPct}%
             </div>
           )}
@@ -922,7 +949,7 @@ export default function KLineChart({
           </span>
         )}
         {rangeStr && (
-          <span className="text-[10px] font-mono text-slate-600">
+          <span className="text-[10px] font-mono text-slate-400">
             {rangeStr}
           </span>
         )}

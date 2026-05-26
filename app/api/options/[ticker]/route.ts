@@ -1,17 +1,27 @@
 import { NextResponse } from 'next/server'
-import { yahooSymbolFromParam } from '@/lib/quant/yahooSymbol'
+import YahooFinance from 'yahoo-finance2'
 import { fetchOptionsChain } from '@/lib/options/chain'
 import { putCallRatio, maxPain } from '@/lib/options/sentiment'
 import { computeGex } from '@/lib/options/gex'
 import { unusualFlow, flowSentiment } from '@/lib/options/flow'
 import { applyRateLimit } from '@/lib/api/rateLimit'
-import { sanitizeError } from '@/lib/api/sanitize'
+import { normalizeTicker, sanitizeError } from '@/lib/api/sanitize'
+
+const yahooFinance = new YahooFinance()
 
 export async function GET(req: Request, { params }: { params: { ticker: string } }) {
   // Rate limit: 30 req/min per IP
-  const rateLimitResponse = applyRateLimit(req, 'options', { maxRequests: 30, windowSeconds: 60 })
+  const rateLimitResponse = await applyRateLimit(req, 'options', { maxRequests: 30, windowSeconds: 60 })
   if (rateLimitResponse) return rateLimitResponse
-  const symbol = yahooSymbolFromParam(params.ticker)
+
+  // Phase 16 audit (2026-05-24): switched from the permissive
+  // yahooSymbolFromParam (no character whitelist — F7.3 risk) to the strict
+  // normalizeTicker SSOT in lib/api/sanitize.ts. Routes accepting a ticker
+  // path param MUST validate it before reaching the upstream Yahoo client.
+  const symbol = normalizeTicker(params.ticker)
+  if (!symbol) {
+    return NextResponse.json({ error: 'Invalid ticker symbol' }, { status: 400 })
+  }
 
   // Options data is only meaningful for equities/ETFs
   if (symbol.startsWith('^')) {
@@ -22,10 +32,28 @@ export async function GET(req: Request, { params }: { params: { ticker: string }
   }
 
   try {
-    const chain = await fetchOptionsChain(symbol)
+    // Phase 13 S2: pull trailing annual dividend yield from the underlying's
+    // quote so the Merton-extended Black-Scholes pricing in chain.ts uses
+    // the correct `q`. Without this, SPY/JNJ/utility puts are mispriced.
+    // Fail-open to q=0 if the quote fetch fails — better to emit BS-1973
+    // greeks than no greeks at all.
+    let dividendYield = 0
+    try {
+      const q = await yahooFinance.quote(symbol) as Record<string, unknown> | null
+      const raw = q?.trailingAnnualDividendYield
+      if (typeof raw === 'number' && Number.isFinite(raw) && raw >= 0 && raw <= 0.20) {
+        dividendYield = raw
+      }
+    } catch {
+      // Non-critical: fall through with q=0
+    }
+
+    const chain = await fetchOptionsChain(symbol, undefined, dividendYield)
 
     const pcRatio = putCallRatio(chain.calls, chain.puts)
-    const mp = maxPain(chain.calls, chain.puts)
+    // Phase 14 wave 41 F2: pass spot so tied minima resolve to the strike
+    // nearest current price instead of the (often deep-OTM) lowest strike.
+    const mp = maxPain(chain.calls, chain.puts, chain.underlyingPrice)
     const gex = computeGex(chain.calls, chain.puts, chain.underlyingPrice)
     const flow = unusualFlow(chain.calls, chain.puts)
     const sentiment = flowSentiment(flow)

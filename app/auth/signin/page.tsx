@@ -79,7 +79,7 @@ export default async function SignInPage() {
           <SignInButtons hasGoogle={hasGoogle} hasGitHub={hasGitHub} />
         )}
 
-        <p className="text-xs text-slate-600 text-center leading-relaxed">
+        <p className="text-xs text-slate-400 text-center leading-relaxed">
           By signing in you agree that this platform is for information only and does not provide investment advice.
           See footer disclaimer on the main site.
         </p>

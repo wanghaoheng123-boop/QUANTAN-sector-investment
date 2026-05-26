@@ -4,6 +4,7 @@ import { getAuthOptions } from '@/lib/auth'
 import { SUPPORTED_PROVIDERS, DEFAULT_MODELS, type LLMProvider, resolveTradingAgentsBase, type TradingAgentsResolved } from '@/lib/trading-agents-config'
 import { applyRateLimit } from '@/lib/api/rateLimit'
 import { normalizeTicker, sanitizeError } from '@/lib/api/sanitize'
+import { validateCsrf } from '@/lib/api/csrf'
 
 const TIMEOUT_MS = 5 * 60 * 1000 // 5 minutes — TradingAgents can be slow
 const TA_RATE_LIMIT = { maxRequests: 10, windowSeconds: 60 }
@@ -56,7 +57,7 @@ export async function GET(
   { params }: { params: { ticker: string } }
 ) {
   // Rate limit: 10 req/min per IP
-  const rateLimitResponse = applyRateLimit(req, 'trading-agents', TA_RATE_LIMIT)
+  const rateLimitResponse = await applyRateLimit(req, 'trading-agents', TA_RATE_LIMIT)
   if (rateLimitResponse) return rateLimitResponse
   // Phase 13 S2 (F7.3): canonical ticker validation — rejects scripts/paths
   // before they reach the upstream Python service.
@@ -116,8 +117,10 @@ export async function GET(
         { status: 504 }
       )
     }
+    // CWE-209: msg is used internally for connectivity-error detection only;
+    // the response uses sanitizeError so production clients don't see
+    // stack-related details (internal hostnames, file paths, etc).
     const msg = String(err)
-    // Detect connection refused / fetch failures (backend not reachable)
     const isConnectivityError =
       msg.includes('ECONNREFUSED') ||
       msg.includes('ENOTFOUND') ||
@@ -129,15 +132,17 @@ export async function GET(
       return NextResponse.json(
         {
           error: 'backend_unreachable',
-          message: `Cannot reach TradingAgents at ${TA_BASE}. ${DEPLOY_HINT}`,
-          details: msg,
+          // Do NOT echo TA_BASE — it may include a private Railway URL.
+          // Surface a generic message; full URL only in dev via sanitizeError.
+          message: `Cannot reach TradingAgents backend. ${DEPLOY_HINT}`,
+          details: sanitizeError(err),
         },
         { status: 502 }
       )
     }
     console.error('[TradingAgents GET]', err)
     return NextResponse.json(
-      { error: 'failed_to_fetch', details: msg },
+      { error: 'failed_to_fetch', details: sanitizeError(err) },
       { status: 502 }
     )
   }
@@ -147,13 +152,29 @@ export async function POST(
   req: NextRequest,
   { params }: { params: { ticker: string } }
 ) {
+  // Phase 15 Q-055-NEW: CSRF guard before any other work. The double-submit
+  // pattern (cookie + matching x-quantan-csrf header) ensures the request
+  // came from a same-origin context. Cookie is issued by middleware.ts on
+  // first page load; client must read it and echo it in the header.
+  //
+  // Allow X-API-Key callers to bypass — they're server-to-server, not
+  // browser-initiated, and use a different authentication discipline
+  // (the API key itself proves origin authority). Note CSRF is browser-
+  // session protection; out-of-band API integrations are out of scope.
+  const apiKeyHeader = req.headers.get('x-api-key')
+  if (!apiKeyHeader && !validateCsrf(req)) {
+    return NextResponse.json(
+      { error: 'csrf_invalid', message: 'Missing or invalid CSRF token. Reload the page and retry.' },
+      { status: 403 },
+    )
+  }
+
   // Rate limit: 10 req/min per IP
-  const rateLimitResponse = applyRateLimit(req, 'trading-agents', TA_RATE_LIMIT)
+  const rateLimitResponse = await applyRateLimit(req, 'trading-agents', TA_RATE_LIMIT)
   if (rateLimitResponse) return rateLimitResponse
 
   // Auth check: require valid session OR API key header (X-API-Key)
   const session = await getServerSession(getAuthOptions())
-  const apiKeyHeader = req.headers.get('x-api-key')
   if (!session?.user && !apiKeyHeader) {
     return NextResponse.json(
       { error: 'unauthorized', message: 'Authentication required. Sign in or provide X-API-Key header.' },
@@ -237,13 +258,25 @@ export async function POST(
     queryParams.set('quick_think_llm', defaults.quick)
   }
 
-  if (typeof body.max_debate_rounds === 'number') {
-    queryParams.set('max_debate_rounds', String(body.max_debate_rounds))
+  // Phase 14 wave 22 (R7-MED): clamp debate / risk-discuss rounds to a sane
+  // range. Previously these were forwarded verbatim with only `typeof number`.
+  // The Python sidecar honours whatever value we pass; a hostile client could
+  // request 1,000,000 rounds and burn CPU + LLM-API credits before the 5-minute
+  // TIMEOUT_MS triggered. Per-IP rate-limit (10/min) still allows expensive
+  // sustained abuse without this clamp.
+  //
+  // Sensible bounds based on the upstream model: 1-5 rounds. Reject NaN /
+  // non-integer / out-of-range with silent fallback to default.
+  const clampRound = (v: unknown): number | null => {
+    if (typeof v !== 'number' || !Number.isFinite(v)) return null
+    const i = Math.floor(v)
+    if (i < 1 || i > 5) return null
+    return i
   }
-
-  if (typeof body.max_risk_discuss_rounds === 'number') {
-    queryParams.set('max_risk_discuss_rounds', String(body.max_risk_discuss_rounds))
-  }
+  const mdr = clampRound(body.max_debate_rounds)
+  if (mdr !== null) queryParams.set('max_debate_rounds', String(mdr))
+  const mrd = clampRound(body.max_risk_discuss_rounds)
+  if (mrd !== null) queryParams.set('max_risk_discuss_rounds', String(mrd))
 
   if (body.data_vendor) queryParams.set('data_vendor', String(body.data_vendor))
 
@@ -288,12 +321,22 @@ export async function POST(
       } catch {
         // ignore parse error
       }
-      const detailText =
-        errorData.details || errorData.message || errorData.error || upstream.statusText
+      // CWE-209: never forward upstream `details`/`message` verbatim — the
+      // Python server may include traceback fragments, file paths, or
+      // third-party API error envelopes carrying provider-side secrets. In
+      // production return a generic message + sanitized status; preserve
+      // upstream `error` code (a short string identifier — safe).
+      const upstreamErrCode = typeof errorData.error === 'string' ? errorData.error : 'upstream_error'
+      const isDev = process.env.NODE_ENV !== 'production'
+      const detailText = isDev
+        ? (errorData.details || errorData.message || errorData.error || upstream.statusText)
+        : undefined
       return NextResponse.json(
         {
           error: 'upstream_error',
-          message: detailText,
+          upstreamErrorCode: upstreamErrCode,
+          status: upstream.status,
+          message: `Upstream returned ${upstream.status} — see server logs for details.`,
           details: detailText,
         },
         { status: 502 }
@@ -323,15 +366,16 @@ export async function POST(
       return NextResponse.json(
         {
           error: 'backend_unreachable',
-          message: `Cannot reach TradingAgents at ${TA_BASE}. ${DEPLOY_HINT}`,
-          details: msg,
+          // Do NOT echo TA_BASE — may include a private Railway URL.
+          message: `Cannot reach TradingAgents backend. ${DEPLOY_HINT}`,
+          details: sanitizeError(err),
         },
         { status: 502 }
       )
     }
     console.error('[TradingAgents POST]', err)
     return NextResponse.json(
-      { error: 'failed_to_fetch', details: msg },
+      { error: 'failed_to_fetch', details: sanitizeError(err) },
       { status: 502 }
     )
   }

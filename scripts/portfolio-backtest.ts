@@ -19,6 +19,7 @@ import type { PortfolioBacktestResult, PortfolioConfig } from '../lib/backtest/p
 import { DEFAULT_EXIT_CONFIG } from '../lib/backtest/exitRules'
 import type { ExitConfig } from '../lib/backtest/exitRules'
 import { LOOP3_EXIT_GRID, OPTIMIZATION_TARGETS } from '../lib/optimize/parameterSets'
+import type { OhlcvRow } from '../lib/backtest/dataLoader'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -43,19 +44,26 @@ const SECTORS_MAP: Record<string, string> = {
 
 // ─── Data loading ─────────────────────────────────────────────────────────────
 
-interface OhlcvRow {
-  time: number
-  open: number
-  high: number
-  low: number
-  close: number
-  volume: number | undefined
-}
-
 interface CandleFile {
   ticker?: string
   sector?: string
-  candles: OhlcvRow[]
+  candles: Array<Omit<OhlcvRow, 'volume'> & { volume?: number }>
+}
+
+function normalizeRows(candles: CandleFile['candles']): OhlcvRow[] {
+  return candles
+    .filter(
+      (c) =>
+        Number.isFinite(c.time) &&
+        Number.isFinite(c.open) &&
+        Number.isFinite(c.high) &&
+        Number.isFinite(c.low) &&
+        Number.isFinite(c.close),
+    )
+    .map((c) => ({
+      ...c,
+      volume: typeof c.volume === 'number' && Number.isFinite(c.volume) ? c.volume : 0,
+    }))
 }
 
 function loadAllInstruments(): {
@@ -70,14 +78,22 @@ function loadAllInstruments(): {
   const instrumentData: Record<string, OhlcvRow[]> = {}
   const sectorMap: Record<string, string> = {}
 
+  // Phase 14 wave 7: only class-share filenames use dash→dot mangling.
+  // Crypto pairs like BTC-USD.json must stay as BTC-USD (matches the
+  // normalizeTicker regex updated in R4-M-2). Previously every dash was
+  // replaced unconditionally, mangling BTC-USD → BTC.USD and breaking the
+  // sector-attribution lookup for every crypto file.
+  const CLASS_SHARE_TICKERS = new Set(['BRK-B', 'BRK-A', 'BF-B', 'BF-A', 'RDS-B', 'RDS-A'])
+  function tickerFromFilename(filename: string): string {
+    const base = filename.replace('.json', '')
+    return CLASS_SHARE_TICKERS.has(base) ? base.replace('-', '.') : base
+  }
+
   for (const f of readdirSync(dataDir).filter(f => f.endsWith('.json'))) {
     const raw = readFileSync(join(dataDir, f), 'utf-8')
     const data = JSON.parse(raw) as CandleFile
-    const ticker = f.replace('.json', '').replace(/-/g, '.')
-    const rows: OhlcvRow[] = (data.candles ?? []).filter(
-      c => Number.isFinite(c.time) && Number.isFinite(c.open) &&
-           Number.isFinite(c.high) && Number.isFinite(c.low) && Number.isFinite(c.close),
-    )
+    const ticker = tickerFromFilename(f)
+    const rows = normalizeRows(data.candles ?? [])
     if (rows.length >= 252) {
       instrumentData[ticker] = rows
       sectorMap[ticker] = SECTORS_MAP[ticker] ?? data.sector ?? 'Unknown'

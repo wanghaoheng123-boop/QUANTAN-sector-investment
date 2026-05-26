@@ -110,7 +110,9 @@ describe('detectRegime', () => {
 
     // Should still return a valid result
     expect(result.volatilityRegime).toBeDefined()
-    expect(result.volRatio).toBe(1.0) // default when insufficient data
+    // Phase 14: volRatio is null when vol20/vol60 cannot be measured
+    // (insufficient data) — previously returned the misleading 1.0 default.
+    expect(result.volRatio).toBeNull()
   })
 
   it('trend_following hint with strong ADX and non-crisis vol', () => {
@@ -134,5 +136,61 @@ describe('detectRegime', () => {
     const result = detectRegime(closes, bars)
 
     expect(result.volRatio).toBeGreaterThan(0)
+  })
+
+  /**
+   * Bug-fix regression: when ADX is unavailable (insufficient bars), the
+   * function used to default trendRegime to 'range_bound' and then emit
+   * 'mean_reversion' as the strategy hint based on no actual trend signal.
+   * This was a fail-open recommendation. Now: strategyHint = 'neutral'
+   * whenever adxValue is null.
+   */
+  describe('regression — fail-closed when ADX unavailable', () => {
+    it('returns adxValue = null when bars are insufficient for ADX(14)', () => {
+      const closes = generateCloses(8)
+      const bars = closesToBars(closes)
+      const result = detectRegime(closes, bars)
+      expect(result.adxValue).toBeNull()
+    })
+
+    it('strategyHint = neutral when adxValue is null (was: mean_reversion)', () => {
+      const closes = generateCloses(8)
+      const bars = closesToBars(closes)
+      const result = detectRegime(closes, bars)
+      expect(result.adxValue).toBeNull()
+      expect(result.strategyHint).toBe('neutral')
+    })
+
+    it('does NOT recommend mean_reversion just because vol is low + no ADX', () => {
+      // 10 closes with very low vol — vol regime would be "low" or "normal",
+      // but ADX is unavailable so no strategy hint should fire.
+      const closes: number[] = []
+      for (let i = 0; i < 10; i++) closes.push(100 + Math.sin(i) * 0.05)
+      const bars = closesToBars(closes)
+      const result = detectRegime(closes, bars)
+      expect(result.adxValue).toBeNull()
+      expect(result.strategyHint).not.toBe('mean_reversion')
+      expect(result.strategyHint).not.toBe('trend_following')
+    })
+
+    /**
+     * Second regression in the same family: confidence boost for
+     * `trendRegime === 'range_bound'` (+10) used to fire even when
+     * trendKnown was false (because the variable defaults to 'range_bound').
+     * The "unknown trend" therefore got the same confidence boost as a
+     * MEASURED range-bound regime. Now gated on trendKnown.
+     */
+    it('does NOT boost confidence for the default range_bound fallback', () => {
+      // Insufficient bars → adxValue null. Volatility regime can't be
+      // computed either (vol60 needs 62 bars). So confidence stays
+      // ≤ 50 (base) — no trendKnown boost, no vol-normal boost.
+      const closes = generateCloses(8)
+      const bars = closesToBars(closes)
+      const result = detectRegime(closes, bars)
+      expect(result.adxValue).toBeNull()
+      // Without trendKnown there must be no +10 boost from the
+      // (falsely-default) range_bound regime. Base is 50.
+      expect(result.confidence).toBeLessThanOrEqual(50)
+    })
   })
 })

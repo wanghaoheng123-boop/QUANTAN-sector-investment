@@ -20,6 +20,7 @@ import { ChartErrorBoundary } from '@/components/ChartErrorBoundary'
 import { DashboardGuide } from '@/components/DashboardGuide'
 import { MetricTooltip } from '@/components/MetricTooltip'
 import { DataFreshnessIndicator } from '@/components/DataFreshnessIndicator'
+import { useLiveQuote } from '@/hooks/useLiveQuote'
 
 const CHART_POLL_MS = (range: string) =>
   ['1m', '3m', '5m'].includes(range) ? 30_000 : 60_000
@@ -62,18 +63,24 @@ export default function SectorPage({ params }: { params: { slug: string } }) {
   const [activeRange, setActiveRange] = useState('6M')
   const [quoteError, setQuoteError] = useState<string | null>(null)
 
+  // Phase 14 wave 18: AbortSignal-aware fetch. Prior code was vulnerable to
+  // the same race conditions fixed in stock/[ticker]/page.tsx (waves 8/9) —
+  // rapid sector navigation could leave stale responses in flight that
+  // overwrote state for the new sector.
   const fetchChartData = useCallback(
-    (range: string) => {
-      fetch(`/api/chart/${encodeURIComponent(sector.etf)}?range=${encodeURIComponent(range)}`)
+    (range: string, signal?: AbortSignal) => {
+      fetch(`/api/chart/${encodeURIComponent(sector.etf)}?range=${encodeURIComponent(range)}`, { signal })
         .then((r) => {
           if (!r.ok) return Promise.reject(new Error(`HTTP ${r.status}`))
           return r.json()
         })
         .then((data) => {
+          if (signal?.aborted) return
           setCandles(data.candles ?? [])
           setDarkPoolMarkers(data.darkPoolMarkers ?? [])
         })
         .catch((err) => {
+          if (signal?.aborted || (err instanceof DOMException && err.name === 'AbortError')) return
           // Phase 13 S2 fix (F5.4): chart data fetch failure now surfaces as a
           // diagnostic in console; UI shows last-known candles unchanged.
           console.warn('[sector] chart fetch failed for', sector.etf, err)
@@ -83,37 +90,79 @@ export default function SectorPage({ params }: { params: { slug: string } }) {
   )
 
   useEffect(() => {
-    fetchChartData(activeRange)
+    const controller = new AbortController()
+    fetchChartData(activeRange, controller.signal)
+    return () => controller.abort()
   }, [sector.etf, activeRange, fetchChartData])
 
+  // Intraday chart candles only — quote header uses useLiveQuote (SSE), not this interval.
   useEffect(() => {
     if (activeTab !== 'chart') return
     if (!isStockIntradayPollRange(activeRange)) return
     const ms = CHART_POLL_MS(activeRange)
-    const id = setInterval(() => fetchChartData(activeRange), ms)
-    return () => clearInterval(id)
+    let activeController = new AbortController()
+    const id = setInterval(() => {
+      activeController.abort()
+      activeController = new AbortController()
+      fetchChartData(activeRange, activeController.signal)
+    }, ms)
+    return () => {
+      clearInterval(id)
+      activeController.abort()
+    }
   }, [activeTab, activeRange, fetchChartData])
 
+  // Phase 14 wave 37 — REAL-TIME QUOTE STREAM (replaces 15 s polling).
+  //
+  // Same pattern as app/stock/[ticker]/page.tsx wave 36: a one-shot REST
+  // boot fetch populates the UI on first render (typical SSE first-event
+  // latency: 1-2 s), then `useLiveQuote(sector.etf)` takes over via SSE.
+  //
+  // Why keep the REST boot path? SSE first-event arrival is bounded only
+  // by the upstream Yahoo fetch — if Yahoo is slow we'd otherwise paint a
+  // blank header for several seconds. The boot fetch gives instant feedback.
   useEffect(() => {
-    const pull = () => {
-      fetch(`/api/prices?tickers=${encodeURIComponent(sector.etf)}`)
-        .then((r) => {
-          if (!r.ok) return Promise.reject(new Error(`HTTP ${r.status}`))
-          return r.json()
-        })
-        .then((data) => {
-          const q = data.quotes?.find((x: { ticker: string }) => x.ticker === sector.etf)
-          if (q) {
-            setQuote(q)
-            setQuoteError(null)
-          }
-        })
-        .catch((e) => setQuoteError(e instanceof Error ? e.message : 'Quote unavailable'))
-    }
-    pull()
-    const id = setInterval(pull, 15000)
-    return () => clearInterval(id)
+    const controller = new AbortController()
+    fetch(`/api/prices?tickers=${encodeURIComponent(sector.etf)}`, { signal: controller.signal })
+      .then((r) => {
+        if (!r.ok) return Promise.reject(new Error(`HTTP ${r.status}`))
+        return r.json()
+      })
+      .then((data) => {
+        if (controller.signal.aborted) return
+        const q = data.quotes?.find((x: { ticker: string }) => x.ticker === sector.etf)
+        if (q) {
+          setQuote(q)
+          setQuoteError(null)
+        }
+      })
+      .catch((e) => {
+        if (controller.signal.aborted || (e instanceof DOMException && e.name === 'AbortError')) return
+        setQuoteError(e instanceof Error ? e.message : 'Quote unavailable')
+      })
+    return () => controller.abort()
   }, [sector.etf])
+
+  // SSE subscription: real-time quote updates.
+  const live = useLiveQuote(sector.etf)
+
+  // Merge live quote into the page's quote state. Preserves the volume /
+  // 52w / pe fields from the boot REST fetch (SSE payloads carry just
+  // price / change / volume / marketOpen).
+  useEffect(() => {
+    if (!live.quote) return
+    setQuote((prev) => ({
+      price: live.quote!.price,
+      change: live.quote!.change,
+      changePct: live.quote!.changePct,
+      volume: live.quote!.volume ?? prev?.volume ?? 0,
+      high52w: prev?.high52w ?? 0,
+      low52w: prev?.low52w ?? 0,
+      pe: prev?.pe ?? 0,
+      quoteTime: live.quote!.timestamp,
+    }))
+    setQuoteError(null)
+  }, [live.quote])
 
   useEffect(() => {
     setDarkPoolPrints(generateDarkPoolPrints(sector.etf))
@@ -121,19 +170,23 @@ export default function SectorPage({ params }: { params: { slug: string } }) {
 
   useEffect(() => {
     if (activeTab !== 'darkpool') return
+    const controller = new AbortController()
     setDarkPoolApiLoading(true)
     setDarkPoolApiData(null)
-    fetch(`/api/darkpool/${encodeURIComponent(sector.etf)}`)
+    fetch(`/api/darkpool/${encodeURIComponent(sector.etf)}`, { signal: controller.signal })
       .then((r) => r.json())
       .then((data) => {
+        if (controller.signal.aborted) return
         setDarkPoolApiData(data)
         setDarkPoolApiLoading(false)
       })
       .catch((err) => {
+        if (controller.signal.aborted || (err instanceof DOMException && err.name === 'AbortError')) return
         // Phase 13 S2 fix (F5.4): dark-pool fetch failure now diagnosable.
         console.warn('[sector] dark-pool fetch failed for', sector.etf, err)
         setDarkPoolApiLoading(false)
       })
+    return () => controller.abort()
   }, [sector.etf, activeTab])
 
   const signal = useMemo(
@@ -192,8 +245,42 @@ export default function SectorPage({ params }: { params: { slug: string } }) {
                   <div className={`text-sm font-mono ${isUp ? 'text-green-400' : 'text-red-400'}`}>
                     {isUp ? '▲' : '▼'} {formatSignedNumber(quote.change)} ({Math.abs(quote.changePct).toFixed(2)}%)
                   </div>
-                  <div className="text-xs text-slate-600 mt-1 font-mono">ETF: {sector.etf}</div>
-                  <div className="text-[10px] text-slate-600 mt-1">Quote: {formatFreshness(quote.quoteTime)}</div>
+                  <div className="text-xs text-slate-400 mt-1 font-mono">ETF: {sector.etf}</div>
+                  {/* Phase 14 wave 37: real-time SSE stream status pill. */}
+                  <div className="flex items-center justify-end gap-2 mt-1">
+                    <span
+                      className={`inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
+                        live.connected
+                          ? live.marketOpen
+                            ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                            : 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                          : 'bg-slate-700/40 text-slate-400 border border-slate-600/40'
+                      }`}
+                      title={
+                        live.connected
+                          ? live.marketOpen
+                            ? 'Live stream connected — market open'
+                            : 'Live stream connected — market closed (snapshot)'
+                          : live.supported
+                            ? 'Reconnecting…'
+                            : 'Polling (SSE unavailable)'
+                      }
+                      role="status"
+                    >
+                      <span
+                        className={`inline-block w-1.5 h-1.5 rounded-full ${
+                          live.connected && live.marketOpen
+                            ? 'bg-emerald-400 animate-pulse'
+                            : live.connected
+                              ? 'bg-amber-400'
+                              : 'bg-slate-500'
+                        }`}
+                        aria-hidden="true"
+                      />
+                      {live.connected ? (live.marketOpen ? 'LIVE' : 'CLOSED') : 'RECONNECT'}
+                    </span>
+                    <span className="text-[10px] text-slate-400">{formatFreshness(quote.quoteTime)}</span>
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-2 text-right w-32">
@@ -365,7 +452,7 @@ export default function SectorPage({ params }: { params: { slug: string } }) {
                   </ChartErrorBoundary>
                 ) : (
                   <div className="h-80 bg-slate-800/30 rounded-xl animate-pulse flex items-center justify-center">
-                    <span className="text-slate-600 text-sm">Loading chart data...</span>
+                    <span className="text-slate-400 text-sm">Loading chart data...</span>
                   </div>
                 )}
               </div>
@@ -422,7 +509,7 @@ export default function SectorPage({ params }: { params: { slug: string } }) {
                     <div className="text-xs text-slate-500 mb-1">Bullish Prints</div>
                     <div className="text-lg font-bold text-green-400 font-mono">
                       {darkPoolPrints.filter(p => p.sentiment === 'BULLISH').length}
-                      <span className="text-slate-600 text-sm font-normal">/{darkPoolPrints.length}</span>
+                      <span className="text-slate-400 text-sm font-normal">/{darkPoolPrints.length}</span>
                     </div>
                   </div>
                 </div>
@@ -440,10 +527,10 @@ export default function SectorPage({ params }: { params: { slug: string } }) {
                         <span className="text-sm">{s.icon}</span>
                         <div>
                           <div className="text-xs font-medium text-white">{s.name}</div>
-                          <div className="text-xs text-slate-600 font-mono">{s.etf}</div>
+                          <div className="text-xs text-slate-400 font-mono">{s.etf}</div>
                         </div>
                       </div>
-                      <span className="text-slate-600 group-hover:text-slate-400 text-xs transition-colors">→</span>
+                      <span className="text-slate-400 group-hover:text-slate-200 text-xs transition-colors">→</span>
                     </div>
                   </Link>
                 ))}

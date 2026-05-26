@@ -166,4 +166,35 @@ describe('multiTimeframeSignal', () => {
     const result = multiTimeframeSignal(bars)
     expect([-1, 0, 1]).toContain(result.daily.score)
   })
+
+  /**
+   * Regression: the monthly-analysis gate used to be `dailyBars.length >= 300`,
+   * which always passed classifyTimeframe a too-short array (300/21 ≈ 14
+   * monthly bars; classify needs 35). So monthly analysis was silently null
+   * for any dataset under ~750 bars, making the gate an ineffective no-op.
+   * The fix raises the gate to 735 bars and aligns the inner monthly-bar
+   * count check (24 → 35) so callers see consistent threshold semantics.
+   */
+  describe('regression — monthly-analysis threshold honesty', () => {
+    it('monthly is null for 400 daily bars (was: null silently after a no-op gate)', () => {
+      const bars = generateDailyBars(400, 100, 'up')
+      const r = multiTimeframeSignal(bars)
+      expect(r.monthly).toBeNull()
+      // Weekly should still be available with 400 bars
+      expect(r.weekly).not.toBeNull()
+    })
+
+    it('monthly is null for 600 daily bars (still below the new 735 gate)', () => {
+      const bars = generateDailyBars(600, 100, 'up')
+      const r = multiTimeframeSignal(bars)
+      expect(r.monthly).toBeNull()
+    })
+
+    it('monthly fires only with ≥735 daily bars (3 years)', () => {
+      const bars = generateDailyBars(800, 100, 'up')
+      const r = multiTimeframeSignal(bars)
+      expect(r.monthly).not.toBeNull()
+      expect(r.monthly!.timeframe).toBe('monthly')
+    })
+  })
 })

@@ -48,13 +48,42 @@ export interface MultiTimeframeResult {
  * Aggregate daily bars to weekly bars.
  * Groups by ISO week (Monday-Friday). Partial weeks at start/end are included.
  */
+/**
+ * Phase 14 wave 22: defensive input prep.
+ * Filters out bars with non-finite OHLC values (Yahoo holiday rows
+ * sometimes have nulls; a single NaN in volume would poison
+ * `current.volume += bar.volume` for the rest of the week).
+ * Sorts ascending by time so reversed inputs (newest-first vendors)
+ * don't produce duplicate/interleaved week buckets downstream.
+ * Cite: Murphy (1999) p117 — weekly aggregation requires monotonic input.
+ */
+function sanitizeDailyBars(daily: TimedBar[]): TimedBar[] {
+  const cleaned: TimedBar[] = []
+  for (const bar of daily) {
+    if (!Number.isFinite(bar.time)) continue
+    if (!Number.isFinite(bar.open) || !Number.isFinite(bar.high)) continue
+    if (!Number.isFinite(bar.low) || !Number.isFinite(bar.close)) continue
+    // Volume can be missing on holidays — coerce to 0 rather than dropping.
+    const v = Number.isFinite(bar.volume) ? bar.volume : 0
+    cleaned.push({ ...bar, volume: v })
+  }
+  cleaned.sort((a, b) => a.time - b.time)
+  return cleaned
+}
+
 export function aggregateToWeekly(daily: TimedBar[]): AggregatedBar[] {
   if (daily.length === 0) return []
+
+  const sanitized = sanitizeDailyBars(daily)
+  if (sanitized.length === 0) return []
 
   const weeks: AggregatedBar[] = []
   let current: AggregatedBar | null = null
 
-  for (const bar of daily) {
+  for (const bar of sanitized) {
+    // Phase 14: bar.time is assumed UTC-aligned (yahoo-finance2 returns UTC epoch).
+    // If a future data source returns local-tz epoch, weeks crossing DST boundaries
+    // may mis-bucket — re-validate this aggregation when integrating new vendors.
     const date = new Date(bar.time * 1000)
     // getDay: 0=Sun..6=Sat. ISO week starts Monday (1).
     // Use Monday as week boundary.
@@ -93,11 +122,14 @@ export function aggregateToWeekly(daily: TimedBar[]): AggregatedBar[] {
 export function aggregateToMonthly(daily: TimedBar[]): AggregatedBar[] {
   if (daily.length === 0) return []
 
+  const sanitized = sanitizeDailyBars(daily)
+  if (sanitized.length === 0) return []
+
   const months: AggregatedBar[] = []
   let current: AggregatedBar | null = null
   let currentKey = ''
 
-  for (const bar of daily) {
+  for (const bar of sanitized) {
     const date = new Date(bar.time * 1000)
     const key = `${date.getUTCFullYear()}-${date.getUTCMonth()}`
 
@@ -217,11 +249,16 @@ export function multiTimeframeSignal(
     }
   }
 
-  // Monthly: need even more data (~24 monthly bars)
+  // Monthly: classifyTimeframe requires ≥35 bars. 35 months × ~21 trading
+  // days/month ≈ 735 daily bars minimum. The previous gate of >= 300 was
+  // a no-op: aggregateToMonthly on 300 daily bars yields ~14 monthly bars,
+  // which classifyTimeframe immediately rejects (35 > 14), so monthly was
+  // silently null for any dataset below ~750 daily bars. The new gate is
+  // both honest and saves the aggregation cost when classify will fail.
   let monthly: TimeframeSignal | null = null
-  if (hasTime && dailyBars.length >= 300) {
+  if (hasTime && dailyBars.length >= 735) {
     const monthlyBars = aggregateToMonthly(dailyBars as TimedBar[])
-    if (monthlyBars.length >= 24) {
+    if (monthlyBars.length >= 35) {
       monthly = classifyTimeframe(monthlyBars.map(b => b.close), 'monthly', strategyHint)
     }
   }

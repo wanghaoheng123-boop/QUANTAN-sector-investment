@@ -42,6 +42,32 @@ describe('Regime Signal', () => {
     expect(result.confidence).toBe(0)
   })
 
+  /**
+   * Regression: prior implementation silently classified non-finite prices
+   * as CRASH_ZONE BUY/SELL (78-95% confidence). Bad inputs must fail
+   * closed to HOLD with confidence=0, never emit real trading actions.
+   */
+  it('returns HOLD/0-confidence for non-finite price (fail-closed)', () => {
+    const closes = generateCloses(100, 250, 0.1) // sufficient bars
+    const nan = regimeSignal(NaN, closes)
+    expect(nan.action).toBe('HOLD')
+    expect(nan.confidence).toBe(0)
+    expect(nan.deviationPct).toBeNull()
+    const inf = regimeSignal(Infinity, closes)
+    expect(inf.action).toBe('HOLD')
+    expect(inf.confidence).toBe(0)
+  })
+
+  it('returns HOLD/0-confidence for non-positive price (fail-closed)', () => {
+    const closes = generateCloses(100, 250, 0.1)
+    const zero = regimeSignal(0, closes)
+    expect(zero.action).toBe('HOLD')
+    expect(zero.confidence).toBe(0)
+    const neg = regimeSignal(-50, closes)
+    expect(neg.action).toBe('HOLD')
+    expect(neg.confidence).toBe(0)
+  })
+
   it('classifies HEALTHY_BULL when price is 0-10% above SMA200', () => {
     // Create 250 bars with gentle uptrend so SMA200 is below current price
     const closes = generateCloses(100, 250, 0.1)
@@ -193,5 +219,82 @@ describe('DEFAULT_CONFIG', () => {
     expect(DEFAULT_CONFIG.confidenceThreshold).toBe(50)
     expect(DEFAULT_CONFIG.maxDrawdownCap).toBe(0.25)
     expect(DEFAULT_CONFIG.halfKelly).toBe(true)
+  })
+})
+
+/**
+ * Phase 13 S2 — TEAM AUDIT regression suite for `enhancedCombinedSignal`.
+ *
+ * Q (Quant) + A (AI) + F (Full-stack) cross-validated finding:
+ *   Per-indicator scores must lie in [-1, +1] so that the weighted sum
+ *   Σ wᵢ · sᵢ is bounded in [-1, +1] (since Σ wᵢ = 1). Without the bound,
+ *   a single overshoot can dominate the ensemble and silently flip the
+ *   decision. Kuncheva (2014) §4.2 — weighted-combination ensemble
+ *   bounds require homogeneous base-learner output ranges.
+ *
+ * These tests pin the bound property by constructing synthetic price
+ * series that drive Bollinger pctB outside [0, 1] (price overshoots
+ * the upper / lower band) and verifying every weightedConfirm score
+ * stays within the contract.
+ */
+describe('enhancedCombinedSignal — TEAM AUDIT: per-indicator score bounds', () => {
+  it('all weightedConfirm scores remain in [-1, +1] under typical market', () => {
+    const closes = generateCloses(100, 250, 0.1)
+    const bars = generateBars(closes)
+    const ohlcvBars = generateOhlcvBars(closes)
+    const sig = enhancedCombinedSignal('TEST', '2026-01-01', closes[closes.length - 1], closes, bars, ohlcvBars)
+    for (const c of sig.weightedConfirms) {
+      expect(c.score).toBeGreaterThanOrEqual(-1)
+      expect(c.score).toBeLessThanOrEqual(1)
+    }
+  })
+
+  it('all weightedConfirm scores remain in [-1, +1] under a Bollinger UPPER overshoot', () => {
+    // Build a series with a sharp recent rally so pctB exceeds 1.0.
+    // The rally needs to be large enough to push price meaningfully above
+    // the 20-period mean + 2σ band, which requires ~5-10% above the mean
+    // on a tight prior series.
+    const base = Array.from({ length: 230 }, () => 100 + (Math.random() - 0.5) * 0.1)
+    // Sharp last 20 bars: vertical ramp.
+    const rally = Array.from({ length: 20 }, (_, i) => 100 + (i + 1) * 1.5)
+    const closes = [...base, ...rally]
+    const bars = generateBars(closes)
+    const ohlcvBars = generateOhlcvBars(closes)
+    const sig = enhancedCombinedSignal('TEST', '2026-01-01', closes[closes.length - 1], closes, bars, ohlcvBars)
+    for (const c of sig.weightedConfirms) {
+      expect(c.score).toBeGreaterThanOrEqual(-1)
+      expect(c.score).toBeLessThanOrEqual(1)
+      // weightedScore = weight × score; with weight ≤ 0.25, |weightedScore| ≤ 0.25
+      expect(Math.abs(c.weightedScore)).toBeLessThanOrEqual(0.30)
+    }
+  })
+
+  it('all weightedConfirm scores remain in [-1, +1] under a Bollinger LOWER overshoot', () => {
+    // Sharp recent decline so pctB drops below 0.
+    const base = Array.from({ length: 230 }, () => 100 + (Math.random() - 0.5) * 0.1)
+    const crash = Array.from({ length: 20 }, (_, i) => 100 - (i + 1) * 1.5)
+    const closes = [...base, ...crash]
+    const bars = generateBars(closes)
+    const ohlcvBars = generateOhlcvBars(closes)
+    const sig = enhancedCombinedSignal('TEST', '2026-01-01', closes[closes.length - 1], closes, bars, ohlcvBars)
+    for (const c of sig.weightedConfirms) {
+      expect(c.score).toBeGreaterThanOrEqual(-1)
+      expect(c.score).toBeLessThanOrEqual(1)
+      expect(Math.abs(c.weightedScore)).toBeLessThanOrEqual(0.30)
+    }
+  })
+
+  it('totalWeightedScore base (pre-bonus) is bounded by Σ |wᵢ| = 1', () => {
+    // With unclamped scores a single indicator's weighted contribution
+    // could push the SUM outside [-1, +1]. With the clamp, even adversarial
+    // inputs must respect the bound.
+    const closes = Array.from({ length: 250 }, (_, i) => 100 + Math.sin(i * 0.1) * 50)
+    const bars = generateBars(closes)
+    const ohlcvBars = generateOhlcvBars(closes)
+    const sig = enhancedCombinedSignal('TEST', '2026-01-01', closes[closes.length - 1], closes, bars, ohlcvBars)
+    // Reconstruct the pre-bonus sum from individual weighted contributions.
+    const baseSum = sig.weightedConfirms.reduce((s, c) => s + c.weightedScore, 0)
+    expect(baseSum).toBeGreaterThanOrEqual(-1)
+    expect(baseSum).toBeLessThanOrEqual(1)
   })
 })

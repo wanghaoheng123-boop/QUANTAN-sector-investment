@@ -1,3 +1,28 @@
+/**
+ * Safe numeric formatter — returns a placeholder for null / undefined /
+ * NaN / ±Infinity instead of letting `.toFixed()` emit "NaN"/"Infinity"
+ * or throwing on undefined.
+ *
+ * Phase 13 S2 cross-cutting Pattern 3 audit (defensive UI clamps):
+ *   The codebase had local `safeToFixed` helpers in PriceTicker.tsx and
+ *   ad-hoc `Number.isFinite(...) ? x.toFixed(d) : '—'` inline checks in
+ *   many components. SSOT — every UI numeric render that originates
+ *   from upstream data (quotes, signals, indicators) should pass through
+ *   safeFixed so non-finite values render as a dash instead of breaking
+ *   layout with "NaN%" / "$Infinity" / blank cells.
+ *
+ * Use formatCurrency / formatPercent / formatSignedNumber when the
+ * specific semantic applies; use safeFixed for plain numeric display.
+ */
+export function safeFixed(
+  value: number | null | undefined,
+  digits = 2,
+  fallback = '—',
+): string {
+  if (value == null || !Number.isFinite(value)) return fallback
+  return value.toFixed(digits)
+}
+
 export function formatCurrency(value: number | null | undefined, digits = 2): string {
   if (value == null || !Number.isFinite(value)) return '—'
   return `$${value.toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits })}`
@@ -39,17 +64,67 @@ export function formatFreshness(iso: string | null | undefined): string {
 /**
  * Parse a Yahoo Finance quote timestamp into an ISO string.
  * Shared by darkpool and briefs API routes.
+ *
+ * Phase 14 wave 17: defensive bounds + try/catch around `.toISOString()`.
+ * V8 throws RangeError when the date is outside ±100 million days from
+ * the epoch (≈ year -271820 to year 275760). A negative or impossibly-large
+ * timestamp from a misconfigured upstream would crash the route. We now
+ * clamp to the V8 valid range and swallow the throw as a defensive
+ * fallback.
  */
+const MS_MAX = 8.64e15  // V8 max date: ±100 million days from epoch
+const MS_MIN = -8.64e15
+
+function safeToIso(ms: number): string | null {
+  if (!Number.isFinite(ms)) return null
+  if (ms < MS_MIN || ms > MS_MAX) return null
+  try {
+    return new Date(ms).toISOString()
+  } catch {
+    return null
+  }
+}
+
 export function parseQuoteTime(ts: unknown): string | null {
   if (ts == null) return null
-  if (ts instanceof Date) return ts.toISOString()
+  if (ts instanceof Date) {
+    const t = ts.getTime()
+    return Number.isFinite(t) ? safeToIso(t) : null
+  }
   if (typeof ts === 'string') {
     const d = new Date(ts)
-    return Number.isFinite(d.getTime()) ? d.toISOString() : null
+    return Number.isFinite(d.getTime()) ? safeToIso(d.getTime()) : null
   }
   if (typeof ts === 'number') {
     const ms = ts > 1e12 ? ts : ts * 1000
-    return Number.isFinite(ms) ? new Date(ms).toISOString() : null
+    return safeToIso(ms)
   }
   return null
+}
+
+/**
+ * Safe YYYY-MM-DD date formatter.
+ *
+ * Phase 14 wave 41 — SSOT for the common pattern in options components:
+ *
+ *   value instanceof Date ? value.toISOString().slice(0,10) : new Date(value).toISOString().slice(0,10)
+ *
+ * That ternary was duplicated in OptionsChainTable (twice) and was MISSING
+ * entirely in FlowScanner — where the unconditional `item.expiration.toISOString()`
+ * crashed the whole panel because after `fetch().then(r => r.json())` the
+ * `expiration: Date` field is actually a string at runtime (Date is not
+ * a JSON-native type — it serialises to a string).
+ *
+ * This helper accepts Date instances, ISO strings, or epoch numbers
+ * (seconds or ms via the 1e12 heuristic) and returns YYYY-MM-DD. Invalid
+ * input returns the supplied fallback (default empty string) — callers
+ * can use that to render "—" or hide the cell entirely.
+ *
+ * Reference: HTML §4.10.6 Date inputs — YYYY-MM-DD is the canonical
+ *            machine-readable form; sliced from ISO 8601.
+ */
+export function toIsoDate(value: unknown, fallback = ''): string {
+  const iso = parseQuoteTime(value)
+  if (iso == null) return fallback
+  return iso.slice(0, 10)
 }

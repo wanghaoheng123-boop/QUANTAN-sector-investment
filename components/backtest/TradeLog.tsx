@@ -29,11 +29,17 @@ export default function TradeLog({ trades, sectorColors }: Props) {
   }, [trades])
 
   const filtered = useMemo(() => {
+    // Phase 14 wave 10: copy via spread before sort. Prior code did
+    //   let rows = trades; ...; return rows.sort(...)
+    // which — when no filters were applied — mutated the `trades` PROP
+    // directly. That's a React-Anti-pattern: a parent component passing the
+    // same `trades` array to multiple children would have the array silently
+    // reordered to date-descending by this child.
     let rows = trades
     if (filterSector !== 'All') rows = rows.filter(t => t.sector === filterSector)
     if (filterAction !== 'All') rows = rows.filter(t => t.action === filterAction)
     if (filterTicker) rows = rows.filter(t => t.ticker.toLowerCase().includes(filterTicker.toLowerCase()))
-    return rows.sort((a, b) => (a.date < b.date ? 1 : -1))
+    return [...rows].sort((a, b) => (a.date < b.date ? 1 : -1))
   }, [trades, filterSector, filterAction, filterTicker])
 
   const winningTrades = filtered.filter(t => (t.pnlPct ?? 0) > 0)
@@ -67,7 +73,7 @@ export default function TradeLog({ trades, sectorColors }: Props) {
         <div className="bg-slate-900/60 rounded-xl p-4 border border-slate-800">
           <div className="text-xs text-slate-500 mb-1">All Trades</div>
           <div className="text-xl font-bold font-mono text-white">{filtered.length}</div>
-          <div className="text-[10px] text-slate-600 mt-1">
+          <div className="text-[10px] text-slate-400 mt-1">
             {new Set(filtered.map(t => t.ticker)).size} instruments
           </div>
         </div>
@@ -153,7 +159,7 @@ export default function TradeLog({ trades, sectorColors }: Props) {
           <div className="py-12 text-center text-slate-500 text-sm">No trades found.</div>
         )}
         {filtered.length > 200 && (
-          <div className="py-2 text-center text-[10px] text-slate-600 border-t border-slate-800">
+          <div className="py-2 text-center text-[10px] text-slate-400 border-t border-slate-800">
             Showing 200 of {filtered.length} trades
           </div>
         )}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { computeResearchScore, bandPosition } from '@/lib/quant/researchScore'
+import { computeResearchScore, bandPosition, rsiScoreDelta } from '@/lib/quant/researchScore'
 import type { ResearchScoreInput } from '@/lib/quant/researchScore'
 
 const neutralInput: ResearchScoreInput = {
@@ -142,5 +142,152 @@ describe('Band Position', () => {
   it('returns null for invalid inputs', () => {
     expect(bandPosition(100, null, 150, 125)).toBeNull()
     expect(bandPosition(0, 100, 150, 125)).toBeNull()
+  })
+
+  // Phase 14 wave 14: interior interpolation is now CONTINUOUS with the
+  // [0.15, 0.85] clamps. At the midpoint of the band the position is still
+  // 0.5 (by symmetry of the linear map 0.15 + frac × 0.70 at frac = 0.5),
+  // but interior points scale relative to the clamped endpoints, not 0/1.
+  //
+  // Old (buggy) interior: [buyHigh, sellLow] → [0, 1]
+  // New interior:         [buyHigh, sellLow] → [0.15, 0.85]
+  // Without the fix, price = buyHigh + ε returned ~0 (deeper-than-deep-buy),
+  // creating a discontinuous downward jump at the band's lower boundary.
+  it('mid-band linear interpolation: at midpoint of band, position = 0.5', () => {
+    // buyHigh=100, sellLow=200 → midpoint=150 → 0.15 + 0.5 × 0.70 = 0.5
+    expect(bandPosition(150, 100, 200, 175)).toBe(0.5)
+  })
+
+  it('mid-band linear interpolation: 25% into the band (continuous semantics)', () => {
+    // buyHigh=100, sellLow=200 → 25% in = 125 → 0.15 + 0.25 × 0.70 = 0.325
+    expect(bandPosition(125, 100, 200, 150)).toBeCloseTo(0.325, 10)
+  })
+
+  it('mid-band linear interpolation: continuous with the lower clamp', () => {
+    // A price just above buyHigh should return just above 0.15, NOT just above 0.
+    // Catches the prior discontinuity bug.
+    const justAbove = bandPosition(100.01, 100, 200, 150)!
+    expect(justAbove).toBeGreaterThan(0.15)
+    expect(justAbove).toBeLessThan(0.16)
+  })
+
+  it('mid-band linear interpolation: continuous with the upper clamp', () => {
+    // A price just below sellLow should return just below 0.85, NOT just below 1.
+    const justBelow = bandPosition(199.99, 100, 200, 150)!
+    expect(justBelow).toBeGreaterThan(0.84)
+    expect(justBelow).toBeLessThan(0.85)
+  })
+
+  it('returns null for inverted band (buyHigh > sellLow malformed input)', () => {
+    // Previously: silently returned a negative-denominator result via the
+    // dead `sellLow === buyHigh` branch. Now correctly refused.
+    expect(bandPosition(140, 150, 100, 125)).toBeNull()
+  })
+
+  it('handles edge case price === buyHigh (clamps to 0.15)', () => {
+    expect(bandPosition(100, 100, 200, 150)).toBe(0.15)
+  })
+
+  it('handles edge case price === sellLow (clamps to 0.85)', () => {
+    expect(bandPosition(200, 100, 200, 150)).toBe(0.85)
+  })
+})
+
+describe('rsiScoreDelta (F1.11 piecewise-linear)', () => {
+  it('returns 0 in the neutral 30..70 band', () => {
+    expect(rsiScoreDelta(30).delta).toBe(0)
+    expect(rsiScoreDelta(50).delta).toBe(0)
+    expect(rsiScoreDelta(70).delta).toBe(0)
+  })
+
+  it('caps positive delta at +15 when RSI = 0 (extreme oversold)', () => {
+    expect(rsiScoreDelta(0).delta).toBeCloseTo(15, 6)
+  })
+
+  it('caps negative delta at -10 when RSI = 100 (extreme overbought)', () => {
+    expect(rsiScoreDelta(100).delta).toBeCloseTo(-10, 6)
+  })
+
+  it('linearly interpolates in the oversold band: RSI=15 → +7.5', () => {
+    expect(rsiScoreDelta(15).delta).toBeCloseTo(7.5, 6)
+  })
+
+  it('linearly interpolates in the overbought band: RSI=85 → -5', () => {
+    expect(rsiScoreDelta(85).delta).toBeCloseTo(-5, 6)
+  })
+
+  it('is continuous at thresholds (no step at RSI=30)', () => {
+    const d29 = rsiScoreDelta(29).delta
+    const d30 = rsiScoreDelta(30).delta
+    const d31 = rsiScoreDelta(31).delta
+    // Old step: d30 = +15, d31 = 0 (15-pt jump). New: smooth across boundary.
+    expect(Math.abs(d30 - d31)).toBeLessThan(1)
+    expect(Math.abs(d29 - d30)).toBeLessThan(1)
+  })
+
+  it('is continuous at thresholds (no step at RSI=70)', () => {
+    const d69 = rsiScoreDelta(69).delta
+    const d70 = rsiScoreDelta(70).delta
+    const d71 = rsiScoreDelta(71).delta
+    expect(Math.abs(d70 - d71)).toBeLessThan(1)
+    expect(Math.abs(d69 - d70)).toBeLessThan(1)
+  })
+
+  it('is monotonically non-increasing in RSI', () => {
+    let prev = rsiScoreDelta(0).delta
+    for (let r = 1; r <= 100; r++) {
+      const cur = rsiScoreDelta(r).delta
+      expect(cur).toBeLessThanOrEqual(prev + 1e-9)
+      prev = cur
+    }
+  })
+
+  it('clamps RSI inputs out of [0,100] range', () => {
+    expect(rsiScoreDelta(-5).delta).toBeCloseTo(15, 6)
+    expect(rsiScoreDelta(150).delta).toBeCloseTo(-10, 6)
+  })
+
+  it('non-finite RSI yields no contribution', () => {
+    expect(rsiScoreDelta(NaN).delta).toBe(0)
+    expect(rsiScoreDelta(Infinity).delta).toBe(0)
+  })
+
+  it('label reflects band: oversold / overbought / neutral', () => {
+    expect(rsiScoreDelta(20).label).toBe('RSI oversold')
+    expect(rsiScoreDelta(80).label).toBe('RSI overbought')
+    expect(rsiScoreDelta(50).label).toMatch(/^RSI \d+$/)
+  })
+})
+
+describe('Quality pillar — negative-margin penalty', () => {
+  const base: ResearchScoreInput = {
+    trailingPE: null,
+    forwardPE: null,
+    debtToEquity: null,
+    returnOnEquity: null,
+    profitMargin: null,
+    rsi14: null,
+    trendScore: null,
+    pctB: null,
+    excessVsSpy60d: null,
+    bandPosition: null,
+  }
+
+  it('negative profit margin produces lower quality score than 0% margin', () => {
+    const lossy = computeResearchScore({ ...base, profitMargin: -0.30 })
+    const breakeven = computeResearchScore({ ...base, profitMargin: 0 })
+    // Quality pillar is index 1
+    expect(lossy.pillars[1].score).toBeLessThan(breakeven.pillars[1].score)
+  })
+
+  it('healthy margin (>20%) still produces higher quality score than break-even', () => {
+    const healthy = computeResearchScore({ ...base, profitMargin: 0.25 })
+    const breakeven = computeResearchScore({ ...base, profitMargin: 0 })
+    expect(healthy.pillars[1].score).toBeGreaterThan(breakeven.pillars[1].score)
+  })
+
+  it('negative margin detail string mentions the penalty', () => {
+    const lossy = computeResearchScore({ ...base, profitMargin: -0.30 })
+    expect(lossy.pillars[1].detail).toMatch(/negative margins/i)
   })
 })

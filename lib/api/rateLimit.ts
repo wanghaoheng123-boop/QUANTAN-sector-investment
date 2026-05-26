@@ -1,19 +1,15 @@
 /**
- * In-memory token-bucket rate limiter for Next.js API routes.
+ * Rate limiter for Next.js API routes (Phase 15 Q-005).
  *
- * Each route gets a bucket identified by a composite key (route name + IP).
- * Buckets refill tokens at the configured rate. When a bucket is empty, the
- * request is rejected with 429 Too Many Requests.
- *
- * All state is per-process (serverless instance). In a multi-instance Vercel
- * deployment this provides approximate per-instance limiting — for strict global
- * limits, use an external store (Redis, Upstash, Vercel KV).
+ * Default: in-memory token bucket per serverless instance.
+ * When KV_REST_API_URL + KV_REST_API_TOKEN are set (Vercel KV / Upstash),
+ * uses distributed INCR+EXPIRE; falls back to memory on KV errors.
  */
 
 const buckets = new Map<string, { tokens: number; lastRefill: number }>()
 
-// Purge stale entries every 5 minutes to prevent memory leak from abandoned IPs.
 const STALE_CLEANUP_INTERVAL_MS = 5 * 60 * 1000
+const MAX_BUCKETS = 50_000
 let _lastCleanup = Date.now()
 
 function cleanupStale() {
@@ -21,85 +17,100 @@ function cleanupStale() {
   if (now - _lastCleanup < STALE_CLEANUP_INTERVAL_MS) return
   _lastCleanup = now
   for (const [key, bucket] of buckets) {
-    // Buckets that haven't been accessed in > 15 min are stale
-    if (now - bucket.lastRefill > 15 * 60 * 1000) {
-      buckets.delete(key)
-    }
+    if (now - bucket.lastRefill > 15 * 60 * 1000) buckets.delete(key)
   }
+}
+
+function evictHalfByAge(): void {
+  const sorted = [...buckets.entries()].sort((a, b) => a[1].lastRefill - b[1].lastRefill)
+  const dropCount = Math.floor(sorted.length / 2)
+  for (let i = 0; i < dropCount; i++) buckets.delete(sorted[i][0])
 }
 
 export interface RateLimitConfig {
-  /** Maximum number of requests allowed in the window. */
   maxRequests: number
-  /** Window size in seconds over which maxRequests is measured. */
   windowSeconds: number
 }
 
-/**
- * Check rate limit for a given key. Returns { allowed: true } or
- * { allowed: false, retryAfter: seconds }.
- *
- * The token bucket refills at a rate of maxRequests / windowSeconds tokens per
- * second, with a burst capacity of maxRequests.
- */
 export function checkRateLimit(
-  /** Composite key — typically `${routeName}:${ip}` */
   key: string,
-  config: RateLimitConfig
+  config: RateLimitConfig,
+): { allowed: true } | { allowed: false; retryAfter: number } {
+  return checkRateLimitMemory(key, config)
+}
+
+function checkRateLimitMemory(
+  key: string,
+  config: RateLimitConfig,
 ): { allowed: true } | { allowed: false; retryAfter: number } {
   cleanupStale()
-
   const now = Date.now()
-  const refillRate = config.maxRequests / config.windowSeconds // tokens per second
-  const bucketKey = key
-
-  let bucket = buckets.get(bucketKey)
+  const refillRate = config.maxRequests / config.windowSeconds
+  let bucket = buckets.get(key)
   if (!bucket) {
+    if (buckets.size >= MAX_BUCKETS) evictHalfByAge()
     bucket = { tokens: config.maxRequests, lastRefill: now }
-    buckets.set(bucketKey, bucket)
+    buckets.set(key, bucket)
   }
-
-  // Refill tokens based on elapsed time
-  const elapsedSec = (now - bucket.lastRefill) / 1000
-  const refillTokens = elapsedSec * refillRate
-  bucket.tokens = Math.min(config.maxRequests, bucket.tokens + refillTokens)
+  const elapsedSec = Math.max(0, (now - bucket.lastRefill) / 1000)
+  bucket.tokens = Math.min(config.maxRequests, bucket.tokens + elapsedSec * refillRate)
   bucket.lastRefill = now
-
   if (bucket.tokens >= 1) {
     bucket.tokens -= 1
     return { allowed: true }
   }
-
-  // Calculate how long until the next token is available
-  const tokensNeeded = 1 - bucket.tokens
-  const retryAfter = Math.ceil(tokensNeeded / refillRate)
+  const retryAfter = Math.ceil((1 - bucket.tokens) / refillRate)
   return { allowed: false, retryAfter: Math.max(1, retryAfter) }
 }
 
-/**
- * Extract a rate-limit key from a NextRequest. Uses x-forwarded-for header
- * (trusted in Vercel deployments) with a fallback to x-real-ip or a hash of
- * the request's properties.
- */
+function isKvConfigured(): boolean {
+  return Boolean(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN)
+}
+
+async function checkRateLimitKv(
+  key: string,
+  config: RateLimitConfig,
+): Promise<{ allowed: true } | { allowed: false; retryAfter: number }> {
+  const base = process.env.KV_REST_API_URL!.replace(/\/$/, '')
+  const auth = { Authorization: `Bearer ${process.env.KV_REST_API_TOKEN!}` }
+  const bucketKey = `rl:${key}`
+  try {
+    const incrRes = await fetch(`${base}/incr/${encodeURIComponent(bucketKey)}`, { headers: auth })
+    if (!incrRes.ok) return checkRateLimitMemory(key, config)
+    const body = (await incrRes.json()) as { result?: number }
+    const count = Number(body.result ?? 1)
+    if (count === 1) {
+      await fetch(`${base}/expire/${encodeURIComponent(bucketKey)}/${config.windowSeconds}`, { headers: auth })
+    }
+    if (count <= config.maxRequests) return { allowed: true }
+    return { allowed: false, retryAfter: Math.max(1, config.windowSeconds) }
+  } catch {
+    return checkRateLimitMemory(key, config)
+  }
+}
+
 export function getRateLimitKey(request: Request, routeName: string): string {
-  const forwarded = request.headers.get('x-forwarded-for')
-  const ip = forwarded?.split(',')[0]?.trim()
-    || request.headers.get('x-real-ip')
-    || 'unknown'
+  const isVercel = process.env.VERCEL === '1'
+  let ip: string
+  if (isVercel) {
+    ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+      || request.headers.get('x-real-ip')
+      || 'unknown'
+  } else {
+    ip = request.headers.get('x-real-ip') || 'server'
+  }
   return `${routeName}:${ip}`
 }
 
-/**
- * Convenience: apply rate limiting to a request and return a 429 response if
- * exceeded, or null if the request should proceed.
- */
-export function applyRateLimit(
+export async function applyRateLimit(
   request: Request,
   routeName: string,
-  config: RateLimitConfig
-): Response | null {
+  config: RateLimitConfig,
+): Promise<Response | null> {
   const key = getRateLimitKey(request, routeName)
-  const result = checkRateLimit(key, config)
+  const result = isKvConfigured()
+    ? await checkRateLimitKv(key, config)
+    : checkRateLimitMemory(key, config)
   if (!result.allowed) {
     return new Response(
       JSON.stringify({
@@ -113,7 +124,7 @@ export function applyRateLimit(
           'Content-Type': 'application/json',
           'Retry-After': String(result.retryAfter),
         },
-      }
+      },
     )
   }
   return null

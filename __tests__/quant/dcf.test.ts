@@ -84,4 +84,56 @@ describe('DCF Model', () => {
     // Negative FCF with positive growth leads to more negative → null (valuePerShare <= 0)
     expect(result).toBeNull()
   })
+
+  /**
+   * FCFF→equity bridge — Damodaran (2012) ch. 12: equity value = firm
+   * value − net debt. The previous code set equityValue = enterpriseValue,
+   * silently overstating equity for any levered company. New tests pin
+   * down the bridge contract.
+   */
+  describe('FCFF → equity bridge (netDebt)', () => {
+    it('default netDebt = 0 preserves prior behavior (equity = EV)', () => {
+      const r = runDcf(baseInput)!
+      expect(r.equityValue).toBe(r.enterpriseValue)
+      expect(r.valuePerShare).toBeCloseTo(r.enterpriseValue / baseInput.shares, 5)
+      expect(r.netDebtUsed).toBe(0)
+    })
+
+    it('positive net debt reduces equity value vs EV', () => {
+      const noDebt = runDcf(baseInput)!
+      const levered = runDcf({ ...baseInput, netDebt: 5_000_000 })!
+      expect(levered.enterpriseValue).toBeCloseTo(noDebt.enterpriseValue, 5)
+      expect(levered.equityValue).toBeCloseTo(noDebt.enterpriseValue - 5_000_000, 5)
+      expect(levered.valuePerShare).toBeLessThan(noDebt.valuePerShare)
+      expect(levered.netDebtUsed).toBe(5_000_000)
+    })
+
+    it('negative net debt (net cash) increases equity value vs EV', () => {
+      const noDebt = runDcf(baseInput)!
+      // Apple-like: net cash position
+      const netCash = runDcf({ ...baseInput, netDebt: -3_000_000 })!
+      expect(netCash.equityValue).toBeCloseTo(noDebt.enterpriseValue + 3_000_000, 5)
+      expect(netCash.valuePerShare).toBeGreaterThan(noDebt.valuePerShare)
+      expect(netCash.netDebtUsed).toBe(-3_000_000)
+    })
+
+    it('returns null when net debt makes equity value non-positive', () => {
+      // EV ≈ 13M for baseInput; netDebt = 100M → equity = -87M → null
+      const r = runDcf({ ...baseInput, netDebt: 100_000_000 })
+      expect(r).toBeNull()
+    })
+
+    it('non-finite netDebt is treated as 0 (defensive)', () => {
+      const nan = runDcf({ ...baseInput, netDebt: NaN })!
+      const inf = runDcf({ ...baseInput, netDebt: Infinity })!
+      const baseline = runDcf(baseInput)!
+      expect(nan.equityValue).toBe(baseline.equityValue)
+      expect(inf.equityValue).toBe(baseline.equityValue)
+    })
+
+    it('valuePerShare = (EV − netDebt) / shares', () => {
+      const r = runDcf({ ...baseInput, netDebt: 2_000_000 })!
+      expect(r.valuePerShare).toBeCloseTo((r.enterpriseValue - 2_000_000) / baseInput.shares, 5)
+    })
+  })
 })

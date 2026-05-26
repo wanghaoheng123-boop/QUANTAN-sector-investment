@@ -1,0 +1,47 @@
+# Phase 4 / Expert Team Program — nightly benchmark guard on main.
+# Fails if aggregate win rate drops below 55% (project floor).
+# Pair with weekly data refresh (refresh-data.yml) for fresh backtestData.
+
+name: Nightly Benchmark
+
+on:
+  schedule:
+    - cron: '0 6 * * 1-5'
+  workflow_dispatch:
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run canonical benchmark
+        run: npm run benchmark
+
+      - name: Enforce WR floor (>= 55%)
+        run: |
+          node -e "
+            const fs = require('fs');
+            const r = JSON.parse(fs.readFileSync('scripts/benchmark-results.json', 'utf8'));
+            const wr = r.aggregate?.aggregateWinRate;
+            if (typeof wr !== 'number') {
+              console.error('FAIL: missing aggregate.aggregateWinRate');
+              process.exit(1);
+            }
+            const FLOOR = 55.0;
+            console.log('Aggregate Win Rate:', wr.toFixed(2) + '%');
+            if (wr < FLOOR) {
+              console.error('FAIL: WR below nightly floor', FLOOR);
+              process.exit(1);
+            }
+            console.log('PASS');
+          "

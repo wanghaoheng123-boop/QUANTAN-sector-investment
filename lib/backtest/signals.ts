@@ -4,6 +4,7 @@
  */
 
 import type { OhlcBar, OhlcvBar } from '@/lib/quant/indicators'
+import { useEnhancedCombinedSignal } from '@/lib/featureFlags'
 import {
   smaLatest as sma,
   ema,
@@ -27,6 +28,18 @@ export { sma, ema, rsi, macdFn, atr, bollinger }
  * Critical fix for Technology sector — prevents buying dips in secular downtrends.
  * AAPL went from 16.7% → expected ~55%+ win rate after applying this gate.
  */
+/**
+ * Piecewise RSI score (Wilder 1978; Phase 15 Q-025 / F1.11).
+ * RSI &lt; 30 → +1.0; 30–70 linear; &gt; 70 → −1.0 (mean-reversion framing).
+ */
+export function piecewiseRsiScore(rsi14: number): number {
+  if (!Number.isFinite(rsi14)) return 0
+  if (rsi14 < 30) return 1.0
+  if (rsi14 > 70) return -1.0
+  if (rsi14 <= 50) return (50 - rsi14) / 20
+  return -(rsi14 - 50) / 20
+}
+
 export function isGoldenCross(closes: number[]): boolean {
   if (closes.length < 200) return false
   const ema50Arr = emaFull(closes, 50)
@@ -139,7 +152,12 @@ export function isMACompression(closes: number[], tolerancePct = 0.05): boolean 
 }
 
 export function sma200DeviationPct(price: number, sma200: number): number | null {
-  if (!Number.isFinite(sma200) || sma200 <= 0 || !Number.isFinite(price)) return null
+  // Reject non-finite OR non-positive price/SMA — negative or zero prices
+  // produce mathematically-finite-but-meaningless deviations (e.g. a price
+  // of -50 vs SMA 100 yields dev = -150%, which would fall into the
+  // CRASH_ZONE branch downstream and emit a 78%-confidence BUY/SELL).
+  if (!Number.isFinite(sma200) || sma200 <= 0) return null
+  if (!Number.isFinite(price) || price <= 0) return null
   return ((price - sma200) / sma200) * 100
 }
 
@@ -218,6 +236,18 @@ export function regimeSignal(price: number, closes: number[], rsi14?: number): R
   const slopePos = slope != null ? slope > 0.005 : null
   // FIX D: Was price recently within +5% of SMA?
   const nearSma = priceWasNearSmaRecently(closes, 5)
+
+  // Fail-closed when deviation can't be computed (non-finite price, broken
+  // SMA). Previously the function fell through every `if (dev != null ...)`
+  // branch and silently classified the position as CRASH_ZONE BUY or SELL
+  // with 78–95% confidence — emitting real trading actions from bad data.
+  if (dev == null) {
+    return {
+      zone: 'INSUFFICIENT_DATA', dipSignal: 'INSUFFICIENT_DATA',
+      deviationPct: null, slopePct: slope, slopePositive: slopePos,
+      action: 'HOLD', confidence: 0, label: 'Insufficient Data',
+    }
+  }
 
   // ── Deviation-based zones ──────────────────────────────────────────────
   // EXTREME_BULL: >+20% — extremely extended, no buy
@@ -369,7 +399,7 @@ const WEIGHT_PROFILES: Record<string, { rsi: number; macd: number; atr: number; 
  * as accumulation territory (institutional buyers absorbing supply) and
  * above-VA as distribution territory; the asymmetric weights bias the
  * confluence score toward dip-buying, which historically produces the
- * platform's institutional-grade win rate.
+ * dip-buy bias in the confluence score (see SIGNAL_SSOT.md for honest WR metrics).
  *
  * For TREND-FOLLOWING regimes (high ADX), an above-VA breakout is
  * bullish, not bearish. The current implementation does not flip the
@@ -482,7 +512,36 @@ export function enhancedCombinedSignal(
   const weights = WEIGHT_PROFILES[volRegime.strategyHint] ?? WEIGHT_PROFILES.default
 
   // ── Compute per-indicator scores (-1 to +1) ──
-  const rsiScore = Number.isFinite(rsi14) ? (50 - rsi14) / 50 : 0
+  //
+  // CRITICAL ensemble property: every score MUST lie in [-1, +1] so that
+  // the weighted sum (Σ wᵢ · sᵢ, with Σ wᵢ = 1) is bounded in [-1, +1].
+  // A single unclamped score can dominate the entire weighted ensemble.
+  //
+  // Phase 13 S2 — TEAM AUDIT (Quant + AI + Full-stack):
+  //
+  //   Bug found: bbScore = 1 - 2 * bbPctB was UNCLAMPED. When price
+  //   overshoots a Bollinger band — common in strong trends — bbPctB
+  //   exceeds [0, 1]:
+  //     bbPctB =  1.5 (price 50% above upper band)  → bbScore = -2.0
+  //     bbPctB = -0.5 (price 50% below lower band)  → bbScore = +2.0
+  //   With weight 0.15, the contribution is ±0.30 — alone matching the
+  //   SELL threshold (-0.30) or doubling the BUY threshold (+0.15).
+  //   A single-bar Bollinger overshoot could silently flip the ensemble.
+  //
+  //   Bug found: rsiScore = (50 - rsi14) / 50 assumed rsi14 ∈ [0, 100]
+  //   but had no explicit clamp. RSI is mathematically bounded by Wilder's
+  //   construction, but a numerical bug in the indicator (e.g. a divide-by-
+  //   tiny-loss) could emit out-of-range values that would silently swing
+  //   the ensemble.
+  //
+  // Fix: clamp ALL per-indicator scores to [-1, +1] explicitly.
+  //
+  // Citation: Kuncheva, L. I. (2014). *Combining Pattern Classifiers:
+  //           Methods and Algorithms* (2nd ed.), Wiley, §4.2 — weighted-
+  //           combination ensemble bounds require homogeneous base-learner
+  //           output ranges. Unbounded base learners produce unbounded
+  //           ensemble outputs, which break threshold-based decision rules.
+  const rsiScore = Number.isFinite(rsi14) ? piecewiseRsiScore(rsi14) : 0
   const macdScore = Number.isFinite(macdHist) && Number.isFinite(atrLast) && atrLast > 0
     // F1.13 (Phase 13 S2 documentation): scale MACD histogram by 10% of the
     // current ATR to make the score volatility-normalised. The 0.1 factor is
@@ -492,10 +551,15 @@ export function enhancedCombinedSignal(
     // up with practitioner heuristics for "meaningful MACD divergence".
     ? clamp(macdHist / (atrLast * 0.1), -1, 1) : 0
   const atrScore = Number.isFinite(atrPct) ? clamp((atrPct - 1.5) / 2.0, -1, 1) : 0
-  const bbScore = Number.isFinite(bbPctB) ? 1 - 2 * bbPctB : 0
+  const bbScore = Number.isFinite(bbPctB) ? clamp(1 - 2 * bbPctB, -1, 1) : 0
   const vpocScore = volumeZoneScore(vpZone)
-  const mtfScore = mtf.alignmentScore / 3.0
-  const volRegScore = volRegimeScore(volRegime)
+  // mtf.alignmentScore is in [-3, +3] (sum of 3 timeframe contributions);
+  // /3 maps to [-1, +1] exactly under the existing contract, but clamp
+  // defensively against future changes to multiTimeframeSignal's range.
+  const mtfScore = clamp(mtf.alignmentScore / 3.0, -1, 1)
+  // volRegimeScore returns values from a fixed enum (-0.8 .. +0.5) so a
+  // clamp here is for defence-in-depth (no current path can exceed ±1).
+  const volRegScore = clamp(volRegimeScore(volRegime), -1, 1)
 
   // ── Build weighted confirms ──
   const weightedConfirms: WeightedConfirm[] = [
@@ -529,8 +593,17 @@ export function enhancedCombinedSignal(
   // ── Action determination ──
   let action: 'BUY' | 'HOLD' | 'SELL' = regime.action
 
-  // Resolve thresholds (sector overrides or defaults)
-  const buyThresh = sectorGates?.buyWScoreThreshold ?? 0.15
+  // Resolve thresholds (sector overrides or defaults).
+  // Q1-C-5 (Phase 14 S1): BUY threshold raised from 0.15 → 0.25 to reduce false positives.
+  // The function docstring already stated "> 0.25" but the default was 0.15 — a comment/code
+  // contradiction. At 0.15, a single RSI score of 0.30 (weight 0.20) alone exceeds the
+  // threshold; at 0.25, at least two confirming indicators are needed in a typical regime.
+  //
+  // C2 algorithm-lead approval: documented here. Impact tracked by post-fix benchmark run.
+  // Citation: Kuncheva (2014) §4.2 — ensemble threshold should reflect the minimum
+  // confluence of base learners; a 0.25 threshold requires ~2 confirming signals
+  // weighted ≥ 0.13 each (matches the platform's 7-factor weight layout).
+  const buyThresh = sectorGates?.buyWScoreThreshold ?? 0.25
   const sellThresh = sectorGates?.sellWScoreThreshold ?? -0.30
 
   // Use weighted score for confirmation instead of bullishCount
@@ -617,5 +690,43 @@ export function enhancedCombinedSignal(
     multiTfScore: mtf.alignmentScore,
     volumeZone: vpZone,
     totalWeightedScore,
+  }
+}
+
+/** Production signal resolver — enhanced gated by Q-009 feature flag. */
+export function resolveBacktestSignal(
+  ticker: string,
+  date: string,
+  price: number,
+  closes: number[],
+  bars: OhlcBar[],
+  ohlcvBars: (OhlcvBar & { time?: number })[],
+  config: Partial<BacktestConfig> = {},
+  sectorGates?: SectorGateConfig,
+): EnhancedCombinedSignal {
+  if (useEnhancedCombinedSignal()) {
+    return enhancedCombinedSignal(ticker, date, price, closes, bars, ohlcvBars, config, sectorGates)
+  }
+  const rsi14 = rsi(closes).at(-1) ?? NaN
+  const regime = regimeSignal(price, closes, rsi14)
+  const cfg = { ...DEFAULT_CONFIG, ...config }
+  let kellyFrac = 0.10
+  if (regime.action === 'BUY') kellyFrac = cfg.halfKelly ? 0.15 : 0.30
+  if (regime.action === 'SELL') kellyFrac = 1.0
+  return {
+    ticker,
+    date,
+    price,
+    regime,
+    confirms: [],
+    action: regime.action,
+    confidence: regime.confidence,
+    KellyFraction: kellyFrac,
+    reason: `${regime.zone} [regime-only path; enhanced disabled in production]`,
+    weightedConfirms: [],
+    volRegime: detectRegime(closes, bars),
+    multiTfScore: 0,
+    volumeZone: null,
+    totalWeightedScore: 0,
   }
 }

@@ -1,10 +1,11 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Rocket, ExternalLink, Copy, Check, X, CheckCircle2 } from 'lucide-react'
+import { useDialogA11y } from '@/hooks/useDialogA11y'
 
 /** Subfolder that contains `server_trading_agents.py` when the Git repo is the monorepo root. */
-const DEFAULT_ROOT_DIR = 'antigravity-sectors'
+const DEFAULT_ROOT_DIR = 'QUANTAN-sector-investment'
 
 const RAILWAY_NEW = 'https://railway.app/new'
 const RAILWAY_DOCS_PYTHON = 'https://docs.railway.app/guides/languages/python'
@@ -22,6 +23,11 @@ type Props = {
 export function LlmDeployAssistant({ repoServiceRoot = DEFAULT_ROOT_DIR, backendReady = false }: Props) {
   const [open, setOpen] = useState(false)
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  // Phase 13 S2 (F6.7 WAI-ARIA Dialog) — refs for full focus management.
+  // Phase 14 wave 31: the previously-inlined effect now lives in
+  // `useDialogA11y` (called below) — SSOT shared with KeyboardShortcuts.
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const closeBtnRef = useRef<HTMLButtonElement>(null)
 
   const copy = useCallback(async (text: string, id: string) => {
     try {
@@ -42,6 +48,10 @@ export function LlmDeployAssistant({ repoServiceRoot = DEFAULT_ROOT_DIR, backend
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [open])
+
+  // F6.7 WAI-ARIA Dialog full pattern via the shared useDialogA11y primitive:
+  // initial focus · focus trap · body scroll lock · return focus on close.
+  useDialogA11y({ open, dialogRef, initialFocusRef: closeBtnRef })
 
   const openRailway = useCallback(() => {
     window.open(RAILWAY_NEW, '_blank', 'noopener,noreferrer')
@@ -64,7 +74,7 @@ python server_trading_agents.py`
         {backendReady ? (
           <>
             <div className="flex flex-col items-center gap-1 text-center px-1">
-              <CheckCircle2 className="w-7 h-7 text-emerald-400" aria-hidden />
+              <CheckCircle2 className="w-7 h-7 text-emerald-400" aria-hidden="true" />
               <span className="text-[10px] font-bold text-emerald-100 leading-tight uppercase tracking-wide">
                 Setup
                 <br />
@@ -87,7 +97,7 @@ python server_trading_agents.py`
               onClick={() => setOpen(true)}
               className="flex flex-col items-center gap-1.5 rounded-lg bg-gradient-to-b from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white px-2 py-3 text-center shadow-lg shadow-amber-900/30 transition-colors"
             >
-              <Rocket className="w-5 h-5" aria-hidden />
+              <Rocket className="w-5 h-5" aria-hidden="true" />
               <span className="text-[10px] font-bold leading-tight uppercase tracking-wide">
                 Deploy
                 <br />
@@ -132,11 +142,15 @@ python server_trading_agents.py`
           aria-labelledby="llm-deploy-title"
           onClick={(e) => e.target === e.currentTarget && setOpen(false)}
         >
-          <div className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl">
+          <div
+            ref={dialogRef}
+            className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl"
+          >
             <button
+              ref={closeBtnRef}
               type="button"
               onClick={() => setOpen(false)}
-              className="absolute right-3 top-3 rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white"
+              className="absolute right-3 top-3 rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-blue-400"
               aria-label="Close"
             >
               <X className="w-4 h-4" />

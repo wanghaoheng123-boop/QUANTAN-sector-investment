@@ -77,6 +77,13 @@ export function computeGex(
   puts: EnrichedContract[],
   spot: number,
 ): GexResult {
+  // Phase 14 wave 7: defensive guard on spot. A NaN/Inf/zero spot poisons
+  // `dollarPer1Pct = 100 * spot * spot * 0.01` and propagates NaN through
+  // every per-strike GEX value and the totalGex sum.
+  if (!Number.isFinite(spot) || spot <= 0) {
+    return { totalGex: 0, strikeGex: [], flipPoint: null, flipPoints: [] }
+  }
+
   // Per-strike, per-side accumulators. Multiple contracts at the same strike
   // (rare but possible across providers) get OI summed and gamma averaged
   // (within-side average is meaningful — same side IV is consistent).
@@ -91,6 +98,13 @@ export function computeGex(
   const strikeMap = new Map<number, StrikeAccum>()
 
   function upsert(strike: number, oi: number, gamma: number, side: 'call' | 'put') {
+    // Phase 14 wave 7: NaN gamma comes from deep-ITM/OTM Greeks near the B-S
+    // singularity or 0-DTE contracts. A single NaN poisoned every downstream
+    // sum. We treat non-finite gamma like zero-OI: count it in side OI for
+    // depth-of-book metrics but EXCLUDE it from the gamma average so the
+    // healthy contracts retain accurate gamma. Same defence for non-finite
+    // OI or strike.
+    if (!Number.isFinite(strike) || !Number.isFinite(oi)) return
     let entry = strikeMap.get(strike)
     if (!entry) {
       entry = {
@@ -103,13 +117,14 @@ export function computeGex(
       entry.callOI += oi
       // F3.3: only accumulate gamma if OI > 0 — zero-OI contracts shouldn't
       // pollute the side average (and they contribute nothing to GEX anyway).
-      if (oi > 0) {
+      // Phase 14 wave 7: also require gamma finite.
+      if (oi > 0 && Number.isFinite(gamma)) {
         entry.callGammaSum += gamma
         entry.callGammaCount++
       }
     } else {
       entry.putOI += oi
-      if (oi > 0) {
+      if (oi > 0 && Number.isFinite(gamma)) {
         entry.putGammaSum += gamma
         entry.putGammaCount++
       }
@@ -141,8 +156,19 @@ export function computeGex(
   for (let i = 0; i < strikeGex.length; i++) {
     const prev = cumulative
     cumulative += strikeGex[i].gex
-    // Check both sign-change directions: positive→negative OR negative→positive
-    if ((prev > 0 && cumulative <= 0) || (prev < 0 && cumulative >= 0)) {
+    // Phase 14 wave 41 (F3): require STRICT sign change.
+    //
+    // Prior `cumulative <= 0` / `cumulative >= 0` fired on every strike
+    // where the running sum landed exactly on zero — common when both
+    // sides have zero OI at that strike, OR when a strike's GEX exactly
+    // cancels the running sum. Pre-wave-41 this produced spurious
+    // flipPoints, sometimes multiple in a row, contaminating the chart.
+    //
+    // Strict comparison: only flip when the sign actually changes
+    // (positive → strictly negative, negative → strictly positive).
+    // A landing on exactly zero is treated as carry-through; the next
+    // non-zero contribution decides direction.
+    if ((prev > 0 && cumulative < 0) || (prev < 0 && cumulative > 0)) {
       const s0 = i > 0 ? strikeGex[i - 1].strike : strikeGex[i].strike
       const s1 = strikeGex[i].strike
       const denom = Math.abs(prev) + Math.abs(cumulative)

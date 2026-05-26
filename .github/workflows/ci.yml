@@ -1,5 +1,10 @@
 name: CI
 
+# Phase 15 Q-001 (2026-05-23):
+# Expands CI from typecheck-only to a quality gate covering typecheck, tests,
+# benchmark floor, and smoke verification. Each job is independent so failures
+# surface granularly. Benchmark gates net label WR (SSOT, 2026-05-26 re-baseline).
+
 on:
   push:
     branches: [main]
@@ -10,16 +15,104 @@ jobs:
   typecheck:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
+      - uses: actions/checkout@v5
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: '20'
           cache: 'npm'
-
       - name: Install dependencies
         run: npm ci
-
       - name: Typecheck
         run: npm run typecheck
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Run vitest
+        run: npm run test
+      # Floor: 798 tests (per reviews/invariants-baseline.md §3 as of 2026-05-23)
+
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Run vitest with coverage thresholds
+        run: npm run test:coverage
+      # Q-022: enforces vitest.config.ts thresholds (80/80/80/70).
+      # Q-051-NEW: hooks, lib/ml, lib/optimize, lib/portfolio, data/providers
+      # temporarily excluded until tests land.
+
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Run canonical benchmark
+        run: npm run benchmark
+      - name: Enforce net WR floor (>= 53.29%)
+        run: |
+          # SSOT re-baseline 2026-05-26: production regime-only label benchmark.
+          # Net WR after round-trip costs (executionModel.ts). Frozen 53.79%;
+          # 50 bps tolerance = 53.29%. See reviews/invariants-baseline.md §1b.
+          node -e "
+            const fs = require('fs');
+            const r = JSON.parse(fs.readFileSync('scripts/benchmark-results.json', 'utf8'));
+            const netWr = r.aggregate?.aggregateNetWinRate;
+            const grossWr = r.aggregate?.aggregateWinRate;
+            if (typeof netWr !== 'number') {
+              console.error('FAIL: benchmark JSON missing aggregate.aggregateNetWinRate');
+              process.exit(1);
+            }
+            const FLOOR_NET = 53.29;
+            const FROZEN_NET = 53.79;
+            console.log('Aggregate Net Win Rate:', netWr.toFixed(2) + '%');
+            console.log('Aggregate Gross Win Rate:', (grossWr ?? 'n/a') + '%');
+            console.log('Floor (net):', FLOOR_NET.toFixed(2) + '%');
+            if (netWr < FLOOR_NET) {
+              console.error('FAIL: net WR ' + netWr.toFixed(2) + '% below floor ' + FLOOR_NET.toFixed(2) + '%');
+              process.exit(1);
+            }
+            if (netWr < FROZEN_NET) {
+              console.warn('WARN: net WR below frozen baseline ' + FROZEN_NET + '%; document in PR if intentional.');
+            }
+            console.log('PASS');
+          "
+
+  smoke:
+    runs-on: ubuntu-latest
+    needs: [typecheck, test]
+    steps:
+      - uses: actions/checkout@v5
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Verify scripts (logic + indicators + btc)
+        run: npm run verify:data
+      # Note: full check:smoke (production HTTP probes) is run on deploy, not on PR.
+      # See package.json scripts for the canonical command list.

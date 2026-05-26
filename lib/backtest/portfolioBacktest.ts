@@ -13,12 +13,12 @@
  *   - Enhanced exit rules (ATR stops, profit-taking, panic exits)
  */
 
-import type { OhlcvRow } from '@/scripts/backtest/dataLoader'
-import { enhancedCombinedSignal, DEFAULT_CONFIG } from '@/lib/backtest/signals'
+import type { OhlcvRow } from '@/lib/backtest/dataLoader'
+import { resolveBacktestSignal, DEFAULT_CONFIG } from '@/lib/backtest/signals'
 import type { BacktestConfig, SectorGateConfig } from '@/lib/backtest/signals'
 import { atrArray, sortinoRatio } from '@/lib/quant/indicators'
 import { maxCorrelationVsPeers, correlationAdjustedKelly } from '@/lib/quant/correlation'
-import { BACKTEST_RFR_ANNUAL } from '@/lib/quant/constants'
+import { getRiskFreeRateSync } from '@/lib/quant/riskFreeRate'
 import {
   checkExitConditions, updatePosition, atrAdaptiveStop,
   DEFAULT_EXIT_CONFIG,
@@ -34,7 +34,7 @@ export interface PortfolioConfig extends BacktestConfig {
   exit: ExitConfig
   /**
    * Per-ticker macro gate overrides. Phase 12-A: wires SECTOR_PROFILES into
-   * enhancedCombinedSignal so per-sector gates (golden cross, TLT/yield curve,
+   * resolveBacktestSignal (SSOT) so per-sector gates apply when enhanced flag is on.
    * threshold overrides) apply during portfolio backtests. Default: derived from
    * SECTOR_PROFILES on first call.
    */
@@ -144,6 +144,32 @@ export function runPortfolioBacktest(
   // institutional risk reports for short-term correlation.
   const CORRELATION_WINDOW = 63
 
+  // Phase 14 wave 6: pre-seed correlation tape from the warm-up window so
+  // the first ~20 trading days don't fail-closed via maxCorrelationVsPeers.
+  // Without this, the tape is empty at di=220, maxCorrelationVsPeers
+  // returns null for <20 history, and correlationAdjustedKelly fail-closes
+  // to 0 — blocking ALL new positions for the first ~20 trading days.
+  // Seed using the unified-date window so per-ticker indices stay consistent.
+  const CORR_SEED_BARS = 25
+  const seedStartDi = Math.max(0, 220 - CORR_SEED_BARS)
+  for (const t of tickers) {
+    const rows = instrumentData[t] ?? []
+    const seed: number[] = []
+    for (let i = seedStartDi + 1; i < 220 && i < dates.length; i++) {
+      const prevTime = dates[i - 1]
+      const currTime = dates[i]
+      const prevIdx = priceIndex[t]?.get(prevTime)
+      const currIdx = priceIndex[t]?.get(currTime)
+      if (prevIdx == null || currIdx == null) continue
+      const prev = rows[prevIdx]?.close
+      const curr = rows[currIdx]?.close
+      if (prev && curr && prev > 0 && Number.isFinite(curr) && Number.isFinite(prev)) {
+        seed.push(curr / prev - 1)
+      }
+    }
+    tickerDailyReturns[t] = seed
+  }
+
   // Phase 12-A: Build per-ticker sector-gate map.
   // Resolution order:
   //   1) explicit cfg.tickerSectorGates override (per-ticker)
@@ -230,16 +256,28 @@ export function runPortfolioBacktest(
       let signalAction: 'BUY' | 'HOLD' | 'SELL' = 'HOLD'
       try {
         // Phase 12-A: pass per-ticker sector gate
-        const sig = enhancedCombinedSignal(
+        const sig = resolveBacktestSignal(
           ticker, currentDate, price, closes, bars, ohlcv, cfg,
           sectorGateByTicker[ticker],
         )
         signalAction = sig.action
-      } catch { /* keep HOLD on error */ }
+      } catch (err) {
+        // Phase 14 wave 21: log the signal-generation error so a regression
+        // (e.g. a NaN bar that throws inside an indicator) leaves a trace.
+        // We still keep HOLD as the conservative fallback, but the warn
+        // surfaces what would otherwise be a silent algorithm failure.
+        console.warn(
+          `[portfolioBacktest] signal generation failed for ${ticker} on ${currentDate}:`,
+          err instanceof Error ? err.message : err,
+        )
+      }
 
-      // Check exit conditions
+      // Check exit conditions — F1.3 (Phase 13 S2): pass the full bar so
+      // stop-loss and profit-target evaluation uses bar.low / bar.high
+      // (intraday breach), not just bar.close.
       const exitCheck = checkExitConditions(
         pos, di, price, currentDate, currentATRPct, signalAction, cfg.exit,
+        { open: row.open, high: row.high, low: row.low, close: row.close },
       )
 
       if (exitCheck) {
@@ -247,6 +285,17 @@ export function runPortfolioBacktest(
         const exitShares = exitCheck.isPartial
           ? Math.floor(pos.currentShares * exitCheck.partialFraction)
           : pos.currentShares
+
+        // Phase 14 wave 7: skip zero-share partial exits.
+        // Bug: small positions (currentShares = 1 with partialFraction = 0.5)
+        // floor to exitShares = 0 but the prior code still pushed a "trade"
+        // record (shares=0, pnlDollar=0) and flipped partialExitDone=true,
+        // poisoning win-rate stats (zero-share trades count toward the
+        // denominator) and stripping the position of its profit-target exit
+        // path so it could only exit via trailing stop afterwards.
+        if (exitCheck.isPartial && exitShares <= 0) {
+          continue  // keep position intact, partialExitDone stays false
+        }
 
         const pnlPct = (exitPrice - pos.entryPrice) / pos.entryPrice
         const pnlDollar = exitShares * (exitPrice - pos.entryPrice)
@@ -306,7 +355,7 @@ export function runPortfolioBacktest(
         let sig
         try {
           // Phase 12-A: pass per-ticker sector gate
-          sig = enhancedCombinedSignal(
+          sig = resolveBacktestSignal(
             ticker, currentDate, price, closes, bars, ohlcv, cfg,
             sectorGateByTicker[ticker],
           )
@@ -476,8 +525,12 @@ export function runPortfolioBacktest(
   // Phase 13 S2 fix (F1.16): Sortino delegated to canonical indicators.ts impl.
   // Sharpe stays inline (no SSOT divergence to fix).
   let sharpe: number | null = null
-  // F1.4 (Phase 13 S2 partial): rate sourced from canonical constant; FRED hookup TBD.
-  const rfD = BACKTEST_RFR_ANNUAL / 252
+  // F1.4 / Q-052-NEW (Phase 15): tenor-matched RFR via FRED-backed helper. When
+  // QUANTAN_FRED_PREWARM=1 is set in production, the helper returns the
+  // prevailing 1-year Treasury yield (DGS1); in tests / CI / canonical benchmark
+  // the cache is cold and returns BACKTEST_RFR_ANNUAL (0.045) verbatim — so
+  // this drop-in is reproducibility-safe.
+  const rfD = getRiskFreeRateSync(365) / 252
   if (dailyReturns.length > 30) {
     const mean = dailyReturns.reduce((a, b) => a + b, 0) / dailyReturns.length
     const variance = dailyReturns.reduce((s, x) => s + (x - mean) ** 2, 0) / Math.max(1, dailyReturns.length - 1)

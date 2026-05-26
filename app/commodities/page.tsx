@@ -22,11 +22,15 @@ export default function CommoditiesPage() {
 
   const tickers = useMemo(() => COMMODITY_INSTRUMENTS.map((c) => c.ticker), [])
 
-  const fetchPrices = useCallback(async () => {
+  // Phase 14 wave 20: AbortSignal-aware poll + structured catch logging.
+  // Prior silent `catch { /* network */ }` made transient failures invisible.
+  const fetchPrices = useCallback(async (signal?: AbortSignal) => {
     try {
       const q = tickers.map(encodeURIComponent).join(',')
-      const res = await fetch(`/api/prices?tickers=${q}`)
+      const res = await fetch(`/api/prices?tickers=${q}`, { signal })
+      if (signal?.aborted) return
       const data = await res.json()
+      if (signal?.aborted) return
       if (data.quotes) {
         const map: Record<string, Quote> = {}
         data.quotes.forEach((row: Quote) => {
@@ -35,21 +39,35 @@ export default function CommoditiesPage() {
         setQuotes(map)
         setLastUpdate(new Date())
       }
-    } catch {
-      /* network */
+    } catch (err) {
+      if (signal?.aborted || (err instanceof DOMException && err.name === 'AbortError')) return
+      console.warn('[commodities] fetch failed', err)
     }
   }, [tickers])
 
   useEffect(() => {
-    fetchPrices()
-    const id = setInterval(fetchPrices, 20_000)
-    return () => clearInterval(id)
+    let activeController = new AbortController()
+    void fetchPrices(activeController.signal)
+    const id = setInterval(() => {
+      activeController.abort()
+      activeController = new AbortController()
+      void fetchPrices(activeController.signal)
+    }, 20_000)
+    return () => {
+      clearInterval(id)
+      activeController.abort()
+    }
   }, [fetchPrices])
 
+  // Phase 14 wave 20: spread BEFORE sort. Prior code: when filter === 'ALL',
+  // `list = COMMODITY_INSTRUMENTS` and `list.sort()` mutated the IMPORTED
+  // module constant. Any other consumer reading COMMODITY_INSTRUMENTS in
+  // any order other than ticker-ascending would silently get re-sorted data
+  // after this page mounted once.
   const rows = useMemo(() => {
     const list =
       filter === 'ALL' ? COMMODITY_INSTRUMENTS : COMMODITY_INSTRUMENTS.filter((c) => c.category === filter)
-    return list.sort((a, b) => a.ticker.localeCompare(b.ticker))
+    return [...list].sort((a, b) => a.ticker.localeCompare(b.ticker))
   }, [filter])
 
   return (
@@ -118,14 +136,14 @@ export default function CommoditiesPage() {
                       <div className="truncate" title={c.description}>
                         {c.name}
                       </div>
-                      <div className="text-xs text-slate-600 truncate">{c.benchmarkNote}</div>
+                      <div className="text-xs text-slate-400 truncate">{c.benchmarkNote}</div>
                     </td>
                     <td className="px-4 py-3 hidden md:table-cell capitalize text-slate-500">{c.category}</td>
                     <td className="px-4 py-3 text-right font-mono text-white">
                       {q ? q.price.toFixed(2) : '—'}
                     </td>
                     <td
-                      className={`px-4 py-3 text-right font-mono ${q ? (up ? 'text-emerald-400' : 'text-red-400') : 'text-slate-600'}`}
+                      className={`px-4 py-3 text-right font-mono ${q ? (up ? 'text-emerald-400' : 'text-red-400') : 'text-slate-400'}`}
                     >
                       {q ? `${up ? '+' : ''}${q.changePct.toFixed(2)}%` : '—'}
                     </td>

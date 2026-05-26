@@ -51,9 +51,15 @@ export interface EnrichedChain {
 
 const yahooFinance = new YahooFinance()
 
-// Phase 13 S2 (F1.4 partial): centralized in lib/quant/constants.ts.
-// Eventual FRED-backed getRiskFreeRate(tenorDays) will be a 1-line change.
-import { OPTIONS_RFR_ANNUAL as RISK_FREE_RATE } from '@/lib/quant/constants'
+// Phase 13 S2 (F1.4 partial) + Phase 15 Q-052-NEW (2026-05-24):
+// Switched from the static OPTIONS_RFR_ANNUAL constant to the tenor-matched
+// FRED-backed `getRiskFreeRateSync(daysToExpiry)`. When QUANTAN_FRED_PREWARM=1
+// is set in the production env, the cache is warmed at module init and per-
+// contract Greeks reflect the prevailing tenor-matched Treasury yield. When
+// unset (tests, CI, canonical benchmark), the sync helper returns the static
+// fallback (5.25% for ≤90d via OPTIONS_RFR_ANNUAL, 4.5% otherwise via
+// BACKTEST_RFR_ANNUAL) — identical pre-Q-052 behaviour.
+import { getRiskFreeRateSync } from '@/lib/quant/riskFreeRate'
 
 function toDate(d: unknown): Date {
   if (d instanceof Date) return d
@@ -61,6 +67,23 @@ function toDate(d: unknown): Date {
 }
 
 function normaliseContract(raw: Record<string, unknown>): CallOrPut {
+  // Q3-H-3 (Phase 14): Yahoo returns IV as decimal (0.25 = 25%). If we see
+  // > 5.0, it's almost certainly a percentage-vs-decimal upstream bug — a
+  // raw value like 25 would propagate to Black-Scholes and blow up every
+  // Greek for the contract. Clamp to 0 (Greeks reported as zeros) and log
+  // for forensics so we can spot upstream schema drift early.
+  let ivRaw = Number(raw.impliedVolatility ?? 0)
+  if (Number.isFinite(ivRaw) && ivRaw > 5.0) {
+    // eslint-disable-next-line no-console
+    console.warn(JSON.stringify({
+      event: 'options.iv_out_of_range',
+      symbol: String(raw.contractSymbol ?? ''),
+      raw: ivRaw,
+    }))
+    ivRaw = 0
+  }
+  if (!Number.isFinite(ivRaw)) ivRaw = 0
+
   return {
     contractSymbol: String(raw.contractSymbol ?? ''),
     strike: Number(raw.strike ?? 0),
@@ -75,7 +98,7 @@ function normaliseContract(raw: Record<string, unknown>): CallOrPut {
     contractSize: String(raw.contractSize ?? 'REGULAR'),
     expiration: toDate(raw.expiration),
     lastTradeDate: toDate(raw.lastTradeDate ?? raw.expiration),
-    impliedVolatility: Number(raw.impliedVolatility ?? 0),
+    impliedVolatility: ivRaw,
     inTheMoney: Boolean(raw.inTheMoney),
   }
 }
@@ -93,19 +116,58 @@ function normaliseContract(raw: Record<string, unknown>): CallOrPut {
  *
  *   Switching conventions changes theta by ~30% (252 vs 365 → 0.69× factor)
  *   so any platform reading our theta values must use ACT/365.
+ *
+ * Dividend yield (Merton 1973 — Phase 13 S2 gap close):
+ * ──────────────────────────────────────────────────────
+ *   The `greeks()` function was extended earlier in this phase to accept
+ *   `q` (continuous dividend yield). Without `q`, BS-1973 prices puts
+ *   too low and calls too high for any dividend-paying underlying. This
+ *   function now forwards a caller-supplied `q` (default 0 for
+ *   back-compat). The `fetchOptionsChain` API takes a `dividendYield`
+ *   parameter that flows through here.
  */
 function enrichContract(
   contract: CallOrPut,
   spot: number,
   today: number,
   type: 'call' | 'put',
+  q = 0,
 ): EnrichedContract {
   const T = Math.max(0, (contract.expiration.getTime() - today) / (365 * 24 * 60 * 60 * 1000))
   const sigma = contract.impliedVolatility
 
-  const g: Greeks = sigma > 0 && T > 0
-    ? greeks(spot, contract.strike, T, RISK_FREE_RATE, sigma, type)
-    : { delta: 0, gamma: 0, theta: 0, vega: 0, rho: 0 }
+  // Q-052-NEW: tenor-matched risk-free rate. T is in years; convert to days
+  // for the seriesId lookup (DGS3MO / DGS1 / DGS2 / DGS10). When the FRED
+  // cache is cold, this returns the static OPTIONS_RFR_ANNUAL / BACKTEST_
+  // RFR_ANNUAL fallback so behaviour matches pre-Q-052 in tests / CI.
+  const daysToExpiry = T * 365
+  const RISK_FREE_RATE = getRiskFreeRateSync(daysToExpiry)
+
+  // Phase 14 wave 39 — OPTIONS CHAIN GREEKS FIX.
+  //
+  // Bug: the prior gate `sigma > 0 && T > 0` returned `{delta:0,...all zeros}`
+  // whenever EITHER condition failed. This made the intrinsic-delta logic
+  // inside greeks() (greeks.ts:145-150 — returns delta=1 for ITM call at
+  // expiry, -1 for ITM put, 0 for OTM) DEAD CODE, never reached.
+  //
+  // Real-world impact: every contract in the closest expiry of a stock's
+  // chain reports delta=0 for the entire trading day of expiration because
+  // Yahoo sets `expiration` to midnight UTC of the expiry day, so by any
+  // mid-day request `(expiration - today)` is already negative → T=0 → gate
+  // returns all zeros. Deep-ITM calls expiring today reported delta=0
+  // instead of 1. The MaxPainGauge / GexChart / FlowScanner all rendered
+  // degenerate values because their inputs were these zero-Greek contracts.
+  //
+  // Fix: call greeks() unconditionally. The function correctly handles
+  // every edge case internally:
+  //   - T <= 0 (expired):    intrinsic delta (1/0/-1) + other Greeks 0
+  //   - sigma <= 0:           all Greeks 0
+  //   - S <= 0 or K <= 0:     all Greeks 0
+  //   - normal path:          full Black-Scholes-Merton
+  //
+  // Reference: Hull (2017) op cit. p373 — at expiry, delta is the
+  //   intrinsic indicator (sign of moneyness), not zero.
+  const g: Greeks = greeks(spot, contract.strike, T, RISK_FREE_RATE, sigma, type, q)
 
   return { ...contract, ...g }
 }
@@ -114,11 +176,26 @@ function enrichContract(
 
 /**
  * Fetches an enriched options chain for `symbol`.
- * Optionally pass `date` to target a specific expiration.
+ *
+ * @param symbol  Yahoo-normalized ticker (e.g. 'AAPL', '^SPX').
+ * @param date    Optional target expiration. If omitted, returns the
+ *                first available expiration.
+ * @param dividendYield  Optional continuous dividend yield (e.g. 0.014 for
+ *                       SPY's 1.4%). Forwarded to greeks() for Merton-
+ *                       extended pricing. Defaults to 0 for back-compat —
+ *                       callers should supply this whenever the underlying
+ *                       is known to yield. The yahoo-finance2 quote
+ *                       response includes `trailingAnnualDividendYield`
+ *                       which can be passed by the API route.
+ *
+ * The route reads Yahoo's quote first to extract dividendYield, then
+ * passes it here. This keeps fetchOptionsChain a pure function over
+ * its inputs.
  */
 export async function fetchOptionsChain(
   symbol: string,
   date?: Date,
+  dividendYield = 0,
 ): Promise<EnrichedChain> {
   // Use validateResult: false to tolerate Yahoo schema drift
   const raw = await (yahooFinance as unknown as {
@@ -133,17 +210,67 @@ export async function fetchOptionsChain(
   const spot = Number(quote?.regularMarketPrice ?? 0)
   const today = Date.now()
 
+  // Defensive clamp: dividend yield outside [0, 0.20] is almost certainly
+  // a misreading (REIT yields top out around 12%; energy MLPs ~10%).
+  // Clamp to prevent absurd pricing from a corrupted upstream value.
+  const q = Number.isFinite(dividendYield) && dividendYield >= 0 && dividendYield <= 0.20
+    ? dividendYield : 0
+
   const expirationDatesRaw = (raw.expirationDates as unknown[]) ?? []
   const expirationDates = expirationDatesRaw.map(toDate)
 
   const optionsArr = (raw.options as Record<string, unknown>[]) ?? []
-  const firstExpiration = optionsArr[0] ?? null
+
+  // Phase 14 wave 40 — OPTIONS PICK-EXPIRY FIX.
+  //
+  // Bug (user-reported as "options-related functions still broken" after wave 39):
+  //   The "first expiration" Yahoo returns is the EARLIEST one in the chain —
+  //   which is typically the current week's Friday. Mid-day on expiration day,
+  //   T <= 0 for every contract in that expiry, so every contract has gamma = 0
+  //   (correct intrinsic behaviour). GexChart then shows totalGex = 0 with no
+  //   flip point and the per-strike bars are all empty.
+  //
+  // Fix: skip expirations whose contracts are already expired (T <= 0). Pick
+  // the first expiration with at least one contract that still has measurable
+  // gamma exposure — i.e. T > MIN_TRADABLE_TIME_YEARS (1 hour in calendar years).
+  //
+  // This does NOT change the UX for normal trading days — the front month is
+  // still selected on Mondays through Thursdays, and on Fridays before the
+  // expiration cut-off. It ONLY shifts the chain on Fridays POST-expiration
+  // (or weekly cycles where today IS the expiry day) — exactly the scenario
+  // that produced the user's bug.
+  //
+  // Reference: CBOE settlement rules — equity options expire 4 pm ET on the
+  // third Friday of the month (or designated weekly expiry days). Yahoo's
+  // `expiration` field is set to midnight UTC of that day; by 4 pm ET the
+  // option has already settled. We adopt T <= 0 as the conservative cutoff.
+  const MIN_TRADABLE_TIME_YEARS = 1 / (365 * 24) // 1 hour
+  type ExpirationBlock = {
+    calls?: Record<string, unknown>[]
+    puts?: Record<string, unknown>[]
+    expirationDate?: unknown
+  }
+
+  function blockIsTradable(block: Record<string, unknown> | undefined): boolean {
+    if (!block) return false
+    const expDate = toDate((block as ExpirationBlock).expirationDate ?? null)
+    if (!Number.isFinite(expDate.getTime())) return false
+    const T = (expDate.getTime() - today) / (365 * 24 * 60 * 60 * 1000)
+    return T > MIN_TRADABLE_TIME_YEARS
+  }
+
+  // Find the first tradable (non-expired) expiration; fall back to the
+  // earliest expiration in the chain if EVERY block is expired (defensive —
+  // would be a strange Yahoo response but possible for halted symbols).
+  const tradableIdx = optionsArr.findIndex(blockIsTradable)
+  const chosenIdx = tradableIdx >= 0 ? tradableIdx : 0
+  const firstExpiration = (optionsArr[chosenIdx] ?? null) as ExpirationBlock | null
 
   const rawCalls = (firstExpiration?.calls as Record<string, unknown>[]) ?? []
   const rawPuts  = (firstExpiration?.puts  as Record<string, unknown>[]) ?? []
 
-  const calls = rawCalls.map((c) => enrichContract(normaliseContract(c), spot, today, 'call'))
-  const puts  = rawPuts.map((p)  => enrichContract(normaliseContract(p),  spot, today, 'put'))
+  const calls = rawCalls.map((c) => enrichContract(normaliseContract(c), spot, today, 'call', q))
+  const puts  = rawPuts.map((p)  => enrichContract(normaliseContract(p),  spot, today, 'put',  q))
 
   const currentExpiry = firstExpiration?.expirationDate != null
     ? toDate(firstExpiration.expirationDate)

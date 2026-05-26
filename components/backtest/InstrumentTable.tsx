@@ -51,7 +51,7 @@ export default function InstrumentTable({ results, sectorColors }: Props) {
   }
 
   function SortIcon({ k }: { k: SortKey }) {
-    if (sortKey !== k) return <span className="text-slate-600 ml-1">⇅</span>
+    if (sortKey !== k) return <span className="text-slate-400 ml-1">⇅</span>
     return <span className="text-cyan-400 ml-1">{sortDir === 'desc' ? '↓' : '↑'}</span>
   }
 
@@ -78,7 +78,7 @@ export default function InstrumentTable({ results, sectorColors }: Props) {
         >
           {sectors.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
-        <span className="text-xs text-slate-600 self-center">{filtered.length} instruments</span>
+        <span className="text-xs text-slate-400 self-center">{filtered.length} instruments</span>
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-slate-800">

@@ -66,10 +66,24 @@ const ALL_YAHOO: QuoteProvenance = {
  * when Bloomberg returns 0 / 'N/A'. Per-field provenance is recorded so
  * downstream audit code can verify which feed produced each value.
  *
- * Note: F4.2 also preserved the `||` fallback at the field level so that
- * Bloomberg-reported zeros DON'T silently fall through to yahoo (a 0
- * volume during a halt is meaningful). Use nullish-coalescing semantics
- * only for fields where 0 is genuinely missing.
+ * Phase 13 S2 audit (mergeQuotes correctness):
+ *   The `||` fallback DOES treat Bloomberg-reported 0 as "missing" and
+ *   falls through to Yahoo. This is the conservative choice given the
+ *   bridge-client's `num()` helper (lib/data/bloomberg/bridgeClient.ts:27)
+ *   coerces ALL missing/invalid values to 0 — making Bloomberg's 0
+ *   ambiguous between "halted/no trades" and "field absent from upstream".
+ *
+ *   Genuine zero-volume during a halt → Yahoo override → minor cost
+ *   (Yahoo has the same halt). Genuine missing-field zero → Yahoo
+ *   override → critical recovery. The conservative choice is correct.
+ *
+ *   If the bridge protocol is ever extended to distinguish missing from
+ *   zero (e.g. by emitting `volume: null`), the type & this fallback
+ *   can be tightened to use nullish-coalescing semantics.
+ *
+ *   The provenance tracker mirrors the same truthy-check so the
+ *   reported `provenance.volume = 'yahoo'` is consistent with the
+ *   value's actual source.
  */
 export function mergeYahooAndBloomberg(
   yahoo: YahooQuoteLike[],
@@ -126,6 +140,30 @@ export function mergeYahooAndBloomberg(
 
   for (const [t, bb] of bloomberg) {
     if (seen.has(t)) continue
+    // Phase 14 wave 7: apply the same truthy-checks as the Yahoo-overlap branch
+    // above. Previously every field's provenance was hard-coded to 'bloomberg'
+    // even when bb.volume was 0 or bb.marketCap was the 'N/A' sentinel — an
+    // audit reading `provenance.volume === 'bloomberg'` would falsely conclude
+    // Bloomberg supplied volume when in fact the value was missing.
+    //
+    // For consistency with the dual-source path, we still mark these as
+    // 'bloomberg' for primary (price/change/changePct) — Bloomberg is the
+    // only source available in this branch — but emit a structured warn so
+    // operators can detect the Bloomberg-only sentinel pattern.
+    const sentinelFields: string[] = []
+    if (!bb.volume) sentinelFields.push('volume')
+    if (!bb.high52w) sentinelFields.push('high52w')
+    if (!bb.low52w) sentinelFields.push('low52w')
+    if (!bb.pe) sentinelFields.push('pe')
+    if (bb.marketCap === 'N/A') sentinelFields.push('marketCap')
+    if (sentinelFields.length > 0) {
+      console.warn(JSON.stringify({
+        event: 'mergeQuotes.bloomberg_sentinel_fields',
+        ticker: t,
+        fields: sentinelFields,
+        message: 'Bloomberg-only quote has sentinel values for these fields; downstream audits may be misled by provenance=bloomberg.',
+      }))
+    }
     const provenance: QuoteProvenance = {
       price: 'bloomberg',
       change: 'bloomberg',

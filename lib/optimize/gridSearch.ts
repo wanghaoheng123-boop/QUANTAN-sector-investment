@@ -12,7 +12,7 @@
  *   // Apply best.params to signal config
  */
 
-import type { OhlcvRow } from '@/scripts/backtest/dataLoader'
+import type { OhlcvRow } from '@/lib/backtest/dataLoader'
 
 export interface ParamGrid {
   slopeThreshold: number[]
@@ -83,7 +83,7 @@ export function generateGrid(grid: ParamGrid): GridPoint[] {
 
 /**
  * Simple inline backtest for grid search.
- * Uses the simplified signal logic (same as benchmark-signals.mjs) for speed.
+ * Uses inline simplified signal logic for speed (not resolveBacktestSignal SSOT).
  * Grid search of the enhanced signal would be 100× slower.
  */
 function simpleBacktestSlice(

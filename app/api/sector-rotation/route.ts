@@ -8,8 +8,16 @@ import { sanitizeError } from '@/lib/api/sanitize'
 
 const yahooFinance = new YahooFinance()
 
-/** Fetch 1yr of daily closes for an ETF. Returns null on failure. */
-async function fetchCloses(etf: string): Promise<number[] | null> {
+/**
+ * Fetch 1yr of daily closes for an ETF.
+ * Returns the closes on success, or a structured failure reason so callers
+ * can distinguish "thin data" from "fetch failed" (R4-M-5, Phase 14).
+ */
+type FetchResult =
+  | { ok: true; closes: number[] }
+  | { ok: false; reason: 'insufficient_data' | 'fetch_failed'; count?: number }
+
+async function fetchCloses(etf: string): Promise<FetchResult> {
   try {
     const period1 = new Date()
     period1.setFullYear(period1.getFullYear() - 1)
@@ -17,19 +25,27 @@ async function fetchCloses(etf: string): Promise<number[] | null> {
     const closes = (chart?.quotes ?? [])
       .filter(hasPositiveClose)
       .map((q) => q.close!)
-    return closes.length > 20 ? closes : null
+    if (closes.length > 20) return { ok: true, closes }
+    // R4-M-5 (Phase 14): make thin-data exclusions visible to operators.
+    console.warn(JSON.stringify({
+      event: 'sector-rotation.insufficient_data',
+      etf,
+      closes: closes.length,
+      minimum: 21,
+    }))
+    return { ok: false, reason: 'insufficient_data', count: closes.length }
   } catch (err) {
     // Phase 13 S2 fix: previously silent; operators couldn't diagnose
     // partial-data sector rotation failures.
     console.warn('[sector-rotation] fetchCloses failed for', etf, err)
-    return null
+    return { ok: false, reason: 'fetch_failed' }
   }
 }
 
 export async function GET(request: Request) {
   // Phase 13 S2: rate-limit. Each request triggers 11 yahoo chart calls
   // (one per sector ETF), so abuse amplifies upstream load 11×.
-  const rateLimitResponse = applyRateLimit(request, 'sector-rotation', {
+  const rateLimitResponse = await applyRateLimit(request, 'sector-rotation', {
     maxRequests: 10,
     windowSeconds: 60,
   })
@@ -41,10 +57,22 @@ export async function GET(request: Request) {
     const results = await Promise.allSettled(etfList.map(fetchCloses))
 
     const etfData: Record<string, number[]> = {}
+    const excludedSectors: Array<{ etf: string; reason: string; closes?: number }> = []
     for (let i = 0; i < etfList.length; i++) {
+      const etf = etfList[i]
       const result = results[i]
-      if (result.status === 'fulfilled' && result.value) {
-        etfData[etfList[i]] = result.value
+      if (result.status === 'fulfilled' && result.value.ok) {
+        etfData[etf] = result.value.closes
+      } else if (result.status === 'fulfilled' && !result.value.ok) {
+        // R4-M-5 (Phase 14): surface excluded sectors in the response so
+        // operators and end-users know why a sector is missing.
+        excludedSectors.push({
+          etf,
+          reason: result.value.reason,
+          closes: result.value.count,
+        })
+      } else if (result.status === 'rejected') {
+        excludedSectors.push({ etf, reason: 'promise_rejected' })
       }
     }
 
@@ -53,6 +81,7 @@ export async function GET(request: Request) {
     return NextResponse.json(
       {
         scores,
+        excludedSectors,
         fetchedAt: new Date().toISOString(),
         note: 'Sector rotation ranks based on 3/6/12-month momentum and RSI mean-reversion boost.',
       },

@@ -1,0 +1,51 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`BacktestPage (Q-058-NEW snapshot precondition) > renders centered loading spinner with copy while fetch is in flight 1`] = `
+<div
+  class="min-h-screen bg-black flex items-center justify-center"
+>
+  <div
+    class="text-center"
+  >
+    <div
+      class="w-8 h-8 border-2 border-slate-500 border-t-cyan-400 rounded-full animate-spin mx-auto mb-4"
+    />
+    <p
+      class="text-slate-400 text-sm"
+    >
+      Loading backtest data…
+    </p>
+    <p
+      class="text-slate-400 text-xs mt-1"
+    >
+      Fetching 5Y history for 56 instruments (may take ~20s)
+    </p>
+  </div>
+</div>
+`;
+
+exports[`BacktestPage (Q-058-NEW snapshot precondition) > renders error fallback with Retry button when fetch fails 1`] = `
+<div
+  class="min-h-screen bg-black flex items-center justify-center"
+>
+  <div
+    class="text-center max-w-sm"
+  >
+    <div
+      class="text-red-400 text-lg font-bold mb-2"
+    >
+      Failed to load backtest
+    </div>
+    <p
+      class="text-slate-400 text-sm mb-4"
+    >
+      HTTP 500
+    </p>
+    <button
+      class="px-4 py-2 bg-slate-800 text-white rounded-lg text-sm hover:bg-slate-700"
+    >
+      Retry
+    </button>
+  </div>
+</div>
+`;

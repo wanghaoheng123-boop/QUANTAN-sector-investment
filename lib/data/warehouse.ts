@@ -71,6 +71,33 @@ function createSchema(db: Db): void {
 
     CREATE INDEX IF NOT EXISTS idx_candles_ticker_date ON candles(ticker, date);
   `)
+
+  // R4-H-6 / Phase 14 S1 — idempotent schema migration for the `quotes` table.
+  //
+  // The `CREATE TABLE IF NOT EXISTS` above only fires on a brand-new DB. Older
+  // dev/prod databases were created with just (ticker, price, updated_at) and
+  // never received the change_val / change_pct / volume / market_cap columns,
+  // breaking every upsertQuote call (test suite + production routes).
+  //
+  // SQLite's `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` exists from 3.35+
+  // (PRAGMA query is cheaper to validate). We use the PRAGMA approach so we
+  // remain compatible with older SQLite bindings.
+  const existing = new Set(
+    (db.prepare(`PRAGMA table_info(quotes)`).all() as { name: string }[])
+      .map(c => c.name),
+  )
+  const addIfMissing = (name: string, decl: string) => {
+    if (!existing.has(name)) {
+      db.exec(`ALTER TABLE quotes ADD COLUMN ${name} ${decl}`)
+    }
+  }
+  // Each ADD COLUMN must be NULL-defaultable (SQLite restriction: cannot add
+  // NOT NULL without a default). DEFAULT 0 is safe for change_val/change_pct
+  // (no info = "flat" rather than "missing"); NULL for the optional fields.
+  addIfMissing('change_val', 'REAL NOT NULL DEFAULT 0')
+  addIfMissing('change_pct', 'REAL NOT NULL DEFAULT 0')
+  addIfMissing('volume', 'REAL')
+  addIfMissing('market_cap', 'REAL')
 }
 
 // ─── Read Operations ─────────────────────────────────────────────────────────
@@ -94,7 +121,15 @@ export function getCandles(ticker: string): DailyBar[] | null {
       'SELECT date, open, high, low, close, volume FROM candles WHERE ticker = ? ORDER BY date ASC'
     ).all(ticker) as DailyBar[]
     return rows.length > 0 ? rows : null
-  } catch {
+  } catch (err) {
+    // R4-H-1 (Phase 14): structured log so a corrupt DB or I/O failure can
+    // be distinguished from a legitimate "ticker not in warehouse" miss.
+    // Semantics unchanged: callers still see null.
+    console.warn(JSON.stringify({
+      event: 'warehouse.getCandles_error',
+      ticker,
+      message: (err as Error)?.message,
+    }))
     return null
   }
 }
@@ -120,7 +155,13 @@ export function getCachedQuote(ticker: string): QuoteSnapshot | null {
       marketCap: row.market_cap,
       updatedAt: row.updated_at,
     }
-  } catch {
+  } catch (err) {
+    // R4-H-1 (Phase 14): see getCandles for rationale.
+    console.warn(JSON.stringify({
+      event: 'warehouse.getCachedQuote_error',
+      ticker,
+      message: (err as Error)?.message,
+    }))
     return null
   }
 }
@@ -134,7 +175,12 @@ export function warehouseTickers(): string[] {
   try {
     const rows = db.prepare('SELECT DISTINCT ticker FROM candles ORDER BY ticker').all() as Array<{ ticker: string }>
     return rows.map((r) => r.ticker)
-  } catch {
+  } catch (err) {
+    // R4-H-1 (Phase 14): see getCandles for rationale.
+    console.warn(JSON.stringify({
+      event: 'warehouse.warehouseTickers_error',
+      message: (err as Error)?.message,
+    }))
     return []
   }
 }

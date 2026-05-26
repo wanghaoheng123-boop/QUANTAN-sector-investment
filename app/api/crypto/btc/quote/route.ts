@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { sanitizeError } from '@/lib/api/sanitize'
 
 export const dynamic = 'force-dynamic'
 
@@ -41,6 +42,17 @@ export async function GET() {
       { headers: { 'Cache-Control': 'no-store' } }
     )
   } catch (e) {
-    return NextResponse.json({ error: String(e) }, { status: 500 })
+    // Phase 16 audit (2026-05-24): replaced `error: String(e)` (CWE-209 leak —
+    // would emit Yahoo/CoinGecko stack traces in production). The SSOT
+    // sanitizeError returns undefined in prod and the message in dev.
+    console.error('[crypto/btc/quote]', e)
+    const details = sanitizeError(e)
+    return NextResponse.json(
+      {
+        error: 'crypto_quote_failed',
+        ...(details ? { details } : {}),
+      },
+      { status: 500 },
+    )
   }
 }

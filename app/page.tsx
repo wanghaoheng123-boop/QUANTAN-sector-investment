@@ -10,6 +10,7 @@ import { PriceSignal } from '@/lib/sectors'
 import { buildSessionSignalsFromQuotes } from '@/lib/sessionSignalsFromQuotes'
 import { useErrorToast } from '@/hooks/useErrorToast'
 import { ErrorToastList } from '@/components/ErrorToastList'
+import { useLiveQuotes } from '@/hooks/useLiveQuotes'
 
 // Real news brief from Yahoo Finance API
 interface NewsBrief {
@@ -52,15 +53,24 @@ export default function HomePage() {
   const { toasts, showToast, dismissToast } = useErrorToast()
   const [quotes, setQuotes] = useState<Record<string, Quote>>({})
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
-  const [countdown, setCountdown] = useState(15)
+  // Phase 14 wave 38: removed legacy `countdown` state. The 15 s polling
+  // countdown was tied to setInterval and the badge that displayed it.
+  // The new LIVE badge sourced from useLiveQuotes replaces both — no
+  // countdown to track because SSE is push-based.
   const [newsBriefs, setNewsBriefs] = useState<NewsBrief[]>([])
   const [newsLoading, setNewsLoading] = useState(true)
   const [activeFilter, setActiveFilter] = useState<string>('ALL')
 
-  const fetchPrices = useCallback(async () => {
+  // Phase 14 wave 10: signal-aware fetch.
+  // Prior code had two issues: (1) the 15-second poll could stack requests
+  // on slow networks (no abort of in-flight fetch when a new tick fired),
+  // and (2) setQuotes/setLastUpdate could fire on an unmounted component
+  // after page navigation away from the dashboard.
+  const fetchPrices = useCallback(async (signal?: AbortSignal) => {
     try {
-      const res = await fetch('/api/prices')
+      const res = await fetch('/api/prices', { signal })
       const data = await res.json()
+      if (signal?.aborted) return
       if (data.quotes) {
         const map: Record<string, Quote> = {}
         data.quotes.forEach((q: Quote) => { map[q.ticker] = q })
@@ -68,44 +78,106 @@ export default function HomePage() {
         setLastUpdate(new Date())
       }
     } catch (e: unknown) {
+      if (signal?.aborted || (e instanceof DOMException && e.name === 'AbortError')) return
       showToast(`Price refresh failed: ${e instanceof Error ? e.message : 'Network error'}`, 'warn', 4000)
     }
   }, [showToast])
 
+  // Phase 14 wave 38 — REAL-TIME DASHBOARD via useLiveQuotes (replaces 15 s polling).
+  //
+  // The REST boot fetch runs ONCE on mount to populate the dashboard before
+  // the SSE streams hand off their first events (typical: 1-2 s). After that,
+  // useLiveQuotes maintains N parallel EventSource connections — one per
+  // ETF — and merges each tick into the `quotes` state map.
+  //
+  // The countdown timer below stays informational (15 → 0 visual) but no
+  // longer triggers a fetch. We may remove it in a future wave once users
+  // are accustomed to the LIVE badge as the freshness indicator.
   useEffect(() => {
-    fetchPrices()
-    const interval = setInterval(() => {
-      fetchPrices()
-      setCountdown(15)
-    }, 15000)
-    return () => clearInterval(interval)
+    const controller = new AbortController()
+    void fetchPrices(controller.signal)
+    return () => controller.abort()
   }, [fetchPrices])
 
-  // Fetch real news from Yahoo Finance
+  // Memoize the ticker list so useLiveQuotes' effect dep is stable.
+  // SECTORS is a module-level constant, so the .map result is also stable
+  // across renders — but useMemo makes the intent explicit and protects
+  // against future refactors that might reshape SECTORS dynamically.
+  const liveTickers = useMemo(
+    () => [...SECTORS.map((s) => s.etf), 'SPY', 'QQQ'],
+    [],
+  )
+  const live = useLiveQuotes(liveTickers)
+
+  // Merge live updates into the `quotes` state map. We don't replace the
+  // whole map (the boot REST fetch may carry fields the SSE payload doesn't,
+  // e.g. dataSource/provenance) — instead we overlay price/change/changePct
+  // per ticker as each tick arrives.
   useEffect(() => {
+    const entries = Object.entries(live.quotes)
+    if (entries.length === 0) return
+    setQuotes((prev) => {
+      let touched = false
+      const next = { ...prev }
+      for (const [ticker, q] of entries) {
+        if (!q) continue
+        const old = next[ticker]
+        // Skip if the live tick is identical to what we already have (avoids
+        // pointless re-renders of every SectorCard on every heartbeat).
+        if (
+          old &&
+          old.price === q.price &&
+          old.change === q.change &&
+          old.changePct === q.changePct
+        ) {
+          continue
+        }
+        next[ticker] = {
+          ticker,
+          price: q.price,
+          change: q.change,
+          changePct: q.changePct,
+          quoteTime: q.timestamp,
+        }
+        touched = true
+      }
+      if (touched) setLastUpdate(new Date())
+      return touched ? next : prev
+    })
+  }, [live.quotes])
+
+  // Fetch real news from Yahoo Finance. Cancellation flag prevents the
+  // late `setNewsBriefs` / `setNewsLoading` updates from firing after unmount.
+  useEffect(() => {
+    const controller = new AbortController()
     async function fetchNews() {
       try {
-        const res = await fetch('/api/briefs')
+        const res = await fetch('/api/briefs', { signal: controller.signal })
+        if (controller.signal.aborted) return
         if (res.ok) {
           const data = await res.json()
+          if (controller.signal.aborted) return
           if (data.briefs) {
             setNewsBriefs(data.briefs)
           }
         }
       } catch (e: unknown) {
+        if (controller.signal.aborted || (e instanceof DOMException && e.name === 'AbortError')) return
         showToast(`News feed failed: ${e instanceof Error ? e.message : 'Network error'}`, 'warn', 5000)
       } finally {
-        setNewsLoading(false)
+        if (!controller.signal.aborted) setNewsLoading(false)
       }
     }
-    fetchNews()
+    void fetchNews()
+    return () => controller.abort()
+    // showToast is intentionally excluded — it's stable from the error-toast hook
+    // and we don't want re-fetches when its identity occasionally changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Countdown timer
-  useEffect(() => {
-    const t = setInterval(() => setCountdown(c => Math.max(0, c - 1)), 1000)
-    return () => clearInterval(t)
-  }, [])
+  // Phase 14 wave 38: countdown setInterval removed. Live SSE streams have
+  // no poll cadence to count down to — the LIVE / MARKET CLOSED / CONNECTING
+  // badge plus the `lastUpdate` timestamp already communicate freshness.
 
   const signals = useMemo(() => buildSessionSignalsFromQuotes(quotes), [quotes])
 
@@ -113,8 +185,20 @@ export default function HomePage() {
   const sellSignals = useMemo(() => signals.filter((s) => s.direction === 'SELL'), [signals])
   const holdSignals = useMemo(() => signals.filter((s) => s.direction === 'HOLD'), [signals])
 
-  const topBuy = useMemo(() => buySignals.sort((a, b) => Math.abs(b.sessionChangePct ?? 0) - Math.abs(a.sessionChangePct ?? 0)).slice(0, 3), [buySignals])
-  const topSell = useMemo(() => sellSignals.sort((a, b) => Math.abs(b.sessionChangePct ?? 0) - Math.abs(a.sessionChangePct ?? 0)).slice(0, 2), [sellSignals])
+  // Phase 14 wave 10: spread BEFORE sort to avoid mutating the memoized filter
+  // result. Array.prototype.sort mutates in place — without the spread, the
+  // useMemo cache for `buySignals` would be reordered as a side effect, and
+  // any later consumer that iterates `buySignals` (currently only `.length`
+  // is read, but future code could iterate) would silently observe sorted
+  // order instead of filter order.
+  const topBuy = useMemo(
+    () => [...buySignals].sort((a, b) => Math.abs(b.sessionChangePct ?? 0) - Math.abs(a.sessionChangePct ?? 0)).slice(0, 3),
+    [buySignals],
+  )
+  const topSell = useMemo(
+    () => [...sellSignals].sort((a, b) => Math.abs(b.sessionChangePct ?? 0) - Math.abs(a.sessionChangePct ?? 0)).slice(0, 2),
+    [sellSignals],
+  )
   const topSignals = useMemo(() => [...topBuy, ...topSell], [topBuy, topSell])
 
   const signalMap = useMemo(() => signals.reduce<Record<string, PriceSignal>>((acc, s) => {
@@ -155,10 +239,42 @@ export default function HomePage() {
 
         {/* Hero */}
         <div className="text-center space-y-4 py-6">
-          <div className="inline-flex items-center gap-2.5 bg-amber-500/10 border border-amber-500/30 rounded-full px-4 py-1.5 text-xs text-amber-400 mb-2 shadow-lg shadow-amber-900/20">
-            <span className="w-1.5 h-1.5 bg-amber-400 rounded-full animate-pulse" />
-            Live · {lastUpdate ? `Updated ${lastUpdate.toLocaleTimeString()}` : 'Connecting…'}
-            <span className="ml-1 text-amber-600 font-mono">↻ {countdown}s</span>
+          {/* Phase 14 wave 38: status pill reflects live-stream state instead of
+              the legacy "Live" claim. Three states keyed off useLiveQuotes:
+                • emerald + pulsing  — all SSE connections healthy, market open
+                • amber              — connected, market closed (snapshot only)
+                • slate              — reconnecting / EventSource unavailable */}
+          <div
+            className={`inline-flex items-center gap-2.5 rounded-full px-4 py-1.5 text-xs mb-2 shadow-lg ${
+              live.marketOpen && Object.values(live.connections).some(Boolean)
+                ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 shadow-emerald-900/20'
+                : Object.values(live.connections).some(Boolean)
+                  ? 'bg-amber-500/10 border border-amber-500/30 text-amber-400 shadow-amber-900/20'
+                  : 'bg-slate-700/30 border border-slate-600/40 text-slate-400'
+            }`}
+            role="status"
+            aria-live="polite"
+          >
+            <span
+              className={`w-1.5 h-1.5 rounded-full ${
+                live.marketOpen && Object.values(live.connections).some(Boolean)
+                  ? 'bg-emerald-400 animate-pulse'
+                  : Object.values(live.connections).some(Boolean)
+                    ? 'bg-amber-400'
+                    : 'bg-slate-500'
+              }`}
+              aria-hidden="true"
+            />
+            {live.marketOpen && Object.values(live.connections).some(Boolean)
+              ? 'LIVE'
+              : Object.values(live.connections).some(Boolean)
+                ? 'MARKET CLOSED'
+                : 'CONNECTING'}
+            <span className="text-slate-400">·</span>
+            {lastUpdate ? `Updated ${lastUpdate.toLocaleTimeString()}` : 'Awaiting first tick…'}
+            <span className="ml-1 text-slate-500 font-mono text-[10px]">
+              {Object.values(live.connections).filter(Boolean).length}/{live.active} streams
+            </span>
           </div>
           <h1 className="text-4xl sm:text-5xl font-bold tracking-tight">
             <span className="gradient-text">Sector Intelligence</span>
@@ -177,7 +293,7 @@ export default function HomePage() {
                 <h2 className="text-lg font-bold text-white">Institutional Backtest Dashboard</h2>
               </div>
               <p className="text-sm text-slate-400 max-w-lg">
-                5Y walk-forward backtest across all 11 sectors (55 stocks) + BTC. 200EMA deviation regime strategy with RSI/MACD/ATR/BB confirmations, Half-Kelly position sizing, and 10% stop-loss.
+                5Y walk-forward backtest across 56 instruments (11 GICS sectors + BTC). Regime dip-buy vs 200SMA (SSOT: resolveBacktestSignal), ATR-adaptive stops, and half-Kelly sizing — label WR ~55% gross / ~54% net after costs (not a live accuracy guarantee).
               </p>
             </div>
             <Link
@@ -225,7 +341,7 @@ export default function HomePage() {
             <div key={i} className="rounded-xl border border-slate-800 p-4 bg-slate-900/60 hover:border-slate-700/80 transition-colors">
               <div className="text-2xl font-bold font-mono" style={{ color: stat.color }}>
                 {stat.value}
-                {stat.of && <span className="text-slate-600 text-base font-normal">/{stat.of}</span>}
+                {stat.of && <span className="text-slate-400 text-base font-normal">/{stat.of}</span>}
               </div>
               <div className="text-xs text-slate-500 mt-1">{stat.label}</div>
             </div>
@@ -414,11 +530,11 @@ export default function HomePage() {
                             {t}
                           </span>
                         ))}
-                        <span className="text-xs text-slate-600">
+                        <span className="text-xs text-slate-400">
                           {brief.publisher}
                         </span>
                         {brief.timestamp && (
-                          <span className="text-xs text-slate-600">
+                          <span className="text-xs text-slate-400">
                             {formatUtcDateTime(brief.timestamp)}
                           </span>
                         )}
@@ -433,7 +549,7 @@ export default function HomePage() {
                         ))}
                       </div>
                     </div>
-                    <div className="shrink-0 text-slate-600 group-hover:text-amber-400 transition-colors">↗</div>
+                    <div className="shrink-0 text-slate-400 group-hover:text-amber-400 transition-colors">↗</div>
                   </div>
                 </a>
               ))}

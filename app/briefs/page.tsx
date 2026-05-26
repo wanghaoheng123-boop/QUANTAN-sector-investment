@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { appBaseUrl } from '@/lib/appUrl'
 import { SECTORS } from '@/lib/sectors'
 import BriefCard from './BriefCard'
 
@@ -29,11 +30,8 @@ interface SectorBrief {
 async function getAllBriefs(): Promise<SectorBrief[]> {
   const results = await Promise.allSettled(
     SECTORS.map(async s => {
-      const baseUrl = process.env.VERCEL_URL
-        ? `https://${process.env.VERCEL_URL}`
-        : 'http://localhost:3000'
       const res = await fetch(
-        `${baseUrl}/api/briefs/${encodeURIComponent(s.slug)}`,
+        `${appBaseUrl()}/api/briefs/${encodeURIComponent(s.slug)}`,
         { cache: 'no-store' }
       )
       if (!res.ok) return null

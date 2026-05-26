@@ -16,31 +16,43 @@ function flatSeries(n: number, price = 100): number[] {
 }
 
 describe('momentumScore', () => {
-  it('returns 0 for insufficient data', () => {
-    expect(momentumScore([100, 101, 102])).toBe(0)
+  it('returns null for insufficient data (was: silent 0 fallback)', () => {
+    // Updated contract: prior signature returned 0 on insufficient data
+    // (3, 22, 100, 200 bars all returned 0). This conflated "no data"
+    // with "zero return" and silently distorted sector momentum scores.
+    // New contract returns null when ANY constituent return is missing.
+    expect(momentumScore([100, 101, 102])).toBeNull()
+    expect(momentumScore(trendingSeries(100, 100, 0.001))).toBeNull()  // 100 bars: 12mo missing
+    expect(momentumScore(trendingSeries(252, 100, 0.001))).toBeNull()  // 252 bars: still need start at -252
+  })
+
+  it('returns a finite number when 253+ bars available', () => {
+    expect(momentumScore(trendingSeries(253, 100, 0.001))).toBeTypeOf('number')
   })
 
   it('positive momentum score for uptrending series', () => {
     const closes = trendingSeries(300, 100, 0.001)  // +0.1%/day
-    expect(momentumScore(closes)).toBeGreaterThan(0)
+    const s = momentumScore(closes)
+    expect(s).not.toBeNull()
+    expect(s!).toBeGreaterThan(0)
   })
 
   it('negative momentum score for downtrending series', () => {
     const closes = trendingSeries(300, 100, -0.001)  // -0.1%/day
-    expect(momentumScore(closes)).toBeLessThan(0)
+    const s = momentumScore(closes)
+    expect(s).not.toBeNull()
+    expect(s!).toBeLessThan(0)
   })
 
   it('crash filter reduces score when last month was strong', () => {
     // Long term uptrend, but recent month even stronger (crash filter penalty)
-    const slowUp = trendingSeries(252, 100, 0.0005)  // gradual uptrend
+    const slowUp = trendingSeries(280, 100, 0.0005)  // gradual uptrend (need ≥ 253 total)
     const fastUp = trendingSeries(22, slowUp[slowUp.length - 1], 0.005)  // fast last month
     const combined = [...slowUp.slice(0, -22), ...fastUp]
+    expect(combined.length).toBeGreaterThanOrEqual(253) // sanity-check fixture
     const score = momentumScore(combined)
-    // Score should be lower than pure uptrend because 1mo crash filter deducts recent gains
-    const pureUpScore = momentumScore(trendingSeries(combined.length, 100, 0.0005))
-    // The crash-filtered score should be meaningfully different
-    expect(typeof score).toBe('number')
-    expect(isNaN(score)).toBe(false)
+    expect(score).not.toBeNull()
+    expect(Number.isFinite(score!)).toBe(true)
   })
 })
 
@@ -128,6 +140,21 @@ describe('sectorScores', () => {
     const data: Record<string, number[]> = {
       XLK: trendingSeries(300, 100, 0.001),
       XLE: [100, 101, 102],  // too short
+    }
+    const scores = sectorScores(data)
+    expect(scores.length).toBe(1)
+    expect(scores[0].etf).toBe('XLK')
+  })
+
+  it('skips ETFs with 22-252 bars (regression: gate raised 22 → 253)', () => {
+    // Previously the gate was 22 bars, which let through ETFs that then
+    // had silent 0-fallbacks for the 6mo and 12mo terms. A newer ETF with
+    // 200 bars would score artificially low momentum because 2/3 of the
+    // momentum components were forced to 0. New behaviour: skip entirely.
+    const data: Record<string, number[]> = {
+      XLK: trendingSeries(300, 100, 0.001),  // sufficient
+      XLE: trendingSeries(100, 100, 0.001),  // 100 bars — was scored, now skipped
+      XLF: trendingSeries(252, 100, 0.001),  // exactly 252 — still insufficient (need 12mo + start)
     }
     const scores = sectorScores(data)
     expect(scores.length).toBe(1)

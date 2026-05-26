@@ -1,19 +1,30 @@
 import { describe, it, expect } from 'vitest'
 import { btcRegime, type BtcCandle } from '@/lib/quant/btc-indicators'
 
-function makeCandles(closes: number[], baseTime = 1700000000, range = 0.01): BtcCandle[] {
+function makeCandles(closes: number[], baseTime = 1700000000): BtcCandle[] {
   return closes.map((c, i) => ({
     time: baseTime + i * 86400,
     open: c,
-    high: c * (1 + range),
-    low: c * (1 - range),
+    high: c * 1.01,
+    low: c * 0.99,
     close: c,
     volume: 1000,
   }))
 }
 
-function makeFlatCandles(n: number, price = 50000, range = 0.01): BtcCandle[] {
-  return makeCandles(Array.from({ length: n }, () => price), 1700000000, range)
+function makeFlatCandles(n: number, price = 50000): BtcCandle[] {
+  // True-flat: H = L = C, ATR = 0 — required for the confidence test.
+  // makeCandles synthesises ±1% wicks (H = C*1.01, L = C*0.99), which
+  // would inflate ATR to ~2% of price and clamp confidence to 75.
+  const baseTime = 1700000000
+  return Array.from({ length: n }, (_, i) => ({
+    time: baseTime + i * 86400,
+    open: price,
+    high: price,
+    low: price,
+    close: price,
+    volume: 1000,
+  }))
 }
 
 function makeTrendCandles(n: number, start: number, dailyReturn: number): BtcCandle[] {
@@ -60,8 +71,7 @@ describe('btcRegime', () => {
   })
 
   it('confidence scales inversely with volatility (calmer = higher)', () => {
-    // Use candles with tiny range (0.1%) for calm market — ATR should be minimal
-    const calm = btcRegime(makeFlatCandles(250, 50000, 0.001))
+    const calm = btcRegime(makeFlatCandles(250))
     expect(calm.confidence).toBeGreaterThan(80)
   })
 

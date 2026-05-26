@@ -22,9 +22,15 @@ import { withRetry } from '@/lib/api/reliability'
 
 const yahooFinance = new YahooFinance()
 
-const QUOTE_INTERVAL_MS = 15_000   // 15 s
-const HEARTBEAT_INTERVAL_MS = 30_000  // 30 s
-const STREAM_AUTO_CLOSE_MS = 10 * 60 * 1000  // 10 minutes
+const QUOTE_INTERVAL_MS = 15_000     // 15 s
+const HEARTBEAT_INTERVAL_MS = 30_000 // 30 s
+// R4-C-3 (Phase 14 S1): was 10 minutes, which exactly matches Vercel Pro function timeout.
+// Reduced to 9 minutes so our soft close fires first with a warning, giving the client
+// 60 s to reconnect before Vercel terminates the function hard (possibly without flushing).
+// Vercel hobby tier has a 60 s function timeout — SSE on hobby requires Edge Runtime or
+// the user must upgrade; document this in README/env requirements.
+const STREAM_AUTO_CLOSE_MS = 9 * 60 * 1000    // 9 minutes (server-initiated soft close)
+const STREAM_CLOSE_WARN_LEAD_MS = 30_000       // emit closing_soon 30 s before soft close
 
 interface QuoteEvent {
   ticker: string
@@ -70,7 +76,7 @@ export async function GET(
 ): Promise<Response> {
   // Phase 13 S2: rate-limit SSE — connections are expensive (long-lived,
   // each consumes a serverless slot). Tighter than POST routes.
-  const rateLimitResponse = applyRateLimit(req, 'stream', { maxRequests: 10, windowSeconds: 60 })
+  const rateLimitResponse = await applyRateLimit(req, 'stream', { maxRequests: 10, windowSeconds: 60 })
   if (rateLimitResponse) return rateLimitResponse
 
   // Phase 13 S2 fix (F4.10 + F7.3): canonical normalizer with strict char
@@ -94,6 +100,7 @@ export async function GET(
       let quoteTimer: ReturnType<typeof setInterval> | null = null
       let heartbeatTimer: ReturnType<typeof setInterval> | null = null
       let autoCloseTimer: ReturnType<typeof setTimeout> | null = null
+      let closeWarnTimer: ReturnType<typeof setTimeout> | null = null
       let closed = false
 
       function close() {
@@ -102,6 +109,7 @@ export async function GET(
         if (quoteTimer) { clearInterval(quoteTimer); quoteTimer = null }
         if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null }
         if (autoCloseTimer) { clearTimeout(autoCloseTimer); autoCloseTimer = null }
+        if (closeWarnTimer) { clearTimeout(closeWarnTimer); closeWarnTimer = null }
         try { controller.close() } catch { /* already closed */ }
       }
 
@@ -134,22 +142,40 @@ export async function GET(
         }
       }
 
-      // Market-hours quote polling
-      if (isMarketOpen()) {
-        quoteTimer = setInterval(async () => {
-          if (closed) return
-          if (!isMarketOpen()) {
-            if (quoteTimer) { clearInterval(quoteTimer); quoteTimer = null }
+      // Phase 13 S2 fix: market-hours quote polling MUST always be armed
+      // (not gated by `isMarketOpen()` at start). Previously a client
+      // connecting pre-market (e.g. 9:25am ET) never received quote events
+      // even after the market opened at 9:30 — the gate at connection time
+      // permanently disabled the quote timer. Now the timer fires every
+      // QUOTE_INTERVAL_MS unconditionally, and the inner check decides
+      // whether to actually fetch + emit a quote OR skip silently.
+      let lastMarketOpen = isMarketOpen()
+      quoteTimer = setInterval(async () => {
+        if (closed) return
+        const open = isMarketOpen()
+        // Notify client when market state transitions (open → close → open)
+        // so the UI can re-render the "DELAYED" / "LIVE" badge instead of
+        // assuming the initial-connection state forever.
+        if (open !== lastMarketOpen) {
+          lastMarketOpen = open
+          try {
+            controller.enqueue(encode(sseMessage('market_state', {
+              open,
+              timestamp: new Date().toISOString(),
+            })))
+          } catch {
+            close()
             return
           }
-          const q = await fetchQuote(symbol)
-          if (closed) return
-          if (q) {
-            try { controller.enqueue(encode(sseMessage('quote', q))) }
-            catch { close() }
-          }
-        }, QUOTE_INTERVAL_MS)
-      }
+        }
+        if (!open) return  // skip the fetch outside market hours
+        const q = await fetchQuote(symbol)
+        if (closed) return
+        if (q) {
+          try { controller.enqueue(encode(sseMessage('quote', q))) }
+          catch { close() }
+        }
+      }, QUOTE_INTERVAL_MS)
 
       // Heartbeat to keep connection alive
       heartbeatTimer = setInterval(() => {
@@ -161,9 +187,46 @@ export async function GET(
         }
       }, HEARTBEAT_INTERVAL_MS)
 
-      // Auto-close after 10 minutes to prevent runaway connections.
-      // Stored on autoCloseTimer so close() can clear it on early termination.
-      autoCloseTimer = setTimeout(() => close(), STREAM_AUTO_CLOSE_MS)
+      // R4-C-3 (Phase 14 S1): server-initiated soft close with pre-close warning.
+      //
+      // Previously, a single 10-minute hard close races against Vercel Pro's
+      // 10-minute function timeout — whichever fires first, the client sees an
+      // abrupt drop with no chance to reconnect cleanly. Now:
+      //   • At T - 30 s, emit `closing_soon` so the UI can pre-warm a reconnect.
+      //   • At T, emit `close` then controller.close().
+      // Total budget is 9 minutes, well under Vercel Pro's 10-minute ceiling.
+      //
+      // P15-NEW-7 (Phase 15, 2026-05-23): unify the two chained setTimeouts
+      // into a single warn-then-close timer. Prior code armed `closeWarnTimer`
+      // and `autoCloseTimer` independently — under clock skew (NTP adjust,
+      // system suspend resume, container migration) the autoclose could fire
+      // BEFORE the warn, so a client never saw `closing_soon` and reconnected
+      // late. With a single sequence, the warn-then-close ordering is
+      // guaranteed by structured-construction, not by wall-clock comparison.
+      closeWarnTimer = setTimeout(() => {
+        if (closed) return
+        try {
+          controller.enqueue(encode(sseMessage('closing_soon', {
+            message: 'Stream will auto-close shortly. Reconnect to continue.',
+            reconnectInMs: STREAM_CLOSE_WARN_LEAD_MS,
+            timestamp: new Date().toISOString(),
+          })))
+        } catch { /* client already gone; close() will handle it */ }
+        // Inner timer — chained inside the warn handler so the order is
+        // structurally guaranteed: closing_soon emit → wait warn-lead →
+        // close emit + close(). Reassigning `autoCloseTimer` keeps the
+        // `close()` cleanup loop unchanged.
+        autoCloseTimer = setTimeout(() => {
+          if (closed) return
+          try {
+            controller.enqueue(encode(sseMessage('close', {
+              reason: 'auto_close_max_duration',
+              timestamp: new Date().toISOString(),
+            })))
+          } catch { /* ignore */ }
+          close()
+        }, STREAM_CLOSE_WARN_LEAD_MS)
+      }, STREAM_AUTO_CLOSE_MS - STREAM_CLOSE_WARN_LEAD_MS)
     },
   })
 

@@ -16,6 +16,26 @@ Goal: >80% selective signal accuracy across all market conditions. Bloomberg-lik
 
 ---
 
+## Phase 15 — Current Reality (2026-05-24)
+
+| Item | Value |
+|------|--------|
+| **Tests** | **816+** across **53** files (`npm run test`) |
+| **Canonical benchmark WR** | **57.05%** (`npm run benchmark`, floor 56.55% in `reviews/invariants-baseline.md`) |
+| **Enhanced benchmark** | **52.63%** — **not** production default until Q-009 approved |
+| **Branch / worktree** | `fix/options-investigation` · `.claude/worktrees/competent-wu-a84629` |
+| **Canonical plan** | `reviews/PHASE-15-PLAN.md` · backlog `workspace/IMPROVEMENT_BACKLOG.json` |
+
+**Present on disk (do not treat as deleted):** `lib/portfolio/*`, `lib/data/providers/*`, `lib/data/warehouse.ts`, `components/SectorRotationPanel.tsx`, Phase 8 scripts (`optimize-grid.ts`, `portfolio-backtest.ts`, `benchmark-enhanced.ts`).
+
+**Auth nav:** `components/SafeAuth.tsx` replaced `AuthNav.tsx` intentionally.
+
+**Indicator SSOT:** `lib/quant/indicators.ts`; `lib/quant/technicals.ts` is a thin delegate layer (no duplicate RSI/EMA math).
+
+**Loop 1 grid:** Documented in `reviews/optimization-loop1.md` — aggregate OOS WR ~25.7%; do not ship winners to production signals.
+
+---
+
 ## 7-Phase Upgrade Plan — Status
 
 | Phase | Name | Status | Branch / Commit |
@@ -27,7 +47,8 @@ Goal: >80% selective signal accuracy across all market conditions. Bloomberg-lik
 | 5 | Data Infrastructure | ✅ COMPLETE | branch `claude/loving-banach` |
 | 6 | Portfolio & Risk Management | ✅ COMPLETE | branch `claude/loving-banach` |
 | 7 | Continuous Optimization | ✅ COMPLETE | branch `claude/loving-banach` |
-| 8 | Benchmark Fix + Optimization Loops (1-3) | 🔲 INFRASTRUCTURE READY | Run scripts to execute |
+| 8 | Benchmark Fix + Optimization Loops (1-3) | ✅ SCRIPTS + JSON | `npm run optimize:grid`, `portfolio:backtest`, `benchmark:enhanced` |
+| 15 | Remediation + hardening | 🔄 IN PROGRESS | `reviews/PHASE-15-PLAN.md`, `workspace/IMPROVEMENT_BACKLOG.json` |
 | 9 | Stock-by-Stock Analysis Report | ✅ COMPLETE | `docs/archive/QUANTAN_ANALYSIS_REPORT.md` |
 | 10 | Cleanup + P1 Audit | ✅ COMPLETE | merged via PR #6, PR for branch `fix/dead-ema-and-progress-audit` |
 
@@ -59,7 +80,7 @@ Goal: >80% selective signal accuracy across all market conditions. Bloomberg-lik
 - Vitest with 80% coverage thresholds
 - `lib/quant/indicators.ts` — canonical indicator source (SMA, EMA, RSI, MACD, BB, ATR, ADX, OBV, VWAP, StochRSI)
 - 10 test files in `__tests__/`
-- `scripts/benchmark-signals.mjs` — baseline: **56.35% win rate**
+- `scripts/benchmark-signals.ts` — SSOT benchmark (net WR floor ~53.29% CI; see `reviews/invariants-baseline.md` §1b)
 - `lib/qa/dataValidator.ts`, `lib/qa/signalTracker.ts`
 
 ### Phase 2 (merged PR #3)
@@ -89,7 +110,7 @@ Goal: >80% selective signal accuracy across all market conditions. Bloomberg-lik
 - `lib/ml/client.ts` + `app/api/ml/[ticker]/route.ts` — graceful TS proxy
 - 2 new test files
 
-**Current test count: 266 passing · TypeScript clean**
+**Current test count: 816+ passing (53 files) · TypeScript clean · benchmark WR 57.05%**
 
 ---
 
@@ -226,7 +247,7 @@ app/monitor/page.tsx             — Rolling 30d win rate, signal heatmap, data 
 npm install           # first time only — worktree has no node_modules
 npm run test          # vitest run (Windows: node_modules/.bin/vitest.cmd run)
 npm run typecheck     # tsc --noEmit
-npm run benchmark     # scripts/benchmark-signals.mjs
+npm run benchmark     # scripts/benchmark-signals.ts (SSOT)
 ```
 
 ### API Route Pattern

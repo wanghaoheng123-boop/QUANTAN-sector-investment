@@ -1,8 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { memo, useMemo, useState } from 'react'
 import type { EnrichedChain, EnrichedContract } from '@/lib/options/chain'
 import { MetricTooltip } from '@/components/MetricTooltip'
+import { toIsoDate } from '@/lib/format'
 
 const HEADER_TOOLTIPS: Record<string, string> = {
   IV: 'iv',
@@ -14,24 +15,35 @@ interface Props {
   chain: EnrichedChain
 }
 
-function fmtPct(v: number | undefined): string {
-  if (v == null || isNaN(v)) return '—'
+// Phase 14 wave 41 — every formatter accepts `unknown` and gates on
+// Number.isFinite. After fetch+JSON.parse the contract fields are
+// nominally `number` but in practice can be null / NaN for missing or
+// halted-symbol upstream rows. `v != null && isNaN(v)` (the prior gate)
+// missed `null` because typeof null === 'object' and `NaN(null)` is false.
+function fmtPct(v: unknown): string {
+  if (typeof v !== 'number' || !Number.isFinite(v)) return '—'
   return `${(v * 100).toFixed(1)}%`
 }
 
-function fmtNum(v: number | undefined | null, decimals = 2): string {
-  if (v == null || isNaN(v as number)) return '—'
-  return (v as number).toFixed(decimals)
+function fmtNum(v: unknown, decimals = 2): string {
+  if (typeof v !== 'number' || !Number.isFinite(v)) return '—'
+  return v.toFixed(decimals)
 }
 
-function fmtVol(v: number | undefined): string {
-  if (v == null) return '—'
+function fmtVol(v: unknown): string {
+  if (typeof v !== 'number' || !Number.isFinite(v) || v < 0) return '—'
   if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`
   if (v >= 1_000) return `${(v / 1_000).toFixed(0)}K`
-  return String(v)
+  return String(Math.round(v))
 }
 
-function ContractCell({
+// Phase 14 wave 41 (task #15 perf) — memoise ContractCell.
+// Each row renders 2 ContractCell instances (call + put) and a strike has
+// up to 100+ rows in a deep chain. Without memo, every expiry switch or
+// parent re-render walks every cell. React.memo + the default referential
+// prop comparison gives a meaningful skip rate because chain.calls /
+// chain.puts elements are stable references once fetched.
+const ContractCell = memo(function ContractCell({
   contract,
   spot,
   side,
@@ -42,78 +54,97 @@ function ContractCell({
 }) {
   if (!contract) return <td className="px-2 py-1 text-gray-500 text-xs" colSpan={5}>—</td>
   const itm = side === 'call' ? spot > contract.strike : spot < contract.strike
+  const cellCls = `px-2 py-1 text-xs tabular-nums text-right ${itm ? 'text-emerald-400' : 'text-gray-300'}`
   return (
     <>
-      <td className={`px-2 py-1 text-xs tabular-nums text-right ${itm ? 'text-emerald-400' : 'text-gray-300'}`}>
-        {fmtPct(contract.impliedVolatility)}
-      </td>
-      <td className={`px-2 py-1 text-xs tabular-nums text-right ${itm ? 'text-emerald-400' : 'text-gray-300'}`}>
-        {fmtNum(contract.delta)}
-      </td>
-      <td className={`px-2 py-1 text-xs tabular-nums text-right ${itm ? 'text-emerald-400' : 'text-gray-300'}`}>
-        {fmtVol(contract.openInterest)}
-      </td>
-      <td className={`px-2 py-1 text-xs tabular-nums text-right ${itm ? 'text-emerald-400' : 'text-gray-300'}`}>
-        {fmtVol(contract.volume)}
-      </td>
-      <td className={`px-2 py-1 text-xs tabular-nums text-right ${itm ? 'text-emerald-400' : 'text-gray-300'}`}>
-        ${fmtNum(contract.lastPrice)}
-      </td>
+      <td className={cellCls}>{fmtPct(contract.impliedVolatility)}</td>
+      <td className={cellCls}>{fmtNum(contract.delta)}</td>
+      <td className={cellCls}>{fmtVol(contract.openInterest)}</td>
+      <td className={cellCls}>{fmtVol(contract.volume)}</td>
+      <td className={cellCls}>${fmtNum(contract.lastPrice)}</td>
     </>
   )
-}
+})
 
 const MAX_VISIBLE_EXPIRIES = 8
 
-export default function OptionsChainTable({ chain }: Props) {
+function OptionsChainTableImpl({ chain }: Props) {
+  // Phase 14 wave 41 — `toIsoDate` SSOT replaces the duplicated defensive
+  // ternaries. The currentExpiry / expirationDates fields are typed Date
+  // but are strings at runtime (JSON cannot reconstruct Date). The prior
+  // unconditional `.toISOString()` here crashed the table on first paint.
   const [selectedExpiry, setSelectedExpiry] = useState<string>(
-    chain.currentExpiry ? chain.currentExpiry.toISOString().slice(0, 10) : '',
+    toIsoDate(chain.currentExpiry, ''),
   )
   const [showAllExpiries, setShowAllExpiries] = useState(false)
 
-  const expiryStr = selectedExpiry || (chain.currentExpiry ? chain.currentExpiry.toISOString().slice(0, 10) : '')
-  const calls = chain.calls.filter(
-    (c) => c.expiration instanceof Date
-      ? c.expiration.toISOString().slice(0, 10) === expiryStr
-      : new Date(c.expiration).toISOString().slice(0, 10) === expiryStr,
+  const expiryStr = selectedExpiry || toIsoDate(chain.currentExpiry, '')
+
+  // Phase 14 wave 41 (task #15 perf) — every derived list is now memoised.
+  // The filter / Set construction / sort / Map allocation chain previously
+  // ran on EVERY render of the parent stock page (every quote tick, every
+  // tab switch). For a 100-strike chain that's ~500 allocations per tick.
+  const calls = useMemo(
+    () => chain.calls.filter((c) => toIsoDate(c.expiration) === expiryStr),
+    [chain.calls, expiryStr],
   )
-  const puts = chain.puts.filter(
-    (p) => p.expiration instanceof Date
-      ? p.expiration.toISOString().slice(0, 10) === expiryStr
-      : new Date(p.expiration).toISOString().slice(0, 10) === expiryStr,
+  const puts = useMemo(
+    () => chain.puts.filter((p) => toIsoDate(p.expiration) === expiryStr),
+    [chain.puts, expiryStr],
   )
 
-  // Build unified strike list
-  const strikeSet = new Set<number>()
-  calls.forEach((c) => strikeSet.add(c.strike))
-  puts.forEach((p) => strikeSet.add(p.strike))
-  const strikes = Array.from(strikeSet).sort((a, b) => a - b)
+  const strikes = useMemo(() => {
+    const strikeSet = new Set<number>()
+    for (const c of calls) {
+      if (Number.isFinite(c.strike)) strikeSet.add(c.strike)
+    }
+    for (const p of puts) {
+      if (Number.isFinite(p.strike)) strikeSet.add(p.strike)
+    }
+    return Array.from(strikeSet).sort((a, b) => a - b)
+  }, [calls, puts])
 
-  const callByStrike = new Map(calls.map((c) => [c.strike, c]))
-  const putByStrike  = new Map(puts.map((p) => [p.strike, p]))
-  const spot = chain.underlyingPrice
+  const callByStrike = useMemo(
+    () => new Map(calls.map((c) => [c.strike, c])),
+    [calls],
+  )
+  const putByStrike = useMemo(
+    () => new Map(puts.map((p) => [p.strike, p])),
+    [puts],
+  )
+
+  // Defensive: chain.underlyingPrice can be 0 / NaN if Yahoo returned a halt
+  // row. The pre-wave-41 code computed `spot > contract.strike` against NaN
+  // → always false → every cell rendered OTM colours. We display the chain
+  // but downgrade the ITM colouring to neutral when spot is unmeasurable.
+  const spot = Number.isFinite(chain.underlyingPrice) && chain.underlyingPrice > 0
+    ? chain.underlyingPrice
+    : 0
 
   return (
     <div className="space-y-3">
       {/* Expiry selector */}
       <div className="flex items-center gap-2 flex-wrap">
         <span className="text-xs text-gray-400 uppercase tracking-wide">Expiry:</span>
-        {(showAllExpiries ? chain.expirationDates : chain.expirationDates.slice(0, MAX_VISIBLE_EXPIRIES)).map((d) => {
-          const str = d instanceof Date ? d.toISOString().slice(0, 10) : new Date(d).toISOString().slice(0, 10)
-          return (
+        {(showAllExpiries ? chain.expirationDates : chain.expirationDates.slice(0, MAX_VISIBLE_EXPIRIES))
+          .map((d) => toIsoDate(d, ''))
+          .filter((str) => str.length > 0)  // drop malformed expirations
+          .map((str) => (
             <button
               key={str}
+              type="button"
               onClick={() => setSelectedExpiry(str)}
-              className={`text-xs px-2 py-0.5 rounded border transition-colors ${
+              className={`text-xs px-2 py-0.5 rounded border transition-colors focus:outline-none focus:ring-1 focus:ring-indigo-400 ${
                 str === expiryStr
                   ? 'border-indigo-500 bg-indigo-500/20 text-indigo-300'
                   : 'border-gray-600 text-gray-400 hover:border-gray-400'
               }`}
+              aria-pressed={str === expiryStr}
+              aria-label={`Show expiry ${str}`}
             >
               {str}
             </button>
-          )
-        })}
+          ))}
         {chain.expirationDates.length > MAX_VISIBLE_EXPIRIES && (
           <button
             onClick={() => setShowAllExpiries((v) => !v)}
@@ -187,3 +218,12 @@ export default function OptionsChainTable({ chain }: Props) {
     </div>
   )
 }
+
+// Phase 14 wave 41 (task #15 perf) — React.memo wrapping. The parent stock
+// page re-renders on every quote tick (~every 15 s during market hours via
+// the SSE useLiveQuote subscription); without memo, the entire chain table
+// re-walked even when the chain prop reference was unchanged. The boot
+// fetch sets chain once; SSE updates rarely change it. memo skips the
+// re-render walk when chain prop is referentially stable.
+const OptionsChainTable = memo(OptionsChainTableImpl)
+export default OptionsChainTable

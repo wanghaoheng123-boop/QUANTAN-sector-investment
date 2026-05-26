@@ -3,7 +3,7 @@ import {
   runPortfolioBacktest,
   DEFAULT_PORTFOLIO_CONFIG,
 } from '@/lib/backtest/portfolioBacktest'
-import type { OhlcvRow } from '@/scripts/backtest/dataLoader'
+import type { OhlcvRow } from '@/lib/backtest/dataLoader'
 
 // ─── Synthetic OHLCV fixture builders ───────────────────────────────────────
 

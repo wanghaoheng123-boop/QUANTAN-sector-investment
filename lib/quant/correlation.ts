@@ -53,16 +53,45 @@ export function pearsonCorrelation(a: number[], b: number[]): number | null {
  * Compute the maximum pairwise correlation between a candidate return series
  * and a set of existing position return series.
  *
- * Returns 0 if no peer series have enough data — interpreted as "no
- * correlation pressure to shrink Kelly."
+ * Fail-closed: returns null when the candidate or all peers have insufficient
+ * data. Risk-management code should NOT assume "no correlation" when it
+ * simply lacks the bars to measure — the conservative interpretation is
+ * "unknown, treat as correlated for sizing." Callers (correlationAdjustedKelly)
+ * shrink Kelly to zero on null.
+ *
+ * Returns 0 only when correlation is genuinely measurable AND maxes at 0
+ * (truly uncorrelated portfolio).
+ *
+ * Previous implementation: `if (candidate.length < minWindow) return 0`
+ * silently allowed full Kelly for candidates with <20 bars — a fail-OPEN
+ * default that gave maximum size to the least-known position.
  */
 export function maxCorrelationVsPeers(
   candidate: number[],
   peers: ReadonlyArray<number[]>,
   minWindow = 20,
-): number {
-  if (candidate.length < minWindow) return 0
-  let maxAbsRho = 0
+): number | null {
+  if (candidate.length < minWindow) return null
+  // Phase 14 wave 7: track SIGNED maximum (most-positive rho) instead of |rho|.
+  // Markowitz (1952) "Portfolio Selection": a negatively-correlated holding
+  // is diversifying — it should NOT shrink Kelly. The prior implementation
+  // used `Math.abs(rho)`, which conflated a +0.9 momentum overlap (real risk)
+  // with a -0.7 gold-vs-equities hedge (variance reduction). Both got identical
+  // sizing penalties, systematically blocking the additions that most reduce
+  // portfolio variance.
+  //
+  // CAVEAT — tail-correlation flip: in extreme drawdowns, correlations often
+  // spike toward +1 across the book (e.g., 2008, 2020-Mar). A historically
+  // negative correlation provides less diversification than its long-run rho
+  // suggests when you need it most. The 0.20 gate in correlationAdjustedKelly
+  // is set conservatively to absorb some of this risk; if a future phase wants
+  // a stricter "tail-aware" model, switch to signed but adjust the gate down.
+  //
+  // Reference: Markowitz, H. (1952). "Portfolio Selection." Journal of
+  //            Finance 7(1), p77-91. Diversification benefit grows as
+  //            correlation decreases (and is maximised at rho = -1).
+  let maxRho = -Infinity
+  let measured = false
   for (const peer of peers) {
     if (peer.length < minWindow) continue
     // Align tails — both series end at the same observation.
@@ -71,36 +100,50 @@ export function maxCorrelationVsPeers(
     const b = peer.slice(-w)
     const rho = pearsonCorrelation(a, b)
     if (rho == null) continue
-    const abs = Math.abs(rho)
-    if (abs > maxAbsRho) maxAbsRho = abs
+    measured = true
+    if (rho > maxRho) maxRho = rho
   }
-  return maxAbsRho
+  // If we couldn't measure correlation against ANY peer, return null —
+  // the candidate is genuinely-isolated (e.g. brand-new portfolio with
+  // no peers, or all peers are too short). Callers treat null per their
+  // own fail-mode policy.
+  if (!measured) return peers.length === 0 ? 0 : null
+  return maxRho
 }
 
 /**
  * Adjust a Kelly fraction downward when the candidate is highly correlated
  * with existing portfolio positions (correlation-Kelly approximation).
  *
- * - When max correlation < gate: no shrinkage (returns kelly unchanged).
- * - When max correlation >= gate: shrink Kelly by `(1 - rho)` factor —
- *   at rho = 1.0 the candidate gets zero new allocation; at rho = gate
- *   the candidate gets `kelly * (1 - gate)`.
+ * Continuous-at-gate semantics (previous version had a 20% jump at gate):
+ *   - rho ≤ gate:  no shrinkage (returns kelly unchanged).
+ *   - rho ∈ (gate, 1]: linearly shrink to zero at rho = 1.
+ *       shrink_factor = (1 − rho) / (1 − gate)
+ *     so at rho = gate the factor is 1.0 (continuous), and at rho = 1.0
+ *     the factor is 0 (no allocation to a perfectly-correlated position).
+ *   - rho == null (measurement impossible): fail-CLOSED — return 0.
+ *     Risk-management code should not assume an unmeasured correlation
+ *     is favourable.
  *
  * Reference: Thorp (2006) §5 — correlated bets reduce effective Kelly.
  *
  * @param kelly       Base Kelly fraction (typically halfKelly output).
- * @param maxRho      Max absolute pairwise correlation vs existing positions.
+ * @param maxRho      Max absolute pairwise correlation, or null if unmeasurable.
  * @param gate        Correlation threshold above which shrinking begins.
  *                    Default 0.20 (matches portfolioBacktest correlationGate).
  */
 export function correlationAdjustedKelly(
   kelly: number,
-  maxRho: number,
+  maxRho: number | null,
   gate = 0.20,
 ): number {
   if (!Number.isFinite(kelly) || kelly <= 0) return 0
-  if (!Number.isFinite(maxRho) || maxRho <= gate) return kelly
-  // Linear shrink from kelly at rho=gate to 0 at rho=1.
-  const remaining = Math.max(0, 1 - maxRho)
-  return Math.max(0, kelly * remaining)
+  // Fail-closed on unmeasurable correlation — the candidate could be
+  // perfectly correlated with the existing book and we'd never know.
+  if (maxRho == null || !Number.isFinite(maxRho)) return 0
+  if (maxRho <= gate) return kelly
+  // Continuous linear shrink: at rho = gate → kelly; at rho = 1 → 0.
+  const denom = Math.max(1e-9, 1 - gate)
+  const factor = Math.max(0, (1 - maxRho) / denom)
+  return Math.max(0, kelly * factor)
 }

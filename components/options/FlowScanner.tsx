@@ -2,6 +2,7 @@
 
 import type { UnusualFlowItem, FlowSentimentLabel } from '@/lib/options/flow'
 import { MetricTooltip } from '@/components/MetricTooltip'
+import { toIsoDate } from '@/lib/format'
 
 const HEADER_TOOLTIPS: Record<string, string> = {
   Volume: 'volSma',
@@ -16,10 +17,22 @@ interface Props {
   sentiment: FlowSentimentLabel
 }
 
-function fmtVol(v: number): string {
+// Phase 14 wave 41 — defensive numeric guards. The function previously
+// assumed `v: number` matched the TS type, but JSON.parse can deliver
+// null / NaN / Infinity for missing or malformed Yahoo fields, and
+// `(null as unknown as number) >= 1_000_000` evaluates as false → falls
+// through to `String(null)` → "null" rendered in the volume cell.
+function fmtVol(v: unknown): string {
+  if (typeof v !== 'number' || !Number.isFinite(v) || v < 0) return '—'
   if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`
   if (v >= 1_000) return `${(v / 1_000).toFixed(0)}K`
-  return String(v)
+  return String(Math.round(v))
+}
+
+/** Safe `.toFixed(n)` — same defensive contract as fmtVol. */
+function fmtFixed(v: unknown, digits = 2, fallback = '—'): string {
+  if (typeof v !== 'number' || !Number.isFinite(v)) return fallback
+  return v.toFixed(digits)
 }
 
 function SentimentBadge({ label }: { label: FlowSentimentLabel }) {
@@ -95,20 +108,29 @@ export default function FlowScanner({ items, sentiment }: Props) {
                 </td>
                 <td className="py-1 px-2 text-right font-mono text-gray-300">${item.strike}</td>
                 <td className="py-1 px-2 text-right text-gray-400">
-                  {item.expiration.toISOString().slice(0, 10)}
+                  {/* Phase 14 wave 41 — fix: `item.expiration` is typed as Date but is
+                      a STRING at runtime (JSON.parse cannot reconstruct Date instances).
+                      The prior `.toISOString()` call crashed the whole FlowScanner panel.
+                      `toIsoDate` accepts Date | string | number safely. */}
+                  {toIsoDate(item.expiration, '—')}
                 </td>
                 <td className="py-1 px-2 text-right font-mono text-gray-200">{fmtVol(item.volume)}</td>
                 <td className="py-1 px-2 text-right font-mono text-gray-400">
                   {item.openInterest > 0 ? fmtVol(item.openInterest) : '—'}
                 </td>
                 <td className="py-1 px-2 text-right font-mono text-yellow-400">
-                  {item.volumeToOI === Infinity ? '∞' : item.volumeToOI.toFixed(1)}x
+                  {item.volumeToOI === Infinity
+                    ? '∞'
+                    : `${fmtFixed(item.volumeToOI, 1)}x`}
                 </td>
                 <td className="py-1 px-2 text-right font-mono text-gray-400">
-                  {(item.impliedVolatility * 100).toFixed(1)}%
+                  {/* Defensive guard for malformed Yahoo IV (null/NaN). */}
+                  {Number.isFinite(item.impliedVolatility)
+                    ? `${(item.impliedVolatility * 100).toFixed(1)}%`
+                    : '—'}
                 </td>
                 <td className="py-1 px-2 text-right font-mono text-gray-300">
-                  ${item.lastPrice.toFixed(2)}
+                  ${fmtFixed(item.lastPrice, 2)}
                 </td>
                 <td className="py-1 px-2 text-center">
                   <SentimentBadge label={item.sentiment} />

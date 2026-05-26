@@ -50,16 +50,26 @@ describe('pearsonCorrelation', () => {
 })
 
 describe('maxCorrelationVsPeers', () => {
-  it('returns 0 when candidate has insufficient data', () => {
+  // Updated contract: fail-CLOSED when correlation can't be measured against
+  // peers that ARE present. Previously returned 0 (fail-OPEN), letting a
+  // candidate we couldn't characterize collect full Kelly — a risk-management
+  // anti-pattern. Only returns 0 when peers.length === 0 (genuinely-isolated
+  // first position, where there's nothing to correlate against).
+  it('returns null when candidate has insufficient data', () => {
     const candidate = [0.01, 0.02]
     const peers = [Array.from({ length: 100 }, () => 0.01)]
-    expect(maxCorrelationVsPeers(candidate, peers, 20)).toBe(0)
+    expect(maxCorrelationVsPeers(candidate, peers, 20)).toBeNull()
   })
 
-  it('returns 0 when no peers have enough data', () => {
+  it('returns null when no peers have enough data', () => {
     const candidate = Array.from({ length: 50 }, (_, i) => i * 0.001)
     const peers = [[0.01], [0.02, 0.03]]
-    expect(maxCorrelationVsPeers(candidate, peers, 20)).toBe(0)
+    expect(maxCorrelationVsPeers(candidate, peers, 20)).toBeNull()
+  })
+
+  it('returns 0 when peers array is empty (no positions to correlate against)', () => {
+    const candidate = Array.from({ length: 50 }, (_, i) => i * 0.001)
+    expect(maxCorrelationVsPeers(candidate, [], 20)).toBe(0)
   })
 
   it('finds highest |rho| across peers', () => {
@@ -94,9 +104,16 @@ describe('correlationAdjustedKelly', () => {
     expect(correlationAdjustedKelly(0.25, 0.20, 0.20)).toBe(0.25) // == gate, no shrink
   })
 
-  it('shrinks Kelly proportionally above the gate', () => {
-    // rho=0.8, gate=0.20 → shrink to kelly * (1-0.8) = 0.2*kelly
-    expect(correlationAdjustedKelly(0.25, 0.8, 0.20)).toBeCloseTo(0.05, 6)
+  it('shrinks Kelly proportionally above the gate (continuous at gate)', () => {
+    // Continuous-at-gate semantics: shrink_factor = (1 - rho) / (1 - gate)
+    // rho=0.8, gate=0.20 → factor = (1-0.8)/(1-0.2) = 0.25 → kelly * 0.25
+    expect(correlationAdjustedKelly(0.25, 0.8, 0.20)).toBeCloseTo(0.25 * 0.25, 6)
+    // Continuity check: at rho exactly at gate, factor === 1 (no jump).
+    expect(correlationAdjustedKelly(0.25, 0.20, 0.20)).toBeCloseTo(0.25, 6)
+    // Just-above-gate should produce factor ≈ 1, not factor ≈ 0.80 (old bug).
+    const justAbove = correlationAdjustedKelly(0.25, 0.21, 0.20)
+    expect(justAbove).toBeGreaterThan(0.24) // not the old 0.20
+    expect(justAbove).toBeLessThan(0.25)
   })
 
   it('returns 0 at perfect correlation', () => {
@@ -107,5 +124,12 @@ describe('correlationAdjustedKelly', () => {
     // Caller is expected to pass max|rho|, but if a raw negative slips in we
     // pass it through (kelly unchanged since -0.8 <= gate=0.20).
     expect(correlationAdjustedKelly(0.25, -0.8, 0.20)).toBe(0.25)
+  })
+
+  // Fail-closed contract: null maxRho means "unmeasured" — risk-mgmt
+  // code must not assume favourable correlation. Previously the function
+  // didn't accept null; callers passing 0 got full Kelly under uncertainty.
+  it('returns 0 when maxRho is null (fail-closed on unmeasurable correlation)', () => {
+    expect(correlationAdjustedKelly(0.25, null, 0.20)).toBe(0)
   })
 })

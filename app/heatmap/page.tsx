@@ -18,11 +18,17 @@ export default function HeatmapPage() {
   const [loading, setLoading] = useState(true)
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
 
+  // Phase 14 wave 20: AbortSignal-aware poll. Each tick aborts any in-flight
+  // previous fetch so a slow response from a prior tick cannot overwrite
+  // a fresh response. Cleanup aborts the active controller on unmount.
   useEffect(() => {
-    const fetchPrices = async () => {
+    let activeController = new AbortController()
+    const fetchPrices = async (signal: AbortSignal) => {
       try {
-        const res = await fetch('/api/prices')
+        const res = await fetch('/api/prices', { signal })
+        if (signal.aborted) return
         const data = await res.json()
+        if (signal.aborted) return
         if (data.quotes) {
           const map: Record<string, Quote> = {}
           data.quotes.forEach((q: Quote) => { map[q.ticker] = q })
@@ -30,15 +36,23 @@ export default function HeatmapPage() {
           setLastUpdate(new Date())
         }
       } catch (e) {
-        console.error('Fetch error', e)
+        if (signal.aborted || (e instanceof DOMException && e.name === 'AbortError')) return
+        console.warn('[heatmap] fetch failed', e)
       } finally {
-        setLoading(false)
+        if (!signal.aborted) setLoading(false)
       }
     }
 
-    fetchPrices()
-    const interval = setInterval(fetchPrices, 15000)
-    return () => clearInterval(interval)
+    void fetchPrices(activeController.signal)
+    const interval = setInterval(() => {
+      activeController.abort()
+      activeController = new AbortController()
+      void fetchPrices(activeController.signal)
+    }, 15000)
+    return () => {
+      clearInterval(interval)
+      activeController.abort()
+    }
   }, [])
 
   // Order sectors by market cap or alphabetically. Right now using just standard order.
@@ -65,7 +79,7 @@ export default function HeatmapPage() {
           <div>
             <h1 className="text-3xl font-bold text-white mb-2">Sector Heatmap</h1>
             <p className="text-slate-400">Session change % vs prior close from Yahoo (normalized in /api/prices).</p>
-            <p className="text-xs text-slate-600 mt-2 max-w-2xl leading-relaxed">
+            <p className="text-xs text-slate-400 mt-2 max-w-2xl leading-relaxed">
               Between exchange sessions the vendor quote usually does not move; the clock above is when we last polled, not a new auction print. Colors map fixed % buckets (0, ±1%, ±2%).
             </p>
           </div>

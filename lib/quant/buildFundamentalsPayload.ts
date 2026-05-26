@@ -18,7 +18,7 @@ import {
 } from './technicals'
 import { alignCloses, logReturns, correlation, excessReturn } from './relativeStrength'
 import { bandPosition, computeResearchScore } from './researchScore'
-import { classicPivots } from './pivots'
+import { classicPivots, priorSessionBar } from './pivots'
 import { parseEarningsSnapshot } from './earningsParse'
 
 type AnyRec = Record<string, unknown>
@@ -108,6 +108,37 @@ export function buildFundamentalsPayload(
   const shares = num(keyStats?.sharesOutstanding) ?? num(keyStats?.ordinarySharesNumber)
   const fcf0 = pickFcf0(cashModule, financialData)
 
+  // Net debt = (long-term debt + short-term debt) − cash & equivalents
+  // (most-recent balance sheet). Required for the FCFF→equity bridge in runDcf.
+  //
+  // Phase 14 wave 13: was using LTD alone, which understates net debt for
+  // companies with material short-term obligations (commercial-paper-heavy
+  // financials, REITs with revolving credit lines, retailers with seasonal
+  // working-capital financing). The Damodaran (2012) FCFF→equity bridge
+  // explicitly subtracts ALL interest-bearing debt, not just long-term.
+  //
+  // Also adds `shortLongTermDebt` (Yahoo's name for the current portion of
+  // long-term debt). When the balance-sheet module is unavailable we fall
+  // back to undefined → runDcf assumes netDebt=0 (preserves prior behaviour
+  // for those tickers).
+  //
+  // Citation: Damodaran, A. (2012). Investment Valuation (3rd ed.), Wiley,
+  //           ch.2 — "subtract all interest-bearing debt obligations from EV
+  //           to derive equity value".
+  let netDebt: number | undefined
+  if (balanceHist.length > 0) {
+    const latest = balanceHist[0] as AnyRec
+    const ltd = num(latest?.longTermDebt) ?? 0
+    // Short-term debt may surface under different Yahoo names. Try the
+    // common ones; default to 0 if none present.
+    const std = num(latest?.shortLongTermDebt)
+              ?? num(latest?.shortTermDebt)
+              ?? num(latest?.currentDebt)
+              ?? 0
+    const cash = num(latest?.cash) ?? 0
+    netDebt = ltd + std - cash
+  }
+
   const dcfBear =
     shares && fcf0
       ? runDcf({
@@ -116,11 +147,12 @@ export function buildFundamentalsPayload(
           wacc: q.wacc + 0.015,
           terminalGrowth: Math.min(q.terminalGrowth, 0.02),
           explicitGrowth: q.gBear,
+          netDebt,
         })
       : null
   const dcfBase =
     shares && fcf0
-      ? runDcf({ fcf0, shares, wacc: q.wacc, terminalGrowth: q.terminalGrowth, explicitGrowth: q.gBase })
+      ? runDcf({ fcf0, shares, wacc: q.wacc, terminalGrowth: q.terminalGrowth, explicitGrowth: q.gBase, netDebt })
       : null
   const dcfBull =
     shares && fcf0
@@ -130,6 +162,7 @@ export function buildFundamentalsPayload(
           wacc: Math.max(q.wacc - 0.01, 0.06),
           terminalGrowth: q.terminalGrowth,
           explicitGrowth: q.gBull,
+          netDebt,
         })
       : null
 
@@ -280,10 +313,15 @@ export function buildFundamentalsPayload(
     bandPosition: bPos,
   })
 
+  // Floor-trader pivots: derive from the most-recent COMPLETED session's HLC.
+  // priorSessionBar inspects dates to distinguish "last bar is today's intraday"
+  // (use length-2) from "last bar IS yesterday/the prior complete session"
+  // (use length-1). Previous code always took length-2 and silently returned
+  // 2-day-old data on weekends, holidays, and pre-market hits.
   let pivots: ReturnType<typeof classicPivots> | null = null
-  if (ohlc.length >= 2) {
-    const p = ohlc[ohlc.length - 2]
-    pivots = classicPivots(p.high, p.low, p.close)
+  const prior = priorSessionBar(ohlc, dates)
+  if (prior) {
+    pivots = classicPivots(prior.high, prior.low, prior.close)
   }
 
   const earnings = parseEarningsSnapshot(quoteSummary as Record<string, unknown>)
@@ -291,9 +329,15 @@ export function buildFundamentalsPayload(
   const slice52 = closes.length >= 60 ? closes.slice(-Math.min(252, closes.length)) : closes
   const high52w = slice52.length ? Math.max(...slice52) : null
   const low52w = slice52.length ? Math.min(...slice52) : null
+  // Phase 13 S2 audit (cross-cutting Pattern 1 — comment-vs-code drift):
+  // posIn52w previously used `lastClose` (yesterday's daily-bar close) but
+  // should use `price` (the LIVE intraday value) so the 52w-range position
+  // reflects current market state, not yesterday's close. Fall back to
+  // `lastClose` only when `price` is unavailable.
+  const pricePoint = price != null && price > 0 ? price : lastClose
   const posIn52w =
-    high52w != null && low52w != null && lastClose != null && high52w > low52w
-      ? (lastClose - low52w) / (high52w - low52w)
+    high52w != null && low52w != null && pricePoint != null && high52w > low52w
+      ? (pricePoint - low52w) / (high52w - low52w)
       : null
 
   const vol20d = closes.length >= 22 ? annualizedVolFromCloses(closes.slice(-22)) : null

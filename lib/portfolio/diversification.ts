@@ -7,23 +7,24 @@
  * - Diversification ratio (weighted avg vol / portfolio vol)
  */
 
+import { pearsonCorrelation } from '@/lib/quant/correlation'
+
 /**
- * Pearson correlation between two equal-length return series.
+ * Thin adapter over the SSOT pearsonCorrelation primitive
+ * (lib/quant/correlation.ts) — preserves the local convention of
+ * returning 0 for degenerate inputs (length < 2 or zero variance)
+ * instead of null. Phase 13 S2 team-audit cleanup eliminated three
+ * inline duplicates of this math across lib/portfolio/* and
+ * lib/quant/intermarket.ts; this one was the last.
  */
 function pearsonCorr(a: number[], b: number[]): number {
   const n = Math.min(a.length, b.length)
-  if (n < 2) return 0
+  // Align tails — both series end at the same observation, matching the
+  // prior in-file implementation's semantics.
   const aSlice = a.slice(-n)
   const bSlice = b.slice(-n)
-  const meanA = aSlice.reduce((s, x) => s + x, 0) / n
-  const meanB = bSlice.reduce((s, x) => s + x, 0) / n
-  let cov = 0, varA = 0, varB = 0
-  for (let i = 0; i < n; i++) {
-    cov += (aSlice[i] - meanA) * (bSlice[i] - meanB)
-    varA += (aSlice[i] - meanA) ** 2
-    varB += (bSlice[i] - meanB) ** 2
-  }
-  return varA > 0 && varB > 0 ? cov / Math.sqrt(varA * varB) : 0
+  const rho = pearsonCorrelation(aSlice, bSlice)
+  return rho == null ? 0 : rho
 }
 
 export interface CorrelationMatrix {
@@ -142,42 +143,97 @@ export function sectorExposure(
     .sort((a, b) => b.weight - a.weight)
 }
 
+/** Minimum observations required for a meaningful vol estimate. */
+const MIN_VOL_OBS = 5
+
 /**
  * Diversification ratio = (weighted average vol) / (portfolio vol).
- * Higher ratio = more diversification benefit.
- * DR = 1 → no diversification (all returns perfectly correlated).
- * DR = sqrt(n) → maximum diversification (all uncorrelated equal-vol assets).
+ *   DR = 1 → no diversification (all returns perfectly correlated).
+ *   DR = √n → maximum diversification (all uncorrelated equal-vol assets).
+ *
+ * Phase 13 S2: returns now include a warnings field for data-quality issues
+ * (mirrors stressTest's pattern). Callers can distinguish "DR=1 because
+ * portfolio is single-asset / fully-correlated" (legitimate) from "DR=1
+ * because we couldn't compute" (degraded).
+ *
+ * Citation: Choueifaty, Y. & Coignard, Y. (2008). "Toward Maximum
+ *           Diversification." Journal of Portfolio Management, 35(1), 40-51.
  */
+export interface DiversificationRatioResult {
+  ratio: number
+  /** Observations used in the portfolio-vol computation (max across tickers). */
+  observations: number
+  /** Data-quality issues encountered. Empty array == clean run. */
+  warnings: string[]
+}
+
 export function diversificationRatio(
   returnSeries: Record<string, number[]>,
   weights: Record<string, number>,
   lookback = 60,
-): number {
+): DiversificationRatioResult {
+  const warnings: string[] = []
   const tickers = Object.keys(weights).filter(t => weights[t] > 0)
-  if (tickers.length < 2) return 1
+  if (tickers.length < 2) {
+    return {
+      ratio: 1,
+      observations: 0,
+      warnings: tickers.length === 0
+        ? ['Empty portfolio — diversification ratio undefined; returning 1.']
+        : ['Single-asset portfolio — diversification ratio definitionally 1.'],
+    }
+  }
 
-  // Individual vols
+  // Individual vols, with per-ticker warnings for short histories.
   const vols: Record<string, number> = {}
+  const shortHistoryTickers: string[] = []
   for (const t of tickers) {
     const rets = (returnSeries[t] ?? []).slice(-lookback)
-    if (rets.length < 5) continue
+    if (rets.length < MIN_VOL_OBS) {
+      shortHistoryTickers.push(t)
+      continue
+    }
     const mean = rets.reduce((s, r) => s + r, 0) / rets.length
     const variance = rets.reduce((s, r) => s + (r - mean) ** 2, 0) / Math.max(1, rets.length - 1)
     vols[t] = Math.sqrt(Math.max(0, variance))
   }
+  if (shortHistoryTickers.length > 0) {
+    warnings.push(
+      `${shortHistoryTickers.length} ticker(s) had <${MIN_VOL_OBS} obs in the lookback ` +
+      `window and were excluded from the vol average: ${shortHistoryTickers.join(', ')}.`,
+    )
+  }
 
-  // Weighted average vol
-  const weightedAvgVol = tickers.reduce((s, t) => s + (weights[t] ?? 0) * (vols[t] ?? 0), 0)
+  // Weighted average vol. Use the actual computed-vol tickers, not the full set.
+  const measurableTickers = tickers.filter(t => vols[t] != null)
+  const weightedAvgVol = measurableTickers.reduce(
+    (s, t) => s + (weights[t] ?? 0) * (vols[t] ?? 0),
+    0,
+  )
 
-  // Portfolio returns (weighted sum)
-  const n = Math.min(...tickers.map(t => (returnSeries[t] ?? []).length))
-  if (n < 5) return 1
+  // Portfolio returns — use MAX of non-empty lengths (Phase 13 S2 fail-closed
+  // pattern, mirrors stressTest.ts fix). Previously Math.min(...lengths)
+  // silently returned 1 when any one ticker had zero history.
+  const nonEmptyLengths = tickers
+    .map(t => (returnSeries[t] ?? []).length)
+    .filter(len => len > 0)
+  const n = nonEmptyLengths.length > 0 ? Math.max(...nonEmptyLengths) : 0
+
+  if (n < MIN_VOL_OBS) {
+    warnings.push(
+      `Insufficient return history (${n} obs across all tickers) ` +
+      `to compute portfolio vol; returning DR=1.`,
+    )
+    return { ratio: 1, observations: n, warnings }
+  }
 
   const portReturns: number[] = new Array(n).fill(0)
   for (const t of tickers) {
-    const rets = (returnSeries[t] ?? []).slice(-n)
-    for (let i = 0; i < n; i++) {
-      portReturns[i] += (weights[t] ?? 0) * (rets[i] ?? 0)
+    const rets = (returnSeries[t] ?? [])
+    if (rets.length === 0) continue
+    const sliced = rets.slice(-n)
+    for (let i = 0; i < sliced.length; i++) {
+      portReturns[i] += (weights[t] ?? 0) * sliced[i]
     }
   }
 
@@ -185,5 +241,6 @@ export function diversificationRatio(
   const portVariance = portReturns.reduce((s, r) => s + (r - portMean) ** 2, 0) / Math.max(1, n - 1)
   const portVol = Math.sqrt(Math.max(0, portVariance))
 
-  return portVol > 0 ? weightedAvgVol / portVol : 1
+  const ratio = portVol > 0 ? weightedAvgVol / portVol : 1
+  return { ratio, observations: n, warnings }
 }

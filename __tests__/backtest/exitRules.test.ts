@@ -4,6 +4,7 @@ import {
   checkExitConditions,
   updatePosition,
   computeExitStats,
+  evaluateStopHit,
   DEFAULT_EXIT_CONFIG,
   type OpenPosition,
   type ExitConfig,
@@ -66,6 +67,102 @@ describe('atrAdaptiveStop', () => {
     const bars = makeBars(closes, 60)
     const { stopLossPrice } = atrAdaptiveStop(100, bars, 1.5, 0.05, 0.15)
     expect(stopLossPrice).toBeCloseTo(100 * (1 - 0.15), 2)
+  })
+
+  it('AT-F1.22-atr-prior-bar: forming entry bar does not affect ATR window', () => {
+    const completed = makeBars(Array.from({ length: 25 }, () => 100), 2)
+    const wildEntryBar: OhlcBar = { open: 100, high: 500, low: 1, close: 100 }
+    const withWildEntry = [...completed, wildEntryBar]
+
+    const baseline = atrAdaptiveStop(100, completed)
+    const withEntry = atrAdaptiveStop(100, withWildEntry)
+
+    expect(withEntry.stopLossPrice).toBeCloseTo(baseline.stopLossPrice, 6)
+    expect(withEntry.atrPct).toBeCloseTo(baseline.atrPct, 6)
+  })
+
+  /**
+   * R8-C-2 (Phase 14): property test — atrAdaptiveStop should hold its
+   * advertised invariants for any input bar series and any entry > 0.
+   *
+   * For a long position with default params (multiplier 1.5, floor 5%,
+   * ceiling 15%):
+   *   • stopLossPrice ∈ (0, entry)
+   *   • atrPct ≥ 0
+   *   • (entry - stopLossPrice) / entry ∈ [floor, ceiling]
+   *
+   * We exercise five deterministic seeds rather than randomised input
+   * to keep CI failures debuggable.
+   */
+  describe('R8-C-2: property invariants across random scenarios', () => {
+    const SEEDS = [3, 17, 88, 256, 7777]
+
+    function makeRng(seed: number): () => number {
+      let s = seed >>> 0
+      return () => {
+        s = (s * 1664525 + 1013904223) >>> 0
+        return s / 0xFFFFFFFF
+      }
+    }
+
+    function randomBars(rng: () => number, count: number, startPrice: number): OhlcBar[] {
+      const bars: OhlcBar[] = []
+      let p = startPrice
+      for (let i = 0; i < count; i++) {
+        const noise = (rng() - 0.5) * 0.04 * p   // ~±2% per bar
+        const open = p
+        const close = Math.max(p + noise, 1)
+        const range = Math.abs(noise) + p * 0.005
+        bars.push({
+          open,
+          close,
+          high: Math.max(open, close) + range,
+          low: Math.max(Math.min(open, close) - range, 0.5),
+        })
+        p = close
+      }
+      return bars
+    }
+
+    for (const seed of SEEDS) {
+      it(`seed ${seed}: stop lies inside (0, entry) and stop% ∈ [floor, ceiling]`, () => {
+        const rng = makeRng(seed)
+        const startPrice = 50 + rng() * 200    // entry in [50, 250]
+        const bars = randomBars(rng, 60, startPrice)
+        const entry = startPrice
+
+        const floor = 0.05
+        const ceiling = 0.15
+        const { stopLossPrice, atrPct } = atrAdaptiveStop(entry, bars, 1.5, floor, ceiling)
+
+        // atrPct must be a finite, non-negative number (fallback is 0.05).
+        expect(Number.isFinite(atrPct)).toBe(true)
+        expect(atrPct).toBeGreaterThanOrEqual(0)
+
+        // Stop must be strictly positive and tighter than entry (long stop).
+        expect(stopLossPrice).toBeGreaterThan(0)
+        expect(stopLossPrice).toBeLessThan(entry)
+
+        // Stop-distance percentage must respect floor/ceiling.
+        const stopDistPct = (entry - stopLossPrice) / entry
+        // Allow tiny floating-point slop at the boundaries.
+        expect(stopDistPct).toBeGreaterThanOrEqual(floor - 1e-9)
+        expect(stopDistPct).toBeLessThanOrEqual(ceiling + 1e-9)
+      })
+    }
+
+    it('zero / negative entry price returns floor-bounded stop (degenerate input)', () => {
+      // Documented behaviour: atrPct falls back to floor when entry <= 0
+      // (since the per-share ATR% can't be computed without a denominator).
+      // The returned stopLossPrice equals entry * (1 - floor), which for
+      // entry = 0 is also 0 — caller is responsible for guarding entry > 0.
+      const bars = makeBars([100, 100, 100], 0)
+      const { stopLossPrice, atrPct } = atrAdaptiveStop(0, bars)
+      expect(Number.isFinite(atrPct)).toBe(true)
+      expect(atrPct).toBeGreaterThanOrEqual(0)
+      // For zero entry, stop also ends up at zero — but never NaN/-Infinity.
+      expect(Number.isFinite(stopLossPrice)).toBe(true)
+    })
   })
 })
 
@@ -250,5 +347,221 @@ describe('computeExitStats', () => {
     expect(stats.stopLossPct).toBeCloseTo(0.4, 4)
     expect(stats.profitTakePct).toBeCloseTo(0.4, 4)
     expect(stats.timeExitPct).toBeCloseTo(0.2, 4)
+  })
+})
+
+// ─── F1.3 (Phase 13 S2): intraday-aware exits ───────────────────────────────
+
+/**
+ * The legacy behaviour (close-only stop evaluation) systematically
+ * under-reported stops and profit-takes, biasing backtest WR optimistic
+ * on stop hits and pessimistic on profit-take hits. These tests pin
+ * down the corrected intraday-breach semantics.
+ *
+ * Reference: Pardo (2008), *The Evaluation and Optimization of Trading
+ * Strategies* (2nd ed.), ch. 7 — backtests must check bar low for
+ * long stops, bar high for long profit-targets, to avoid systematic
+ * optimism in equity-curve estimates.
+ */
+describe('checkExitConditions — F1.3 intraday-aware exits', () => {
+  it('STOP LOSS fires on bar.low <= stop even when close recovers above', () => {
+    const pos = makePosition({ stopLossPrice: 97 })
+    // close = 99 (above stop), but low = 95 (below stop) — intraday breach.
+    const result = checkExitConditions(
+      pos, 5, 99, '2026-01-06', 0.02, 'HOLD', cfg,
+      { open: 99, high: 99.5, low: 95, close: 99 },
+    )
+    expect(result).not.toBeNull()
+    expect(result!.reason).toBe('stop_loss')
+    // Fill at stop price (assumed limit-order), not at bar.low (no slippage).
+    expect(result!.exitPrice).toBe(97)
+  })
+
+  it('STOP LOSS fills at bar.open on a gap-down through the stop', () => {
+    const pos = makePosition({ stopLossPrice: 97 })
+    // Gap-down: open = 95 (below stop). Fill at open (worse).
+    const result = checkExitConditions(
+      pos, 5, 94, '2026-01-06', 0.02, 'HOLD', cfg,
+      { open: 95, high: 95.5, low: 93, close: 94 },
+    )
+    expect(result).not.toBeNull()
+    expect(result!.reason).toBe('stop_loss')
+    expect(result!.exitPrice).toBe(95) // open
+  })
+
+  it('PROFIT TARGET fires on bar.high >= target even when close pulls back', () => {
+    const pos = makePosition() // profitTake default 8% → target = 108
+    // close = 105 (below target), but high = 109 (above target).
+    const result = checkExitConditions(
+      pos, 5, 105, '2026-01-06', 0.02, 'HOLD', cfg,
+      { open: 104, high: 109, low: 103, close: 105 },
+    )
+    expect(result).not.toBeNull()
+    expect(result!.reason).toBe('profit_target')
+    // Fill at target (assumed limit-order), not at bar.high.
+    expect(result!.exitPrice).toBe(108)
+    expect(result!.isPartial).toBe(true)
+  })
+
+  it('PROFIT TARGET fills at bar.open on a gap-up through the target', () => {
+    const pos = makePosition()
+    // Gap-up: open = 110 (above target 108). Fill at open (better).
+    const result = checkExitConditions(
+      pos, 5, 111, '2026-01-06', 0.02, 'HOLD', cfg,
+      { open: 110, high: 112, low: 109, close: 111 },
+    )
+    expect(result).not.toBeNull()
+    expect(result!.reason).toBe('profit_target')
+    expect(result!.exitPrice).toBe(110) // open
+  })
+
+  it('STOP LOSS takes priority over PROFIT TARGET on a wide range bar', () => {
+    // Both breaches in one bar (very wide range): stop@97 hit AND target@108 hit.
+    // Conservative: assume stop hits first (worse outcome).
+    const pos = makePosition({ stopLossPrice: 97 })
+    const result = checkExitConditions(
+      pos, 5, 105, '2026-01-06', 0.02, 'HOLD', cfg,
+      { open: 100, high: 109, low: 96, close: 105 },
+    )
+    expect(result).not.toBeNull()
+    expect(result!.reason).toBe('stop_loss')
+  })
+
+  it('TRAILING STOP fires on bar.low <= trail level (post partial exit)', () => {
+    const pos = makePosition({
+      partialExitDone: true,
+      highestPrice: 110, // trail at 110 * 0.95 = 104.5 (default trailingStopPct = 5%)
+    })
+    // close = 105 (above trail), but low = 104 (below).
+    const result = checkExitConditions(
+      pos, 5, 105, '2026-01-06', 0.02, 'HOLD', cfg,
+      { open: 105, high: 105.5, low: 104, close: 105 },
+    )
+    expect(result).not.toBeNull()
+    expect(result!.reason).toBe('stop_loss')
+    expect(result!.exitPrice).toBe(104.5) // trail level
+  })
+
+  it('back-compat: omitting currentBar falls back to close-only behaviour', () => {
+    // No bar param — uses currentPrice as low/high/open. Same result as
+    // the legacy contract (existing 23 tests rely on this).
+    const pos = makePosition({ stopLossPrice: 97 })
+    const result = checkExitConditions(pos, 5, 96, '2026-01-06', 0.02, 'HOLD', cfg)
+    expect(result).not.toBeNull()
+    expect(result!.reason).toBe('stop_loss')
+    expect(result!.exitPrice).toBe(96)
+  })
+})
+
+// ─── evaluateStopHit (SSOT primitive) ──────────────────────────────────────
+
+/**
+ * evaluateStopHit is the single source of truth for intraday stop/target
+ * detection, used by BOTH lib/backtest/exitRules.ts:checkExitConditions
+ * and lib/backtest/engine.ts. Direct tests cover the four (side, kind)
+ * quadrants so regressions show up here even if the higher-level paths
+ * don't exercise them.
+ */
+describe('evaluateStopHit — SSOT intraday primitive', () => {
+  const bar = (open: number, high: number, low: number, close: number) =>
+    ({ open, high, low, close })
+
+  // ─── LONG STOP ─────────────────────────────────────────────────────────
+  describe('long stop', () => {
+    it('triggers when bar.low <= stop (close above)', () => {
+      const r = evaluateStopHit(bar(100, 101, 95, 99), 97, 'long', 'stop')
+      expect(r).toBe(97)
+    })
+
+    it('fills at bar.open when gap-down opens below stop', () => {
+      const r = evaluateStopHit(bar(95, 96, 93, 94), 97, 'long', 'stop')
+      expect(r).toBe(95)
+    })
+
+    it('does not trigger when bar.low > stop', () => {
+      const r = evaluateStopHit(bar(100, 102, 99, 101), 97, 'long', 'stop')
+      expect(r).toBeNull()
+    })
+
+    it('boundary: bar.low === stop fires (≤ semantics)', () => {
+      const r = evaluateStopHit(bar(100, 101, 97, 99), 97, 'long', 'stop')
+      expect(r).toBe(97)
+    })
+  })
+
+  // ─── LONG TARGET ────────────────────────────────────────────────────────
+  describe('long target (profit take)', () => {
+    it('triggers when bar.high >= target (close below)', () => {
+      const r = evaluateStopHit(bar(104, 109, 103, 105), 108, 'long', 'target')
+      expect(r).toBe(108)
+    })
+
+    it('fills at bar.open when gap-up opens above target', () => {
+      const r = evaluateStopHit(bar(110, 112, 109, 111), 108, 'long', 'target')
+      expect(r).toBe(110)
+    })
+
+    it('does not trigger when bar.high < target', () => {
+      const r = evaluateStopHit(bar(104, 106, 103, 105), 108, 'long', 'target')
+      expect(r).toBeNull()
+    })
+
+    it('boundary: bar.high === target fires (≥ semantics)', () => {
+      const r = evaluateStopHit(bar(104, 108, 103, 105), 108, 'long', 'target')
+      expect(r).toBe(108)
+    })
+  })
+
+  // ─── SHORT STOP ─────────────────────────────────────────────────────────
+  describe('short stop', () => {
+    it('triggers when bar.high >= stop', () => {
+      const r = evaluateStopHit(bar(100, 109, 99, 101), 108, 'short', 'stop')
+      expect(r).toBe(108)
+    })
+
+    it('fills at bar.open when gap-up opens above stop', () => {
+      const r = evaluateStopHit(bar(110, 112, 109, 111), 108, 'short', 'stop')
+      expect(r).toBe(110)
+    })
+
+    it('does not trigger when bar.high < stop', () => {
+      const r = evaluateStopHit(bar(100, 105, 99, 101), 108, 'short', 'stop')
+      expect(r).toBeNull()
+    })
+  })
+
+  // ─── SHORT TARGET ───────────────────────────────────────────────────────
+  describe('short target (profit take)', () => {
+    it('triggers when bar.low <= target', () => {
+      const r = evaluateStopHit(bar(100, 101, 89, 99), 90, 'short', 'target')
+      expect(r).toBe(90)
+    })
+
+    it('fills at bar.open when gap-down opens below target', () => {
+      const r = evaluateStopHit(bar(88, 89, 85, 86), 90, 'short', 'target')
+      expect(r).toBe(88)
+    })
+
+    it('does not trigger when bar.low > target', () => {
+      const r = evaluateStopHit(bar(100, 101, 92, 99), 90, 'short', 'target')
+      expect(r).toBeNull()
+    })
+  })
+
+  // ─── DEFENSIVE EDGE CASES ──────────────────────────────────────────────
+  describe('defensive (non-finite / non-positive)', () => {
+    it('returns null for NaN level', () => {
+      expect(evaluateStopHit(bar(100, 101, 99, 100), NaN, 'long', 'stop')).toBeNull()
+    })
+
+    it('returns null for zero/negative level', () => {
+      expect(evaluateStopHit(bar(100, 101, 99, 100), 0, 'long', 'stop')).toBeNull()
+      expect(evaluateStopHit(bar(100, 101, 99, 100), -5, 'long', 'stop')).toBeNull()
+    })
+
+    it('returns null when bar has non-finite OHLC', () => {
+      expect(evaluateStopHit({ open: NaN, high: 101, low: 99, close: 100 }, 97, 'long', 'stop')).toBeNull()
+      expect(evaluateStopHit({ open: 100, high: Infinity, low: 99, close: 100 }, 97, 'long', 'stop')).toBeNull()
+    })
   })
 })

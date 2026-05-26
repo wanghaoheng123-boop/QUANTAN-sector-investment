@@ -85,6 +85,25 @@ function buildAnalysis(
   const sharesOutstanding = safeNum(keyStats?.sharesOutstanding ?? financialData?.sharesOutstanding)
   const sharesFloat = safeNum(keyStats?.ordinarySharesNumber ?? financialData?.sharesOutstanding)
 
+  // Phase 14 (R4-H-4): silent null fallback hid Yahoo schema drift. When
+  // the quote came back populated but sharesFloat resolved to null, the
+  // route used to return null silently — operators never saw it, so a
+  // Yahoo field rename or coverage gap could degrade the float-based
+  // ratios across the user base without detection. Emit a single
+  // structured warn so log aggregation can alert on drift. Behavior is
+  // unchanged: downstream still treats null as "unknown" and proceeds.
+  const quoteHasPrice = quote && quote.price > 0
+  if (quoteHasPrice && sharesFloat === null) {
+    console.warn(JSON.stringify({
+      event: 'darkpool.shares_float_missing',
+      ticker,
+      keyStatsHasOrdinaryShares: keyStats?.ordinarySharesNumber !== undefined,
+      keyStatsHasSharesOutstanding: keyStats?.sharesOutstanding !== undefined,
+      financialDataHasSharesOutstanding: financialData?.sharesOutstanding !== undefined,
+      fetchedAt: new Date().toISOString(),
+    }))
+  }
+
   // Yahoo Finance does not publish per-ticker off-exchange share counts via public API.
   // offExchangePct would require Finra ADF aggregate data which is not accessible without a
   // dedicated data vendor (Bloomberg BVAL, Refinitiv, or Finra itself).
@@ -96,7 +115,12 @@ function buildAnalysis(
   let onExchangePct: number | null = null
 
   if (offExchangeShares != null && totalShares != null && totalShares > 0) {
-    offExchangePct = (offExchangeShares / totalShares) * 100
+    // Phase 13 S2 defensive clamp: Yahoo occasionally returns inconsistent
+    // shares-outstanding vs shares-trading numbers (data error or stale
+    // float). Cap percentages to [0, 100] so UI charts don't display
+    // negative on-exchange% or > 100 % off-exchange.
+    const rawPct = (offExchangeShares / totalShares) * 100
+    offExchangePct = Math.max(0, Math.min(100, rawPct))
     onExchangePct = 100 - offExchangePct
   }
 
@@ -159,7 +183,7 @@ export async function GET(
   { params }: { params: { ticker: string } }
 ): Promise<NextResponse<DarkPoolAnalysis | { error: string }>> {
   // Phase 13 S2: rate-limit + canonical ticker validation.
-  const rateLimitResponse = applyRateLimit(req, 'darkpool', {
+  const rateLimitResponse = await applyRateLimit(req, 'darkpool', {
     maxRequests: 30,
     windowSeconds: 60,
   })
@@ -194,17 +218,26 @@ export async function GET(
       (q as Record<string, unknown>).regularMarketChangePercent
     )
 
+    // Phase 14 wave 24 (Pattern C — defensive clamps): every numeric field
+    // emitted to the UI must be finite. Prior code used `?? 0` which only
+    // catches null/undefined, NOT NaN/Infinity. Yahoo halt rows occasionally
+    // surface NaN in change / changePct fields, which then JSON-serialised
+    // to `null` and crashed `.toFixed` on the consumer side. Now we guard
+    // with Number.isFinite at the API boundary so the UI gets a real number
+    // OR an explicit 0 (never NaN/Infinity).
+    const finiteOrZero = (v: unknown): number =>
+      typeof v === 'number' && Number.isFinite(v) ? v : 0
+
     const price: PricePoint =
-      rawPrice != null && rawPrice > 0
+      rawPrice != null && Number.isFinite(rawPrice) && rawPrice > 0
         ? {
             price: rawPrice,
-            change: rawChange ?? 0,
-            changePct:
-              rawChangePct != null
-                ? rawChangePct
-                : rawChange != null && rawPrice > 0
-                  ? (100 * rawChange) / rawPrice
-                  : 0,
+            change: finiteOrZero(rawChange),
+            changePct: Number.isFinite(rawChangePct)
+              ? (rawChangePct as number)
+              : Number.isFinite(rawChange) && rawPrice > 0
+                ? (100 * (rawChange as number)) / rawPrice
+                : 0,
             quoteTime: parseQuoteTime(q.regularMarketTime),
           }
         : {

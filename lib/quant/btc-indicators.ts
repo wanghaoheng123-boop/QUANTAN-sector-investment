@@ -140,9 +140,23 @@ export function calcADX(candles: BtcCandle[], period = 14) {
 
 // ─── On-chain / model indicators ─────────────────────────────────────────────
 
-/** MVRV — Market Value vs Realized Cap ratio */
-export function calcMVRV(price: number, realizedCap: number): number {
-  return realizedCap > 0 ? price / realizedCap : 1
+/**
+ * MVRV — Market Value vs Realized Cap ratio.
+ *
+ * Phase 14 wave 11: returns null when inputs are unmeasurable so callers can
+ * distinguish "no data" from "fairly valued at 1.0". The prior fallback
+ * `realizedCap > 0 ? p/rc : 1` silently emitted "fair value" when realizedCap
+ * was zero/missing — misleading for a regime classifier (CAPITULATION /
+ * EUPHORIA bands assume MVRV is measured, not defaulted).
+ *
+ * Citation: Puell, D. (2018). "Bitcoin Market-Value-to-Realized-Value Ratio:
+ *           introducing Realized Capitalisation." Coinmetrics — original
+ *           MVRV framework defines MVRV as undefined when RC = 0.
+ */
+export function calcMVRV(price: number, realizedCap: number): number | null {
+  if (!Number.isFinite(price) || !Number.isFinite(realizedCap)) return null
+  if (realizedCap <= 0 || price <= 0) return null
+  return price / realizedCap
 }
 
 /**
@@ -152,13 +166,25 @@ export function calcMVRV(price: number, realizedCap: number): number {
  * SMA × 2. This function takes pre-computed EMAs as inputs because callers
  * already have those handy from other indicators; document the divergence
  * to make the convention explicit.
+ *
+ * Phase 14 wave 11: explicit NaN-input rejection. Previously, NaN inputs
+ * silently emitted `false` ("not at top"), masking corrupted data flow.
+ * Now returns null when inputs are non-finite so the caller can distinguish
+ * "no top signal" from "no input data".
  */
-export function calcPiCycleTop(ema111: number, ema350: number, multi = 2): boolean {
+export function calcPiCycleTop(ema111: number, ema350: number, multi = 2): boolean | null {
+  if (!Number.isFinite(ema111) || !Number.isFinite(ema350) || ema350 <= 0) return null
   return ema111 > ema350 * multi
 }
 
-/** Stock-to-Flow model price (PlanB power-law approximation, simplified). */
-export function calcS2FPrice(totalS2F: number): number {
+/**
+ * Stock-to-Flow model price (PlanB power-law approximation, simplified).
+ *
+ * Phase 14 wave 11: returns null on non-finite or negative input. Prior code
+ * computed `Math.pow(NaN, 3) * 0.001 = NaN`, propagating into downstream UI.
+ */
+export function calcS2FPrice(totalS2F: number): number | null {
+  if (!Number.isFinite(totalS2F) || totalS2F < 0) return null
   return Math.pow(totalS2F, 3) * 0.001
 }
 
@@ -350,7 +376,12 @@ export function btcRegime(candles: BtcCandle[], opts: BtcRegimeOptions = {}): Bt
   // Use epsilon tolerance to avoid floating-point artefacts (e.g. -2.9e-16 for flat series)
   const pctRaw = (last - ema200) / ema200
   const pct = Math.abs(pctRaw) < 1e-10 ? 0 : pctRaw
-  const atrPct = Number.isFinite(atr) && atr > 0 ? atr / last : null
+  // ATR == 0 is a legitimate "fully flat" signal (no range over the lookback);
+  // treating it as null collapses confidence to the unknown-fallback (50) and
+  // misclassifies the calmest possible market as having no volatility info.
+  // Only reject non-finite ATR or negative ATR (the latter is impossible by
+  // construction, but defensive).
+  const atrPct = Number.isFinite(atr) && atr >= 0 && last > 0 ? atr / last : null
   const reasons: string[] = []
 
   let regime: BtcRegimeLabel = 'NEUTRAL'

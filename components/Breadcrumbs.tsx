@@ -86,7 +86,7 @@ export default function Breadcrumbs() {
         return (
           <span key={index} className="flex items-center gap-1.5">
             {index > 0 && (
-              <span className="text-slate-600">/</span>
+              <span className="text-slate-400">/</span>
             )}
             {crumb.href && !isLast ? (
               <Link

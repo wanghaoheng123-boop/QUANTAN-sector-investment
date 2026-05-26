@@ -26,15 +26,34 @@ const US_INDEX_SYMBOLS: ReadonlySet<string> = new Set([
  * Strict allowable ticker character set. Phase 13 F7.3 (Security): defense
  * against attempts to embed URL parameters or paths in the ticker token.
  *   AAPL, BRK-B, BRK.B, 9988.HK, GC=F, ^VIX, ^GSPC
+ *
+ * R4-M-2 (Phase 14 S1): explicit support for crypto pair tickers like BTC-USDT.
+ * The first character class covers standard symbols (letters, digits, dot, equals);
+ * the optional (-[A-Z0-9]{1,10}) suffix captures crypto BASE-QUOTE pairs such as
+ * BTC-USDT and ETH-USD without opening the character whitelist to arbitrary input.
  */
-const TICKER_REGEX = /^\^?[A-Z0-9][A-Z0-9.\-=]{0,15}$/
+const TICKER_REGEX = /^\^?[A-Z0-9][A-Z0-9.=]{0,14}(-[A-Z0-9]{1,10})?$/
 
 /**
  * Normalize a single ticker token from a user-supplied string.
  * Returns the normalized form, or null if the input fails validation.
+ *
+ * Phase 14 wave 7: `decodeURIComponent` throws `URIError` on malformed
+ * escapes (e.g., `%G1`, lone `%`). Previously this propagated up to the
+ * route handler and surfaced as a 500 instead of the intended 400
+ * `invalid_ticker` envelope. We now catch and return null so the calling
+ * route's standard "invalid ticker" path fires correctly.
  */
 export function normalizeTicker(raw: string): string | null {
-  const u = decodeURIComponent(raw.trim()).toUpperCase()
+  if (typeof raw !== 'string') return null
+  let decoded: string
+  try {
+    decoded = decodeURIComponent(raw.trim())
+  } catch {
+    // Malformed URI escape → treat as invalid ticker.
+    return null
+  }
+  const u = decoded.toUpperCase()
   if (!u) return null
   // Already prefixed with ^ — pass through if valid.
   if (u.startsWith('^')) return TICKER_REGEX.test(u) ? u : null

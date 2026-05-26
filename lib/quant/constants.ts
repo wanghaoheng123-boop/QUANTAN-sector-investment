@@ -27,17 +27,53 @@
  * Risk-free rate for backtest Sharpe/Sortino calculations (annualized).
  * Used by `lib/backtest/engine.ts` and `lib/backtest/portfolioBacktest.ts`.
  *
- * TODO Phase 13 S3: replace with `getRiskFreeRate(periodStart, periodEnd)`
- * pulling DGS3MO from FRED for the actual backtest period.
+ * Phase 14 (Q1-H-2): The hard-coded 0.04 (4%) value was stale relative to
+ * the prevailing 2026 short-rate regime (US 10Y ~4.5%, 3M T-bill ~4.5%).
+ * Sharpe is sensitive to RFR (~50bps shifts Sharpe by ~0.05), so a stale
+ * value persistently understates risk-adjusted return. Bumped default to
+ * 0.045 (4.5%) and exposed an env override so deployments can pin a
+ * different value without code change.
+ *
+ * Phase 15 Q-052-NEW (LANDED 2026-05-24): the tenor-matched FRED helper
+ * `getRiskFreeRate(tenorDays)` now lives in `lib/quant/riskFreeRate.ts` and
+ * is wired through `engine.ts`, `portfolioBacktest.ts`, and `chain.ts`.
+ * Production activation requires `QUANTAN_FRED_PREWARM=1` in the deploy env
+ * (off by default for test/CI/benchmark reproducibility). When unset, the
+ * sync accessor falls back to BACKTEST_RFR_ANNUAL below — so this constant
+ * still functions as the authoritative fallback.
+ *
+ * Override via env: BACKTEST_RFR_ANNUAL=0.052 (decimal, not percent).
  */
-export const BACKTEST_RFR_ANNUAL = 0.04
+const RFR_ANNUAL_OVERRIDE = (() => {
+  const raw = process.env.BACKTEST_RFR_ANNUAL
+  if (!raw) return null
+  const parsed = Number(raw)
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 0.2) {
+    // Reject obviously invalid values (negative, or > 20% — likely a
+    // percent-not-decimal mistake). Fall back to default silently;
+    // logging here would spam at module-init across every route.
+    return null
+  }
+  return parsed
+})()
+
+export const BACKTEST_RFR_ANNUAL = RFR_ANNUAL_OVERRIDE ?? 0.045
 
 /**
  * Risk-free rate for Black-Scholes option pricing (annualized,
- * continuously compounded).  Used by `lib/options/chain.ts:fetchOptionsChain`.
+ * continuously compounded). Used by `lib/options/chain.ts:fetchOptionsChain`
+ * as the FALLBACK when the FRED-backed `getRiskFreeRateSync(daysToExpiry)`
+ * has a cold cache (Phase 15 Q-052-NEW LANDED 2026-05-24).
  *
- * TODO Phase 13 S3: replace with tenor-matched rate from FRED's
- * Treasury yield curve (DGS3MO for ≤90d, DGS1 for ≤1y, DGS2 for ≤2y).
+ * Tenor routing (per `lib/quant/riskFreeRate.ts:SERIES_BY_TENOR`):
+ *   ≤90d   → DGS3MO   (fallback = OPTIONS_RFR_ANNUAL, this constant)
+ *   ≤365d  → DGS1     (fallback = BACKTEST_RFR_ANNUAL above)
+ *   ≤730d  → DGS2     (fallback = BACKTEST_RFR_ANNUAL above)
+ *    >730d → DGS10    (fallback = BACKTEST_RFR_ANNUAL above)
+ *
+ * Set `QUANTAN_FRED_PREWARM=1` in production to fetch the real rates at
+ * module init. When unset (tests, CI, canonical benchmark), this constant
+ * is what the options pricer uses.
  */
 export const OPTIONS_RFR_ANNUAL = 0.0525
 

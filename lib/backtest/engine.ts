@@ -4,29 +4,36 @@
  */
 
 import type { OhlcBar } from '@/lib/quant/technicals'
-import { enhancedCombinedSignal, DEFAULT_CONFIG, atr, type BacktestConfig } from './signals'
+import { resolveBacktestSignal, DEFAULT_CONFIG, atr, type BacktestConfig } from './signals'
 import { sortinoRatio } from '@/lib/quant/indicators'
-import { BACKTEST_RFR_ANNUAL } from '@/lib/quant/constants'
+import { getRiskFreeRateSync } from '@/lib/quant/riskFreeRate'
+import { evaluateStopHit } from './exitRules'
+import { costBpsPerSide, DEFAULT_EXECUTION_COSTS } from './executionModel'
 
-// ─── Transaction cost model ─────────────────────────────────────────────────────
-// Applied per side (entry OR exit) to reflect realistic execution costs.
-// Source: Interactive Brokers ~$0.005/share + 0.05% spread + 0.5bps mid-price slippage
-// For a $100 stock: 0.005/100 = 0.005% commission + 0.05% spread + 0.05% slippage ≈ 0.11% = 11bps per side
-// Total round-trip cost = 22 bps (11 bps entry + 11 bps exit).
-//
-// TIERED MODEL (FIX E2/E3): Instrument-type spreads vary significantly.
-// Large-cap ETFs (SPY, QQQ, XLK): ~1-2 bps round-trip
-// Large-cap stocks (AAPL, MSFT): ~2-3 bps round-trip
-// Mid/small cap: ~8-15 bps round-trip
-// We use 11 bps per side as a conservative average for large/mid-caps.
-// For a more accurate model, use instrument-specific costs.
-export const TX_COST_BPS_PER_SIDE = 11  // basis points per side (entry OR exit)
-export const TX_COST_PCT_PER_SIDE = TX_COST_BPS_PER_SIDE / 10000  // as decimal
-// Total round-trip = 2 × TX_COST_PCT_PER_SIDE
+// ─── Transaction cost model (SSOT: lib/backtest/executionModel.ts) ───────────
+/** Basis points per side (entry OR exit); matches benchmark label net costs. */
+export const TX_COST_BPS_PER_SIDE = costBpsPerSide(DEFAULT_EXECUTION_COSTS)
+export const TX_COST_PCT_PER_SIDE = TX_COST_BPS_PER_SIDE / 10000
 
 export interface OhlcvRow extends OhlcBar {
   time: number
   volume: number
+  /** Optional cash dividend per bar (Q-021). Yahoo split-adjusted close embeds most dividend effect. */
+  dividend?: number
+}
+
+/** Total-return buy-and-hold including optional per-bar dividends (F1.5). */
+export function computeBuyAndHoldReturn(rows: OhlcvRow[]): number {
+  if (rows.length < 2) return 0
+  const initial = rows[0].close
+  if (initial <= 0) return 0
+  let shares = 1
+  for (let i = 1; i < rows.length; i++) {
+    const div = rows[i].dividend ?? 0
+    if (div > 0 && rows[i].close > 0) shares += div / rows[i].close
+  }
+  const finalValue = shares * rows[rows.length - 1].close
+  return (finalValue - initial) / initial
 }
 
 export interface Trade {
@@ -103,8 +110,78 @@ function newPortfolio(initialCapital: number): PortfolioState {
   }
 }
 
-function currentEquity(state: PortfolioState): number {
-  return state.capital + state.position * state.avgCost
+/**
+ * Mark-to-market equity.
+ *
+ * Q1-C-1 (Phase 14 S1): previously returned `capital + position * avgCost`
+ * (cost basis), meaning equity never changed while a position was open. The
+ * drawdown circuit breaker therefore fired only AFTER an exit, not while the
+ * position was bleeding.
+ *
+ * Correct formula: `capital + position × currentMarketPrice`.
+ * When no position is held (`position = 0`), both expressions are identical.
+ *
+ * Citation: Bacon, C. R. (2008). *Practical Risk-Adjusted Performance
+ * Measurement*. Wiley. p 9 — "market value of holdings at today's prices".
+ *
+ * @param currentPrice  Latest bar close price for open-position mark-to-market.
+ *                      Omit (or pass undefined) only when position is flat.
+ */
+function currentEquity(state: PortfolioState, currentPrice?: number): number {
+  const positionValue = state.position > 0 && currentPrice != null && Number.isFinite(currentPrice)
+    ? state.position * currentPrice
+    : state.position * state.avgCost
+  return state.capital + positionValue
+}
+
+/**
+ * Close the current open position at `fillPrice` and book the trade.
+ *
+ * Phase 14 wave 35 (SSOT extraction): this exit-bookkeeping sequence was
+ * INLINED FIVE TIMES in this file (trailing stop, 4× ATR lock stop, primary
+ * stop, DD circuit breaker, SELL signal). The 12-line block was the largest
+ * regression-hazard pattern in the engine — every copy is a place where a
+ * future fix would have to be duplicated, and where the SAME bug could live
+ * in N places (we saw this exact pattern with the F1.3 intraday-stop fix
+ * during Phase 13, which had to be applied in two places).
+ *
+ * This helper handles:
+ *   1. Compute proceeds, transaction cost, net proceeds
+ *   2. Compute realized pnl% (side-aware — long vs short)
+ *   3. Update tradeWins/Losses + grossProfit/Loss aggregates
+ *   4. Credit capital
+ *   5. Stamp openTrade with exitPrice + pnlPct
+ *   6. Push the closed trade onto closedTrades
+ *   7. Reset position / avgCost / openTrade to flat
+ *   8. Push the new equity-history row (mark-to-market with the post-exit
+ *      position, which is flat — so `currentEquity(state)` is exact)
+ *
+ * @param state      PortfolioState (mutated in place — internal helper only).
+ * @param fillPrice  The realised exit fill (already gap-aware from
+ *                   `evaluateStopHit` where applicable).
+ * @returns true when an exit happened; false if there was no open trade
+ *                (defensive — callers gate on state.openTrade before calling).
+ */
+function closePosition(state: PortfolioState, fillPrice: number): boolean {
+  const open = state.openTrade
+  if (!open) return false
+  const proceeds = state.position * fillPrice
+  const txCost = proceeds * TX_COST_PCT_PER_SIDE
+  const netProceeds = proceeds - txCost
+  const pnlPct = open.action === 'BUY'
+    ? (fillPrice - open.entryPrice) / open.entryPrice
+    : (open.entryPrice - fillPrice) / open.entryPrice
+  if (pnlPct > 0) { state.tradeWins++; state.grossProfit += pnlPct }
+  else { state.tradeLosses++; state.grossLoss += Math.abs(pnlPct) }
+  state.capital += netProceeds
+  open.exitPrice = fillPrice
+  open.pnlPct = pnlPct
+  state.closedTrades.push({ ...open })
+  state.position = 0
+  state.avgCost = 0
+  state.openTrade = null
+  state.equityHistory.push(currentEquity(state))
+  return true
 }
 
 // Phase 13 S2 fix (F1.6): tickers that trade 7 days a week need 365-day
@@ -173,14 +250,24 @@ export function backtestInstrument(
 
     // ── ATR-adaptive stop-loss + trailing stop ──
     if (state.openTrade) {
-      // ATR% at entry for adaptive stop (stored at entry)
-      const atrAtEntry = state.openTrade.atrAtrPctAtEntry ?? 0.10
+      // ATR% at entry for adaptive stop (stored at entry, PERCENT scale: e.g. 1.5 = 1.5%).
+      // Q1-H-4 (Phase 14 S1): both reads now use the same fallback of 1.0 (1% ATR).
+      // The prior code had two inconsistent fallbacks: 0.10 and 10.
+      const atrAtEntryPct = state.openTrade.atrAtrPctAtEntry ?? 1.0
       // Adaptive stop: 1.5x ATR%, capped at 15%.
-      // FIX P12-H2: Instrument-type-aware floor — ETF: 1.5% (XLK ATR ~1.8%, 3% was always active),
-      // Stock: 3% (still too low for high-vol like NVDA but prevents trivial noise exits on ETFs).
+      // Q1-H-4 (Phase 14 S1 Critical fix): atrAtrPctAtEntry is stored as PERCENTAGE (0–100 scale,
+      // e.g. 1.5 for a 1.5% ATR) because line L321 multiplies by 100. The prior code computed
+      //   1.5 * atrAtEntry  (treating the value as a decimal fraction)
+      // which for a typical 1.5% ATR gave  1.5 × 1.5 = 2.25 → capped to 0.15 (15%) always.
+      // The stop was therefore ALWAYS 15%, never adaptive. Correct formula divides by 100:
+      //   1.5 × (atrPct / 100) → 0.0225 (2.25%) → above ETF floor (1.5%), below stock floor (3%) so
+      //   the floor controls for low-volatility ETFs and the 1.5×ATR value controls for stocks.
+      //
+      // Citation: Wilder (1978) "New Concepts in Technical Trading Systems" ch.3 — ATR-based
+      // stop placement at 1–3× ATR measured in price units (dollars), not percentage-of-percentage.
       const ETF_STOP_FLOOR_TICKERS = ['XLK','XLE','XLV','XLF','XLI','XLU','XLB','XLP','XLY','XLRE','XLC','SPY','QQQ','TLT','UUP']
       const atrFloor = ETF_STOP_FLOOR_TICKERS.includes(ticker) ? 0.015 : 0.03
-      const atrStopPct = Math.max(atrFloor, Math.min(0.15, 1.5 * atrAtEntry))
+      const atrStopPct = Math.max(atrFloor, Math.min(0.15, 1.5 * atrAtEntryPct / 100))
       const stopPx = state.openTrade.action === 'BUY'
         ? state.openTrade.entryPrice * (1 - atrStopPct)
         : state.openTrade.entryPrice * (1 + atrStopPct)
@@ -192,96 +279,58 @@ export function backtestInstrument(
         // Profit measured from entry
         const profitFromEntry = (signalPrice - state.openTrade.entryPrice) / state.openTrade.entryPrice
         // Convert stored ATR% (at entry) back to dollar ATR: ATR% / 100 * entryPrice
-        const atrAtEntryDollar = ((state.openTrade.atrAtrPctAtEntry ?? 10) / 100) * state.openTrade.entryPrice
+        const atrAtEntryDollar = (atrAtEntryPct / 100) * state.openTrade.entryPrice
         const twoAtrProfit = (2 * atrAtEntryDollar) / state.openTrade.entryPrice
         const fourAtrProfit = (4 * atrAtEntryDollar) / state.openTrade.entryPrice
         if (profitFromEntry >= twoAtrProfit) {
-          // Raise stop to break-even + 0.5% buffer
+          // Raise stop to break-even + 0.5% buffer.
+          // SSOT: F1.3 intraday-aware via evaluateStopHit primitive.
           const trailStopPx = state.openTrade.entryPrice * (1 + 0.005)
-          if (signalPrice <= trailStopPx) {
-            const proceeds = state.position * signalPrice
-            const txCost = proceeds * TX_COST_PCT_PER_SIDE
-            const netProceeds = proceeds - txCost
-            const pnlPct = (signalPrice - state.openTrade.entryPrice) / state.openTrade.entryPrice
-            if (pnlPct > 0) { state.tradeWins++; state.grossProfit += pnlPct }
-            else { state.tradeLosses++; state.grossLoss += Math.abs(pnlPct) }
-            state.capital += netProceeds
-            state.openTrade.exitPrice = signalPrice
-            state.openTrade.pnlPct = pnlPct
-            state.closedTrades.push({ ...state.openTrade })
-            state.position = 0; state.avgCost = 0; state.openTrade = null
-            state.equityHistory.push(currentEquity(state))
+          const fillPrice = evaluateStopHit(rows[i], trailStopPx, 'long', 'stop')
+          if (fillPrice != null) {
+            closePosition(state, fillPrice)
             continue
           }
         }
-        // 4x ATR profit → tighten to lock in 1x ATR gain from entry price
+        // 4x ATR profit → tighten to lock in 1x ATR gain from entry price.
+        // SSOT: F1.3 intraday-aware via evaluateStopHit primitive.
         if (profitFromEntry >= fourAtrProfit) {
           const lockStopPx = state.openTrade.entryPrice + atrAtEntryDollar  // lock 1x ATR from entry
-          if (signalPrice <= lockStopPx) {
-            const proceeds = state.position * signalPrice
-            const txCost = proceeds * TX_COST_PCT_PER_SIDE
-            const netProceeds = proceeds - txCost
-            const pnlPct = (signalPrice - state.openTrade.entryPrice) / state.openTrade.entryPrice
-            if (pnlPct > 0) { state.tradeWins++; state.grossProfit += pnlPct }
-            else { state.tradeLosses++; state.grossLoss += Math.abs(pnlPct) }
-            state.capital += netProceeds
-            state.openTrade.exitPrice = signalPrice
-            state.openTrade.pnlPct = pnlPct
-            state.closedTrades.push({ ...state.openTrade })
-            state.position = 0; state.avgCost = 0; state.openTrade = null
-            state.equityHistory.push(currentEquity(state))
+          const fillPrice = evaluateStopHit(rows[i], lockStopPx, 'long', 'stop')
+          if (fillPrice != null) {
+            closePosition(state, fillPrice)
             continue
           }
         }
       }
 
-      // Primary stop-loss check (exits at today's close)
-      if ((state.openTrade.action === 'BUY' && signalPrice <= stopPx) ||
-          (state.openTrade.action === 'SELL' && signalPrice >= stopPx)) {
-        const proceeds = state.position * signalPrice
-        const txCost = proceeds * TX_COST_PCT_PER_SIDE
-        const netProceeds = proceeds - txCost
-        const pnlPct = state.openTrade.action === 'BUY'
-          ? (signalPrice - state.openTrade.entryPrice) / state.openTrade.entryPrice
-          : (state.openTrade.entryPrice - signalPrice) / state.openTrade.entryPrice
-        if (pnlPct > 0) { state.tradeWins++; state.grossProfit += pnlPct }
-        else { state.tradeLosses++; state.grossLoss += Math.abs(pnlPct) }
-        state.capital += netProceeds
-        state.openTrade.exitPrice = signalPrice
-        state.openTrade.pnlPct = pnlPct
-        state.closedTrades.push({ ...state.openTrade })
-        state.position = 0; state.avgCost = 0; state.openTrade = null
-        const eq = currentEquity(state)
-        state.equityHistory.push(eq)
+      // Primary stop-loss check — SSOT: F1.3 intraday-aware via the shared
+      // evaluateStopHit primitive (single source of truth, also used by
+      // lib/backtest/exitRules.ts's checkExitConditions). Previously each
+      // path had its own copy of the bar.low/bar.high/gap-aware logic — a
+      // hazard that already caused the same close-only bug to live in
+      // two places. The primitive eliminates that future-regression risk.
+      const tradeSide: 'long' | 'short' = state.openTrade.action === 'BUY' ? 'long' : 'short'
+      const fillPrice = evaluateStopHit(rows[i], stopPx, tradeSide, 'stop')
+      if (fillPrice != null) {
+        closePosition(state, fillPrice)
         continue
       }
     }
 
     // ── Portfolio max-drawdown circuit breaker ──
-    const eq = currentEquity(state)
+    // Q1-C-1: pass signalPrice so open-position loss is reflected mark-to-market.
+    const eq = currentEquity(state, signalPrice)
     if (eq > state.peakEquity) state.peakEquity = eq
     const dd = (state.peakEquity - eq) / state.peakEquity
     if (dd >= cfg.maxDrawdownCap && state.openTrade) {
-      const proceeds = state.position * signalPrice
-      const txCost = proceeds * TX_COST_PCT_PER_SIDE
-      const netProceeds = proceeds - txCost
-      const pnlPct = state.openTrade.action === 'BUY'
-        ? (signalPrice - state.openTrade.entryPrice) / state.openTrade.entryPrice
-        : (state.openTrade.entryPrice - signalPrice) / state.openTrade.entryPrice
-      if (pnlPct > 0) { state.tradeWins++; state.grossProfit += pnlPct }
-      else { state.tradeLosses++; state.grossLoss += Math.abs(pnlPct) }
-      state.capital += netProceeds
-      state.openTrade.exitPrice = signalPrice
-      state.openTrade.pnlPct = pnlPct
-      state.closedTrades.push({ ...state.openTrade })
-      state.position = 0; state.avgCost = 0; state.openTrade = null
-      state.equityHistory.push(currentEquity(state))
+      closePosition(state, signalPrice)
       continue
     }
 
     // ── Signal generation (uses today's close data, no look-ahead) ──
     const lookbackOhlcv = rows.slice(0, i + 1)
-    const signal = enhancedCombinedSignal(ticker, signalDate, signalPrice, lookbackCloses, lookbackBars, lookbackOhlcv, cfg)
+    const signal = resolveBacktestSignal(ticker, signalDate, signalPrice, lookbackCloses, lookbackBars, lookbackOhlcv, cfg)
 
     if (signal.action === 'BUY' && !state.openTrade) {
       const kellyFrac = Math.min(signal.KellyFraction, 0.50)
@@ -307,47 +356,31 @@ export function backtestInstrument(
         regime: signal.regime.label, dipSignal: signal.regime.dipSignal,
         confidence: signal.confidence, pnlPct: null, reason: signal.reason,
         // FIX P12-H3: Use atrVals[i-1] (prior bar) not atrVals[i] — signal bar's own TR not yet closed
-        atrAtrPctAtEntry: Number.isFinite(atrVals[Math.max(0, i - 1)]) ? (atrVals[Math.max(0, i - 1)] / signalPrice) * 100 : 0.10,
+        // Q1-H-4: fallback is 1.0 (1% ATR) — consistent with the percent-scale convention.
+        atrAtrPctAtEntry: Number.isFinite(atrVals[Math.max(0, i - 1)]) ? (atrVals[Math.max(0, i - 1)] / signalPrice) * 100 : 1.0,
         highestPriceAfterEntry: entryPrice,
       }
       state.confidenceSum += signal.confidence
       state.confidenceCount++
-      state.equityHistory.push(currentEquity(state))
+      // Q1-C-1: pass entryPrice — position just opened at this price (mark-to-market = cost basis).
+      state.equityHistory.push(currentEquity(state, entryPrice))
 
     } else if (signal.action === 'SELL' && state.openTrade) {
-      // SELL exits at today's close (signal price) — realistic same-day exit on regime shift
-      const proceeds = state.position * signalPrice
-      const txCost = proceeds * TX_COST_PCT_PER_SIDE
-      const netProceeds = proceeds - txCost
-      const pnlPct = (signalPrice - state.openTrade.entryPrice) / state.openTrade.entryPrice
-      if (pnlPct > 0) { state.tradeWins++; state.grossProfit += pnlPct }
-      else { state.tradeLosses++; state.grossLoss += Math.abs(pnlPct) }
-      state.capital += netProceeds
-      state.openTrade.exitPrice = signalPrice
-      state.openTrade.pnlPct = pnlPct
-      state.closedTrades.push({ ...state.openTrade })
-      state.position = 0; state.avgCost = 0; state.openTrade = null
-      state.equityHistory.push(currentEquity(state))
+      // SELL exits at today's close (signal price) — realistic same-day exit on regime shift.
+      // Phase 14 wave 35: bookkeeping via the shared closePosition primitive.
+      closePosition(state, signalPrice)
 
     } else {
-      state.equityHistory.push(currentEquity(state))
+      // Q1-C-1: HOLD — pass signalPrice so equity reflects open-position mark-to-market.
+      state.equityHistory.push(currentEquity(state, signalPrice))
     }
   }
 
   // ── Close remaining open position at final price ──
+  // Phase 14 wave 35: bookkeeping via the shared closePosition primitive.
   const finalPrice = rows[rows.length - 1].close
   if (state.openTrade) {
-    const proceeds = state.position * finalPrice
-    const txCost = proceeds * TX_COST_PCT_PER_SIDE
-    const netProceeds = proceeds - txCost
-    const pnlPct = (finalPrice - state.openTrade.entryPrice) / state.openTrade.entryPrice
-    if (pnlPct > 0) { state.tradeWins++; state.grossProfit += pnlPct }
-    else { state.tradeLosses++; state.grossLoss += Math.abs(pnlPct) }
-    state.capital += netProceeds
-    state.openTrade.exitPrice = finalPrice
-    state.openTrade.pnlPct = pnlPct
-    state.closedTrades.push({ ...state.openTrade })
-    state.position = 0
+    closePosition(state, finalPrice)
   }
 
   const finalEquity = state.capital
@@ -358,7 +391,7 @@ export function backtestInstrument(
   const years = days / annualization
   const totalReturn = (finalEquity - initialCapital) / initialCapital
   const annualizedReturn = years > 0 ? (1 + totalReturn) ** (1 / years) - 1 : 0
-  const bnhReturn = (finalPrice - rows[0].close) / rows[0].close
+  const bnhReturn = computeBuyAndHoldReturn(rows)
 
   // Equity curve metrics
   let peak = initialCapital, maxDd = 0
@@ -388,7 +421,7 @@ export function backtestInstrument(
     const v = dailyReturns.reduce((s, x) => s + (x - mean) ** 2, 0) / Math.max(1, dailyReturns.length - 1)
     const sd = Math.sqrt(Math.max(v, 0))
     if (sd > 1e-10) {
-      const rfD = BACKTEST_RFR_ANNUAL / annualization
+      const rfD = getRiskFreeRateSync() / annualization
       sharpe = ((mean - rfD) / sd) * Math.sqrt(annualization)
     }
   }
@@ -399,7 +432,7 @@ export function backtestInstrument(
   // Uses MAR = rfDaily, n_d denominator (Sortino & van der Meer 1991),
   // and minimum n_d ≥ 30 (Bacon 2008 p107). Annualization matches instrument.
   // F1.4 (Phase 13 S2 partial): rate sourced from canonical constant; FRED hookup TBD.
-  const rfDaily = BACKTEST_RFR_ANNUAL / annualization
+  const rfDaily = getRiskFreeRateSync() / annualization
   const sortino = sortinoRatio(dailyReturns, rfDaily, annualization)
 
   return {
@@ -545,7 +578,7 @@ export function aggregatePortfolio(results: BacktestResult[], initialCapital: nu
         const mean = portfolioDailyReturns.reduce((a, b) => a + b, 0) / n
         const variance = portfolioDailyReturns.reduce((s, x) => s + (x - mean) ** 2, 0) / Math.max(1, n - 1)
         const sd = Math.sqrt(Math.max(variance, 0))
-        const rfD = BACKTEST_RFR_ANNUAL / 252
+        const rfD = getRiskFreeRateSync() / 252
         if (sd > 1e-10) {
           sharpe = ((mean - rfD) / sd) * Math.sqrt(252)
         }
@@ -590,191 +623,21 @@ export function aggregatePortfolio(results: BacktestResult[], initialCapital: nu
   }
 }
 
-// ─── Walk-Forward Analysis ──────────────────────────────────────────────────────
-// Splits data into N in-sample (training) and out-of-sample (testing) windows.
-// This is the gold standard for detecting overfitting: if IS ≫ OOS, the strategy
-// is likely curve-fit. Robust strategies show similar metrics in both periods.
-
-export interface WFWWindow {
-  periodLabel: string
-  startDate: string
-  endDate: string
-  isReturn: number      // in-sample annualized return
-  isSharpe: number | null
-  osReturn: number      // out-of-sample annualized return
-  osSharpe: number | null
-  oosRatio: number      // OOS/IS ratio (1.0 = perfect out-of-sample, <0.5 = overfit suspicion)
-}
-
-function annualized(totalReturn: number, days: number): number {
-  const years = days / 252
-  return years > 0 ? ((1 + totalReturn) ** (1 / years) - 1) : 0
-}
-
-function windowSharpe(dailyReturns: number[]): number | null {
-  if (dailyReturns.length < 30) return null
-  const mean = dailyReturns.reduce((a, b) => a + b, 0) / dailyReturns.length
-  const variance = dailyReturns.reduce((s, x) => s + (x - mean) ** 2, 0) / Math.max(1, dailyReturns.length - 1)
-  const sd = Math.sqrt(Math.max(variance, 0))
-  if (sd < 1e-10) return null
-  const rfD = BACKTEST_RFR_ANNUAL / 252
-  return ((mean - rfD) / sd) * Math.sqrt(252)
-}
-
-/**
- * Walk-forward analysis via trade attribution.
- *
- * Phase 13 S2 fix (F1.1) — Architectural rework:
- *
- *   PREVIOUS BUG: this function ran `backtestInstrument(testRows)` with
- *   `testRows` of length `testDays = 63`. But `backtestInstrument` short-
- *   circuits when `rows.length < 252` (the 200-bar warmup gate plus 52-bar
- *   minimum signal generation), so the test-window result was always
- *   identically zero. `oosRatio` and `overfittingIndex` were therefore
- *   meaningless — every window reported osReturn=0 regardless of
- *   strategy performance, giving false confidence in OOS robustness.
- *
- *   FIXED APPROACH: run a SINGLE backtest on the full series (which has
- *   sufficient warmup), then partition the resulting trades into IS/OS
- *   windows by entry date. Window return is the sum of trade pnlPct for
- *   trades whose entry date falls within the window. Annualized to a
- *   per-year rate using the window's calendar length.
- *
- *   Note on parameter optimisation: this codebase uses fixed sector-
- *   profile parameters (no per-window re-optimisation), so the strict
- *   "walk-forward optimisation" interpretation (Pardo 2008) doesn't
- *   apply. The function answers "how stable is this strategy across
- *   non-overlapping time windows?" rather than "how much does parameter
- *   re-optimisation overfit?" Sufficient for the platform's stability
- *   diagnostic needs.
- *
- *   Reference: Pardo, R. (2008). The Evaluation and Optimization of
- *   Trading Strategies, 2e. Wiley. Ch.11 (Walk-Forward Analysis).
- */
-export function walkForwardAnalysis(
-  ticker: string,
-  sector: string,
-  rows: OhlcvRow[],
-  trainDays = 252,
-  testDays = 63,
-): WFWWindow[] {
-  const windows: WFWWindow[] = []
-  const n = rows.length
-
-  // Need at least one full IS window past the engine's 252-bar warmup.
-  const WARMUP = 252
-  if (n < WARMUP + trainDays + testDays) return windows
-
-  // Single backtest on full series — produces all trades + equity curve.
-  // Note: even when zero trades fire, we still emit windows with 0/0
-  // returns so the temporal scaffolding (window labels, dates) is
-  // populated for downstream UI tabs that expect a non-empty array.
-  const fullResult = backtestInstrument(ticker, sector, rows)
-  const trades = fullResult.closedTrades
-
-  // Map row index → ISO date string for window boundary lookups.
-  const dateAt = (idx: number) =>
-    new Date(rows[idx].time * 1000).toISOString().slice(0, 10)
-
-  // Pre-bucket trades by entry-date for O(N) windowing.
-  const sortedTrades = [...trades].sort((a, b) =>
-    a.date < b.date ? -1 : a.date > b.date ? 1 : 0,
-  )
-
-  let trainStart = WARMUP
-  while (trainStart + trainDays + testDays <= n) {
-    const trainEnd = trainStart + trainDays
-    const testEnd = trainEnd + testDays
-
-    const trainStartDate = dateAt(trainStart)
-    const trainEndDate = dateAt(trainEnd - 1)
-    const testStartDate = dateAt(trainEnd)
-    const testEndDate = dateAt(testEnd - 1)
-
-    // Trade-attribution: sum pnlPct of trades entering inside each window.
-    let isReturnSum = 0
-    let osReturnSum = 0
-    for (const t of sortedTrades) {
-      if (t.date < trainStartDate) continue
-      if (t.date > testEndDate) break
-      const pnl = t.pnlPct ?? 0
-      if (t.date <= trainEndDate) {
-        isReturnSum += pnl
-      } else if (t.date >= testStartDate) {
-        osReturnSum += pnl
-      }
-    }
-
-    const isAnn = annualized(isReturnSum, trainDays)
-    const osAnn = annualized(osReturnSum, testDays)
-
-    // Sharpe per window: compute from equityHistory slice. equityHistory[0]
-    // is initial capital (set BEFORE the loop), and the loop pushes one
-    // entry per iteration starting at row index 200. Index mapping:
-    //   row i (i ≥ 200) ↔ equityHistory[i - 199].
-    const histStart = Math.max(0, trainStart - 199)
-    const histTrainEnd = Math.max(histStart, trainEnd - 199)
-    const histTestEnd = Math.max(histTrainEnd, testEnd - 199)
-    const isReturns = sliceDailyReturns(fullResult.equityCurve, histStart, histTrainEnd)
-    const osReturns = sliceDailyReturns(fullResult.equityCurve, histTrainEnd, histTestEnd)
-    const isSharpe = windowSharpe(isReturns)
-    const osSharpe = windowSharpe(osReturns)
-
-    const oosRatio = isAnn !== 0 ? Math.min(2, Math.max(-1, osAnn / isAnn)) : 0
-
-    windows.push({
-      periodLabel: `${trainStartDate.slice(0, 7)} – ${testEndDate.slice(0, 7)}`,
-      startDate: trainStartDate,
-      endDate: testEndDate,
-      isReturn: isAnn,
-      isSharpe,
-      osReturn: osAnn,
-      osSharpe,
-      oosRatio,
-    })
-
-    trainStart += testDays
-  }
-
-  return windows
-}
-
-/** Compute daily returns from an equity-curve slice [a, b). */
-function sliceDailyReturns(equityCurve: number[], a: number, b: number): number[] {
-  const out: number[] = []
-  for (let i = a + 1; i < b && i < equityCurve.length; i++) {
-    const prev = equityCurve[i - 1]
-    if (prev > 0) {
-      const r = (equityCurve[i] - prev) / prev
-      if (Number.isFinite(r)) out.push(r)
-    }
-  }
-  return out
-}
-
-export interface WalkForwardSummary {
-  avgIsReturn: number
-  avgOsReturn: number
-  avgIsSharpe: number | null
-  avgOsSharpe: number | null
-  avgOosRatio: number
-  overfittingIndex: number   // 0 = perfectly robust, 1 = fully overfit (IS ≫ OS)
-  windows: WFWWindow[]
-}
-
-export function walkForwardSummary(windows: WFWWindow[]): WalkForwardSummary {
-  if (windows.length === 0) {
-    return { avgIsReturn: 0, avgOsReturn: 0, avgIsSharpe: null, avgOsSharpe: null, avgOosRatio: 0, overfittingIndex: 1, windows }
-  }
-  const avgIsReturn = windows.reduce((s, w) => s + w.isReturn, 0) / windows.length
-  const avgOsReturn = windows.reduce((s, w) => s + w.osReturn, 0) / windows.length
-  const avgIsSharpe = windows.reduce((s, w) => s + (w.isSharpe ?? 0), 0) / windows.length
-  const avgOsSharpe = windows.reduce((s, w) => s + (w.osSharpe ?? 0), 0) / windows.length
-  const avgOosRatio = windows.reduce((s, w) => s + w.oosRatio, 0) / windows.length
-  // overfittingIndex: 0 = IS ≈ OS, > 0.5 = suspicious overfitting
-  const overfittingIndex = avgIsReturn > 0
-    ? Math.max(0, Math.min(1, (avgIsReturn - avgOsReturn) / (Math.abs(avgIsReturn) + 0.001)))
-    : 0
-
-  return { avgIsReturn, avgOsReturn, avgIsSharpe: Number.isFinite(avgIsSharpe) ? avgIsSharpe : null, avgOsSharpe: Number.isFinite(avgOsSharpe) ? avgOsSharpe : null, avgOosRatio, overfittingIndex, windows }
-}
+// ─── Walk-Forward Analysis ──────────────────────────────────────────────────
+//
+// Phase 16 P15-NEW-10 (2026-05-24): the walk-forward logic moved to its own
+// module at `lib/backtest/walkForward.ts` so engine.ts stays within the
+// S3 architectural target of ≤ 600 LOC. The re-exports below preserve every
+// existing import path (`import { walkForwardAnalysis } from '@/lib/backtest/
+// engine'`), so test files and scripts that originally pulled these symbols
+// from engine.ts continue to work without change.
+//
+// New code should prefer the direct import path
+// `@/lib/backtest/walkForward`; eventually engine.ts will drop the re-exports
+// once all consumers migrate (no rush — Phase 17+ cleanup).
+export {
+  computeOosRatio,
+  walkForwardAnalysis,
+  walkForwardSummary,
+} from './walkForward'
+export type { WFWWindow, WalkForwardSummary } from './walkForward'

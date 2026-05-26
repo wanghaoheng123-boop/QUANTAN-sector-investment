@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import YahooFinance from 'yahoo-finance2'
 import { SECTORS } from '@/lib/sectors'
 import { sma, rsi, ma200Regime } from '@/lib/quant/technicals'
+import { sanitizeError } from '@/lib/api/sanitize'
 
 const yahooFinance = new YahooFinance()
 
@@ -106,9 +107,16 @@ export async function GET() {
     })
   } catch (error) {
     console.error('[MA Deviation API]', error)
+    // Phase 16 audit (2026-05-24): replaced `details: String(error)` which
+    // would leak stack traces + file paths in production (CWE-209). The SSOT
+    // sanitizeError returns undefined in production and the message in dev.
+    const details = sanitizeError(error)
     return NextResponse.json(
-      { error: 'Failed to compute MA deviation data', details: String(error) },
-      { status: 500 }
+      {
+        error: 'Failed to compute MA deviation data',
+        ...(details ? { details } : {}),
+      },
+      { status: 500 },
     )
   }
 }

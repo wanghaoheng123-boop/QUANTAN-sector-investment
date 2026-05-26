@@ -1,0 +1,63 @@
+{
+  "schema_version": "1.1",
+  "description": "Optional fields for workspace/IMPROVEMENT_BACKLOG.json array items. Parsers must accept unknown keys. The backlog file remains a JSON array at the top level.",
+  "required_fields": [
+    "id",
+    "title",
+    "domain",
+    "priority",
+    "status"
+  ],
+  "recommended_fields": [
+    "acceptance_criteria",
+    "verify_commands",
+    "files",
+    "notes_2026_05_25"
+  ],
+  "optional_fields": {
+    "dev_plan_phase": {
+      "type": "string",
+      "enum": ["P0", "P1", "P2", "P3", "P4"],
+      "description": "Maps to workspace/DEVELOPMENT_PLAN_2026-05-26.md phases"
+    },
+    "owner_role": {
+      "type": "string",
+      "enum": [
+        "Owner (PM)",
+        "Cursor coordinator",
+        "Implementer",
+        "Verifier",
+        "ci-investigator"
+      ]
+    },
+    "human_blocker": {
+      "type": "string",
+      "description": "Non-technical gate requiring PM action before work can complete"
+    },
+    "blocked_by": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Other Q-IDs that must complete first"
+    },
+    "superseded_by": {
+      "type": "string",
+      "description": "Continuation task ID"
+    },
+    "phase15_sprint": {
+      "type": "string",
+      "enum": ["S1", "S2", "S3", "S4"]
+    },
+    "phase16_sprint": {
+      "type": "string",
+      "description": "Phase 16 sprint label from reviews/PHASE-16-PLAN.md"
+    }
+  },
+  "status_values": [
+    "pending",
+    "partial",
+    "done",
+    "cancelled",
+    "deferred"
+  ],
+  "priority_values": ["P0", "P1", "P2", "P3"]
+}

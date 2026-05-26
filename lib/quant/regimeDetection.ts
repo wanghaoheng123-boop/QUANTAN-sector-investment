@@ -18,7 +18,7 @@ export interface RegimeState {
   volatilityRegime: VolatilityRegime
   trendRegime: TrendRegime
   strategyHint: StrategyHint
-  volRatio: number       // vol20 / vol60
+  volRatio: number | null  // vol20 / vol60; null when vol20/vol60 unmeasurable (Phase 14)
   adxValue: number | null
   confidence: number     // 0-100, how clear the regime signal is
 }
@@ -27,7 +27,15 @@ export interface RegimeState {
 
 /**
  * Annualized realized volatility over `period` days.
- * Uses log returns, annualized by sqrt(252).
+ *
+ * Convention (Phase 14 Q2-M-1 doc'd): LOG RETURNS r_i = ln(c_i / c_{i-1}),
+ * annualized by √252.
+ *
+ * Volatility is a time-aggregation problem (T-day σ = √T · daily σ), and
+ * log returns aggregate additively over time while simple returns do not.
+ * See Tsay (2010) "Analysis of Financial Time Series" pp 3–7: "log returns
+ * aggregate over time, simple returns aggregate across portfolios." Sister
+ * implementation in `lib/quant/volatility.ts` follows the same convention.
  */
 function realizedVol(closes: number[], period: number): number | null {
   if (closes.length < period + 1) return null
@@ -66,14 +74,20 @@ function realizedVol(closes: number[], period: number): number | null {
  *   - otherwise -> neutral
  */
 export function detectRegime(closes: number[], bars: OhlcBar[]): RegimeState {
-  // Volatility regime
+  // Volatility regime — `volKnown` distinguishes "measured normal" from
+  // "default normal" (the same fail-open pattern as trendRegime below).
+  // Without the flag, an insufficient-data input got a +10 confidence
+  // boost downstream for being "normal" even though we never measured
+  // vol at all.
   const vol20 = realizedVol(closes, 20)
   const vol60 = realizedVol(closes, 60)
   let volRatio = 1.0
   let volatilityRegime: VolatilityRegime = 'normal'
+  let volKnown = false
 
   if (vol20 != null && vol60 != null && vol60 > 0) {
     volRatio = vol20 / vol60
+    volKnown = true
     if (volRatio > 1.5) volatilityRegime = 'crisis'
     else if (volRatio > 1.2) volatilityRegime = 'high'
     else if (volRatio < 0.8) volatilityRegime = 'low'
@@ -84,36 +98,60 @@ export function detectRegime(closes: number[], bars: OhlcBar[]): RegimeState {
   const adx = adxArray(bars, 14)
   const lastAdx = adx.adx[adx.adx.length - 1]
   let adxValue: number | null = null
+  // When ADX is unavailable (insufficient bars), trendRegime stays UNKNOWN
+  // (encoded by adxValue === null below). Previously this defaulted to
+  // 'range_bound' which then triggered a mean_reversion strategy hint
+  // based on no actual trend signal — a fail-open bug.
   let trendRegime: TrendRegime = 'range_bound'
+  let trendKnown = false
 
   if (Number.isFinite(lastAdx)) {
     adxValue = lastAdx
+    trendKnown = true
     if (lastAdx > 25) trendRegime = 'strong_trend'
     else if (lastAdx > 15) trendRegime = 'weak_trend'
     else trendRegime = 'range_bound'
   }
 
-  // Strategy hint
+  // Strategy hint — emit a recommendation only when BOTH the trend
+  // and the volatility regime have actually been measured. Otherwise
+  // fall through to 'neutral'. The trend-following branch checks
+  // `volatilityRegime !== 'crisis'` and the mean-reversion branch
+  // checks for 'low' / 'normal' — both readings are meaningless
+  // unless volKnown.
   let strategyHint: StrategyHint = 'neutral'
-  if (trendRegime === 'strong_trend' && volatilityRegime !== 'crisis') {
-    strategyHint = 'trend_following'
-  } else if (trendRegime === 'range_bound' && (volatilityRegime === 'low' || volatilityRegime === 'normal')) {
-    strategyHint = 'mean_reversion'
+  if (trendKnown && volKnown) {
+    if (trendRegime === 'strong_trend' && volatilityRegime !== 'crisis') {
+      strategyHint = 'trend_following'
+    } else if (trendRegime === 'range_bound' && (volatilityRegime === 'low' || volatilityRegime === 'normal')) {
+      strategyHint = 'mean_reversion'
+    }
   }
 
-  // Confidence: clearer signals = higher confidence
+  // Confidence: clearer signals = higher confidence. Gated on trendKnown
+  // because `trendRegime` defaults to 'range_bound' when ADX is
+  // unavailable — without this gate, an UNKNOWN trend silently got the
+  // same +10 boost as a measured range-bound regime, inflating confidence
+  // on insufficient data (related to the same fail-open bug as the
+  // strategyHint gate above).
   let confidence = 50
-  if (trendRegime === 'strong_trend') confidence += 20
-  else if (trendRegime === 'range_bound') confidence += 10
-  if (volatilityRegime === 'normal') confidence += 10
-  else if (volatilityRegime === 'crisis') confidence -= 15
+  if (trendKnown) {
+    if (trendRegime === 'strong_trend') confidence += 20
+    else if (trendRegime === 'range_bound') confidence += 10
+  }
+  if (volKnown) {
+    if (volatilityRegime === 'normal') confidence += 10
+    else if (volatilityRegime === 'crisis') confidence -= 15
+  }
   if (adxValue != null && (adxValue > 30 || adxValue < 12)) confidence += 10 // very clear signal
 
   return {
     volatilityRegime,
     trendRegime,
     strategyHint,
-    volRatio,
+    // Phase 14: surface null when unmeasured so callers don't get
+    // misleading "1.0 = normal" reading from insufficient data.
+    volRatio: volKnown ? volRatio : null,
     adxValue,
     confidence: Math.max(0, Math.min(100, confidence)),
   }

@@ -79,18 +79,81 @@ export function createPortfolio(name: string, initialCapital: number): Portfolio
 
 export function savePortfolio(portfolio: Portfolio): void {
   if (typeof localStorage === 'undefined') return
-  localStorage.setItem(storageKey(portfolio.id), JSON.stringify(portfolio))
+  // Phase 14 wave 15: localStorage.setItem throws QuotaExceededError in
+  // private/incognito mode and when storage quota (5–10 MB) is exceeded.
+  // Without this guard, a failed save would propagate up and crash the
+  // calling UI component. We silently degrade — saving fails, the in-memory
+  // portfolio state is preserved, and we log so operators can diagnose.
+  try {
+    localStorage.setItem(storageKey(portfolio.id), JSON.stringify(portfolio))
+  } catch (err) {
+    console.warn('[portfolio.tracker] savePortfolio failed', err)
+  }
+}
+
+/**
+ * Phase 16 audit (2026-05-24): boundary validator. Reject portfolios with
+ * non-finite or negative-where-impossible numeric fields, or with positions
+ * that have avgCost === 0 (the same corruption pattern that triggered the
+ * tracker.ts div-by-zero bug we patched in commit 629bd07). Garbage in →
+ * `null` returned → caller treats as "no portfolio" → user can recreate
+ * cleanly instead of operating on Infinity / NaN values.
+ *
+ * Not a full schema validator (would justify a Zod dependency); a focused
+ * runtime guard against the corruption modes we've actually observed:
+ *   - hand-edited localStorage
+ *   - in-flight migration from an older schema
+ *   - private-mode quota-exceeded mid-write (truncated JSON)
+ *   - third-party browser extensions tampering with storage
+ */
+function isValidPortfolio(p: unknown): p is Portfolio {
+  if (!p || typeof p !== 'object') return false
+  const o = p as Record<string, unknown>
+  if (typeof o.id !== 'string' || !o.id) return false
+  if (typeof o.name !== 'string') return false
+  // Required finite numerics
+  const numericFields = ['cash', 'initialCapital', 'totalValue', 'unrealizedPnl', 'totalReturnPct', 'realizedPnl'] as const
+  for (const field of numericFields) {
+    const v = o[field]
+    if (typeof v !== 'number' || !Number.isFinite(v)) return false
+  }
+  // initialCapital must be strictly positive (totalReturnPct divides by it).
+  if ((o.initialCapital as number) <= 0) return false
+  // Positions array shape + per-position non-corrupt invariants.
+  if (!Array.isArray(o.positions)) return false
+  for (const raw of o.positions) {
+    if (!raw || typeof raw !== 'object') return false
+    const pos = raw as Record<string, unknown>
+    if (typeof pos.ticker !== 'string' || !pos.ticker) return false
+    if (typeof pos.shares !== 'number' || !Number.isFinite(pos.shares) || pos.shares <= 0) return false
+    // avgCost > 0 is the critical invariant — see commit 629bd07 div-by-zero
+    if (typeof pos.avgCost !== 'number' || !Number.isFinite(pos.avgCost) || pos.avgCost <= 0) return false
+    if (typeof pos.currentPrice !== 'number' || !Number.isFinite(pos.currentPrice) || pos.currentPrice < 0) return false
+  }
+  return true
 }
 
 export function loadPortfolio(portfolioId: string): Portfolio | null {
   if (typeof localStorage === 'undefined') return null
   const raw = localStorage.getItem(storageKey(portfolioId))
   if (!raw) return null
+  let parsed: unknown
   try {
-    return JSON.parse(raw) as Portfolio
+    parsed = JSON.parse(raw)
   } catch {
     return null
   }
+  // Phase 16: validate at the boundary; corrupted state surfaces here, not
+  // in downstream business logic (closePosition, recomputePortfolio, etc).
+  if (!isValidPortfolio(parsed)) {
+    console.warn(JSON.stringify({
+      event: 'portfolio.tracker.load_rejected',
+      reason: 'schema_invalid',
+      portfolioId,
+    }))
+    return null
+  }
+  return parsed
 }
 
 export function listPortfolioIds(): string[] {
@@ -161,17 +224,36 @@ export function closePosition(
 
   const proceeds = shares * exitPrice
   const realizedPnl = (exitPrice - pos.avgCost) * shares
-  const realizedPnlPct = (exitPrice - pos.avgCost) / pos.avgCost
+  // Phase 16 audit (2026-05-24): div-by-zero guard. addPosition validates
+  // `cost = shares × price` against cash and throws on insufficient cash,
+  // and `cost > 0` requires price > 0 — so avgCost > 0 in normal flow. BUT
+  // a corrupted localStorage payload (manually edited, or surviving a buggy
+  // upgrade) could load a position with avgCost === 0; the prior unguarded
+  // division emitted Infinity, JSON.stringify cast it to null, and the
+  // ClosedTrade record was stored with realizedPnlPct: null — confusing for
+  // analytics.
+  const realizedPnlPct = pos.avgCost > 0
+    ? (exitPrice - pos.avgCost) / pos.avgCost
+    : 0
 
   portfolio.cash += proceeds
   portfolio.realizedPnl += realizedPnl
 
+  // Phase 14 wave 15: defensive date validation. Invalid date strings make
+  // `new Date().getTime()` return NaN, so the subtraction → NaN → Math.round
+  // would emit NaN as holdingDays. ClosedTrade JSON-serialized with NaN
+  // becomes `null` on the way back through localStorage → confusing display.
+  const exitTime = new Date(exitDate).getTime()
+  const entryTime = new Date(pos.entryDate).getTime()
+  const holdingDays = Number.isFinite(exitTime) && Number.isFinite(entryTime)
+    ? Math.max(0, Math.round((exitTime - entryTime) / 86400000))
+    : 0
   const trade: ClosedTrade = {
     ticker, sector: pos.sector,
     entryDate: pos.entryDate, exitDate,
     shares, entryPrice: pos.avgCost, exitPrice,
     realizedPnl, realizedPnlPct,
-    holdingDays: Math.round((new Date(exitDate).getTime() - new Date(pos.entryDate).getTime()) / 86400000),
+    holdingDays,
     exitReason,
   }
 
@@ -235,7 +317,14 @@ export function appendClosedTrade(portfolioId: string, trade: ClosedTrade): void
     existing = []
   }
   existing.push(trade)
-  localStorage.setItem(key, JSON.stringify(existing))
+  // Phase 14 wave 15: setItem can throw QuotaExceededError in private mode
+  // or when storage quota is exceeded (5–10 MB depending on browser). A long
+  // history of closed trades could plausibly hit this. Soft-fail with a log.
+  try {
+    localStorage.setItem(key, JSON.stringify(existing))
+  } catch (err) {
+    console.warn('[portfolio.tracker] appendClosedTrade failed', err)
+  }
 }
 
 export function loadClosedTrades(portfolioId: string): ClosedTrade[] {

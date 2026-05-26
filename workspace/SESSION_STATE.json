@@ -1,60 +1,68 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "project": "QUANTAN-sector-investment",
   "created": "2026-04-28T09:40:00Z",
-  "last_updated": "2026-04-28T10:15:00Z",
-  "active_agent": "Codex 5.3",
+  "last_updated": "2026-05-26T18:52:00Z",
+  "active_agent": "deployment-expert (rectification wave 3)",
+  "program_doc": "workspace/QUANTAN_EXPERT_TEAM_COMMERCIALIZATION.md",
   "last_inspection": {
-    "timestamp": "2026-04-28T09:40:00Z",
+    "timestamp": "2026-05-26T18:52:00Z",
     "results": {
-      "INSPECT-1": "PASS - repository root and tracked folders inspected",
-      "INSPECT-2": "PASS - session file initialized",
-      "INSPECT-3": "PASS - searched target files and formatter usage",
-      "INSPECT-4": "PENDING",
-      "INSPECT-5": "PENDING",
-      "INSPECT-6": "PASS - verification commands queued and in progress"
+      "inspection_wave_3": "reviews/INSPECTION-WAVE-3-2026-05-26.md",
+      "typecheck": "PASS",
+      "tests": "991 passed / 81 files",
+      "build": "PASS",
+      "benchmark_wr_ssot_gross": 54.77,
+      "benchmark_wr_ssot_net": 53.79,
+      "smoke_production": "PASS",
+      "vercel_link": "quantan",
+      "fixes_wave_3": [
+        "README/DEPLOY quantan.vercel.app",
+        "delete scripts/backtest/dataLoader.ts",
+        "VERCEL_OPERATIONS single project §12",
+        "vercel link --project quantan"
+      ]
     }
   },
   "tasks": [
     {
-      "id": "TASK-001",
-      "title": "Execute UI/algo/API hardening plan",
-      "status": "IN_PROGRESS",
-      "priority": "HIGH",
+      "id": "TASK-RECT-WAVE-3",
+      "title": "Platform rectification wave 3",
+      "status": "DONE",
+      "priority": "P0",
       "files_touched": [
-        "AGENT.md",
-        "workspace/SESSION_STATE.json",
-        "workspace/MEMORY_LOG.md",
-        "workspace/USAGE_MONITOR.json",
-        "lib/format.ts",
-        "lib/api/reliability.ts",
-        "app/stock/[ticker]/page.tsx",
-        "app/sector/[slug]/page.tsx",
-        "app/desk/page.tsx",
-        "app/backtest/page.tsx",
-        "components/stock/QuantLabPanel.tsx",
-        "components/crypto/BtcQuantLab.tsx",
-        "lib/optimize/gridSearch.ts",
-        "lib/optimize/parameterSets.ts",
-        "scripts/benchmark-enhanced.ts",
-        "app/api/analytics/[ticker]/route.ts",
-        "app/api/prices/route.ts",
-        "app/api/fundamentals/[ticker]/route.ts",
-        "app/api/stream/[ticker]/route.ts",
-        "workspace/audits/deepseek-pass1.json",
-        "workspace/audits/deepseek-pass2.json"
+        "README.md",
+        "workspace/VERCEL_OPERATIONS.md",
+        "scripts/backtest/dataLoader.ts (deleted)",
+        "reviews/INSPECTION-WAVE-3-2026-05-26.md"
       ],
       "verify_status": {
-        "A": null,
-        "B": null,
-        "C": null,
-        "D": null,
-        "E": null,
-        "F": null
+        "A": "PASS",
+        "B": "PASS",
+        "C": "PASS",
+        "D": "PASS",
+        "E": "PASS",
+        "F": "PASS"
       },
-      "notes": "UI/API/algo changes implemented; running verification and final QAQC."
+      "notes": "See workspace/RECTIFICATION_LOG.md wave 3; PR fix/rectification-wave-3"
     }
   ],
-  "blockers": [],
+  "blockers": [
+    {
+      "id": "BLOCKER-ROOT-GIT-DRIFT",
+      "summary": "Drive root was behind origin/main — wave 3 branch merges rectification",
+      "resolution": "PR fix/rectification-wave-3 → main"
+    },
+    {
+      "id": "BLOCKER-FRED-PREWARM",
+      "summary": "QUANTAN_FRED_PREWARM=1 not set on Vercel Production (quantan project only)",
+      "resolution": "Owner: Vercel env + redeploy (Q-004)"
+    },
+    {
+      "id": "BLOCKER-VERCEL-TRIPLE",
+      "summary": "Three QUANTAN Vercel projects still exist until owner deletes two",
+      "resolution": "VERCEL_OPERATIONS.md §12 dashboard steps"
+    }
+  ],
   "checkpoint": null
 }

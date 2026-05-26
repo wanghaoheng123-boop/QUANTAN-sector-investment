@@ -50,16 +50,23 @@ export function ErrorToastList({ toasts, onDismiss }: Props) {
           <div
             key={toast.id}
             className={`pointer-events-auto flex items-start gap-3 rounded-xl border ${styles.border} bg-slate-900/95 backdrop-blur-sm px-4 py-3 shadow-lg animate-fadeIn`}
-            role="alert"
+            role={toast.level === 'error' ? 'alert' : 'status'}
+            aria-atomic="true"
           >
-            {styles.icon}
-            <p className={`text-xs flex-1 ${styles.text} leading-relaxed`}>{toast.message}</p>
+            <span aria-hidden="true">{styles.icon}</span>
+            <p className={`text-xs flex-1 ${styles.text} leading-relaxed`}>
+              <span className="sr-only">
+                {toast.level === 'error' ? 'Error: ' : toast.level === 'warn' ? 'Warning: ' : 'Info: '}
+              </span>
+              {toast.message}
+            </p>
             <button
+              type="button"
               onClick={() => onDismiss(toast.id)}
-              className="text-slate-500 hover:text-slate-300 transition-colors shrink-0 mt-0.5"
-              aria-label="Dismiss notification"
+              className="text-slate-500 hover:text-slate-300 transition-colors shrink-0 mt-0.5 focus:outline-none focus:ring-2 focus:ring-blue-400 rounded"
+              aria-label={`Dismiss ${toast.level} notification`}
             >
-              <X className="w-3.5 h-3.5" />
+              <X className="w-3.5 h-3.5" aria-hidden="true" />
             </button>
           </div>
         )

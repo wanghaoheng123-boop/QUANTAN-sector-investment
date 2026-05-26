@@ -21,6 +21,14 @@ const KLineChart = dynamic(() => import('@/components/KLineChart'), {
   ),
 })
 
+// Phase 14 (R5-C-6): module-scope singletons so React's referential equality
+// holds across renders. Passing fresh `[]` literals to KLineChart invalidated
+// its `useEffect([... darkPoolMarkers, newsMarkers ...])` every render and
+// triggered the full data-rebuild path. BTC currently never receives dark-pool
+// or news markers, but if that changes, hoist into a `useMemo` instead.
+const EMPTY_DARK_POOL_MARKERS: never[] = []
+const EMPTY_NEWS_MARKERS: never[] = []
+
 // Live spot price: Coinbase
 const COINBASE_WS = 'wss://ws-feed.exchange.coinbase.com'
 /** Kraken WS v2 OHLC — public, no Binance (see docs.kraken.com/api/docs/websocket-v2/ohlc) */
@@ -143,6 +151,7 @@ export default function BtcPage() {
   const priceReconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   /** True after Coinbase ticker WS delivered a price — skip redundant REST header quote. */
   const priceFromBinanceWsRef = useRef(false)
+  const lastWsMessageRef = useRef(Date.now())
   /** Always the interval the user selected (fixes reconnect after timeframe change) */
   const activeRangeRef = useRef(activeRange)
   /** Invalidates in-flight REST responses when interval changes or unmounts. */
@@ -286,8 +295,13 @@ export default function BtcPage() {
           setFetchError(null)
           return
         }
-      } catch {
-        /* ignore fallback failure */
+      } catch (err) {
+        // Phase 14 wave 24: CoinGecko client-side fallback failed. The lastErr
+        // path below will surface the most-recent server error to the UI; log
+        // the fallback failure so chronic CG outages are diagnosable.
+        if (err instanceof Error && err.name !== 'AbortError') {
+          console.warn('[btc/fallback] CoinGecko client fetch failed', err)
+        }
       }
       setFetchError(lastErr?.message ?? 'Failed to load candles')
     })()
@@ -392,12 +406,21 @@ export default function BtcPage() {
           }
           applyCandle(candle)
         }
-      } catch {
-        /* ignore malformed frames */
+      } catch (err) {
+        // Phase 14 wave 24: malformed Kraken kline frame. Log on first
+        // occurrence; suppress further to avoid flooding when Kraken
+        // briefly degrades.
+        if (wsConnected) {
+          console.warn('[btc/kline-ws] frame parse failed', err)
+        }
       }
     }
 
-    ws.onerror = () => setWsConnected(false)
+    ws.onerror = (event) => {
+      // Phase 14 wave 24: log onerror event type (network / CSP).
+      console.warn('[btc/kline-ws] WebSocket error', event.type)
+      setWsConnected(false)
+    }
     ws.onclose = () => {
       setWsConnected(false)
       if (gen !== klineGenRef.current) return
@@ -435,6 +458,7 @@ export default function BtcPage() {
           const price = parseFloat(String(d.price))
           if (!Number.isFinite(price) || price <= 0) return
           priceFromBinanceWsRef.current = true
+          lastWsMessageRef.current = Date.now()
           const open24 = parseFloat(String(d.open_24h ?? '0'))
           const chg = open24 > 0 ? price - open24 : 0
           const chgPct = open24 > 0 ? ((price - open24) / open24) * 100 : 0
@@ -447,12 +471,20 @@ export default function BtcPage() {
             volume24h: parseFloat(String(d.volume_24h)) || 0,
           })
         }
-      } catch {
-        /* ignore */
+      } catch (err) {
+        // Phase 14 wave 24: WS messages occasionally arrive malformed during
+        // reconnect / Coinbase server-side restarts. Log so chronic parse
+        // failures are diagnosable instead of silently dropping every tick.
+        // Only log first occurrence per reconnect to avoid log flooding.
+        if (!priceFromBinanceWsRef.current) {
+          console.warn('[btc/price-ws] message parse failed', err)
+        }
       }
     }
-    ws.onerror = () => {
-      /* onclose will reconnect */
+    ws.onerror = (event) => {
+      // Phase 14 wave 24: log WS errors. onclose will trigger reconnect, but
+      // a chronic onerror (CSP block, network down) was previously invisible.
+      console.warn('[btc/price-ws] WebSocket error event', event.type)
     }
     ws.onclose = () => {
       priceReconnectTimerRef.current = setTimeout(() => {
@@ -462,15 +494,21 @@ export default function BtcPage() {
     }
   }, [])
 
-  /** When Coinbase ticker WS has not fired yet, hydrate header from same-origin quote / CoinGecko. */
+  /** When Coinbase ticker WS has not fired yet, hydrate header from same-origin quote / CoinGecko.
+   *  Phase 14 wave 19: cancellation flag + diagnostic logging.
+   *  Previously the catch was silent, so a chronically failing CoinGecko
+   *  (rate-limit / network outage) was indistinguishable from "WS has fired and
+   *  we do not need the REST fallback". */
   useEffect(() => {
+    let cancelled = false
     const loadRestQuote = async () => {
-      if (priceFromBinanceWsRef.current) return
+      if (priceFromBinanceWsRef.current || cancelled) return
       try {
         const r = await fetch(apiUrl('/api/crypto/btc/quote'), {
           cache: 'no-store',
           headers: { Accept: 'application/json' },
         })
+        if (cancelled) return
         if (r.ok) {
           const d = (await r.json()) as {
             price?: number
@@ -480,6 +518,7 @@ export default function BtcPage() {
             low24h?: number
             volume24h?: number
           }
+          if (cancelled) return
           if (!d.price || !Number.isFinite(d.price)) return
           setBtcPrice({
             price: d.price,
@@ -496,8 +535,10 @@ export default function BtcPage() {
           'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true&include_24hr_vol=true',
           { cache: 'no-store' }
         )
+        if (cancelled) return
         if (!cg.ok) return
         const q = (await cg.json()) as { bitcoin?: { usd?: number; usd_24h_change?: number; usd_24h_vol?: number } }
+        if (cancelled) return
         const p = Number(q.bitcoin?.usd)
         if (!Number.isFinite(p) || p <= 0) return
         setBtcPrice({
@@ -508,13 +549,19 @@ export default function BtcPage() {
           low24h: p,
           volume24h: Number(q.bitcoin?.usd_24h_vol) || 0,
         })
-      } catch {
-        /* ignore */
+      } catch (err) {
+        if (cancelled) return
+        console.warn('[btc] REST quote fallback failed', err)
       }
     }
-    const t = setTimeout(loadRestQuote, 4000)
-    const iv = setInterval(loadRestQuote, 60_000)
+    const t = setTimeout(() => {
+      if (Date.now() - lastWsMessageRef.current > 120_000) loadRestQuote()
+    }, 120_000)
+    const iv = setInterval(() => {
+      if (Date.now() - lastWsMessageRef.current > 120_000) loadRestQuote()
+    }, 60_000)
     return () => {
+      cancelled = true
       clearTimeout(t)
       clearInterval(iv)
     }
@@ -626,7 +673,7 @@ export default function BtcPage() {
                   <div className={`text-sm font-mono ${isUp ? 'text-green-400' : 'text-red-400'}`}>
                     {isUp ? '▲' : '▼'} {Math.abs(btcPrice.changePct24h).toFixed(2)}%
                   </div>
-                  <div className="text-[10px] text-slate-600 mt-1 font-mono">
+                  <div className="text-[10px] text-slate-400 mt-1 font-mono">
                     H${btcPrice.high24h.toLocaleString('en-US', { maximumFractionDigits: 0 })} · L${btcPrice.low24h.toLocaleString('en-US', { maximumFractionDigits: 0 })}
                   </div>
                 </div>
@@ -699,9 +746,11 @@ export default function BtcPage() {
                 ) : candles.length > 0 ? (
                   <CryptoChartBoundary title="BTC chart crashed">
                     <KLineChart
-                      candles={candles as any}
-                      darkPoolMarkers={[]}
-                      newsMarkers={[]}
+                      // Phase 14 wave 29: cast removed after KLineChart's Candle
+                      // type widened to accept `time: string | number`.
+                      candles={candles}
+                      darkPoolMarkers={EMPTY_DARK_POOL_MARKERS}
+                      newsMarkers={EMPTY_NEWS_MARKERS}
                       color={color}
                       ticker="BTC"
                       range={activeRange}
@@ -713,7 +762,7 @@ export default function BtcPage() {
                 ) : (
                   <div className="h-[480px] bg-slate-800/10 rounded-xl flex flex-col items-center justify-center gap-2 border border-dashed border-slate-800 px-6 text-center">
                     <span className="text-slate-500 text-sm">No candle data yet</span>
-                    <span className="text-[11px] text-slate-600 max-w-md">
+                    <span className="text-[11px] text-slate-400 max-w-md">
                       If this persists, open DevTools → Network, reload, and check <code className="text-slate-500">/api/crypto/btc</code> (should be 200 with a <code className="text-slate-500">candles</code> array). Disable VPN or try another network if all exchanges time out.
                     </span>
                   </div>

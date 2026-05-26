@@ -5,9 +5,26 @@
  * Redistribution: comply with your Bloomberg Terminal Agreement / Data License.
  */
 
+import { timingSafeEqual } from 'crypto'
 import { fromBloombergSecurity } from './toBloombergSecurity'
 import { formatCompactNumber } from '@/lib/format'
 import { sanitizeError } from '@/lib/api/sanitize'
+
+/**
+ * Timing-safe comparison for `X-Bridge-Secret` (F7.5 / Q-037).
+ * Use in bridge servers and any inbound auth that mirrors this header.
+ */
+export function bridgeSecretMatches(
+  provided: string | null | undefined,
+  expected: string | null | undefined,
+): boolean {
+  if (!expected?.trim()) return true
+  if (provided == null) return false
+  const a = Buffer.from(provided, 'utf8')
+  const b = Buffer.from(expected, 'utf8')
+  if (a.length !== b.length) return false
+  return timingSafeEqual(a, b)
+}
 
 export type BloombergQuoteNormalized = {
   ticker: string

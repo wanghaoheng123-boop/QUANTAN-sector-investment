@@ -27,6 +27,20 @@ describe('normalCdf', () => {
   it('approaches 1 for x >> 0', () => {
     expect(normalCdf(8)).toBeCloseTo(1, 6)
   })
+
+  // Q3-H-2 (Phase 14): explicit boundary semantics at |z| ≥ 8.
+  it('returns exactly 1 at z = 8 (saturation boundary)', () => {
+    expect(normalCdf(8)).toBe(1)
+  })
+  it('returns exactly 0 at z = -8 (saturation boundary)', () => {
+    expect(normalCdf(-8)).toBe(0)
+  })
+  it('returns ≈0.1587 at z = -1', () => {
+    expect(normalCdf(-1)).toBeCloseTo(0.1587, 3)
+  })
+  it('returns NaN for NaN input', () => {
+    expect(Number.isNaN(normalCdf(NaN))).toBe(true)
+  })
 })
 
 describe('blackScholesPrice', () => {

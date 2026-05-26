@@ -1,16 +1,28 @@
 import { NextResponse } from 'next/server'
 import YahooFinance from 'yahoo-finance2'
-import { yahooSymbolFromParam } from '@/lib/quant/yahooSymbol'
 import { dailyReturns } from '@/lib/quant/technicals'
 import { alignCloses, logReturns, correlation } from '@/lib/quant/relativeStrength'
 import { hasPositiveClose } from '@/lib/quant/chartQuoteFilter'
 import { errorResponse, withRetry } from '@/lib/api/reliability'
+import { normalizeTicker, sanitizeError } from '@/lib/api/sanitize'
 
 const yahooFinance = new YahooFinance()
 
+// Phase 14 wave 24 (Pattern C): finite-or-null helper at the API boundary.
+// typeof v === 'number' is true for NaN — without Number.isFinite the JSON
+// emits NaN→null and the UI crashes on .toFixed; or emits Infinity which
+// shows as a meaningless huge number.
+const finiteOrNull = (v: unknown): number | null =>
+  typeof v === 'number' && Number.isFinite(v) ? v : null
+
 /** Extra analytics (win rate, up/down days, beta proxy) — complements `/api/fundamentals`. */
 export async function GET(_req: Request, { params }: { params: { ticker: string } }) {
-  const symbol = yahooSymbolFromParam(params.ticker)
+  // Phase 16 audit (2026-05-24): strict ticker validation via SSOT
+  // normalizeTicker (was permissive yahooSymbolFromParam — F7.3 risk).
+  const symbol = normalizeTicker(params.ticker)
+  if (!symbol) {
+    return NextResponse.json({ error: 'Invalid ticker symbol' }, { status: 400 })
+  }
   if (symbol.startsWith('^')) {
     return NextResponse.json({ error: 'Use a stock/ETF symbol for analytics.' }, { status: 422 })
   }
@@ -22,7 +34,13 @@ export async function GET(_req: Request, { params }: { params: { ticker: string 
     const [chart, spyChart, quote] = await Promise.all([
       withRetry(() => yahooFinance.chart(symbol, { period1, interval: '1d' }), { attempts: 2, timeoutMs: 9000, retryLabel: 'analytics chart' }),
       withRetry(() => yahooFinance.chart('SPY', { period1, interval: '1d' }), { attempts: 2, timeoutMs: 9000, retryLabel: 'spy chart' }),
-      withRetry(() => yahooFinance.quote(symbol), { attempts: 2, timeoutMs: 6000, retryLabel: 'analytics quote' }).catch(() => null),
+      withRetry(() => yahooFinance.quote(symbol), { attempts: 2, timeoutMs: 6000, retryLabel: 'analytics quote' })
+        .catch((err) => {
+          // Phase 14 wave 24: log instead of silent null suppression so a
+          // chronically failing quote endpoint is diagnosable.
+          console.warn(JSON.stringify({ event: 'analytics.quote_fetch_failed', ticker: symbol, message: (err as Error)?.message }))
+          return null
+        }),
     ])
 
     const quotes = chart?.quotes?.filter(hasPositiveClose) ?? []
@@ -76,19 +94,25 @@ export async function GET(_req: Request, { params }: { params: { ticker: string 
         symbol,
         fetchedAt: new Date().toISOString(),
         historyDays: closes.length,
-        winRate252d: winRate252,
-        avgDailyReturn: avgDailyRet,
-        betaVsSpyLogReturns: betaProxy,
-        correlationVsSpy1y: corr1y,
-        dividendYield: typeof q?.dividendYield === 'number' ? q.dividendYield : null,
-        avgVolume3m: typeof q?.averageDailyVolume3Month === 'number' ? q.averageDailyVolume3Month : null,
+        // Phase 14 wave 24: all numeric outputs gated by finiteOrNull. The
+        // computed values (winRate, beta, correlation) can produce NaN under
+        // degenerate inputs (zero-variance series); typeof guards alone
+        // accept NaN.
+        winRate252d: finiteOrNull(winRate252),
+        avgDailyReturn: finiteOrNull(avgDailyRet),
+        betaVsSpyLogReturns: finiteOrNull(betaProxy),
+        correlationVsSpy1y: finiteOrNull(corr1y),
+        dividendYield: finiteOrNull(q?.dividendYield),
+        avgVolume3m: finiteOrNull(q?.averageDailyVolume3Month),
         note:
           'Beta is a quick OLS slope on overlapping log returns vs SPY (~1y window when available), not Bloomberg-adjusted beta.',
       },
       { headers: { 'Cache-Control': 's-maxage=300, stale-while-revalidate=600' } }
     )
   } catch (e) {
+    // Phase 14 wave 24: route raw error through sanitizeError instead of
+    // String(e) so stack traces / internal hostnames don't leak in production.
     console.error('[Analytics API]', symbol, e)
-    return errorResponse('analytics_failed', 'Analytics failed', String(e), 502)
+    return errorResponse('analytics_failed', 'Analytics failed', sanitizeError(e) ?? 'analytics_failed', 502)
   }
 }
