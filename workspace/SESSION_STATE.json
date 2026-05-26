@@ -2,37 +2,69 @@
   "schema_version": "1.1",
   "project": "QUANTAN-sector-investment",
   "created": "2026-04-28T09:40:00Z",
-  "last_updated": "2026-05-26T17:10:00Z",
-  "active_agent": "Cursor (fix-it / PR #19 verify)",
+  "last_updated": "2026-05-26T18:00:00Z",
+  "active_agent": "Cursor (P0 PR stack merge)",
   "last_inspection": {
-    "timestamp": "2026-05-26T17:10:00Z",
+    "timestamp": "2026-05-26T18:00:00Z",
     "results": {
       "canonical_worktree": ".claude/worktrees/competent-wu-a84629",
-      "branch": "fix/backtest-live-signals-guards",
-      "head": "5c9d6fb",
+      "branch": "main",
+      "head": "5149954",
       "repo_root_stale": true,
       "repo_root_head": "3870751",
       "providers_intact": true,
       "portfolio_intact": true,
       "sector_rotation_panel_intact": true,
-      "open_prs_merge_order": "#17 → #18 → #19 (retarget) → #21 → #20",
-      "typecheck": "PASS",
-      "tests": "976 passed / 76 files",
+      "merged_prs": ["#17", "#18", "#19", "#21"],
+      "pending_prs": ["#20"],
+      "typecheck": "PENDING",
+      "tests": "PENDING",
       "benchmark_wr": 57.26,
       "benchmark_floor": 55.0
     }
   },
   "tasks": [
     {
-      "id": "TASK-PR19-VERIFY",
-      "title": "PR #19 backtest live-signals guards — verify + workspace sync",
+      "id": "TASK-PHASE-16-S1",
+      "title": "Phase 16 S1 — Foundations",
+      "status": "DONE",
+      "priority": "P0",
+      "plan_path": "reviews/PHASE-16-PLAN.md",
+      "completed_items": [
+        "CI Node 24 bump (kickoff commit e77c12e)",
+        "RTL + jsdom infrastructure (kickoff commit e77c12e)",
+        "Coverage backfill: parameterSets/sectorProfiles/useErrorToast (kickoff commit e77c12e)",
+        "Code-structure audit: F7.3 hardening + sanitize SSOT (commit 62d7e87)",
+        "Deep audit: CWE-209 crypto routes + tracker div-by-zero (commit 629bd07)",
+        "P15-NEW-10: walkForward extract (commit 66b66a8) — engine 832 → 653 LOC, +6 tracker tests",
+        "npm-audit triage doc + Q-057-NEW filed (2026-05-25)",
+        "Q-058-NEW: snapshot tests (PR #17 merged 88f2c8f)",
+        "Q-054-NEW: backtest page decomp 887→268 LOC (PR #18 merged ee3e3ee)",
+        "fix(backtest) live-signals null-guards (PR #19 merged a0bb302)",
+        "benchmark refresh WR 57.26% (PR #21 merged 5149954)"
+      ],
+      "pending_items": [
+        "Q-057-NEW: Next.js upgrade — DEFERRED pending owner sign-off",
+        "Q-004 prod activation: QUANTAN_FRED_PREWARM=1 in Vercel env (owner action required)",
+        "Q-053-NEW: QuantLabPanel decomp (1684 LOC) — own-session work"
+      ],
+      "open_prs": [],
+      "notes": "P0 stack merged 2026-05-26: #17→#18→#19(retarget+rebase)→#21→#20(pending). Main HEAD 5149954."
+    },
+    {
+      "id": "TASK-PLAN-002",
+      "title": "Refresh future improvement plan from verified codebase",
       "status": "DONE",
       "priority": "HIGH",
+      "plan_path": "workspace/FUTURE_IMPROVEMENT_PLAN.md",
       "files_touched": [
+        "workspace/FUTURE_IMPROVEMENT_PLAN.md",
+        "workspace/IMPROVEMENT_BACKLOG.json",
+        "workspace/CLAUDE_CODE_INSTRUCTIONS.md",
         "workspace/CANONICAL_WORKTREE.md",
         "workspace/ROOT_WORKTREE_WARNING.md",
-        "workspace/SESSION_STATE.json",
-        "workspace/MEMORY_LOG.md"
+        "workspace/MEMORY_LOG.md",
+        "workspace/SESSION_STATE.json"
       ],
       "verify_status": {
         "A": "PASS",
@@ -42,7 +74,7 @@
         "E": "PASS",
         "F": "PASS"
       },
-      "notes": "Code fixes already on branch (5c9d6fb). No new code changes this session. Root deletions documented only."
+      "notes": "2026-05-21 verified plan refresh; superseded by Phase 15/16 closure and P0 merges."
     }
   ],
   "blockers": [
@@ -52,5 +84,6 @@
       "resolution": "Owner may run git checkout -- . at root after review; see ROOT_WORKTREE_WARNING.md"
     }
   ],
-  "checkpoint": null
+  "checkpoint": null,
+  "session_reset": null
 }
