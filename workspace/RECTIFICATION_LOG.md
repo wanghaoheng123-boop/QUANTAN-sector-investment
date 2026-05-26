@@ -93,6 +93,13 @@
 **Inspection:** `reviews/INSPECTION-WAVE-3-2026-05-26.md`  
 **Git:** branch `fix/rectification-wave-3` → PR to `main`
 
+## Wave 4 — 2026-05-26 (K-line / lightweight-charts)
+
+| Item | Fix | Verify |
+|------|-----|--------|
+| Candlestick charts crash (`data must be asc ordered by time`) | `lib/sortChartCandles.ts`; sort in `/api/chart`; safer `touchLast` in `KLineChart`; sort dark-pool + news markers before `setMarkers` | Browser `/stock/AAPL`, `/sector/technology` — 28 canvases, no error boundary |
+| Incremental `update()` on out-of-order last bar | Only `update` when same timestamp or strictly newer bar; `setData` fallback on throw | `__tests__/lib/sortChartCandles.test.ts` |
+
 ## Deferred (owner / next session)
 
 - F1.4 FRED RFR in engine Sharpe (Q-004)

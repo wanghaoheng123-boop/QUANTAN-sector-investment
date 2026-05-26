@@ -26,6 +26,12 @@ Repo SSOT: `lib/appUrl.ts`, `scripts/smoke-production.mjs`, README, `workspace/V
 
 See `workspace/RECTIFICATION_LOG.md` wave 3 table (filled by agent run).
 
+## Wave 4 addendum (charts) — FIXED 2026-05-26
+
+| ID | Issue | Fix |
+|----|-------|-----|
+| W4-001 | K-line charts hit ChartErrorBoundary: `data must be asc ordered by time` | `sortChartCandles`, sorted markers, stricter incremental updates in `KLineChart.tsx` |
+
 ## Still open (owner)
 
 - Delete/archive extra Vercel projects in dashboard
