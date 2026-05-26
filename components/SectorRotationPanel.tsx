@@ -6,6 +6,7 @@ import type { SectorScore, SectorSignal } from '@/lib/quant/sectorRotation'
 interface ApiResponse {
   scores: SectorScore[]
   fetchedAt: string
+  excludedSectors?: Array<{ etf: string; reason: string; closes?: number }>
 }
 
 function SignalBadge({ signal }: { signal: SectorSignal }) {
@@ -67,6 +68,19 @@ export default function SectorRotationPanel() {
     return (
       <div className="text-center py-8 text-gray-500 text-sm">
         Failed to load sector rotation data.
+      </div>
+    )
+  }
+
+  if (data.scores.length === 0) {
+    return (
+      <div className="text-center py-8 px-4 space-y-2">
+        <p className="text-slate-400 text-sm">Sector rotation ranks are temporarily unavailable.</p>
+        <p className="text-slate-500 text-xs">
+          {data.excludedSectors?.length
+            ? `${data.excludedSectors.length} sector ETF(s) excluded (Yahoo data thin or fetch failed). Retry in a few minutes.`
+            : 'Upstream market data did not return enough history for 12-month momentum scoring.'}
+        </p>
       </div>
     )
   }

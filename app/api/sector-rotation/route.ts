@@ -17,21 +17,25 @@ type FetchResult =
   | { ok: true; closes: number[] }
   | { ok: false; reason: 'insufficient_data' | 'fetch_failed'; count?: number }
 
+/** Minimum daily bars for 12mo momentum (252) + baseline bar — see sectorScores(). */
+const MIN_CLOSES_FOR_SCORING = 253
+
 async function fetchCloses(etf: string): Promise<FetchResult> {
   try {
     const period1 = new Date()
-    period1.setFullYear(period1.getFullYear() - 1)
+    // 1yr (~251 trading days) was too short — sectorScores() skips etfs with <253 bars.
+    period1.setFullYear(period1.getFullYear() - 2)
     const chart = await yahooFinance.chart(etf, { period1, interval: '1d' })
     const closes = (chart?.quotes ?? [])
       .filter(hasPositiveClose)
       .map((q) => q.close!)
-    if (closes.length > 20) return { ok: true, closes }
+    if (closes.length >= MIN_CLOSES_FOR_SCORING) return { ok: true, closes }
     // R4-M-5 (Phase 14): make thin-data exclusions visible to operators.
     console.warn(JSON.stringify({
       event: 'sector-rotation.insufficient_data',
       etf,
       closes: closes.length,
-      minimum: 21,
+      minimum: MIN_CLOSES_FOR_SCORING,
     }))
     return { ok: false, reason: 'insufficient_data', count: closes.length }
   } catch (err) {

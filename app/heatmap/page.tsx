@@ -129,7 +129,7 @@ export default function HeatmapPage() {
         </div>
         
         {/* Legend */}
-        <div className="flex items-center justify-end gap-1 mt-6">
+        <div className="flex items-center justify-end gap-1 mt-6 overflow-x-auto pb-1 max-w-full">
           <span className="text-xs text-slate-500 mr-2">Bearish</span>
           <div className="w-6 h-4 bg-red-600 rounded-sm"></div>
           <div className="w-6 h-4 bg-red-700 rounded-sm"></div>

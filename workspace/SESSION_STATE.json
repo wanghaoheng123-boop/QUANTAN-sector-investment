@@ -2,26 +2,25 @@
   "schema_version": "1.1",
   "project": "QUANTAN-sector-investment",
   "created": "2026-04-28T09:40:00Z",
-  "last_updated": "2026-05-26T18:52:00Z",
-  "active_agent": "deployment-expert (rectification wave 3)",
+  "last_updated": "2026-05-26T13:45:00.000Z",
+  "active_agent": "cursor (QA wave 6)",
   "program_doc": "workspace/QUANTAN_EXPERT_TEAM_COMMERCIALIZATION.md",
   "last_inspection": {
-    "timestamp": "2026-05-26T18:52:00Z",
+    "timestamp": "2026-05-26T13:33:27.926Z",
     "results": {
-      "inspection_wave_3": "reviews/INSPECTION-WAVE-3-2026-05-26.md",
+      "pr_22": "MERGED",
+      "main_head": "056b54e",
       "typecheck": "PASS",
-      "tests": "991 passed / 81 files",
+      "tests": "996 passed / 82 files",
       "build": "PASS",
-      "benchmark_wr_ssot_gross": 54.77,
       "benchmark_wr_ssot_net": 53.79,
       "smoke_production": "PASS",
-      "vercel_link": "quantan",
-      "fixes_wave_3": [
-        "README/DEPLOY quantan.vercel.app",
-        "delete scripts/backtest/dataLoader.ts",
-        "VERCEL_OPERATIONS single project §12",
-        "vercel link --project quantan"
-      ]
+      "vercel_production_deploy": "dpl_Co13RU8yh56ym7QEZoVhgaB48KRJ",
+      "chart_api_ascending": "PASS",
+      "sortChartCandles_on_main": true,
+      "sector_rotation_scores_pre_fix": 0,
+      "sector_rotation_scores_post_fix": 11,
+      "full_platform_qa_doc": "workspace/FULL_PLATFORM_QA_2026-05-26.md"
     }
   },
   "tasks": [
@@ -44,7 +43,29 @@
         "E": "PASS",
         "F": "PASS"
       },
-      "notes": "See workspace/RECTIFICATION_LOG.md wave 3; PR fix/rectification-wave-3"
+      "notes": "PR #22 merged to main; production deployed 2026-05-26"
+    },
+    {
+      "id": "TASK-QA-WAVE-6",
+      "title": "Full platform QA + sector rotation fix",
+      "status": "DONE",
+      "priority": "P0",
+      "files_touched": [
+        "app/api/sector-rotation/route.ts",
+        "components/SectorRotationPanel.tsx",
+        "app/heatmap/page.tsx",
+        "workspace/FULL_PLATFORM_QA_2026-05-26.md",
+        "reviews/INSPECTION-WAVE-4-2026-05-26.md"
+      ],
+      "verify_status": {
+        "A": "PASS",
+        "B": "PASS",
+        "C": "PASS",
+        "D": "PASS",
+        "E": "PASS",
+        "F": "PASS"
+      },
+      "notes": "Branch fix/qa-wave-6; prod deploy pending merge"
     }
   ],
   "blockers": [
