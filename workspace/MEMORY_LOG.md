@@ -35,7 +35,7 @@ _None_
 **Merged:** #17 `88f2c8f` · #18 `ee3e3ee` · #19 `a0bb302` (retarget→main, rebase, CI run 26443146355 all green) · #21 `5149954` · #20 `2ee18e3`
 **Verify:** typecheck PASS · 982 tests / 78 files · benchmark WR **57.26%** · smoke PASS on https://quantan.vercel.app
 **Owner action (required):** Vercel **quantan** Production → set `QUANTAN_FRED_PREWARM=1` → redeploy
-**Blockers:** Drive repo root stale at `3870751` (cannot ff-merge main without reset)
+**Blockers:** Drive repo root stale at `3870751` (resolved by fix/rectification-wave-3 merge)
 
 ### Session — 2026-05-26 — Fix-it audit (Cursor subagent, PR #19 branch)
 **Canonical:** `.claude/worktrees/competent-wu-a84629` · `fix/backtest-live-signals-guards` @ `5c9d6fb`
