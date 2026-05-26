@@ -60,7 +60,12 @@ export function LiveSignalsPanel() {
   if (!signals) return <div className="text-slate-400 text-sm py-8 text-center">No live signal data available.</div>
 
   const rawInsts = (signals.instruments as Array<Record<string, unknown>>) ?? []
-  const summary = signals.summary as Record<string, number>
+  // Defensive: API can return a payload without `summary` (initial deploy,
+  // partial cache miss, schema drift). The cast hides the absence — the
+  // `?? {}` fallback keeps the buyCount/holdCount/sellCount destructure
+  // safe (each picks a `?? 0` default below). Without this, the panel
+  // crashed to the nearest error boundary.
+  const summary = (signals.summary as Record<string, number> | undefined) ?? {}
 
   // ── Sector + data freshness ──────────────────────────────────────────────
   const sectors = ['All', ...Array.from(new Set(rawInsts.map(i => i.sector as string))).sort()]
@@ -115,29 +120,35 @@ export function LiveSignalsPanel() {
   if (filterAction !== 'All') insts = insts.filter(i => i.action === filterAction)
 
   // ── Sorting ────────────────────────────────────────────────────────────────
+  // The comparator must produce deterministic ordering even when the API
+  // emits unexpected runtime types in a "numeric" column (NaN, string in a
+  // number slot). Array.prototype.sort with a non-deterministic comparator
+  // re-orders rows across renders.
+  //
+  // String columns: cast then `localeCompare`. Unknown / non-string falls
+  // back to ''.
+  // Number columns: `typeof === 'number' && isFinite(v)` narrowing. NaN /
+  // non-number falls to the null branch (sorted to the end regardless of
+  // direction).
+  const STRING_KEYS = new Set<SortKey>(['ticker', 'sector', 'zone', 'action'])
   insts.sort((a, b) => {
-    const getVal = (obj: Record<string, unknown>, key: SortKey): number | string | null => {
-      switch (key) {
-        case 'ticker': return obj.ticker as string
-        case 'sector': return obj.sector as string
-        case 'price': return obj.price as number
-        case 'changePct': return obj.changePct as number
-        case 'zone': return obj.zone as string
-        case 'action': return obj.action as string
-        case 'confidence': return obj.confidence as number
-        case 'rsi14': return obj.rsi14 as number
-        case 'atrPct': return obj.atrPct as number
-        case 'deviationPct': return obj.deviationPct as number
-        case 'slopePct': return obj.slopePct as number
-        default: return null
-      }
+    const av = a[sortKey]
+    const bv = b[sortKey]
+    if (STRING_KEYS.has(sortKey)) {
+      const as = typeof av === 'string' ? av : ''
+      const bs = typeof bv === 'string' ? bv : ''
+      if (as === '' && bs === '') return 0
+      if (as === '') return 1
+      if (bs === '') return -1
+      const cmp = as.localeCompare(bs)
+      return sortDir === 'asc' ? cmp : -cmp
     }
-    const av = getVal(a, sortKey)
-    const bv = getVal(b, sortKey)
-    if (av == null && bv == null) return 0
-    if (av == null) return 1
-    if (bv == null) return -1
-    const cmp = av < bv ? -1 : av > bv ? 1 : 0
+    const an = typeof av === 'number' && Number.isFinite(av) ? av : null
+    const bn = typeof bv === 'number' && Number.isFinite(bv) ? bv : null
+    if (an == null && bn == null) return 0
+    if (an == null) return 1
+    if (bn == null) return -1
+    const cmp = an < bn ? -1 : an > bn ? 1 : 0
     return sortDir === 'asc' ? cmp : -cmp
   })
 
@@ -241,46 +252,90 @@ export function LiveSignalsPanel() {
           </thead>
           <tbody className="divide-y divide-slate-800/50">
             {insts.slice(0, 200).map((inst: Record<string, unknown>, i: number) => {
-              const action = inst.action as string
+              // Hoist + narrow once per row. Cast-then-deref scattered through
+              // the JSX hid these null cases; each `as number` was a runtime
+              // no-op that silently let `null * 100 = 0` and `undefined * 100
+              // = NaN` flow into `.toFixed()` (producing 'NaN%' or 'undefined'
+              // text). Hoisting also lets className predicates check the same
+              // narrowed value the text content uses — fixes the prior
+              // `null >= 0 → true → text-emerald-400` bug that painted '—'
+              // cells green.
+              const action = inst.action as string | undefined
+              const ticker = inst.ticker as string | undefined
+              const sector = inst.sector as string | undefined
+              const zone = inst.zone as string | undefined
+              const lastDate = inst.lastDate as string | undefined
+              const price = typeof inst.price === 'number' ? inst.price : null
+              const changePct = typeof inst.changePct === 'number' ? inst.changePct : null
+              const confidence = typeof inst.confidence === 'number' ? inst.confidence : null
+              const rsi14 = typeof inst.rsi14 === 'number' ? inst.rsi14 : null
+              const atrPct = typeof inst.atrPct === 'number' ? inst.atrPct : null
+              const deviationPct = typeof inst.deviationPct === 'number' ? inst.deviationPct : null
+              const slopePct = typeof inst.slopePct === 'number' ? inst.slopePct : null
+              const kellyFraction = typeof inst.KellyFraction === 'number' ? inst.KellyFraction : null
+
               const actionColor = action === 'BUY' ? 'text-emerald-400' : action === 'SELL' ? 'text-red-400' : 'text-slate-400'
-              const zoneColor = zoneColorMap[inst.zone as string] ?? '#64748b'
+              const zoneColor = zone != null ? (zoneColorMap[zone] ?? '#64748b') : '#64748b'
+              const zoneLabel = zone != null ? zone.replace(/_/g, ' ') : '—'
+
+              const changePctColor = changePct == null ? 'text-slate-500' : changePct >= 0 ? 'text-emerald-400' : 'text-red-400'
+              const confidenceColor = confidence == null
+                ? 'bg-slate-700/50 text-slate-400'
+                : confidence >= 70
+                  ? 'bg-emerald-500/20 text-emerald-400'
+                  : confidence >= 55
+                    ? 'bg-amber-500/20 text-amber-400'
+                    : 'bg-slate-700/50 text-slate-400'
+              const deviationColor = deviationPct == null
+                ? 'text-slate-500'
+                : deviationPct < -20
+                  ? 'text-red-400'
+                  : deviationPct < 0
+                    ? 'text-amber-400'
+                    : 'text-emerald-400'
+              const slopeColor = slopePct == null ? 'text-slate-500' : slopePct > 0 ? 'text-emerald-400' : 'text-slate-400'
+
               return (
                 <tr key={i} className={`hover:bg-slate-800/30 transition-colors ${action === 'BUY' ? 'border-l-2 border-l-emerald-500/50' : action === 'SELL' ? 'border-l-2 border-l-red-500/50' : ''}`}>
-                  <td className="px-3 py-2 font-mono font-bold text-white">{inst.ticker as string}</td>
-                  <td className="px-3 py-2 text-slate-400 text-[10px]">{inst.sector as string}</td>
-                  <td className="px-3 py-2 font-mono text-white">${(inst.price as number)?.toLocaleString('en-US', { maximumFractionDigits: 0 })}</td>
-                  <td className={`px-3 py-2 font-mono font-medium ${(inst.changePct as number) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {(inst.changePct as number) != null ? `${(inst.changePct as number) >= 0 ? '+' : ''}${(inst.changePct as number).toFixed(2)}%` : '—'}
+                  <td className="px-3 py-2 font-mono font-bold text-white">{ticker ?? '—'}</td>
+                  <td className="px-3 py-2 text-slate-400 text-[10px]">{sector ?? '—'}</td>
+                  <td className="px-3 py-2 font-mono text-white">
+                    {price != null ? `$${price.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '—'}
+                  </td>
+                  <td className={`px-3 py-2 font-mono font-medium ${changePctColor}`}>
+                    {changePct != null ? `${changePct >= 0 ? '+' : ''}${changePct.toFixed(2)}%` : '—'}
                   </td>
                   <td className="px-3 py-2">
                     <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium" style={{ color: zoneColor, backgroundColor: zoneColor + '20' }}>
-                      {(inst.zone as string)?.replace(/_/g, ' ')}
+                      {zoneLabel}
                     </span>
                   </td>
-                  <td className={`px-3 py-2 font-bold text-sm ${actionColor}`}>{action}</td>
+                  <td className={`px-3 py-2 font-bold text-sm ${actionColor}`}>{action ?? '—'}</td>
                   <td className="px-3 py-2 font-mono">
-                    <span className={`px-1.5 py-0.5 rounded text-[10px] ${(inst.confidence as number) >= 70 ? 'bg-emerald-500/20 text-emerald-400' : (inst.confidence as number) >= 55 ? 'bg-amber-500/20 text-amber-400' : 'bg-slate-700/50 text-slate-400'}`}>
-                      {(inst.confidence as number)?.toFixed(0)}
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] ${confidenceColor}`}>
+                      {confidence != null ? confidence.toFixed(0) : '—'}
                     </span>
                   </td>
                   <td className="px-3 py-2 font-mono text-slate-300">
-                    {(inst.rsi14 as number) != null
-                      ? <span className={(inst.rsi14 as number) > 70 ? 'text-red-400' : (inst.rsi14 as number) < 30 ? 'text-emerald-400' : 'text-slate-300'}>
-                          {(inst.rsi14 as number).toFixed(1)}
+                    {rsi14 != null
+                      ? <span className={rsi14 > 70 ? 'text-red-400' : rsi14 < 30 ? 'text-emerald-400' : 'text-slate-300'}>
+                          {rsi14.toFixed(1)}
                         </span>
                       : '—'}
                   </td>
                   <td className="px-3 py-2 font-mono text-slate-300">
-                    {(inst.atrPct as number) != null ? `${(inst.atrPct as number).toFixed(2)}%` : '—'}
+                    {atrPct != null ? `${atrPct.toFixed(2)}%` : '—'}
                   </td>
-                  <td className={`px-3 py-2 font-mono font-medium ${(inst.deviationPct as number) != null && (inst.deviationPct as number) < -20 ? 'text-red-400' : (inst.deviationPct as number) != null && (inst.deviationPct as number) < 0 ? 'text-amber-400' : 'text-emerald-400'}`}>
-                    {(inst.deviationPct as number) != null ? `${(inst.deviationPct as number) >= 0 ? '+' : ''}${(inst.deviationPct as number).toFixed(1)}%` : '—'}
+                  <td className={`px-3 py-2 font-mono font-medium ${deviationColor}`}>
+                    {deviationPct != null ? `${deviationPct >= 0 ? '+' : ''}${deviationPct.toFixed(1)}%` : '—'}
                   </td>
-                  <td className={`px-3 py-2 font-mono ${(inst.slopePct as number) != null && (inst.slopePct as number) > 0 ? 'text-emerald-400' : 'text-slate-400'}`}>
-                    {(inst.slopePct as number) != null ? `${(inst.slopePct as number) >= 0 ? '+' : ''}${(inst.slopePct as number * 100).toFixed(4)}%` : '—'}
+                  <td className={`px-3 py-2 font-mono ${slopeColor}`}>
+                    {slopePct != null ? `${slopePct >= 0 ? '+' : ''}${(slopePct * 100).toFixed(4)}%` : '—'}
                   </td>
-                  <td className="px-3 py-2 font-mono text-slate-400">{((inst.KellyFraction as number) * 100).toFixed(0)}%</td>
-                  <td className="px-3 py-2 font-mono text-slate-400 text-[10px]">{inst.lastDate as string ?? '—'}</td>
+                  <td className="px-3 py-2 font-mono text-slate-400">
+                    {kellyFraction != null ? `${(kellyFraction * 100).toFixed(0)}%` : '—'}
+                  </td>
+                  <td className="px-3 py-2 font-mono text-slate-400 text-[10px]">{lastDate ?? '—'}</td>
                 </tr>
               )
             })}

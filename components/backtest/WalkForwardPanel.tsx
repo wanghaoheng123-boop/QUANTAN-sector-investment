@@ -11,7 +11,7 @@
  * is a pure move — body identical, only imports differ.
  */
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { BacktestResult } from '@/lib/backtest/engine'
 
 interface QuarterStats {
@@ -23,8 +23,22 @@ interface QuarterStats {
 
 export function WalkForwardPanel({ results }: { results: BacktestResult[] }) {
   const [selectedTicker, setSelectedTicker] = useState(results[0]?.ticker ?? '')
-  const selected = results.find(r => r.ticker === selectedTicker)
   const tickers = results.map(r => r.ticker)
+  // Resync when the parent's `results` prop changes (e.g., ticker selector
+  // filter updates upstream). Without this, a previously-picked ticker that
+  // no longer appears in `results` left the panel stuck on 'No instrument
+  // data available' permanently — the empty-state guard below fired but
+  // there was no recovery short of tab unmount.
+  useEffect(() => {
+    if (tickers.length === 0) return
+    if (!tickers.includes(selectedTicker)) {
+      setSelectedTicker(tickers[0])
+    }
+    // We intentionally don't depend on `tickers` (rebuilt every render) —
+    // hashing instead by `results` reference + the current selection.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [results, selectedTicker])
+  const selected = results.find(r => r.ticker === selectedTicker)
 
   // ── Rolling quarterly performance split ─────────────────────────────────────
   const quarters = ((): QuarterStats[] => {
