@@ -61,11 +61,20 @@ export function KeyMetricsStrip({ portfolio, instrumentCount }: KeyMetricsStripP
         label="Sharpe Ratio"
         value={fmtRatio(displayedSharpe)}
         sub="Risk-adj return"
-        color={portfolio.alpha > 0 ? 'text-cyan-400' : 'text-slate-400'}
+        // Color the Sharpe card by the displayed Sharpe value, not alpha.
+        // Pre-fix the card was painted by `portfolio.alpha > 0` which made
+        // a strong Sharpe + weak alpha portfolio look grey/bad and the
+        // reverse case look cyan/good — visual-label mismatch.
+        color={displayedSharpe == null ? 'text-slate-400' : displayedSharpe >= 1 ? 'text-cyan-400' : displayedSharpe >= 0 ? 'text-amber-400' : 'text-red-400'}
       />
       <BacktestMetricCard
         label="Max Drawdown"
-        value={`-${(portfolio.maxPortfolioDd * 100).toFixed(1)}%`}
+        // `Math.abs` is defensive — `lib/backtest/engine.ts` currently
+        // stores `maxPortfolioDd` as a positive magnitude, so the hard-
+        // coded `-` prefix produces the right output today. If the engine
+        // ever switches to signed-drawdown convention, the cell would
+        // otherwise render `--25.0%`. Math.abs makes us convention-agnostic.
+        value={`-${(Math.abs(portfolio.maxPortfolioDd) * 100).toFixed(1)}%`}
         sub="Portfolio peak-to-trough"
         color="text-red-400"
       />

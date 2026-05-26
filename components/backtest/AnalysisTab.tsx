@@ -124,7 +124,7 @@ export function AnalysisTab({ results, sectorColors }: { results: BacktestResult
                         {(r.annualizedReturn * 100).toFixed(1)}%
                       </td>
                       <td className="px-3 py-2 font-mono text-red-400">
-                        -{((r.maxDrawdown) * 100).toFixed(1)}%
+                        -{(Math.abs(r.maxDrawdown) * 100).toFixed(1)}%
                       </td>
                       <td className={`px-3 py-2 font-mono ${(r.sharpeRatio ?? 0) >= 1 ? 'text-emerald-400' : (r.sharpeRatio ?? 0) >= 0 ? 'text-amber-400' : 'text-red-400'}`}>
                         {r.sharpeRatio != null ? r.sharpeRatio.toFixed(2) : '—'}
