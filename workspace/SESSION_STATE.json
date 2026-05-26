@@ -1,60 +1,56 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "project": "QUANTAN-sector-investment",
   "created": "2026-04-28T09:40:00Z",
-  "last_updated": "2026-04-28T10:15:00Z",
-  "active_agent": "Codex 5.3",
+  "last_updated": "2026-05-26T17:10:00Z",
+  "active_agent": "Cursor (fix-it / PR #19 verify)",
   "last_inspection": {
-    "timestamp": "2026-04-28T09:40:00Z",
+    "timestamp": "2026-05-26T17:10:00Z",
     "results": {
-      "INSPECT-1": "PASS - repository root and tracked folders inspected",
-      "INSPECT-2": "PASS - session file initialized",
-      "INSPECT-3": "PASS - searched target files and formatter usage",
-      "INSPECT-4": "PENDING",
-      "INSPECT-5": "PENDING",
-      "INSPECT-6": "PASS - verification commands queued and in progress"
+      "canonical_worktree": ".claude/worktrees/competent-wu-a84629",
+      "branch": "fix/backtest-live-signals-guards",
+      "head": "5c9d6fb",
+      "repo_root_stale": true,
+      "repo_root_head": "3870751",
+      "providers_intact": true,
+      "portfolio_intact": true,
+      "sector_rotation_panel_intact": true,
+      "open_prs_merge_order": "#17 → #18 → #19 (retarget) → #21 → #20",
+      "typecheck": "PASS",
+      "tests": "976 passed / 76 files",
+      "benchmark_wr": 57.26,
+      "benchmark_floor": 55.0
     }
   },
   "tasks": [
     {
-      "id": "TASK-001",
-      "title": "Execute UI/algo/API hardening plan",
-      "status": "IN_PROGRESS",
+      "id": "TASK-PR19-VERIFY",
+      "title": "PR #19 backtest live-signals guards — verify + workspace sync",
+      "status": "DONE",
       "priority": "HIGH",
       "files_touched": [
-        "AGENT.md",
+        "workspace/CANONICAL_WORKTREE.md",
+        "workspace/ROOT_WORKTREE_WARNING.md",
         "workspace/SESSION_STATE.json",
-        "workspace/MEMORY_LOG.md",
-        "workspace/USAGE_MONITOR.json",
-        "lib/format.ts",
-        "lib/api/reliability.ts",
-        "app/stock/[ticker]/page.tsx",
-        "app/sector/[slug]/page.tsx",
-        "app/desk/page.tsx",
-        "app/backtest/page.tsx",
-        "components/stock/QuantLabPanel.tsx",
-        "components/crypto/BtcQuantLab.tsx",
-        "lib/optimize/gridSearch.ts",
-        "lib/optimize/parameterSets.ts",
-        "scripts/benchmark-enhanced.ts",
-        "app/api/analytics/[ticker]/route.ts",
-        "app/api/prices/route.ts",
-        "app/api/fundamentals/[ticker]/route.ts",
-        "app/api/stream/[ticker]/route.ts",
-        "workspace/audits/deepseek-pass1.json",
-        "workspace/audits/deepseek-pass2.json"
+        "workspace/MEMORY_LOG.md"
       ],
       "verify_status": {
-        "A": null,
-        "B": null,
-        "C": null,
-        "D": null,
-        "E": null,
-        "F": null
+        "A": "PASS",
+        "B": "PASS",
+        "C": "PASS",
+        "D": "PASS",
+        "E": "PASS",
+        "F": "PASS"
       },
-      "notes": "UI/API/algo changes implemented; running verification and final QAQC."
+      "notes": "Code fixes already on branch (5c9d6fb). No new code changes this session. Root deletions documented only."
     }
   ],
-  "blockers": [],
+  "blockers": [
+    {
+      "id": "BLOCKER-ROOT-STALE",
+      "summary": "Drive repo root has uncommitted mass deletions — use canonical worktree",
+      "resolution": "Owner may run git checkout -- . at root after review; see ROOT_WORKTREE_WARNING.md"
+    }
+  ],
   "checkpoint": null
 }
