@@ -7,6 +7,7 @@ _None_
 ## Verification Log
 | Timestamp | Task | A | B | C | D | E | F | Notes |
 |---|---|---|---|---|---|---|---|---|
+| 2026-05-26T13:33:27Z | PR #22 merge + prod deploy | PASS | PASS | PASS | PASS | PASS | PASS | main 056b54e; smoke PASS; chart sort PASS |
 | 2026-04-28T09:40:00Z | TASK-001 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING | Bootstrapped workspace tracking files and started implementation. |
 | 2026-04-28T10:18:00Z | TASK-001 | PASS | BLOCKED | PASS | PASS | PASS | PASS | UI/API/algo/audit waves completed. Typecheck blocked by invalid node_modules/typescript package config; vitest and benchmark scripts exited 0 via node entrypoint. |
 | 2026-05-26T17:10:00Z | TASK-PR19-VERIFY | PASS | PASS | PASS | PASS | PASS | PASS | Canonical worktree audit: typecheck clean, 976 tests, WR 57.26%. Root mass-deletions documented; PR #19 code already on 5c9d6fb. |
@@ -21,6 +22,7 @@ _None_
 | 2026-05-26T18:30:00Z | PLATFORM-RECTIFICATION-W1 | PASS | PASS | PASS | PASS | PASS | PASS | CI net floor 53.29%; engine→executionModel; invariants §1b; RECTIFICATION_LOG; 987 tests; benchmark PASS; enhanced warns only. |
 | 2026-05-26T10:46:00Z | RECTIFICATION-WAVE-2 | PASS | PASS | PASS | PASS | PASS | PASS | Browser E2E; appBaseUrl dev fix; honest copy; deleted mjs+stale handoff; 991 tests; INSPECTION-WAVE-2; smoke PASS. |
 | 2026-05-26T18:52:00Z | RECTIFICATION-WAVE-3 | PASS | PASS | PASS | PASS | PASS | PASS | Vercel single-project docs; README quantan URL; delete scripts/backtest/dataLoader; vercel link quantan; 991 tests; net WR 53.79%; smoke PASS; branch fix/rectification-wave-3. |
+| 2026-05-26T13:45:00Z | FULL-PLATFORM-QA-W6 | PASS | PASS | PASS | PASS | PASS | PASS | P0 sector-rotation 2yr fetch; panel empty state; heatmap legend overflow; 996 tests; net WR 53.79%; FULL_PLATFORM_QA doc; INSPECTION-WAVE-4. |
 
 ## Session History
 ### Session — 2026-05-26 — Expert Team & Commercialization (Cursor subagent)

@@ -112,6 +112,24 @@
 
 **Prod missing prior fix:** yes (`sortChartCandles.ts` not in `main`; lightweight-charts client sort + stricter `touchLast` only on branch).
 
+## Wave 6 — 2026-05-26 (full-platform QA)
+
+| Item | Fix | Verify |
+|------|-----|--------|
+| Sector rotation API empty scores | `fetchCloses` uses 2yr history; min 253 bars | Local API: 11 scores; `sector-rotation.test.ts` |
+| Rotation panel blank UI | Empty-state copy + `excludedSectors` hint | Component render |
+| Heatmap legend mobile clip | `overflow-x-auto` on legend | Visual / narrow viewport |
+| Full QA doc | `workspace/FULL_PLATFORM_QA_2026-05-26.md` | Teams Browser/Quant/UX/Fix |
+
+### Wave 6 verify
+
+| Check | Result |
+|-------|--------|
+| Tests | 996 passed |
+| Benchmark | gross 54.77%, net 53.79% |
+| Build | PASS |
+| Inspection | `reviews/INSPECTION-WAVE-4-2026-05-26.md` |
+
 ## Deferred (owner / next session)
 
 - F1.4 FRED RFR in engine Sharpe (Q-004)
