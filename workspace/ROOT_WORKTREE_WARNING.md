@@ -33,3 +33,7 @@ git clean -fd       # ONLY if you intend to remove untracked files — ask owner
 Use the canonical worktree — see `workspace/CANONICAL_WORKTREE.md`.
 
 Never commit fixes from root while `git status` shows mass `D` lines for core library paths.
+
+## rsync hazard (2026-05-26)
+
+**Never** run `rsync --delete` from `.claude/worktrees/competent-wu-a84629/` to the repo root: the worktree path lives **inside** the root tree, so `--delete` can wipe the worktree working copy. Use `rsync` with `--exclude='.claude'` and **without** `--delete`, or `git reset --hard` inside the worktree to recover.

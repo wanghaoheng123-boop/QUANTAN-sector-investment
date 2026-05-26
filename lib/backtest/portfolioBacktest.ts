@@ -14,7 +14,7 @@
  */
 
 import type { OhlcvRow } from '@/lib/backtest/dataLoader'
-import { enhancedCombinedSignal, DEFAULT_CONFIG } from '@/lib/backtest/signals'
+import { resolveBacktestSignal, DEFAULT_CONFIG } from '@/lib/backtest/signals'
 import type { BacktestConfig, SectorGateConfig } from '@/lib/backtest/signals'
 import { atrArray, sortinoRatio } from '@/lib/quant/indicators'
 import { maxCorrelationVsPeers, correlationAdjustedKelly } from '@/lib/quant/correlation'
@@ -34,7 +34,7 @@ export interface PortfolioConfig extends BacktestConfig {
   exit: ExitConfig
   /**
    * Per-ticker macro gate overrides. Phase 12-A: wires SECTOR_PROFILES into
-   * enhancedCombinedSignal so per-sector gates (golden cross, TLT/yield curve,
+   * resolveBacktestSignal (SSOT) so per-sector gates apply when enhanced flag is on.
    * threshold overrides) apply during portfolio backtests. Default: derived from
    * SECTOR_PROFILES on first call.
    */
@@ -256,7 +256,7 @@ export function runPortfolioBacktest(
       let signalAction: 'BUY' | 'HOLD' | 'SELL' = 'HOLD'
       try {
         // Phase 12-A: pass per-ticker sector gate
-        const sig = enhancedCombinedSignal(
+        const sig = resolveBacktestSignal(
           ticker, currentDate, price, closes, bars, ohlcv, cfg,
           sectorGateByTicker[ticker],
         )
@@ -355,7 +355,7 @@ export function runPortfolioBacktest(
         let sig
         try {
           // Phase 12-A: pass per-ticker sector gate
-          sig = enhancedCombinedSignal(
+          sig = resolveBacktestSignal(
             ticker, currentDate, price, closes, bars, ohlcv, cfg,
             sectorGateByTicker[ticker],
           )

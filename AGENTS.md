@@ -80,7 +80,7 @@ Goal: >80% selective signal accuracy across all market conditions. Bloomberg-lik
 - Vitest with 80% coverage thresholds
 - `lib/quant/indicators.ts` — canonical indicator source (SMA, EMA, RSI, MACD, BB, ATR, ADX, OBV, VWAP, StochRSI)
 - 10 test files in `__tests__/`
-- `scripts/benchmark-signals.mjs` — baseline: **56.35% win rate**
+- `scripts/benchmark-signals.ts` — SSOT benchmark (net WR floor ~53.29% CI; see `reviews/invariants-baseline.md` §1b)
 - `lib/qa/dataValidator.ts`, `lib/qa/signalTracker.ts`
 
 ### Phase 2 (merged PR #3)
@@ -247,7 +247,7 @@ app/monitor/page.tsx             — Rolling 30d win rate, signal heatmap, data 
 npm install           # first time only — worktree has no node_modules
 npm run test          # vitest run (Windows: node_modules/.bin/vitest.cmd run)
 npm run typecheck     # tsc --noEmit
-npm run benchmark     # scripts/benchmark-signals.mjs
+npm run benchmark     # scripts/benchmark-signals.ts (SSOT)
 ```
 
 ### API Route Pattern

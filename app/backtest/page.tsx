@@ -96,7 +96,7 @@ export default function BacktestPage() {
         <div className="text-center">
           <div className="w-8 h-8 border-2 border-slate-500 border-t-cyan-400 rounded-full animate-spin mx-auto mb-4" />
           <p className="text-slate-400 text-sm">Loading backtest data…</p>
-          <p className="text-slate-400 text-xs mt-1">Fetching 5Y history for 56 instruments</p>
+          <p className="text-slate-400 text-xs mt-1">Fetching 5Y history for 56 instruments (may take ~20s)</p>
         </div>
       </div>
     )
@@ -139,7 +139,7 @@ export default function BacktestPage() {
                 </div>
                 <div>
                   <h1 className="text-xl font-bold text-white">Institutional Backtest</h1>
-                  <p className="text-xs text-slate-400">5Y Walk-Forward · 56 Instruments · Long Only · 200EMA Regime Strategy</p>
+                  <p className="text-xs text-slate-400">5Y Walk-Forward · 56 Instruments · Long Only · Regime SSOT (200SMA zones)</p>
                 </div>
               </div>
             </div>
@@ -210,7 +210,7 @@ export default function BacktestPage() {
 
           {/* Strategy info bar */}
           <div className="flex flex-wrap gap-4 text-[11px] text-slate-500 border border-slate-800 rounded-lg px-4 py-2 bg-slate-900/40">
-            <span><span className="text-slate-400">Strategy:</span> 200EMA Deviation Regime + RSI/MACD/ATR%/BB% Confirmations</span>
+            <span><span className="text-slate-400">Strategy:</span> resolveBacktestSignal (regime dip-buy; enhanced in dev only)</span>
             <span><span className="text-slate-400">Capital:</span> $100,000 per instrument</span>
             <span><span className="text-slate-400">Stop Loss:</span> ATR-adaptive (1.5× ATR, 3–15%)</span>
             <span><span className="text-slate-400">Trailing Stop:</span> 2× ATR → break-even, 4× ATR → 1× ATR lock</span>

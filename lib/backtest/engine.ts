@@ -8,22 +8,12 @@ import { resolveBacktestSignal, DEFAULT_CONFIG, atr, type BacktestConfig } from 
 import { sortinoRatio } from '@/lib/quant/indicators'
 import { getRiskFreeRateSync } from '@/lib/quant/riskFreeRate'
 import { evaluateStopHit } from './exitRules'
+import { costBpsPerSide, DEFAULT_EXECUTION_COSTS } from './executionModel'
 
-// ─── Transaction cost model ─────────────────────────────────────────────────────
-// Applied per side (entry OR exit) to reflect realistic execution costs.
-// Source: Interactive Brokers ~$0.005/share + 0.05% spread + 0.5bps mid-price slippage
-// For a $100 stock: 0.005/100 = 0.005% commission + 0.05% spread + 0.05% slippage ≈ 0.11% = 11bps per side
-// Total round-trip cost = 22 bps (11 bps entry + 11 bps exit).
-//
-// TIERED MODEL (FIX E2/E3): Instrument-type spreads vary significantly.
-// Large-cap ETFs (SPY, QQQ, XLK): ~1-2 bps round-trip
-// Large-cap stocks (AAPL, MSFT): ~2-3 bps round-trip
-// Mid/small cap: ~8-15 bps round-trip
-// We use 11 bps per side as a conservative average for large/mid-caps.
-// For a more accurate model, use instrument-specific costs.
-export const TX_COST_BPS_PER_SIDE = 11  // basis points per side (entry OR exit)
-export const TX_COST_PCT_PER_SIDE = TX_COST_BPS_PER_SIDE / 10000  // as decimal
-// Total round-trip = 2 × TX_COST_PCT_PER_SIDE
+// ─── Transaction cost model (SSOT: lib/backtest/executionModel.ts) ───────────
+/** Basis points per side (entry OR exit); matches benchmark label net costs. */
+export const TX_COST_BPS_PER_SIDE = costBpsPerSide(DEFAULT_EXECUTION_COSTS)
+export const TX_COST_PCT_PER_SIDE = TX_COST_BPS_PER_SIDE / 10000
 
 export interface OhlcvRow extends OhlcBar {
   time: number

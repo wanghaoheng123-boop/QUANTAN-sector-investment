@@ -1,3 +1,4 @@
+import { appBaseUrl } from '@/lib/appUrl'
 import { SECTORS } from '@/lib/sectors'
 import LiveBriefClient from './LiveBriefClient'
 
@@ -10,7 +11,7 @@ interface Props {
 async function getBriefData(slug: string) {
   try {
     const res = await fetch(
-      `https://antigravity-sectors.vercel.app/api/briefs/${encodeURIComponent(slug)}`,
+      `${appBaseUrl()}/api/briefs/${encodeURIComponent(slug)}`,
       { cache: 'no-store' }
     )
     if (!res.ok) return null

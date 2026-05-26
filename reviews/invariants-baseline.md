@@ -26,9 +26,24 @@ Avg Win Rate per Instrument: 58.57%
 Avg 20d Return per Signal: 1.409%
 ```
 
-**Floor:** **56.35%** aggregate WR (unchanged from Phase 13). Hard regression-block in CI: any PR that drops aggregate WR below 55.85% is auto-rejected (once Q-001 wires the CI gate). Drops between 55.85% and 56.35% require C2 sign-off.
+**Floor (legacy, superseded):** **56.35%** aggregate WR from Phase 13 `benchmark-signals.mjs` inline signal. **Do not use for CI after 2026-05-26.**
 
-**Re-freeze trigger:** When Q-004 (FRED RFR) and Q-021 (B&H dividend-aware) land in Phase 15 S2, C2 will re-run benchmark on the post-merge tip and amend this row. Until then the pre-FRED floor stands.
+**Re-freeze trigger:** When Q-004 (FRED RFR) and Q-021 (B&H dividend-aware) land in Phase 15 S2, C2 will re-run benchmark on the post-merge tip and amend §1b. Legacy §1 preserved for audit.
+
+## 1b. SSOT label benchmark — frozen 2026-05-26 (production regime-only)
+
+```
+$ npm run benchmark   # scripts/benchmark-signals.ts, QUANTAN_USE_ENHANCED_SIGNAL=0
+=== BENCHMARK RESULTS (SSOT) ===
+Aggregate Win Rate (gross label): 54.77%
+Aggregate Win Rate (net after costs): 53.79%
+Expectancy gross/net: 1.3577% / 1.1377%
+Round-trip cost: 22 bps (lib/backtest/executionModel.ts)
+```
+
+**CI hard floor (net label WR):** **53.29%** (50 bps below frozen 53.79%). **Soft reference (gross):** 54.77% frozen; warn below 54.27%.
+
+**Why re-baselined:** Prior §1 measured a **different** inline `generateSimpleSignal()` (~57%). SSOT now gates `resolveBacktestSignal()` (regime-only) + net costs — honest production path. **No metric gaming** to restore 55%+ without real signal improvement.
 
 ## 2. Portfolio backtest — captured 2026-05-23 (Q-002 closed)
 
@@ -88,9 +103,10 @@ Total test cases: 816 (was 798 on 2026-05-23; 279 in Phase 13 S1)
 ## 6. Reproducibility check
 
 ```bash
-node scripts/benchmark-signals.mjs > /tmp/run1
-node scripts/benchmark-signals.mjs > /tmp/run2
+npm run benchmark > /tmp/run1
+npm run benchmark > /tmp/run2
 diff /tmp/run1 /tmp/run2     # must be identical, modulo timestamps
+# (benchmark-signals.mjs is a thin wrapper to benchmark-signals.ts)
 ```
 
 Verified deterministic at Phase 13 S1 and Phase 14 closure (PR #16). Phase 15 reruns this at each sprint exit.

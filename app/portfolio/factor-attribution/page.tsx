@@ -14,6 +14,7 @@ export default function FactorAttributionPage() {
   return (
     <main className="max-w-3xl mx-auto px-4 py-8 space-y-4">
       <h1 className="text-2xl font-semibold text-slate-100">Factor attribution</h1>
+      <p className="text-sm text-amber-200/80 border border-amber-500/30 rounded-lg p-3">{attr.disclaimer}</p>
       <p className="text-sm text-slate-400">5-factor loadings (demo series). Monthly report export in Phase 16.</p>
       <ul className="text-sm text-slate-200 space-y-1">
         {Object.entries(attr.loadings).map(([k, v]) => (
@@ -22,7 +23,9 @@ export default function FactorAttributionPage() {
           </li>
         ))}
       </ul>
-      <p className="text-xs text-slate-500">Alpha (daily): {attr.alpha.toFixed(5)} · R² proxy: {attr.rSquared.toFixed(2)}</p>
+      <p className="text-xs text-slate-500">
+        Alpha (daily): {attr.alpha.toFixed(5)} · R²: {attr.rSquared != null ? attr.rSquared.toFixed(2) : 'N/A (multivariate OLS deferred)'}
+      </p>
     </main>
   )
 }

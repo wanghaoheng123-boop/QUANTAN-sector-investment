@@ -45,11 +45,16 @@ export interface FactorReturns {
   QMJ: number[]
 }
 
+export type FactorAttributionMethodology = 'naive_univariate_proxy'
+
 export interface FactorAttribution {
   ticker: string
   loadings: Record<keyof FactorReturns, number>
   alpha: number
-  rSquared: number
+  /** Null — not a real OLS R²; multivariate OLS deferred (Phase 16+). */
+  rSquared: number | null
+  methodology: FactorAttributionMethodology
+  disclaimer: string
 }
 
 export function regressFactorLoadings(
@@ -59,8 +64,10 @@ export function regressFactorLoadings(
   const n = Math.min(assetReturns.length, factors.MKT.length)
   const names = ['MKT', 'SMB', 'HML', 'MOM', 'QMJ'] as const
   const loadings = { MKT: 0, SMB: 0, HML: 0, MOM: 0, QMJ: 0 }
+  const disclaimer =
+    'Naive univariate factor betas — not Fama-French / Carhart attribution. Do not use for institutional reporting.'
   if (n < 10) {
-    return { ticker: '', loadings, alpha: 0, rSquared: 0 }
+    return { ticker: '', loadings, alpha: 0, rSquared: null, methodology: 'naive_univariate_proxy', disclaimer }
   }
   // Simple univariate proxy per factor (full multivariate OLS deferred to Phase 16).
   for (const name of names) {
@@ -70,7 +77,14 @@ export function regressFactorLoadings(
   }
   const mktBeta = loadings.MKT
   const alpha = mean(assetReturns.slice(-n)) - mktBeta * mean(factors.MKT.slice(-n))
-  return { ticker: '', loadings, alpha, rSquared: Math.min(0.95, Math.abs(mktBeta) * 0.5) }
+  return {
+    ticker: '',
+    loadings,
+    alpha,
+    rSquared: null,
+    methodology: 'naive_univariate_proxy',
+    disclaimer,
+  }
 }
 
 function mean(xs: number[]): number {

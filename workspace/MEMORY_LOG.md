@@ -10,13 +10,32 @@ _None_
 | 2026-04-28T09:40:00Z | TASK-001 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING | Bootstrapped workspace tracking files and started implementation. |
 | 2026-04-28T10:18:00Z | TASK-001 | PASS | BLOCKED | PASS | PASS | PASS | PASS | UI/API/algo/audit waves completed. Typecheck blocked by invalid node_modules/typescript package config; vitest and benchmark scripts exited 0 via node entrypoint. |
 | 2026-05-26T17:10:00Z | TASK-PR19-VERIFY | PASS | PASS | PASS | PASS | PASS | PASS | Canonical worktree audit: typecheck clean, 976 tests, WR 57.26%. Root mass-deletions documented; PR #19 code already on 5c9d6fb. |
+| 2026-05-26T17:20:00Z | P0-PR-STACK | PASS | PASS | PASS | PASS | PASS | PASS | Merged #17–#21+#20; main 2ee18e3; 982 tests; WR 57.26%; smoke PASS. |
+| 2026-05-26T17:30:00Z | EXPERT-TEAM-PROGRAM | PASS | PASS | PASS | PASS | PASS | PASS | chore/expert-team-program 5922bca: inspection docs, OSS benchmark, scenario Taylor P&L, factor r² null, next 14.2.35, nightly CI, quantlab partial, smoke→quantan. |
+| 2026-05-26T17:38:00Z | PLAN-EXEC-DRIVE-ROOT | PASS | PASS | PASS | PASS | PASS | PASS | DEVELOPMENT_PLAN P0 verify + root sync from worktree; WR 57.26%; 965+17 tests; smoke PASS; fixed corrupted reviews/; worktree recovered after rsync mishap. |
+| 2026-05-26T18:15:00Z | EXPERT-TEAM-W2 | PASS | PASS | PASS | PASS | PASS | PASS | Created workspace/QUANTAN_EXPERT_TEAM_COMMERCIALIZATION.md; Q-065 lib/appUrl + briefs fix + 3 tests at Drive root. |
+| 2026-05-26T17:45:00Z | FULL-VERIFY-MANDATE | PASS | PASS | PASS | PASS | PASS | PASS | Worktree+root: 982 tests, build PASS, WR 57.26%, smoke PASS; briefs list appBaseUrl; root sqlite rebuild; QuantLab 1410 LOC open. |
+| 2026-05-26T18:00:00Z | INSPECTION-W1-Q053 | PASS | PASS | PASS | PASS | PASS | PASS | Q-053: QuantLab 148 LOC shell; W1-002/003 closed; F5.2 FIXED; 982 tests; WR 57.26%; synced to Drive root uncommitted. |
+| 2026-05-26T20:30:00Z | REAL-WORLD-VALIDITY-CRITIQUE | PASS | N/A | PASS | PASS | PASS | PASS | Doc-only: workspace/REAL_WORLD_VALIDITY_CRITIQUE_2026-05-26.md — 3 signal paths; CI WR ≠ live; production parity NO. |
+| 2026-05-26T18:25:00Z | SIGNAL-SSOT-REMEDIATION | PASS | PASS | PASS | PASS | PASS | PASS | resolveBacktestSignal SSOT; live+benchmark+portfolio aligned; 984 tests; honest WR 54.77% gross / 53.79% net; OOS gap 6.93pp on 12-name slice. |
+| 2026-05-26T18:30:00Z | PLATFORM-RECTIFICATION-W1 | PASS | PASS | PASS | PASS | PASS | PASS | CI net floor 53.29%; engine→executionModel; invariants §1b; RECTIFICATION_LOG; 987 tests; benchmark PASS; enhanced warns only. |
+| 2026-05-26T10:46:00Z | RECTIFICATION-WAVE-2 | PASS | PASS | PASS | PASS | PASS | PASS | Browser E2E; appBaseUrl dev fix; honest copy; deleted mjs+stale handoff; 991 tests; INSPECTION-WAVE-2; smoke PASS. |
+| 2026-05-26T18:52:00Z | RECTIFICATION-WAVE-3 | PASS | PASS | PASS | PASS | PASS | PASS | Vercel single-project docs; README quantan URL; delete scripts/backtest/dataLoader; vercel link quantan; 991 tests; net WR 53.79%; smoke PASS; branch fix/rectification-wave-3. |
 
 ## Session History
+### Session — 2026-05-26 — Expert Team & Commercialization (Cursor subagent)
+**Program SSOT:** `workspace/QUANTAN_EXPERT_TEAM_COMMERCIALIZATION.md` (consolidates DEVELOPMENT_PLAN, CONTINUOUS_IMPROVEMENT_LOOP § Commercialization, INSPECTION-WAVE-1, OSS-BENCHMARK).
+**Prior work:** `chore/expert-team-program` @ `5922bca` (worktree); P0 merged on `main` @ `2ee18e3`.
+**This session:** Q-065 — `lib/appUrl.ts`, briefs sector page uses `appBaseUrl()`, `__tests__/lib/appUrl.test.ts`; updated INSPECTION-WAVE-1 + findings ledger W1-001; VERCEL_OPERATIONS smoke notes corrected.
+**Verify:** typecheck + vitest at Drive root (see SESSION_STATE last_inspection).
+**Next:** merge expert-team branch; owner FRED prewarm; Q-053 QuantLab decomp.
+
 ### Session — 2026-05-26 — P0 PR stack merge (Cursor subagent)
-**Canonical:** `.claude/worktrees/competent-wu-a84629` · main @ `5149954` after merges
-**Merged:** #17 `88f2c8f` · #18 `ee3e3ee` · #19 `a0bb302` (retargeted to main, rebased, CI green) · #21 `5149954` · #20 pending conflict resolution
-**Owner action:** Set `QUANTAN_FRED_PREWARM=1` on Vercel quantan Production + redeploy
-**Blockers:** Drive repo root stale (mass deletions uncommitted)
+**Canonical:** `.claude/worktrees/competent-wu-a84629` · main @ `2ee18e3`
+**Merged:** #17 `88f2c8f` · #18 `ee3e3ee` · #19 `a0bb302` (retarget→main, rebase, CI run 26443146355 all green) · #21 `5149954` · #20 `2ee18e3`
+**Verify:** typecheck PASS · 982 tests / 78 files · benchmark WR **57.26%** · smoke PASS on https://quantan.vercel.app
+**Owner action (required):** Vercel **quantan** Production → set `QUANTAN_FRED_PREWARM=1` → redeploy
+**Blockers:** Drive repo root stale at `3870751` (resolved by fix/rectification-wave-3 merge)
 
 ### Session — 2026-05-26 — Fix-it audit (Cursor subagent, PR #19 branch)
 **Canonical:** `.claude/worktrees/competent-wu-a84629` · `fix/backtest-live-signals-guards` @ `5c9d6fb`

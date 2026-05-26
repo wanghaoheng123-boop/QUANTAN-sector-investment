@@ -293,7 +293,7 @@ export default function HomePage() {
                 <h2 className="text-lg font-bold text-white">Institutional Backtest Dashboard</h2>
               </div>
               <p className="text-sm text-slate-400 max-w-lg">
-                5Y walk-forward backtest across all 11 sectors (55 stocks) + BTC. 200EMA deviation regime strategy with RSI/MACD/ATR/BB confirmations, Half-Kelly position sizing, and 10% stop-loss.
+                5Y walk-forward backtest across 56 instruments (11 GICS sectors + BTC). Regime dip-buy vs 200SMA (SSOT: resolveBacktestSignal), ATR-adaptive stops, and half-Kelly sizing — label WR ~55% gross / ~54% net after costs (not a live accuracy guarantee).
               </p>
             </div>
             <Link

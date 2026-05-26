@@ -72,6 +72,30 @@ export interface ScenarioResult {
   greeks: { delta: number; gamma: number; vega: number; theta: number; rho: number }
 }
 
+/**
+ * Position-level Taylor P&L (1 day horizon, vol in decimal IV space).
+ * Greeks are assumed pre-weighted per contract × shares when provided;
+ * equity-only rows use delta = shares (dollar delta per $1 move in spot).
+ */
+function positionScenarioPnl(p: PositionStub, shock: ScenarioShock): number {
+  const dS = p.price * shock.spotPct
+  const dVol = shock.volPct
+  const dT = 1 / 252
+  const dR = shock.rateBps / 10_000
+  const delta = p.delta ?? p.shares
+  const gamma = p.gamma ?? 0
+  const vega = p.vega ?? 0
+  const theta = p.theta ?? 0
+  const rho = p.rho ?? 0
+  return (
+    delta * dS
+    + 0.5 * gamma * dS * dS
+    + vega * dVol
+    + theta * dT
+    + rho * dR
+  )
+}
+
 export function runScenario(positions: PositionStub[], shock: ScenarioShock): ScenarioResult {
   let pnl = 0
   let nav = 0
@@ -79,13 +103,12 @@ export function runScenario(positions: PositionStub[], shock: ScenarioShock): Sc
   for (const p of positions) {
     const mv = p.shares * p.price
     nav += mv
-    const dS = p.price * shock.spotPct
-    pnl += p.shares * dS
-    g.delta += (p.delta ?? p.shares) * (1 + shock.spotPct)
-    g.gamma += (p.gamma ?? 0) * shock.spotPct ** 2
-    g.vega += (p.vega ?? 0) * shock.volPct
+    pnl += positionScenarioPnl(p, shock)
+    g.delta += p.delta ?? p.shares
+    g.gamma += p.gamma ?? 0
+    g.vega += p.vega ?? 0
     g.theta += p.theta ?? 0
-    g.rho += (p.rho ?? 0) * (shock.rateBps / 10000)
+    g.rho += p.rho ?? 0
   }
   return {
     scenarioId: shock.id,

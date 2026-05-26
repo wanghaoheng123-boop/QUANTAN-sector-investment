@@ -44,7 +44,7 @@ F4.9,R4,MEDIUM,data-engineering,app/api/prices/route.ts,75,edge-cache 3s + stale
 F4.10,R4,MEDIUM,data-engineering,app/api/prices/route.ts,30,^VIX normalization incomplete,N/A,AT-F4.10-index-symbols,E3,S2,FIXED-c7340323+
 F4.11,R4,LOW,data-engineering,app/api/prices/route.ts,70,dataSources.yahoo hardcoded true,N/A,AT-F4.11-yahoo-detect,E3,S2,FIXED-c7340323+
 F5.1,R5,CRITICAL,frontend-architecture,components/KLineChart.tsx,147-220,indicator math reimplemented inline; SSOT violation,N/A (SSOT),AT-F5.1-chart-canonical-indicators,E2,S2,FIXED-c7fa7902+
-F5.2,R5,HIGH,frontend-architecture,components/stock/QuantLabPanel.tsx,173-1535,1362-line single function,Martin (2008) Clean Code,AT-F5.2-quantlab-decompose,E2,S3,open
+F5.2,R5,HIGH,frontend-architecture,components/stock/QuantLabPanel.tsx,173-1535,1362-line single function,Martin (2008) Clean Code,AT-F5.2-quantlab-decompose,E2,S3,FIXED-Q-053-2026-05-26
 F5.3,R5,HIGH,frontend-architecture,app/backtest/page.tsx,"73, 415, 556, 664",page-as-application; 4 panels colocated,N/A (architecture),AT-F5.3-backtest-decompose,E2,S3,open
 F5.4,R5,HIGH,frontend-architecture,(4 files),4 silent .catch(()=>{}) replaced with diagnostic console.warn,Phase 12 H5,AT-F5.4-zero-silent-catch,E2,S2,FIXED-c7340323+
 F5.5,R5,MEDIUM,frontend-architecture,components/**/*.tsx,various,37 inline styles; no design tokens,N/A,AT-F5.5-design-tokens,E2,S3,open
@@ -89,3 +89,6 @@ F3.9,R3,HIGH,options,lib/options/chain.ts,66,RISK_FREE_RATE hardcoded 5.25% for 
 F1.22,R1,MEDIUM,quant-finance,lib/backtest/exitRules.ts,80-82,atrAdaptiveStop includes still-forming entry bar (look-ahead micro-bias),N/A (Phase 12 H3 class),AT-F1.22-atr-prior-bar,E1,S2,open
 F1.23,R1,LOW,quant-finance,lib/backtest/exitRules.ts,33-40,DEFAULT_EXIT_CONFIG magic numbers without citation,N/A (documentation),AT-F1.23-exit-config-doc,E1,S3,open
 F-NEW-MACD,R2,HIGH,indicators,lib/quant/indicators.ts,184,MACD signal line was offset by sig-1 bars; last 8 bars always NaN — silently disabled MACD weight in signal layer,Appel (1979),AT-FNEW-macd-offset,E1,S2,FIXED
+W2-001,Cursor,HIGH,frontend,lib/appUrl.ts,1-12,briefs SSR used production URL in local dev when NEXT_PUBLIC_APP_URL unset,N/A,AT-W2-appurl-dev,E5,S2,FIXED
+W2-002,Cursor,MEDIUM,frontend,"app/page.tsx; app/backtest/page.tsx",—,UI copy implied 200EMA/57% accuracy vs SSOT honest metrics,SIGNAL_SSOT.md,AT-W2-honest-copy,E5,S2,FIXED
+W2-003,Cursor,LOW,testing,scripts/benchmark-signals.mjs,—,deprecated mjs wrapper duplicated npm run benchmark entry,SIGNAL_SSOT.md,AT-W2-benchmark-ts,E1,S2,FIXED

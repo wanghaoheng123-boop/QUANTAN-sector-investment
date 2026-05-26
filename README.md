@@ -61,7 +61,7 @@ Bloomberg does **not** offer a public REST API for browser or serverless apps. T
 
 ### Deploy (Vercel)
 
-**Production URL:** [https://antigravity-sectors.vercel.app](https://antigravity-sectors.vercel.app) (updates automatically when you push to GitHub `main`).
+**Production URL:** [https://quantan.vercel.app](https://quantan.vercel.app) (updates automatically when you push to GitHub `main`; Vercel project name **`quantan`**).
 
 **Source control and hosting:** Only **GitHub** (this repo) and **Vercel** (linked via the Vercel GitHub App). There is **no** Alibaba Cloud / ECS / secondary server sync. Deployments are triggered by pushes to `main`; Vercel clones the commit and builds on Vercel's runners.
 
@@ -69,7 +69,7 @@ Bloomberg does **not** offer a public REST API for browser or serverless apps. T
 
 1. Push this folder to a GitHub repository (see below).
 2. In [Vercel](https://vercel.com), keep the project **Git-linked** to that repo so every push to `main` triggers a production build.
-3. In **Vercel -> Project -> Settings -> Environment Variables**, add the same keys as `.env.example`. Set **`NEXTAUTH_URL`** to `https://antigravity-sectors.vercel.app` (or your custom domain) and **`NEXTAUTH_SECRET`** (e.g. `openssl rand -base64 32`). Without `NEXTAUTH_SECRET`, sign-in routes may error in production.
+3. In **Vercel -> Project (`quantan`) -> Settings -> Environment Variables**, add the same keys as `.env.example`. Set **`NEXTAUTH_URL`** to `https://quantan.vercel.app` (or your custom domain) and **`NEXTAUTH_SECRET`** (e.g. `openssl rand -base64 32`). Without `NEXTAUTH_SECRET`, sign-in routes may error in production.
 
 ### LLM Multi-Agent Analysis (TradingAgents)
 
@@ -186,7 +186,7 @@ Operational notes:
 (`origin`). To publish updates from your PC (PowerShell):
 
 ```powershell
-cd "path\to\antigravity-sectors"
+cd "path\to\QUANTAN-sector-investment"
 $env:Path = "C:\Program Files\Git\cmd;C:\Program Files\nodejs;" + $env:Path
 git add -A
 git status
@@ -198,7 +198,7 @@ If `git push` asks for credentials, use a [GitHub Personal Access Token](https:/
 
 **Connect Cursor to GitHub:** in Cursor, open **Settings** (gear) -> **Account** -> sign in with GitHub (or **Cursor Settings -> Git**). After that you can use the **Source Control** sidebar to commit/push, open PRs from the editor, and use features that need your GitHub identity.
 
-**Windows + synced `G:` drive:** if `npm install` fails on a cloud drive, run `.\scripts\sync-to-local-build.ps1 -Install -Dev` and develop from the copy under `%LOCALAPPDATA%\Temp\antigravity-sectors-build`, then commit from the `G:` folder (or make the temp folder your Cursor workspace and push from there).
+**Windows + synced `G:` drive:** if `npm install` fails on a cloud drive, run `.\scripts\sync-to-local-build.ps1 -Install -Dev` and develop from the copy under `%LOCALAPPDATA%\Temp\quantan-sector-build`, then commit from the `G:` folder (or make the temp folder your Cursor workspace and push from there).
 
 Add a **Security** policy if you accept third-party contributions.
 

@@ -28,7 +28,7 @@ No Alibaba Cloud, ECS, or secondary sync target is used. Source of truth is **Gi
 1. **Git:** Project connected to `wanghaoheng123-boop/QUANTAN-sector-investment`, production branch `main`.
 2. **Environment variables (Production):**
    - `NEXTAUTH_SECRET` — required for NextAuth (e.g. `openssl rand -base64 32`).
-   - `NEXTAUTH_URL` — your production URL (e.g. `https://antigravity-sectors.vercel.app` or custom domain).
+   - `NEXTAUTH_URL` — your production URL (e.g. `https://quantan.vercel.app` or custom domain).
    - `TRADING_AGENTS_BASE` — optional, for LLM / TradingAgents features.
 3. **Build logs:** Vercel → Project → Deployments → select deployment → Build log.
 

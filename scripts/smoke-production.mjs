@@ -5,7 +5,7 @@
  * Or: SMOKE_BASE_URL=http://localhost:3000 node scripts/smoke-production.mjs
  * Extended (+ fundamentals): SMOKE_EXTENDED=1 npm run check:smoke:local:extended
  */
-const base = (process.env.SMOKE_BASE_URL || 'https://antigravity-sectors.vercel.app').replace(/\/$/, '')
+const base = (process.env.SMOKE_BASE_URL || 'https://quantan.vercel.app').replace(/\/$/, '')
 
 async function getJson(path) {
   const url = `${base}${path}`

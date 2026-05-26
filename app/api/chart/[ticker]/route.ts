@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import YahooFinance from 'yahoo-finance2'
 import { generateDarkPoolMarkers } from '@/lib/mockData'
 import { aggregateMinuteQuotesToN } from '@/lib/chartYahoo'
+import { sortChartCandles } from '@/lib/sortChartCandles'
 import { applyRateLimit } from '@/lib/api/rateLimit'
 import { normalizeTicker, sanitizeError } from '@/lib/api/sanitize'
 
@@ -87,14 +88,16 @@ export async function GET(
           result3.quotes as unknown as Parameters<typeof aggregateMinuteQuotesToN>[0],
           3,
         )
-        const candles = agg.map((c) => ({
-          time: c.time,
-          open: c.open,
-          high: c.high,
-          low: c.low,
-          close: c.close,
-          volume: c.volume,
-        }))
+        const candles = sortChartCandles(
+          agg.map((c) => ({
+            time: c.time,
+            open: c.open,
+            high: c.high,
+            low: c.low,
+            close: c.close,
+            volume: c.volume,
+          })),
+        )
         const darkPoolMarkers = generateDarkPoolMarkers(
           // Phase 14 wave 29: `as any` removed after generateDarkPoolMarkers
           // accepted `time: string | number`.
@@ -192,15 +195,24 @@ export async function GET(
     //   2. Defensive Date coercion — Yahoo occasionally returns a number
     //      or string for `c.date` (older library versions, schema drift).
     //      Use new Date(...) which accepts Date | number | string.
-    const candles = result.quotes
-      .filter((c: any) => Number.isFinite(c?.close))
-      .map((c: any) => {
-        const d = c.date instanceof Date ? c.date : new Date(c.date)
-        const timeVal = isIntraday
-          ? Math.floor(d.getTime() / 1000)
-          : d.toISOString().split('T')[0]
-        return { time: timeVal, open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume }
-      })
+    const candles = sortChartCandles(
+      result.quotes
+        .filter((c: any) => Number.isFinite(c?.close))
+        .map((c: any) => {
+          const d = c.date instanceof Date ? c.date : new Date(c.date)
+          const timeVal = isIntraday
+            ? Math.floor(d.getTime() / 1000)
+            : d.toISOString().split('T')[0]
+          return {
+            time: timeVal,
+            open: c.open,
+            high: c.high,
+            low: c.low,
+            close: c.close,
+            volume: c.volume ?? 0,
+          }
+        }),
+    )
 
     const darkPoolMarkers = generateDarkPoolMarkers(
       // Phase 14 wave 29: `as any` removed — generateDarkPoolMarkers accepts string | number.

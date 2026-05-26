@@ -5,7 +5,7 @@ import { Rocket, ExternalLink, Copy, Check, X, CheckCircle2 } from 'lucide-react
 import { useDialogA11y } from '@/hooks/useDialogA11y'
 
 /** Subfolder that contains `server_trading_agents.py` when the Git repo is the monorepo root. */
-const DEFAULT_ROOT_DIR = 'antigravity-sectors'
+const DEFAULT_ROOT_DIR = 'QUANTAN-sector-investment'
 
 const RAILWAY_NEW = 'https://railway.app/new'
 const RAILWAY_DOCS_PYTHON = 'https://docs.railway.app/guides/languages/python'

@@ -399,7 +399,7 @@ const WEIGHT_PROFILES: Record<string, { rsi: number; macd: number; atr: number; 
  * as accumulation territory (institutional buyers absorbing supply) and
  * above-VA as distribution territory; the asymmetric weights bias the
  * confluence score toward dip-buying, which historically produces the
- * platform's institutional-grade win rate.
+ * dip-buy bias in the confluence score (see SIGNAL_SSOT.md for honest WR metrics).
  *
  * For TREND-FOLLOWING regimes (high ADX), an above-VA breakout is
  * bullish, not bearish. The current implementation does not flip the

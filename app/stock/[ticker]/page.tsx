@@ -73,6 +73,7 @@ export default function StockPage({ params }: { params: { ticker: string } }) {
   const [activeRange, setActiveRange]   = useState('1Y')
   const [activeIndicator, setActiveIndicator] = useState('ema')
   const [loading, setLoading]           = useState(true)
+  const [chartError, setChartError]     = useState<string | null>(null)
   // Indicator visibility state — synced from KLineChart via onIndicatorsChange
   // Both activeIndicator (preset) and vis (individual toggles) feed into indicatorConfig
   const [vis, setVis] = useState<Record<VisKey, boolean>>(() => buildVisFromIndicatorPreset('ema'))
@@ -119,18 +120,32 @@ export default function StockPage({ params }: { params: { ticker: string } }) {
   // Stable callbacks — defined with useCallback to avoid stale closures
   const fetchChartData = useCallback((range: string) => {
     setLoading(true)
+    setChartError(null)
     fetch(`/api/chart/${encodeURIComponent(ticker)}?range=${encodeURIComponent(range)}`)
       .then((r) => {
         if (!r.ok) return Promise.reject(new Error(`HTTP ${r.status}`))
         return r.json()
       })
       .then((data) => {
-        if (data.candles) {
+        if (data.error) {
+          throw new Error(typeof data.error === 'string' ? data.error : 'Chart data unavailable')
+        }
+        if (data.candles?.length) {
           setCandles(data.candles)
           setDarkPoolMarkers(data.darkPoolMarkers ?? [])
+        } else {
+          setCandles([])
+          setDarkPoolMarkers([])
+          setChartError('No historical data returned for this range')
         }
       })
-      .catch((e) => console.error('[Chart] Error:', e))
+      .catch((e) => {
+        const msg = e instanceof Error ? e.message : 'Chart fetch failed'
+        console.error('[Chart] Error:', e)
+        setChartError(msg)
+        setCandles([])
+        setDarkPoolMarkers([])
+      })
       .finally(() => setLoading(false))
   }, [ticker])
 
@@ -410,6 +425,18 @@ export default function StockPage({ params }: { params: { ticker: string } }) {
                     <div className="h-[480px] bg-slate-800/20 rounded-xl animate-pulse flex flex-col items-center justify-center border border-slate-800/50">
                       <span className="text-slate-500 text-sm font-mono mb-2">Connecting to Data Feed...</span>
                     </div>
+                  ) : chartError ? (
+                    <div className="h-[480px] bg-slate-800/10 rounded-xl flex flex-col items-center justify-center gap-3 border border-dashed border-amber-500/30">
+                      <span className="text-amber-400/90 text-sm font-medium">Chart unavailable</span>
+                      <p className="text-slate-500 text-xs font-mono max-w-md text-center px-4">{chartError}</p>
+                      <button
+                        type="button"
+                        onClick={() => fetchChartData(activeRange)}
+                        className="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 text-xs hover:border-cyan-500/40 hover:text-cyan-400"
+                      >
+                        Retry chart
+                      </button>
+                    </div>
                   ) : candles.length > 0 ? (
                     <ChartErrorBoundary label={ticker} fallbackHeight={480}>
                       <KLineChart
@@ -419,14 +446,22 @@ export default function StockPage({ params }: { params: { ticker: string } }) {
                         color={color}
                         ticker={ticker}
                         range={activeRange}
+                        hideTimeframeSelector
                         showRSI
                         indicators={indicatorConfig}
                         onIndicatorsChange={handleVisChange}
                       />
                     </ChartErrorBoundary>
                   ) : (
-                    <div className="h-[480px] bg-slate-800/10 rounded-xl flex items-center justify-center border border-dashed border-slate-800">
+                    <div className="h-[480px] bg-slate-800/10 rounded-xl flex flex-col items-center justify-center gap-3 border border-dashed border-slate-800">
                       <span className="text-slate-400 text-sm">No historical data available for {ticker}</span>
+                      <button
+                        type="button"
+                        onClick={() => fetchChartData(activeRange)}
+                        className="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 text-xs hover:border-cyan-500/40 hover:text-cyan-400"
+                      >
+                        Retry chart
+                      </button>
                     </div>
                   )}
                 </div>

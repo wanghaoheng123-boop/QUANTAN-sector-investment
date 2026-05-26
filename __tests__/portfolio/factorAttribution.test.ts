@@ -26,7 +26,8 @@ describe('regressFactorLoadings (Q-044-NEW — naive proxy)', () => {
     expect(result.loadings.MOM).toBe(0)
     expect(result.loadings.QMJ).toBe(0)
     expect(result.alpha).toBe(0)
-    expect(result.rSquared).toBe(0)
+    expect(result.rSquared).toBeNull()
+    expect(result.methodology).toBe('naive_univariate_proxy')
   })
 
   it('zero-variance factors yield zero betas (no division-by-zero)', () => {
@@ -76,21 +77,11 @@ describe('regressFactorLoadings (Q-044-NEW — naive proxy)', () => {
     expect(result.alpha).toBeCloseTo(0.001, 4)
   })
 
-  it('rSquared is a fabricated heuristic, NOT a real R²', () => {
-    // Identical series → univariate β_MKT = 1 → rSquared = min(0.95, 0.5) = 0.5
-    // (Real R² for asset=MKT would be 1.0; the heuristic produces 0.5.)
+  it('rSquared is null (real multivariate R² deferred)', () => {
     const mkt = Array.from({ length: 50 }, (_, i) => Math.cos(i) * 0.01)
     const factors: FactorReturns = { MKT: mkt, SMB: flat(0, 50), HML: flat(0, 50), MOM: flat(0, 50), QMJ: flat(0, 50) }
     const result = regressFactorLoadings(mkt, factors)
-    expect(result.rSquared).toBe(0.5)
-  })
-
-  it('rSquared is capped at 0.95 for high |β_MKT|', () => {
-    // Univariate β_MKT for asset = 5 × MKT is 5 (cov/var = 5/1 = 5) → heuristic = min(0.95, 2.5) = 0.95
-    const mkt = Array.from({ length: 50 }, (_, i) => Math.cos(i) * 0.01)
-    const asset = mkt.map((x) => x * 5)
-    const factors: FactorReturns = { MKT: mkt, SMB: flat(0, 50), HML: flat(0, 50), MOM: flat(0, 50), QMJ: flat(0, 50) }
-    const result = regressFactorLoadings(asset, factors)
-    expect(result.rSquared).toBe(0.95)
+    expect(result.rSquared).toBeNull()
+    expect(result.disclaimer).toContain('not Fama-French')
   })
 })

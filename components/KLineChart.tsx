@@ -30,6 +30,7 @@ import {
   vwapArray,
   type OhlcBar,
 } from '@/lib/quant/indicators'
+import { chartTimeKey, sortChartCandles } from '@/lib/sortChartCandles'
 
 const TIMEFRAMES = ['1D', '1W', '1M', '3M', '6M', '1Y', 'ALL'] as const
 type Timeframe = typeof TIMEFRAMES[number]
@@ -89,8 +90,10 @@ interface KLineChartProps {
   /** Fires whenever a user toggles an indicator via the chart overlay buttons.
    *  Use this to sync the external indicator selection state (e.g. for a side panel). */
   onIndicatorsChange?: (vis: Record<VisKey, boolean>) => void
-  /** Callback when user selects a timeframe */
+  /** Callback when user selects a timeframe (only when built-in selector is shown) */
   onTimeframeChange?: (tf: Timeframe) => void
+  /** When set, parent page controls range via its own toolbar — hide duplicate timeframe row */
+  hideTimeframeSelector?: boolean
 }
 
 const DEFAULT_INDICATORS: Required<KLineIndicatorFlags> = {
@@ -240,6 +243,7 @@ export default function KLineChart({
   indicators: indicatorsIn,
   onIndicatorsChange,
   onTimeframeChange,
+  hideTimeframeSelector,
 }: KLineChartProps) {
   // R5-M-1 (Phase 14): warn when a caller passes a partial `indicators`
   // object. The spread below silently fills missing keys with defaults,
@@ -293,8 +297,11 @@ export default function KLineChart({
   /** Bumped when async chart `init()` finishes so the data effect runs after `candleRef` exists. */
   const [chartReadyGen, setChartReadyGen] = useState(0)
   const [selectedTimeframe, setSelectedTimeframe] = useState<Timeframe>('3M')
+  const showBuiltinTimeframes = hideTimeframeSelector !== true && onTimeframeChange != null
 
   const indicators = indicatorsProp
+
+  const sortedCandlesPreview = useMemo(() => sortChartCandles(candles), [candles])
 
   const [vis, setVis] = useState<Record<VisKey, boolean>>(() => buildVisFromProps(indicatorsProp))
 
@@ -640,12 +647,13 @@ export default function KLineChart({
 
   // ── B. Data update ──────────────────────────────────────────────
   useEffect(() => {
-    if (!candleRef.current || candles.length === 0) return
+    const sortedCandles = sortChartCandles(candles)
+    if (!candleRef.current || sortedCandles.length === 0) return
 
     const chart = chartRef.current
     const prevLen = prevCandlesLenRef.current
-    const len = candles.length
-    const firstTime = candles[0]?.time ?? null
+    const len = sortedCandles.length
+    const firstTime = sortedCandles[0]?.time ?? null
 
     const fullReset =
       prevLen === 0 ||
@@ -657,21 +665,28 @@ export default function KLineChart({
 
     /** If the series is still empty, never use incremental `update` — fixes “one bar” after remount / async init. */
     let barsInSeries = 0
+    let lastSeriesTimeKey: number | null = null
     try {
-      barsInSeries = candleRef.current.data().length
+      const seriesData = candleRef.current.data()
+      barsInSeries = seriesData.length
+      const last = seriesData[seriesData.length - 1]
+      if (last?.time != null) lastSeriesTimeKey = chartTimeKey(last.time as string | number)
     } catch {
       barsInSeries = 0
     }
 
+    const newLastKey = chartTimeKey(sortedCandles[len - 1].time)
     const touchLast =
       !fullReset &&
       len > 0 &&
       barsInSeries > 0 &&
-      (len === prevLen || len === prevLen + 1)
+      lastSeriesTimeKey !== null &&
+      ((len === prevLen && newLastKey === lastSeriesTimeKey) ||
+        (len === prevLen + 1 && newLastKey > lastSeriesTimeKey))
 
     const saveRange = chart?.timeScale().getVisibleLogicalRange() ?? null
 
-    const candleArr = candles.map((c) => ({
+    const candleArr = sortedCandles.map((c) => ({
       time: c.time as Time,
       open: c.open,
       high: c.high,
@@ -679,16 +694,16 @@ export default function KLineChart({
       close: c.close,
     })) as CandlestickData<Time>[]
 
-    const closes = candles.map((c) => c.close)
-    const volumes = candles.map((c) => c.volume)
+    const closes = sortedCandles.map((c) => c.close)
+    const volumes = sortedCandles.map((c) => c.volume)
     const volSMA = calcVolumeSMA(volumes, 20)
 
     const lineData = (values: number[]) =>
-      candles
+      sortedCandles
         .map((c, i) => ({ time: c.time as Time, value: values[i] }))
         .filter((d) => !isNaN(d.value)) as LineData<Time>[]
 
-    const volArr = candles.map((c, i) => {
+    const volArr = sortedCandles.map((c, i) => {
       const isUp = c.close >= c.open
       const isUnusual = volSMA[i] && c.volume > volSMA[i] * 2
       // Vivid green/red for up/down bars, brighter for unusual volume
@@ -701,16 +716,21 @@ export default function KLineChart({
     }) as HistogramData<Time>[]
 
     if (touchLast) {
-      const c = candles[len - 1]
-      candleRef.current.update({
-        time: c.time as Time,
-        open: c.open,
-        high: c.high,
-        low: c.low,
-        close: c.close,
-      } as CandlestickData<Time>)
-      const lastVol = volArr[volArr.length - 1]
-      volumeRef.current?.update(lastVol)
+      const c = sortedCandles[len - 1]
+      try {
+        candleRef.current.update({
+          time: c.time as Time,
+          open: c.open,
+          high: c.high,
+          low: c.low,
+          close: c.close,
+        } as CandlestickData<Time>)
+        const lastVol = volArr[volArr.length - 1]
+        volumeRef.current?.update(lastVol)
+      } catch {
+        candleRef.current.setData(candleArr)
+        volumeRef.current?.setData(volArr)
+      }
     } else {
       candleRef.current.setData(candleArr)
       volumeRef.current?.setData(volArr)
@@ -729,7 +749,7 @@ export default function KLineChart({
 
     // Use `vis` (not props-only `indicators`) so in-chart legend toggles refresh series data.
     if (vis.vwap && vwapRef.current) {
-      const vwapData = calcVWAP(candles)
+      const vwapData = calcVWAP(sortedCandles)
       vwapRef.current.setData(vwapData.filter((d) => !isNaN(d.value)) as LineData<Time>[])
     }
 
@@ -741,7 +761,7 @@ export default function KLineChart({
     }
 
     const dpMarkers: SeriesMarker<Time>[] = darkPoolMarkers
-      .filter((m) => candles.some((c) => c.time === m.time))
+      .filter((m) => sortedCandles.some((c) => c.time === m.time))
       .map((m) => ({
         time: m.time as Time,
         position: (m.sentiment === 'BULLISH' ? 'belowBar' : 'aboveBar') as SeriesMarkerPosition,
@@ -752,7 +772,7 @@ export default function KLineChart({
       }))
 
     const nMarkers: SeriesMarker<Time>[] = newsMarkers
-      .filter((n) => n.time && candles.some((c) => c.time === n.time))
+      .filter((n) => n.time && sortedCandles.some((c) => c.time === n.time))
       .map((n) => ({
         time: n.time as Time,
         position: (n.impact === 'negative' ? 'aboveBar' : 'belowBar') as SeriesMarkerPosition,
@@ -762,7 +782,10 @@ export default function KLineChart({
         size: 0.8,
       }))
 
-    if (dpMarkers.length + nMarkers.length > 0) candleRef.current.setMarkers([...dpMarkers, ...nMarkers])
+    const allMarkers = [...dpMarkers, ...nMarkers].sort(
+      (a, b) => chartTimeKey(a.time as string | number) - chartTimeKey(b.time as string | number),
+    )
+    if (allMarkers.length > 0) candleRef.current.setMarkers(allMarkers)
 
     if (showRSI && rsiLineRef.current && rsiChartRef.current) {
       const rsiVals = calcRSI(closes)
@@ -779,7 +802,7 @@ export default function KLineChart({
       macdLineRef.current.setData(lineData(macdVals.map((m) => m.macd)))
       macdSignalRef.current.setData(lineData(macdVals.map((m) => m.signal)))
       macdHistRef.current.setData(
-        candles
+        sortedCandles
           .map((c, i) => ({
             time: c.time as Time,
             value: macdVals[i].histogram,
@@ -795,7 +818,7 @@ export default function KLineChart({
 
     // ATR(14) data
     if (showRSI && atrLineRef.current && atrChartRef.current) {
-      const atrVals = calcATR(candles, 14)
+      const atrVals = calcATR(sortedCandles, 14)
       atrLineRef.current.setData(lineData(atrVals))
       if (!touchLast) {
         try { atrChartRef.current.timeScale().fitContent() } catch { /* ignore */ }
@@ -849,7 +872,7 @@ export default function KLineChart({
     onTimeframeChange?.(tf)
   }, [onTimeframeChange])
 
-  const latestCandle = candles[candles.length - 1]
+  const latestCandle = sortedCandlesPreview[sortedCandlesPreview.length - 1]
   const isUp = latestCandle ? latestCandle.close >= latestCandle.open : true
   const priceStr = latestCandle
     ? `$${latestCandle.close.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -872,23 +895,24 @@ export default function KLineChart({
 
   // Memoize last RSI and ATR to avoid recomputing on every render (e.g., crosshair move)
   const latestRsi = useMemo<number | null>(() => {
-    if (candles.length < 15) return null
-    const closes = candles.map(c => c.close)
+    if (sortedCandlesPreview.length < 15) return null
+    const closes = sortedCandlesPreview.map(c => c.close)
     const vals = calcRSI(closes, 14)
     const last = vals[vals.length - 1]
     return Number.isFinite(last) ? last : null
-  }, [candles])
+  }, [sortedCandlesPreview])
 
   const latestAtr14 = useMemo<number | null>(() => {
-    if (candles.length < 15) return null
-    const vals = calcATR(candles, 14)
+    if (sortedCandlesPreview.length < 15) return null
+    const vals = calcATR(sortedCandlesPreview, 14)
     const last = vals[vals.length - 1]
     return Number.isFinite(last) ? last : null
-  }, [candles])
+  }, [sortedCandlesPreview])
 
   return (
     <div className="relative select-none">
-      {/* ── Timeframe Selector ── */}
+      {/* Built-in timeframe row only when parent does not own range (stock/sector/BTC pages use page toolbar). */}
+      {showBuiltinTimeframes && (
       <div className="flex items-center gap-1 px-3 py-2 bg-slate-950/80 border-b border-slate-800/50">
         {TIMEFRAMES.map((tf) => (
           <button
@@ -933,9 +957,10 @@ export default function KLineChart({
           )}
         </div>
       </div>
+      )}
 
       {/* ── Enhanced legend with price / change / volume ── */}
-      <div className="absolute top-[52px] left-3 right-3 z-10 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs bg-slate-950/80 backdrop-blur-sm px-3 py-2 rounded-lg border border-slate-800/50 max-h-[min(40vh,220px)] overflow-y-auto">
+      <div className={`absolute ${showBuiltinTimeframes ? 'top-[52px]' : 'top-2'} left-3 right-3 z-10 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs bg-slate-950/80 backdrop-blur-sm px-3 py-2 rounded-lg border border-slate-800/50 max-h-[min(40vh,220px)] overflow-y-auto`}>
         {/* Live price summary */}
         <span className={`text-sm font-mono font-bold mr-1 ${isUp ? 'text-green-400' : 'text-red-400'}`}>
           {isUp ? '▲' : '▼'} {priceStr}
@@ -977,11 +1002,11 @@ export default function KLineChart({
         ref={containerRef}
         role="img"
         aria-label={
-          candles.length > 0 && latestCandle
-            ? `Price chart for ${ticker}: ${candles.length} candles. ` +
+          sortedCandlesPreview.length > 0 && latestCandle
+            ? `Price chart for ${ticker}: ${sortedCandlesPreview.length} candles. ` +
               `Latest close ${latestCandle.close?.toFixed(2) ?? 'N/A'}, ` +
-              `range ${Math.min(...candles.map(c => c.low ?? Infinity)).toFixed(2)}–` +
-              `${Math.max(...candles.map(c => c.high ?? 0)).toFixed(2)}.`
+              `range ${Math.min(...sortedCandlesPreview.map(c => c.low ?? Infinity)).toFixed(2)}–` +
+              `${Math.max(...sortedCandlesPreview.map(c => c.high ?? 0)).toFixed(2)}.`
             : `Price chart for ${ticker} (loading)`
         }
         className="w-full rounded-t-lg overflow-hidden min-h-[200px]"
