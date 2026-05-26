@@ -100,6 +100,18 @@
 | Candlestick charts crash (`data must be asc ordered by time`) | `lib/sortChartCandles.ts`; sort in `/api/chart`; safer `touchLast` in `KLineChart`; sort dark-pool + news markers before `setMarkers` | Browser `/stock/AAPL`, `/sector/technology` — 28 canvases, no error boundary |
 | Incremental `update()` on out-of-order last bar | Only `update` when same timestamp or strictly newer bar; `setData` fallback on throw | `__tests__/lib/sortChartCandles.test.ts` |
 
+## Wave 5 — 2026-05-26 (charts re-check + prod deploy)
+
+| Item | Fix | Verify |
+|------|-----|--------|
+| `sortChartCandles` not on `main` (PR #22 open) | Commit `0873428` + wave-5 UX on `fix/rectification-wave-3`; prod deploy after merge or `vercel deploy --prod` | `lib/sortChartCandles.ts` absent on `main`; present on branch |
+| Duplicate KLine timeframe row (1D/1W/1M) ignored parent `1m`/`4H` toolbar | `hideTimeframeSelector` on stock/sector/BTC pages; built-in row only when `onTimeframeChange` set | Browser: single range toolbar on `/stock/AAPL` |
+| Silent chart fetch failures | `chartError` + Retry on stock & sector pages | Manual fail path / empty API |
+| BTC normalize drift from equity sort | `normalizeBtcCandles` delegates to `sortChartCandles` | `__tests__/lib/sortChartCandles.test.ts` (5 tests) |
+| Prod browser QA (pre-deploy) | — | `/stock/AAPL` 28 canvases; `/sector/technology` 28 canvases; no ChartErrorBoundary text |
+
+**Prod missing prior fix:** yes (`sortChartCandles.ts` not in `main`; lightweight-charts client sort + stricter `touchLast` only on branch).
+
 ## Deferred (owner / next session)
 
 - F1.4 FRED RFR in engine Sharpe (Q-004)

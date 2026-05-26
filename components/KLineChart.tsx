@@ -90,8 +90,10 @@ interface KLineChartProps {
   /** Fires whenever a user toggles an indicator via the chart overlay buttons.
    *  Use this to sync the external indicator selection state (e.g. for a side panel). */
   onIndicatorsChange?: (vis: Record<VisKey, boolean>) => void
-  /** Callback when user selects a timeframe */
+  /** Callback when user selects a timeframe (only when built-in selector is shown) */
   onTimeframeChange?: (tf: Timeframe) => void
+  /** When set, parent page controls range via its own toolbar — hide duplicate timeframe row */
+  hideTimeframeSelector?: boolean
 }
 
 const DEFAULT_INDICATORS: Required<KLineIndicatorFlags> = {
@@ -241,6 +243,7 @@ export default function KLineChart({
   indicators: indicatorsIn,
   onIndicatorsChange,
   onTimeframeChange,
+  hideTimeframeSelector,
 }: KLineChartProps) {
   // R5-M-1 (Phase 14): warn when a caller passes a partial `indicators`
   // object. The spread below silently fills missing keys with defaults,
@@ -294,8 +297,11 @@ export default function KLineChart({
   /** Bumped when async chart `init()` finishes so the data effect runs after `candleRef` exists. */
   const [chartReadyGen, setChartReadyGen] = useState(0)
   const [selectedTimeframe, setSelectedTimeframe] = useState<Timeframe>('3M')
+  const showBuiltinTimeframes = hideTimeframeSelector !== true && onTimeframeChange != null
 
   const indicators = indicatorsProp
+
+  const sortedCandlesPreview = useMemo(() => sortChartCandles(candles), [candles])
 
   const [vis, setVis] = useState<Record<VisKey, boolean>>(() => buildVisFromProps(indicatorsProp))
 
@@ -866,7 +872,7 @@ export default function KLineChart({
     onTimeframeChange?.(tf)
   }, [onTimeframeChange])
 
-  const latestCandle = candles[candles.length - 1]
+  const latestCandle = sortedCandlesPreview[sortedCandlesPreview.length - 1]
   const isUp = latestCandle ? latestCandle.close >= latestCandle.open : true
   const priceStr = latestCandle
     ? `$${latestCandle.close.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -889,23 +895,24 @@ export default function KLineChart({
 
   // Memoize last RSI and ATR to avoid recomputing on every render (e.g., crosshair move)
   const latestRsi = useMemo<number | null>(() => {
-    if (candles.length < 15) return null
-    const closes = candles.map(c => c.close)
+    if (sortedCandlesPreview.length < 15) return null
+    const closes = sortedCandlesPreview.map(c => c.close)
     const vals = calcRSI(closes, 14)
     const last = vals[vals.length - 1]
     return Number.isFinite(last) ? last : null
-  }, [candles])
+  }, [sortedCandlesPreview])
 
   const latestAtr14 = useMemo<number | null>(() => {
-    if (candles.length < 15) return null
-    const vals = calcATR(candles, 14)
+    if (sortedCandlesPreview.length < 15) return null
+    const vals = calcATR(sortedCandlesPreview, 14)
     const last = vals[vals.length - 1]
     return Number.isFinite(last) ? last : null
-  }, [candles])
+  }, [sortedCandlesPreview])
 
   return (
     <div className="relative select-none">
-      {/* ── Timeframe Selector ── */}
+      {/* Built-in timeframe row only when parent does not own range (stock/sector/BTC pages use page toolbar). */}
+      {showBuiltinTimeframes && (
       <div className="flex items-center gap-1 px-3 py-2 bg-slate-950/80 border-b border-slate-800/50">
         {TIMEFRAMES.map((tf) => (
           <button
@@ -950,9 +957,10 @@ export default function KLineChart({
           )}
         </div>
       </div>
+      )}
 
       {/* ── Enhanced legend with price / change / volume ── */}
-      <div className="absolute top-[52px] left-3 right-3 z-10 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs bg-slate-950/80 backdrop-blur-sm px-3 py-2 rounded-lg border border-slate-800/50 max-h-[min(40vh,220px)] overflow-y-auto">
+      <div className={`absolute ${showBuiltinTimeframes ? 'top-[52px]' : 'top-2'} left-3 right-3 z-10 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs bg-slate-950/80 backdrop-blur-sm px-3 py-2 rounded-lg border border-slate-800/50 max-h-[min(40vh,220px)] overflow-y-auto`}>
         {/* Live price summary */}
         <span className={`text-sm font-mono font-bold mr-1 ${isUp ? 'text-green-400' : 'text-red-400'}`}>
           {isUp ? '▲' : '▼'} {priceStr}
@@ -994,11 +1002,11 @@ export default function KLineChart({
         ref={containerRef}
         role="img"
         aria-label={
-          candles.length > 0 && latestCandle
-            ? `Price chart for ${ticker}: ${candles.length} candles. ` +
+          sortedCandlesPreview.length > 0 && latestCandle
+            ? `Price chart for ${ticker}: ${sortedCandlesPreview.length} candles. ` +
               `Latest close ${latestCandle.close?.toFixed(2) ?? 'N/A'}, ` +
-              `range ${Math.min(...candles.map(c => c.low ?? Infinity)).toFixed(2)}–` +
-              `${Math.max(...candles.map(c => c.high ?? 0)).toFixed(2)}.`
+              `range ${Math.min(...sortedCandlesPreview.map(c => c.low ?? Infinity)).toFixed(2)}–` +
+              `${Math.max(...sortedCandlesPreview.map(c => c.high ?? 0)).toFixed(2)}.`
             : `Price chart for ${ticker} (loading)`
         }
         className="w-full rounded-t-lg overflow-hidden min-h-[200px]"

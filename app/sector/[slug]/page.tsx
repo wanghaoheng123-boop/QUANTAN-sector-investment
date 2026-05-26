@@ -62,6 +62,8 @@ export default function SectorPage({ params }: { params: { slug: string } }) {
   const [activeTab, setActiveTab] = useState('chart')
   const [activeRange, setActiveRange] = useState('6M')
   const [quoteError, setQuoteError] = useState<string | null>(null)
+  const [chartError, setChartError] = useState<string | null>(null)
+  const [chartLoading, setChartLoading] = useState(true)
 
   // Phase 14 wave 18: AbortSignal-aware fetch. Prior code was vulnerable to
   // the same race conditions fixed in stock/[ticker]/page.tsx (waves 8/9) —
@@ -69,6 +71,8 @@ export default function SectorPage({ params }: { params: { slug: string } }) {
   // overwrote state for the new sector.
   const fetchChartData = useCallback(
     (range: string, signal?: AbortSignal) => {
+      setChartLoading(true)
+      setChartError(null)
       fetch(`/api/chart/${encodeURIComponent(sector.etf)}?range=${encodeURIComponent(range)}`, { signal })
         .then((r) => {
           if (!r.ok) return Promise.reject(new Error(`HTTP ${r.status}`))
@@ -76,14 +80,29 @@ export default function SectorPage({ params }: { params: { slug: string } }) {
         })
         .then((data) => {
           if (signal?.aborted) return
-          setCandles(data.candles ?? [])
+          if (data.error) {
+            throw new Error(typeof data.error === 'string' ? data.error : 'Chart data unavailable')
+          }
+          const next = data.candles ?? []
+          if (next.length === 0) {
+            setCandles([])
+            setDarkPoolMarkers([])
+            setChartError('No historical data returned for this range')
+            return
+          }
+          setCandles(next)
           setDarkPoolMarkers(data.darkPoolMarkers ?? [])
         })
         .catch((err) => {
           if (signal?.aborted || (err instanceof DOMException && err.name === 'AbortError')) return
-          // Phase 13 S2 fix (F5.4): chart data fetch failure now surfaces as a
-          // diagnostic in console; UI shows last-known candles unchanged.
+          const msg = err instanceof Error ? err.message : 'Chart fetch failed'
           console.warn('[sector] chart fetch failed for', sector.etf, err)
+          setChartError(msg)
+          setCandles([])
+          setDarkPoolMarkers([])
+        })
+        .finally(() => {
+          if (!signal?.aborted) setChartLoading(false)
         })
     },
     [sector.etf]
@@ -438,7 +457,23 @@ export default function SectorPage({ params }: { params: { slug: string } }) {
                     </span>
                   </div>
                 </div>
-                {candles.length > 0 ? (
+                {chartLoading && candles.length === 0 ? (
+                  <div className="h-80 bg-slate-800/30 rounded-xl animate-pulse flex items-center justify-center">
+                    <span className="text-slate-400 text-sm">Loading chart data...</span>
+                  </div>
+                ) : chartError ? (
+                  <div className="h-[480px] bg-slate-800/10 rounded-xl flex flex-col items-center justify-center gap-3 border border-dashed border-amber-500/30">
+                    <span className="text-amber-400/90 text-sm font-medium">Chart unavailable</span>
+                    <p className="text-slate-500 text-xs font-mono max-w-md text-center px-4">{chartError}</p>
+                    <button
+                      type="button"
+                      onClick={() => fetchChartData(activeRange)}
+                      className="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 text-xs hover:border-cyan-500/40 hover:text-cyan-400"
+                    >
+                      Retry chart
+                    </button>
+                  </div>
+                ) : candles.length > 0 ? (
                   <ChartErrorBoundary label={sector.etf} fallbackHeight={480}>
                     <KLineChart
                       candles={candles}
@@ -446,13 +481,21 @@ export default function SectorPage({ params }: { params: { slug: string } }) {
                       color={sector.color}
                       ticker={sector.etf}
                       range={activeRange}
+                      hideTimeframeSelector
                       showRSI
                       indicators={sectorIndicators}
                     />
                   </ChartErrorBoundary>
                 ) : (
-                  <div className="h-80 bg-slate-800/30 rounded-xl animate-pulse flex items-center justify-center">
-                    <span className="text-slate-400 text-sm">Loading chart data...</span>
+                  <div className="h-[480px] bg-slate-800/10 rounded-xl flex flex-col items-center justify-center gap-3 border border-dashed border-slate-800">
+                    <span className="text-slate-400 text-sm">No chart data for {sector.etf}</span>
+                    <button
+                      type="button"
+                      onClick={() => fetchChartData(activeRange)}
+                      className="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 text-xs hover:border-cyan-500/40 hover:text-cyan-400"
+                    >
+                      Retry chart
+                    </button>
                   </div>
                 )}
               </div>

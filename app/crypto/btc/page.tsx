@@ -754,6 +754,7 @@ export default function BtcPage() {
                       color={color}
                       ticker="BTC"
                       range={activeRange}
+                      hideTimeframeSelector
                       showRSI
                       indicators={indicatorConfig}
                       onIndicatorsChange={(newVis) => setVis(newVis)}
