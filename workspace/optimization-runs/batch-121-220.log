@@ -1,0 +1,82 @@
+
+> quantan@0.1.0 optimize:batch
+> npx tsx --tsconfig tsconfig.json scripts/optimize-batch.ts --from 121 --count 100
+
+
+══════════════════════════════════════════════════════
+  QUANTAN — Batch Canonical Optimization
+  Iterations 121–220 | Floor 55.00000000000001% | Baseline 57.26%
+══════════════════════════════════════════════════════
+
+Loaded 56 instruments
+
+Baseline replay: 64.05% WR, 395 signals
+
+  · iter 130  WR 56.13%  signals 1003  REJECT  WR 56.13% below baseline 64.05%
+
+  [Verifier] Running test suite at iteration 130...
+  [Verifier] npm run test PASS
+  · iter 140  WR 55.74%  signals 1656  REJECT  WR 55.74% below baseline 64.05%
+
+  [Verifier] Running test suite at iteration 140...
+  [Verifier] npm run test PASS
+  · iter 150  WR 60.79%  signals 755  REJECT  WR 60.79% below baseline 64.05%
+
+  [Verifier] Running test suite at iteration 150...
+  [Verifier] npm run test PASS
+  · iter 160  WR 61.59%  signals 1234  REJECT  WR 61.59% below baseline 64.05%
+
+  [Verifier] Running test suite at iteration 160...
+  [Verifier] npm run test PASS
+  · iter 170  WR 57.64%  signals 1256  REJECT  WR 57.64% below baseline 64.05%
+
+  [Verifier] Running test suite at iteration 170...
+  [Verifier] npm run test PASS
+  · iter 180  WR 56.35%  signals 1322  REJECT  WR 56.35% below baseline 64.05%
+
+  [Verifier] Running test suite at iteration 180...
+  [Verifier] npm run test PASS
+  · iter 190  WR 56.36%  signals 1219  REJECT  WR 56.36% below baseline 64.05%
+
+  [Verifier] Running test suite at iteration 190...
+  [Verifier] npm run test PASS
+  ✓ iter 199  WR 64.14%  signals 502  ACCEPT  New best: 64.14% (+0.09pp vs baseline)
+  · iter 200  WR 57.98%  signals 1397  REJECT  WR 57.98% below baseline 64.05%
+
+  [Verifier] Running test suite at iteration 200...
+  [Verifier] npm run test PASS
+  · iter 210  WR 60.26%  signals 1135  REJECT  WR 60.26% below baseline 64.05%
+
+  [Verifier] Running test suite at iteration 210...
+  [Verifier] npm run test PASS
+  · iter 220  WR 61.68%  signals 441  REJECT  WR 61.68% below baseline 64.05%
+
+  [Verifier] Running test suite at iteration 220...
+  [Verifier] npm run test PASS
+
+══════════════════════════════════════════════════════
+  Completed 100 iterations (121–220)
+  Accepted: 1 | Rejected: 0
+  Best WR: 64.14% (baseline 64.05%)
+  Logs: workspace/optimization-runs/iter-*.json
+══════════════════════════════════════════════════════
+
+  Promoting best params to scripts/benchmark-signals.mjs ...
+  Re-running npm run benchmark to verify...
+
+> quantan@0.1.0 benchmark
+> node scripts/benchmark-signals.mjs
+
+Loading data...
+Loaded 56 instruments
+
+=== BENCHMARK RESULTS ===
+Instruments: 56
+Instruments with trades: 39
+Total BUY signals: 395
+Wins: 253 | Losses: 142
+Aggregate Win Rate: 64.05%
+Avg Win Rate per Instrument: 69.14%
+Avg 20d Return per Signal: 4.4066%
+
+Saved to: /Users/haohengwang/Library/CloudStorage/GoogleDrive-wanghaoheng123@gmail.com/My Drive/QUANTAN-sector-investment/.claude/worktrees/competent-wu-a84629/scripts/benchmark-results.json

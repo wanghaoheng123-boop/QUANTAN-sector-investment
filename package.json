@@ -29,7 +29,8 @@
     "benchmark:enhanced": "npx tsx --tsconfig tsconfig.json scripts/benchmark-enhanced.ts",
     "optimize:grid": "npx tsx --tsconfig tsconfig.json scripts/optimize-grid.ts",
     "portfolio:backtest": "npx tsx --tsconfig tsconfig.json scripts/portfolio-backtest.ts",
-    "stryker": "stryker run"
+    "stryker": "stryker run",
+    "optimize:batch": "npx tsx --tsconfig tsconfig.json scripts/optimize-batch.ts"
   },
   "dependencies": {
     "@ducanh2912/next-pwa": "^10.2.9",

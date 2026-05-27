@@ -1,0 +1,25 @@
+{
+  "iteration": 148,
+  "timestamp": "2026-05-26T10:07:27.889Z",
+  "hypothesis": "Continuous random search in canonical param space",
+  "persona": "Physics/Risk",
+  "params": {
+    "slopeThreshold": 0.010120949411764741,
+    "rsiBuyMax": 43,
+    "dipLowerPct": -17.754923302680254,
+    "dipUpperPct": -1.120883964933455,
+    "overboughtSellPct": 24.767922244034708,
+    "fallingKnifeLowerPct": -18.27784599736333,
+    "fallingKnifeSlope": -0.006395220723003149,
+    "holdDays": 16
+  },
+  "metrics": {
+    "canonicalWinRatePct": 55.3872,
+    "avgWinRatePerInstrumentPct": 56.9765,
+    "totalBuySignals": 1188,
+    "avgReturnPerSignalPct": 1.5203,
+    "deltaVsBaselinePct": -8.6634
+  },
+  "decision": "REJECT",
+  "reason": "WR 55.39% below baseline 64.05%"
+}

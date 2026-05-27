@@ -1,0 +1,25 @@
+{
+  "iteration": 4,
+  "timestamp": "2026-05-26T10:01:49.563Z",
+  "hypothesis": "Grid sweep around default canonical thresholds (slope/RSI/dip/hold)",
+  "persona": "Quant/Math",
+  "params": {
+    "slopeThreshold": 0.003,
+    "rsiBuyMax": 36,
+    "dipLowerPct": -20,
+    "dipUpperPct": -2,
+    "overboughtSellPct": 20,
+    "fallingKnifeLowerPct": -15,
+    "fallingKnifeSlope": -0.005,
+    "holdDays": 18
+  },
+  "metrics": {
+    "canonicalWinRatePct": 58.5814,
+    "avgWinRatePerInstrumentPct": 61.8771,
+    "totalBuySignals": 1142,
+    "avgReturnPerSignalPct": 1.4557,
+    "deltaVsBaselinePct": 1.3257
+  },
+  "decision": "REJECT",
+  "reason": "No improvement (WR 58.58%)"
+}
