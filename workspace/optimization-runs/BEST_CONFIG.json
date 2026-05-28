@@ -1,0 +1,47 @@
+{
+  "timestamp": "2026-05-26T10:08:43.352Z",
+  "iterationsRun": {
+    "from": 1,
+    "to": 220,
+    "count": 220,
+    "batches": ["1-120", "121-220"]
+  },
+  "baseline": {
+    "canonicalWinRatePct": 57.2557,
+    "totalBuySignals": 1392,
+    "params": {
+      "slopeThreshold": 0.005,
+      "rsiBuyMax": 40,
+      "dipLowerPct": -20,
+      "dipUpperPct": -2,
+      "overboughtSellPct": 20,
+      "fallingKnifeLowerPct": -15,
+      "fallingKnifeSlope": -0.005,
+      "holdDays": 20
+    }
+  },
+  "best": {
+    "canonicalWinRatePct": 64.3038,
+    "deltaVsLegacyBaselinePct": 7.0481,
+    "deltaVsPriorPromoted6405Pct": 0.2532,
+    "totalBuySignals": 493,
+    "params": {
+      "slopeThreshold": 0.01,
+      "rsiBuyMax": 36,
+      "dipLowerPct": -24,
+      "dipUpperPct": -4,
+      "overboughtSellPct": 22,
+      "fallingKnifeLowerPct": -15,
+      "fallingKnifeSlope": -0.008,
+      "holdDays": 29
+    },
+    "sourceIteration": 199,
+    "promoted": true,
+    "promotedTo": ["scripts/benchmark-signals.mjs", "lib/optimize/canonicalBenchmark.ts"]
+  },
+  "summary": {
+    "acceptedBatch121220": 1,
+    "floorPct": 55,
+    "liveSignalPath": "enhancedCombinedSignal (unchanged — canonical is benchmark/QA path only)"
+  }
+}

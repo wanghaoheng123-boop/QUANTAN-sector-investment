@@ -60,11 +60,23 @@ export const LOOP3_EXIT_GRID: ExitParamGrid = {
  * Used as starting point for Loop 1 grid search.
  */
 export const CURRENT_BASELINE = {
-  slopeThreshold: 0.005,
+  slopeThreshold: 0.01,
   buyWScoreThreshold: 0.25,
   sellWScoreThreshold: -0.30,
   confidenceThreshold: 55,
   atrStopMultiplier: 1.5,
+}
+
+/** Canonical benchmark-only params (scripts/benchmark-signals.mjs), 2026-05-26 */
+export const CANONICAL_BENCHMARK_BASELINE = {
+  ...CURRENT_BASELINE,
+  rsiBuyMax: 36,
+  dipLowerPct: -24,
+  dipUpperPct: -4,
+  overboughtSellPct: 22,
+  fallingKnifeLowerPct: -15,
+  fallingKnifeSlope: -0.008,
+  holdDays: 29,
 }
 
 /**

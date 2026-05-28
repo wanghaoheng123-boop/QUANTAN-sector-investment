@@ -1,0 +1,25 @@
+{
+  "iteration": 29,
+  "timestamp": "2026-05-26T10:02:11.567Z",
+  "hypothesis": "Sector profile slopeThreshold mapped to canonical path",
+  "persona": "Quant/Math",
+  "params": {
+    "slopeThreshold": 0.003,
+    "rsiBuyMax": 42,
+    "dipLowerPct": -20,
+    "dipUpperPct": -2,
+    "overboughtSellPct": 20,
+    "fallingKnifeLowerPct": -15,
+    "fallingKnifeSlope": -0.005,
+    "holdDays": 20
+  },
+  "metrics": {
+    "canonicalWinRatePct": 56.2871,
+    "avgWinRatePerInstrumentPct": 58.7671,
+    "totalBuySignals": 1853,
+    "avgReturnPerSignalPct": 1.216,
+    "deltaVsBaselinePct": -0.9686
+  },
+  "decision": "REJECT",
+  "reason": "WR 56.29% below baseline 57.26%"
+}

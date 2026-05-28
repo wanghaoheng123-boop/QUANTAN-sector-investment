@@ -1,0 +1,9 @@
+{
+  "timestamp": "2026-05-26T10:15:00.000Z",
+  "path": "benchmark:enhanced",
+  "sectorProfiles": true,
+  "aggregateWinRatePct": 52.84,
+  "canonicalWinRatePct": 64.3,
+  "promoted": false,
+  "note": "Q-009 — enhanced path not production default; floor 55% breached"
+}

@@ -1,0 +1,25 @@
+{
+  "iteration": 49,
+  "timestamp": "2026-05-26T10:02:31.454Z",
+  "hypothesis": "Discrete random blend — sector-informed threshold sets",
+  "persona": "Physics/Risk",
+  "params": {
+    "slopeThreshold": 0.008,
+    "rsiBuyMax": 45,
+    "dipLowerPct": -18,
+    "dipUpperPct": -3,
+    "overboughtSellPct": 18,
+    "fallingKnifeLowerPct": -12,
+    "fallingKnifeSlope": -0.003,
+    "holdDays": 18
+  },
+  "metrics": {
+    "canonicalWinRatePct": 56.9912,
+    "avgWinRatePerInstrumentPct": 60.8729,
+    "totalBuySignals": 1130,
+    "avgReturnPerSignalPct": 1.8124,
+    "deltaVsBaselinePct": -0.2646
+  },
+  "decision": "REJECT",
+  "reason": "WR 56.99% below baseline 57.26%"
+}
