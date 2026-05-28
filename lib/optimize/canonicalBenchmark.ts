@@ -1,6 +1,14 @@
 /**
- * Canonical benchmark evaluator — mirrors scripts/benchmark-signals.mjs with tunable params.
- * Used by optimize-batch.ts for fast in-memory iteration (no subprocess per combo).
+ * Canonical benchmark evaluator — a simplified, tunable dip-buy *replay* used
+ * for fast in-memory parameter search by optimize-batch.ts (no subprocess per
+ * combo).
+ *
+ * ⚠️ This is a RESEARCH PROXY, NOT the production signal. The production
+ * canonical path is `resolveBacktestSignal()` (see lib/backtest/SIGNAL_SSOT.md)
+ * benchmarked by scripts/benchmark-signals.ts. A high replay WR here is a lead
+ * for further investigation, not a production result — the two signals are
+ * different implementations. Do not wire `DEFAULT_CANONICAL_PARAMS` into any
+ * production code path; they exist only to seed the optimizer's search.
  */
 
 export interface CanonicalSignalParams {
@@ -34,7 +42,11 @@ export const LEGACY_CANONICAL_PARAMS: CanonicalSignalParams = {
   holdDays: 20,
 }
 
-/** Promoted batch iter-199 (rounded); keep in sync with scripts/benchmark-signals.mjs */
+/**
+ * Best replay-WR param set found by batch iter-199 (rounded). RESEARCH SEED ONLY
+ * — these are the optimizer's best guess against the replay proxy, never promoted
+ * to production (the auto-promote-to-.mjs step was removed; see PR #24 review).
+ */
 export const DEFAULT_CANONICAL_PARAMS: CanonicalSignalParams = {
   slopeThreshold: 0.01,
   rsiBuyMax: 36,

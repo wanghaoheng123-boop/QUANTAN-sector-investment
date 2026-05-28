@@ -2,7 +2,16 @@
  * Batch optimization loop — canonical benchmark parameter search.
  *
  * Runs ≥100 iterations (default 120), logs each to workspace/optimization-runs/iter-NNN.json,
- * writes BEST_CONFIG.json, optionally promotes winners to benchmark-signals.mjs constants.
+ * writes BEST_CONFIG.json, and (with --promote) writes a PROMOTION_CANDIDATE.json
+ * for human review. It does NOT modify any canonical benchmark file — promotion
+ * into production must go through the resolveBacktestSignal() SSOT path with
+ * C2 sign-off (see lib/backtest/SIGNAL_SSOT.md + reviews/invariants-baseline.md).
+ *
+ * IMPORTANT: the optimizer scores params against the canonicalBenchmark *replay*
+ * (lib/optimize/canonicalBenchmark.ts), which is a simplified dip-buy proxy — NOT
+ * the production resolveBacktestSignal() path. A high replay WR is a research
+ * lead, not a production result. Re-validate any candidate against the SSOT
+ * signal + net-of-cost before acting on it.
  *
  * Usage:
  *   npx tsx --tsconfig tsconfig.json scripts/optimize-batch.ts
@@ -204,6 +213,7 @@ async function main() {
   let bestWR = baselineWR
   let bestParams = { ...DEFAULT_CANONICAL_PARAMS }
   let bestSignals = baseline.totalBuySignals
+  let bestIter = 0 // 0 = baseline never beaten
   let accepted = 0
   let rejected = 0
 
@@ -249,6 +259,7 @@ async function main() {
       bestWR = wr
       bestParams = { ...params }
       bestSignals = result.totalBuySignals
+      bestIter = iter
       accepted++
     } else if (
       Math.abs(wr - baselineWR) < 1e-9 &&
@@ -258,6 +269,7 @@ async function main() {
       reason = `Same WR with fewer signals (${result.totalBuySignals} vs ${bestSignals})`
       bestParams = { ...params }
       bestSignals = result.totalBuySignals
+      bestIter = iter
       accepted++
     } else {
       reason = `No improvement (WR ${(wr * 100).toFixed(2)}%)`
@@ -295,7 +307,15 @@ async function main() {
     if (iter % 10 === 0) {
       console.log(`\n  [Verifier] Running test suite at iteration ${iter}...`)
       const tests = runTests()
-      console.log(tests.pass ? '  [Verifier] npm run test PASS' : `  [Verifier] FAIL:\n${tests.output}`)
+      if (!tests.pass) {
+        // Gate, don't just log. A failing suite mid-batch means something in
+        // the tree broke; charging ahead for 100+ more iterations (and writing
+        // a candidate from a broken tree) is worse than stopping. Exit non-zero
+        // so the operator sees it.
+        console.error(`  [Verifier] npm run test FAILED at iteration ${iter} — aborting batch:\n${tests.output}`)
+        process.exit(2)
+      }
+      console.log('  [Verifier] npm run test PASS')
       const statePath = join(ROOT, 'workspace', 'SESSION_STATE.json')
       if (existsSync(statePath)) {
         const state = JSON.parse(readFileSync(statePath, 'utf-8')) as Record<string, unknown>
@@ -318,12 +338,13 @@ async function main() {
       params: DEFAULT_CANONICAL_PARAMS,
     },
     best: {
+      iteration: bestIter,
       canonicalWinRatePct: Number((bestWR * 100).toFixed(4)),
       deltaVsBaselinePct: Number(((bestWR - baselineWR) * 100).toFixed(4)),
       deltaVsTarget5726Pct: Number(((bestWR - BASELINE_WR) * 100).toFixed(4)),
       totalBuySignals: bestSignals,
       params: bestParams,
-      promoted: false,
+      promotionCandidateWritten: false,
     },
     summary: { accepted, rejected, floorPct: FLOOR_WR * 100 },
   }
@@ -338,14 +359,37 @@ async function main() {
   console.log('══════════════════════════════════════════════════════\n')
 
   if (promote && bestWR > baselineWR + 1e-6) {
-    console.log('  Promoting best params to scripts/benchmark-signals.mjs ...')
-    promoteToBenchmarkScript(bestParams)
-    bestConfig.best.promoted = true
+    // NOTE: this writes a *candidate* JSON for human review — it deliberately
+    // does NOT rewrite any canonical benchmark file. The canonical signal is
+    // `resolveBacktestSignal()` (see lib/backtest/SIGNAL_SSOT.md); promoting a
+    // tuned param set into production is a manual decision that must go through
+    // that SSOT path with C2 sign-off and an invariants-baseline re-freeze.
+    // (Earlier this step auto-rewrote scripts/benchmark-signals.mjs — an
+    // inline-signal file that bypassed the SSOT. That file + the auto-promote
+    // were removed; see PR #24 review thread.)
+    const candidatePath = join(runsDir, 'PROMOTION_CANDIDATE.json')
+    writeFileSync(
+      candidatePath,
+      JSON.stringify(
+        {
+          proposedAt: bestConfig.timestamp,
+          sourceIteration: bestConfig.best.iteration,
+          rawParams: bestParams,
+          roundedParams: roundParams(bestParams),
+          bestCanonicalWinRatePct: bestConfig.best.canonicalWinRatePct,
+          baselineWinRatePct: Number((baselineWR * 100).toFixed(2)),
+          NOTE:
+            'CANDIDATE ONLY. Optimizer selects on the canonicalBenchmark replay metric, NOT the production resolveBacktestSignal path. Do NOT wire these params into production without (1) re-implementing the gain against the SSOT signal, (2) net-of-cost validation, (3) C2 sign-off + invariants-baseline re-freeze.',
+        },
+        null,
+        2,
+      ),
+    )
+    bestConfig.best.promotionCandidateWritten = true
     writeFileSync(join(runsDir, 'BEST_CONFIG.json'), JSON.stringify(bestConfig, null, 2))
-    console.log('  Re-running npm run benchmark to verify...')
-    execSync('npm run benchmark', { cwd: ROOT, stdio: 'inherit' })
+    console.log(`  Wrote promotion CANDIDATE → ${candidatePath} (no canonical file modified)`)
   } else if (bestWR <= baselineWR + 1e-6) {
-    console.log('  No promotion — baseline params remain optimal for canonical path.')
+    console.log('  No candidate — baseline params remain optimal for the replay metric.')
   }
 
   // Append summary line to optimization-results-loop1.json
@@ -355,7 +399,7 @@ async function main() {
       timestamp: bestConfig.timestamp,
       iterations: `${from}-${end}`,
       bestCanonicalWR: bestConfig.best.canonicalWinRatePct,
-      promoted: bestConfig.best.promoted,
+      promotionCandidateWritten: bestConfig.best.promotionCandidateWritten,
     },
   }
   if (existsSync(loop1Path)) {
@@ -377,32 +421,6 @@ function roundParams(params: CanonicalSignalParams): CanonicalSignalParams {
     fallingKnifeSlope: Math.round(params.fallingKnifeSlope * 1000) / 1000,
     holdDays: params.holdDays,
   }
-}
-
-function promoteToBenchmarkScript(params: CanonicalSignalParams) {
-  const path = join(__dirname, 'benchmark-signals.mjs')
-  let src = readFileSync(path, 'utf-8')
-  const rounded = roundParams(params)
-
-  const block = `const CANONICAL_PARAMS = {
-  slopeThreshold: ${rounded.slopeThreshold},
-  rsiBuyMax: ${rounded.rsiBuyMax},
-  dipLowerPct: ${rounded.dipLowerPct},
-  dipUpperPct: ${rounded.dipUpperPct},
-  overboughtSellPct: ${rounded.overboughtSellPct},
-  fallingKnifeLowerPct: ${rounded.fallingKnifeLowerPct},
-  fallingKnifeSlope: ${rounded.fallingKnifeSlope},
-  holdDays: ${rounded.holdDays},
-}`
-
-  if (!/const CANONICAL_PARAMS = \{[\s\S]*?\}/.test(src)) {
-    console.error('  promote: CANONICAL_PARAMS block not found in benchmark-signals.mjs')
-    return
-  }
-
-  src = src.replace(/const CANONICAL_PARAMS = \{[\s\S]*?\}/, block)
-  writeFileSync(path, src)
-  console.log('  promote: updated CANONICAL_PARAMS — sync lib/optimize/canonicalBenchmark.ts DEFAULT_CANONICAL_PARAMS')
 }
 
 main().catch(err => {
