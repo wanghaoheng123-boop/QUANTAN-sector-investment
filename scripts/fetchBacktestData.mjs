@@ -1,4 +1,4 @@
-import { writeFileSync, mkdirSync } from 'fs';
+import { writeFileSync, mkdirSync, readFileSync, existsSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
@@ -70,16 +70,55 @@ const TICKERS = [
 const OUTPUT_DIR = path.resolve(__dirname, 'backtestData');
 const PERIOD_DAYS = 1825; // 5 years
 
+// ── Fixture integrity floors (R2 mitigation) ──────────────────────────────
+// The benchmark needs >= 252 rows per instrument (200-bar warmup + signal
+// window). A degraded Yahoo response (rate-limit, partial outage, holiday
+// gaps) can return a short series; without a guard, saveResult() would
+// silently overwrite a good 5Y fixture with the truncated one, the
+// benchmark's `>= 252` filter would drop the instrument, and the WR floor
+// would mask the loss as "signal drift" instead of "data corruption".
+const MIN_ABSOLUTE_ROWS = 252; // hard floor: unusable below this
+const MAX_SHRINK_PCT = 0.05; // refuse a >5% drop vs the existing fixture
+
 mkdirSync(OUTPUT_DIR, { recursive: true });
 
+/**
+ * Persist a fixture, refusing to overwrite a good file with a degraded fetch.
+ * Throws on a floor violation; the caller counts the failure and main() exits
+ * non-zero so the data-refresh workflow goes RED (not a silent green commit).
+ */
 function saveResult(ticker, sector, candles) {
+  const filePath = path.join(OUTPUT_DIR, `${ticker}.json`);
+
+  if (candles.length < MIN_ABSOLUTE_ROWS) {
+    throw new Error(
+      `REFUSED to save ${ticker}: ${candles.length} rows < absolute floor ${MIN_ABSOLUTE_ROWS} (degraded fetch — keeping existing fixture)`,
+    );
+  }
+
+  if (existsSync(filePath)) {
+    try {
+      const prev = JSON.parse(readFileSync(filePath, 'utf8'));
+      const prevCount = Array.isArray(prev.candles) ? prev.candles.length : 0;
+      if (prevCount > 0 && candles.length < prevCount * (1 - MAX_SHRINK_PCT)) {
+        throw new Error(
+          `REFUSED to save ${ticker}: ${candles.length} rows is >${MAX_SHRINK_PCT * 100}% below existing ${prevCount} (likely a degraded fetch — keeping existing fixture)`,
+        );
+      }
+    } catch (e) {
+      // A genuine floor violation re-throws; a corrupt/unreadable existing
+      // file should NOT block a healthy new fetch (>= MIN_ABSOLUTE_ROWS).
+      if (e instanceof Error && e.message.startsWith('REFUSED')) throw e;
+      console.warn(`[${ticker}] existing fixture unreadable (${e.message}); proceeding with fresh ${candles.length}-row save`);
+    }
+  }
+
   const output = {
     ticker,
     sector,
     fetchedAt: new Date().toISOString(),
     candles,
   };
-  const filePath = path.join(OUTPUT_DIR, `${ticker}.json`);
   writeFileSync(filePath, JSON.stringify(output, null, 2), 'utf8');
 }
 
@@ -167,6 +206,15 @@ async function main() {
   }
 
   console.log(`\nDone. Success: ${success}  |  Failed: ${failed}`);
+
+  // R2 mitigation: surface any failed/refused ticker as a non-zero exit so the
+  // refresh-data workflow goes RED and does NOT auto-commit a partial refresh.
+  // Good fixtures still updated above; the integrity guard kept degraded ones
+  // intact. The operator investigates the named failures before re-running.
+  if (failed > 0) {
+    console.error(`\nFAIL: ${failed} instrument(s) did not refresh cleanly — see [TICKER] ERROR lines above. Refusing to exit 0.`);
+    process.exit(1);
+  }
 }
 
 main().catch((err) => {
