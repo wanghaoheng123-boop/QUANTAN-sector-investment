@@ -45,6 +45,42 @@ Round-trip cost: 22 bps (lib/backtest/executionModel.ts)
 
 **Why re-baselined:** Prior §1 measured a **different** inline `generateSimpleSignal()` (~57%). SSOT now gates `resolveBacktestSignal()` (regime-only) + net costs — honest production path. **No metric gaming** to restore 55%+ without real signal improvement.
 
+## 1c. Engine exit timing — T+1 symmetry (2026-05-29)
+
+The walk-forward **engine** (`lib/backtest/engine.ts`, `backtestInstrument`) now
+fills its **signal-driven exits at the next bar's open**, symmetric with entries:
+
+- BUY entries already filled at the T+1 open (`nextOpen`). The **SELL-signal** and
+  **max-drawdown circuit-breaker** exits previously filled at the **same bar's
+  close** (`signalPrice`) — a look-ahead asymmetry, since you cannot transact at a
+  close you have only just observed to generate the signal. Both now fill at
+  `nextOpen`.
+- Intraday **stop-loss** exits are unchanged: a resting stop legitimately fills
+  same-bar via `evaluateStopHit` (the level was placed in advance). The final
+  forced liquidation also stays at the last close (no future bar exists).
+- `ENTRY_SLIPPAGE_BPS` is intentionally **not** mirrored onto the exit price; the
+  11 bps/side cost in `closePosition` already carries a slippage component
+  (`executionModel.ts`). A separate exit-side price bump is a distinct methodology
+  question, deferred.
+
+**This does NOT move the §1b numbers.** §1b is a *label* benchmark
+(`scripts/benchmark-signals.ts` → `runInstrumentLabelBenchmark`): win rate = sign
+of the fixed 20-day forward return after each BUY, computed directly from prices.
+It never calls `backtestInstrument`, so the engine's exit timing is independent of
+the label WR — the §1b CI/nightly floors are unaffected by this change. The engine
+path instead feeds the backtest **page/API** (`app/api/backtest`),
+`walkForward.ts`, and the engine unit tests (all 30 green post-change). Verified:
+`npm run benchmark` is byte-identical before/after (54.77% gross / 53.79% net).
+
+**Observation — regime-SELL is rarely reached:** the ATR stop-loss floor (3% min
+for stocks), checked *before* the SELL/dd-breaker each bar and measured from
+entry, preempts the regime-SELL threshold (`dev < -10%`, i.e. ~10% below the
+200SMA) for any FIRST_DIP entry near the SMA. A deterministic single-instrument
+fixture that fires the SELL before the stop is therefore impractical — which is
+why this change ships without a behavioral pin. The SELL branch may be near-dead
+under the current stop floor; worth a separate review (the fix is correct
+regardless, and the dd-breaker shares the same exit-fill path).
+
 ## 2. Portfolio backtest — captured 2026-05-23 (Q-002 closed)
 
 ```
