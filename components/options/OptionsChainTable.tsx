@@ -3,7 +3,7 @@
 import { memo, useMemo, useState } from 'react'
 import type { EnrichedChain, EnrichedContract } from '@/lib/options/chain'
 import { MetricTooltip } from '@/components/MetricTooltip'
-import { toIsoDate } from '@/lib/format'
+import { toIsoDate, formatPercent } from '@/lib/format'
 
 const HEADER_TOOLTIPS: Record<string, string> = {
   IV: 'iv',
@@ -21,8 +21,8 @@ interface Props {
 // halted-symbol upstream rows. `v != null && isNaN(v)` (the prior gate)
 // missed `null` because typeof null === 'object' and `NaN(null)` is false.
 function fmtPct(v: unknown): string {
-  if (typeof v !== 'number' || !Number.isFinite(v)) return '—'
-  return `${(v * 100).toFixed(1)}%`
+  // SSOT: lib/format.formatPercent (1 decimal, unsigned). Non-numbers → '—'.
+  return formatPercent(typeof v === 'number' ? v : null, 1)
 }
 
 function fmtNum(v: unknown, decimals = 2): string {
