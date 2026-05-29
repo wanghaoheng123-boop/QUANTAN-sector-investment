@@ -23,9 +23,14 @@ export function costBpsPerSide(config: ExecutionCostConfig = DEFAULT_EXECUTION_C
   return config.spreadBpsPerSide + config.slippageBpsPerSide + config.commissionBpsPerSide
 }
 
+/** Decimal per-side cost (entry OR exit). SSOT for the 0.0011 (11 bps) literal. */
+export function perSideCostPct(config: ExecutionCostConfig = DEFAULT_EXECUTION_COSTS): number {
+  return costBpsPerSide(config) / 10000
+}
+
 /** Decimal round-trip cost (entry + exit). */
 export function roundTripCostPct(config: ExecutionCostConfig = DEFAULT_EXECUTION_COSTS): number {
-  return (2 * costBpsPerSide(config)) / 10000
+  return 2 * perSideCostPct(config)
 }
 
 /** Gross holding-period return minus round-trip costs. */
