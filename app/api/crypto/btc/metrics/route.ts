@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { sanitizeError } from '@/lib/api/sanitize'
 export const dynamic = 'force-dynamic'
 
 const BYBIT_BASE = 'https://api.bybit.com'
@@ -111,7 +112,9 @@ export async function GET() {
   const takerBuyVolume = ar?.buyRatio != null ? parseFloat(ar.buyRatio) : null
   const takerSellVolume = ar?.sellRatio != null ? parseFloat(ar.sellRatio) : null
 
-  const errors = [tickRes.error, ratioRes.error, lsrRes.error].filter(Boolean)
+  const errors = [tickRes.error, ratioRes.error, lsrRes.error]
+    .filter(Boolean)
+    .map((e) => sanitizeError(e) ?? 'fetch_failed')
 
   const result = {
     fundingRate,

@@ -3,6 +3,7 @@ import YahooFinance from 'yahoo-finance2'
 import { SECTORS } from '@/lib/sectors'
 import { sma, rsi, ma200Regime } from '@/lib/quant/technicals'
 import { sanitizeError } from '@/lib/api/sanitize'
+import { withRetry } from '@/lib/api/reliability'
 
 const yahooFinance = new YahooFinance()
 
@@ -34,7 +35,10 @@ export async function GET() {
     // Fetch all charts in parallel
     const chartResults = await Promise.allSettled(
       allTickers.map((ticker) =>
-        yahooFinance.chart(ticker, { period1, interval: '1d' })
+        withRetry(
+          () => yahooFinance.chart(ticker, { period1, interval: '1d' }),
+          { attempts: 2, timeoutMs: 7000, retryLabel: `ma-deviation chart ${ticker}` },
+        )
       )
     )
 

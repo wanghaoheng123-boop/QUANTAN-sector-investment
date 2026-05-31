@@ -5,6 +5,7 @@ import { sectorScores } from '@/lib/quant/sectorRotation'
 import { hasPositiveClose } from '@/lib/quant/chartQuoteFilter'
 import { applyRateLimit } from '@/lib/api/rateLimit'
 import { sanitizeError } from '@/lib/api/sanitize'
+import { withRetry } from '@/lib/api/reliability'
 
 const yahooFinance = new YahooFinance()
 
@@ -25,7 +26,10 @@ async function fetchCloses(etf: string): Promise<FetchResult> {
     const period1 = new Date()
     // 1yr (~251 trading days) was too short — sectorScores() skips etfs with <253 bars.
     period1.setFullYear(period1.getFullYear() - 2)
-    const chart = await yahooFinance.chart(etf, { period1, interval: '1d' })
+    const chart = await withRetry(
+      () => yahooFinance.chart(etf, { period1, interval: '1d' }),
+      { attempts: 2, timeoutMs: 6000, retryLabel: `sector-rotation chart ${etf}` },
+    )
     const closes = (chart?.quotes ?? [])
       .filter(hasPositiveClose)
       .map((q) => q.close!)
@@ -94,7 +98,10 @@ export async function GET(request: Request) {
   } catch (e) {
     console.error('[Sector Rotation API]', e)
     return NextResponse.json(
-      { error: 'Failed to compute sector rotation', details: sanitizeError(e) ?? null },
+      {
+        error: 'Failed to compute sector rotation',
+        ...(sanitizeError(e) ? { details: sanitizeError(e) } : {}),
+      },
       { status: 502 },
     )
   }

@@ -5,6 +5,7 @@ import { aggregateMinuteQuotesToN } from '@/lib/chartYahoo'
 import { sortChartCandles } from '@/lib/sortChartCandles'
 import { applyRateLimit } from '@/lib/api/rateLimit'
 import { normalizeTicker, sanitizeError } from '@/lib/api/sanitize'
+import { withRetry } from '@/lib/api/reliability'
 
 const yahooFinance = new YahooFinance()
 
@@ -180,7 +181,10 @@ export async function GET(
         break
     }
 
-    const result = await yahooFinance.chart(ticker, { period1, interval })
+    const result = await withRetry(
+      () => yahooFinance.chart(ticker, { period1, interval }),
+      { attempts: 2, timeoutMs: 7000, retryLabel: `chart ${ticker}` },
+    )
 
     if (!result || !result.quotes || result.quotes.length === 0) {
       return NextResponse.json({ error: 'No historical data found for ticker' }, { status: 404 })
@@ -197,7 +201,13 @@ export async function GET(
     //      Use new Date(...) which accepts Date | number | string.
     const candles = sortChartCandles(
       result.quotes
-        .filter((c: any) => Number.isFinite(c?.close))
+        .filter(
+          (c: any) =>
+            Number.isFinite(c?.open) &&
+            Number.isFinite(c?.high) &&
+            Number.isFinite(c?.low) &&
+            Number.isFinite(c?.close),
+        )
         .map((c: any) => {
           const d = c.date instanceof Date ? c.date : new Date(c.date)
           const timeVal = isIntraday
@@ -242,7 +252,10 @@ export async function GET(
     console.error(`[Chart API] Error fetching historical data for ${ticker}:`, error)
     // Phase 13 S2 fix (F4.8): sanitize error for production response.
     return NextResponse.json(
-      { error: 'Failed to fetch historical data', details: sanitizeError(error) ?? null },
+      {
+        error: 'Failed to fetch historical data',
+        ...(sanitizeError(error) ? { details: sanitizeError(error) } : {}),
+      },
       { status: 500 },
     )
   }

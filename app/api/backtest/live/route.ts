@@ -66,8 +66,10 @@ export async function GET(request: NextRequest) {
         .filter((t): t is string => t !== null)
     : null
 
-  // Serve from cache if fresh
-  if (cache && Date.now() - cache.timestamp < CACHE_TTL_MS) {
+  // Serve from cache for full (unfiltered) runs only — a filtered request must
+  // not read from or write to the shared module-level cache, otherwise a
+  // filtered response would poison the cache for unfiltered callers for 60s.
+  if (!specificTickers && cache && Date.now() - cache.timestamp < CACHE_TTL_MS) {
     return NextResponse.json(cache.data, {
       headers: { 'Cache-Control': 's-maxage=60, stale-while-revalidate=120' },
     })
@@ -110,7 +112,8 @@ export async function GET(request: NextRequest) {
     },
   }
 
-  cache = { data, timestamp: Date.now() }
+  // Only cache the full (unfiltered) response — same guard as the read path.
+  if (!specificTickers) cache = { data, timestamp: Date.now() }
 
   return NextResponse.json(data, {
     headers: { 'Cache-Control': 's-maxage=60, stale-while-revalidate=120' },
