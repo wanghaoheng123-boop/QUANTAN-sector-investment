@@ -216,10 +216,10 @@ export interface RegimeSignal {
  *   >+20%  EXTREME_BULL  → HOLD (overbought, don't chase)
  *   >+10%  EXTENDED_BULL → HOLD
  *   >= 0%  HEALTHY_BULL  → HOLD (slightly above SMA = normal)
- *   -5 to 0%  FIRST_DIP  → BUY if slope > 0.005 AND price was recently near SMA
- *   -10 to -5% DEEP_DIP  → BUY if slope > 0.005 AND price was near SMA
- *   -20 to -10% BEAR_ALERT → HOLD (not oversold enough to buy)
- *   <-20%  CRASH_ZONE    → BUY only if slope > 0.005 (never buy crash in downtrend)
+ *   -10 to 0%  FIRST_DIP  → BUY if slope positive AND price was recently near SMA (else HOLD/WATCH_DIP)
+ *   -20 to -10% DEEP_DIP  → BUY if slope positive AND near SMA (else SELL — falling knife)
+ *   -30 to -20% BEAR_ALERT → BUY only with positive slope + near SMA (else SELL)
+ *   <-30%  CRASH_ZONE    → BUY only if slope positive + near SMA (else SELL — never buy crash in downtrend)
  */
 export function regimeSignal(price: number, closes: number[], rsi14?: number): RegimeSignal {
   if (closes.length < 200) {
