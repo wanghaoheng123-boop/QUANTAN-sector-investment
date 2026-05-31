@@ -5,8 +5,14 @@ import { fetchBloombergQuotesViaBridge, isBloombergBridgeConfigured } from '@/li
 import { hasPositiveClose } from '@/lib/quant/chartQuoteFilter'
 import { errorResponse, withRetry } from '@/lib/api/reliability'
 import { normalizeTicker, sanitizeError } from '@/lib/api/sanitize'
+import { applyRateLimit } from '@/lib/api/rateLimit'
 
 const yahooFinance = new YahooFinance()
+
+// D4-3 (inspection 2026-05-30): fundamentals fans out many Yahoo modules + an
+// optional Bloomberg bridge call per request with no in-process cache. Cap
+// per-IP request rate. 30 req / 60s mirrors the other Yahoo routes.
+const FUNDAMENTALS_RATE_LIMIT = { maxRequests: 30, windowSeconds: 60 }
 
 const MODULES = [
   'summaryProfile',
@@ -23,6 +29,9 @@ const MODULES = [
 ] as const
 
 export async function GET(req: NextRequest, { params }: { params: { ticker: string } }) {
+  const rateLimited = await applyRateLimit(req, 'fundamentals', FUNDAMENTALS_RATE_LIMIT)
+  if (rateLimited) return rateLimited
+
   // Phase 16 audit (2026-05-24): strict ticker validation via SSOT
   // normalizeTicker. The prior yahooSymbolFromParam was permissive and would
   // forward any uppercased path-encoded string to Yahoo (F7.3 risk).

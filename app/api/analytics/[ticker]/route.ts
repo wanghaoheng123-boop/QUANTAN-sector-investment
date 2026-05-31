@@ -5,8 +5,14 @@ import { alignCloses, logReturns, correlation } from '@/lib/quant/relativeStreng
 import { hasPositiveClose } from '@/lib/quant/chartQuoteFilter'
 import { errorResponse, withRetry } from '@/lib/api/reliability'
 import { normalizeTicker, sanitizeError } from '@/lib/api/sanitize'
+import { applyRateLimit } from '@/lib/api/rateLimit'
 
 const yahooFinance = new YahooFinance()
+
+// D4-3 (inspection 2026-05-30): this route fans out 3 Yahoo calls per request
+// with no in-process cache. Cap per-IP request rate so a single caller cannot
+// drive sustained upstream fan-out. 30 req / 60s mirrors the other Yahoo routes.
+const ANALYTICS_RATE_LIMIT = { maxRequests: 30, windowSeconds: 60 }
 
 // Phase 14 wave 24 (Pattern C): finite-or-null helper at the API boundary.
 // typeof v === 'number' is true for NaN — without Number.isFinite the JSON
@@ -16,7 +22,10 @@ const finiteOrNull = (v: unknown): number | null =>
   typeof v === 'number' && Number.isFinite(v) ? v : null
 
 /** Extra analytics (win rate, up/down days, beta proxy) — complements `/api/fundamentals`. */
-export async function GET(_req: Request, { params }: { params: { ticker: string } }) {
+export async function GET(req: Request, { params }: { params: { ticker: string } }) {
+  const rateLimited = await applyRateLimit(req, 'analytics', ANALYTICS_RATE_LIMIT)
+  if (rateLimited) return rateLimited
+
   // Phase 16 audit (2026-05-24): strict ticker validation via SSOT
   // normalizeTicker (was permissive yahooSymbolFromParam — F7.3 risk).
   const symbol = normalizeTicker(params.ticker)
