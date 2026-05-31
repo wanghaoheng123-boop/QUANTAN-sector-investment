@@ -285,12 +285,12 @@ export default function HomePage() {
         </div>
 
         {/* Backtest CTA */}
-        <section className="bg-gradient-to-r from-amber-950/40 via-slate-900/80 to-amber-950/30 rounded-2xl border border-amber-800/30 p-6">
+        <section aria-labelledby="section-backtest" className="bg-gradient-to-r from-amber-950/40 via-slate-900/80 to-amber-950/30 rounded-2xl border border-amber-800/30 p-6">
           <div className="flex items-center justify-between flex-wrap gap-4">
             <div>
               <div className="flex items-center gap-2 mb-1">
                 <span className="text-xs font-mono text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded">NEW</span>
-                <h2 className="text-lg font-bold text-white">Institutional Backtest Dashboard</h2>
+                <h2 id="section-backtest" className="text-lg font-bold text-white">Institutional Backtest Dashboard</h2>
               </div>
               <p className="text-sm text-slate-400 max-w-lg">
                 5Y walk-forward backtest across 56 instruments (11 GICS sectors + BTC). Regime dip-buy vs 200SMA (SSOT: resolveBacktestSignal), ATR-adaptive stops, and half-Kelly sizing — label WR ~55% gross / ~54% net after costs (not a live accuracy guarantee).
@@ -307,10 +307,10 @@ export default function HomePage() {
         </section>
 
         {/* Top Signals */}
-        <section>
+        <section aria-labelledby="section-top-signals">
           <div className="flex items-center justify-between mb-5">
             <div>
-              <h2 className="text-lg font-bold text-white">Largest session moves</h2>
+              <h2 id="section-top-signals" className="text-lg font-bold text-white">Largest session moves</h2>
               <p className="text-xs text-slate-500 mt-0.5">From Yahoo change % (normalized). UP/DOWN = vs prior close — not buy/sell advice.</p>
             </div>
             <Link href="/briefs" className="text-sm text-blue-400 hover:text-blue-300 transition-colors">
@@ -318,11 +318,11 @@ export default function HomePage() {
             </Link>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
-            {topSignals.map((signal, i) => {
+            {topSignals.map((signal) => {
               const sector = SECTORS.find(s => s.etf === signal.etf)
               if (!sector) return null
               return (
-                <Link key={i} href={`/sector/${sector.slug}`}>
+                <Link key={signal.etf} href={`/sector/${sector.slug}`}>
                   <SignalCard signal={signal} color={sector.color} compact />
                 </Link>
               )
@@ -331,7 +331,7 @@ export default function HomePage() {
         </section>
 
         {/* Market Overview Stats */}
-        <section className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <section aria-label="Market overview stats" className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
             { label: 'Sectors Bullish', value: buySignals.length, of: 11, color: '#00d084' },
             { label: 'Sectors Bearish', value: sellSignals.length, of: 11, color: '#ff4757' },
@@ -349,10 +349,10 @@ export default function HomePage() {
         </section>
 
         {/* Market Breadth */}
-        <section className="rounded-2xl border border-slate-800 p-5 bg-slate-900/30">
+        <section aria-labelledby="section-market-breadth" className="rounded-2xl border border-slate-800 p-5 bg-slate-900/30">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-sm font-bold text-white">Market Breadth</h2>
+              <h2 id="section-market-breadth" className="text-sm font-bold text-white">Market Breadth</h2>
               <p className="text-[10px] text-slate-500 mt-0.5">Session direction distribution across all sectors</p>
             </div>
             <div className="flex items-center gap-4 text-[10px] font-mono">
@@ -432,10 +432,10 @@ export default function HomePage() {
         </section>
 
         {/* Sector Grid */}
-        <section>
+        <section aria-labelledby="section-all-sectors">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
             <div>
-              <h2 className="text-lg font-bold text-white">All Sectors</h2>
+              <h2 id="section-all-sectors" className="text-lg font-bold text-white">All Sectors</h2>
               <p className="text-xs text-slate-500 mt-0.5">Click any sector to view K-line chart, dark pool data, and signals</p>
             </div>
             <div className="flex gap-2 flex-wrap">
@@ -443,6 +443,7 @@ export default function HomePage() {
                 <button
                   key={f}
                   onClick={() => setActiveFilter(f)}
+                  aria-pressed={activeFilter === f}
                   className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
                     activeFilter === f
                       ? 'bg-amber-600 text-white'
@@ -467,10 +468,10 @@ export default function HomePage() {
         </section>
 
         {/* Recent Briefs - Live from Yahoo Finance */}
-        <section>
+        <section aria-labelledby="section-latest-news">
           <div className="flex items-center justify-between mb-5">
             <div>
-              <h2 className="text-lg font-bold text-white">Latest Financial News</h2>
+              <h2 id="section-latest-news" className="text-lg font-bold text-white">Latest Financial News</h2>
               <p className="text-xs text-slate-500 mt-0.5">
                 {newsLoading ? 'Loading latest news...' : `Live from Yahoo Finance · ${newsBriefs.length} articles`}
               </p>
@@ -562,8 +563,8 @@ export default function HomePage() {
         </section>
 
         {/* What's inside */}
-        <section className="rounded-2xl border border-slate-800 p-8 bg-slate-900/30">
-          <h2 className="text-lg font-bold text-white mb-6 text-center">What every sector brief includes</h2>
+        <section aria-labelledby="section-whats-inside" className="rounded-2xl border border-slate-800 p-8 bg-slate-900/30">
+          <h2 id="section-whats-inside" className="text-lg font-bold text-white mb-6 text-center">What every sector brief includes</h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
             {[
               { icon: '📊', title: 'K-Line Chart', desc: 'Candlestick charts with EMA overlays, volume, dark pool print markers, and news event pins.' },

@@ -371,9 +371,9 @@ export default function StockPage({ params }: { params: { ticker: string } }) {
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div className="flex flex-wrap gap-1 bg-slate-900 rounded-lg p-1 border border-slate-800">
+          <div role="tablist" className="flex flex-wrap gap-1 bg-slate-900 rounded-lg p-1 border border-slate-800">
             {STOCK_MAIN_TABS.map(([tab, label]) => (
-              <button key={tab} type="button" onClick={() => setActiveTab(tab)}
+              <button key={tab} type="button" role="tab" aria-selected={activeTab === tab} onClick={() => setActiveTab(tab)}
                 className={`px-3 sm:px-4 py-1.5 text-xs font-medium rounded-md transition-all ${activeTab === tab ? 'bg-slate-700 text-white' : 'text-slate-500 hover:text-slate-300'}`}>
                 {label}
               </button>
@@ -385,6 +385,7 @@ export default function StockPage({ params }: { params: { ticker: string } }) {
               <div className="flex flex-wrap gap-1 bg-slate-900 rounded-lg p-1 border border-slate-800">
                 {STOCK_CHART_RANGES.map((r) => (
                   <button key={r} onClick={() => setActiveRange(r)}
+                    aria-pressed={activeRange === r}
                     className={`px-2.5 py-1 text-[11px] rounded-md transition-all ${activeRange === r ? 'bg-slate-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>
                     {r}
                   </button>
@@ -393,6 +394,7 @@ export default function StockPage({ params }: { params: { ticker: string } }) {
               <div className="flex flex-wrap gap-1 bg-slate-900 rounded-lg p-1 border border-slate-800">
                 {STOCK_INDICATOR_PRESETS.map(([val, label]) => (
                   <button key={val} type="button" onClick={() => { setActiveIndicator(val); setVis(buildVisFromIndicatorPreset(val)) }}
+                    aria-pressed={activeIndicator === val}
                     className={`px-2.5 py-1 text-[11px] rounded-md transition-all ${activeIndicator === val ? 'bg-slate-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>
                     {label}
                   </button>

@@ -187,12 +187,14 @@ export function LlmTab(props: LlmTabProps) {
                     className="w-full rounded bg-slate-950 border border-amber-500/30 text-amber-100 px-3 py-2 pr-9 text-xs font-mono placeholder:text-amber-200/30"
                     autoComplete="off"
                     spellCheck={false}
+                    aria-label="LLM provider API key"
                   />
                   <button
                     type="button"
                     onClick={() => setLlmShowKey(s => !s)}
                     className="absolute right-2 top-1/2 -translate-y-1/2 text-amber-400/60 hover:text-amber-300 transition-colors"
                     title={llmShowKey ? 'Hide key' : 'Show key'}
+                    aria-label={llmShowKey ? 'Hide API key' : 'Show API key'}
                   >
                     {llmShowKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                   </button>

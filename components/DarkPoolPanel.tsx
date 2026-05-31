@@ -2,6 +2,7 @@
 
 import { DarkPoolPrint } from '@/lib/sectors'
 import type { DarkPoolAnalysis } from '@/lib/darkpool'
+import { formatFreshness } from '@/lib/format'
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -184,7 +185,7 @@ export default function DarkPoolPanel({
               )}
               {apiData.quote.quoteTime && (
                 <span className="text-slate-400">
-                  {new Date(apiData.quote.quoteTime).toLocaleString()}
+                  {formatFreshness(apiData.quote.quoteTime)}
                 </span>
               )}
             </div>
@@ -244,14 +245,15 @@ export default function DarkPoolPanel({
 
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
+            <caption className="sr-only">Dark pool prints — recent off-exchange block trades</caption>
             <thead>
               <tr className="text-slate-500 border-b border-slate-800">
-                <th className="text-left px-4 py-2 font-medium">Time</th>
-                <th className="text-right px-3 py-2 font-medium">Size</th>
-                <th className="text-right px-3 py-2 font-medium">Price</th>
-                <th className="text-right px-3 py-2 font-medium">vs VWAP</th>
-                <th className="text-center px-3 py-2 font-medium">Type</th>
-                <th className="text-center px-3 py-2 font-medium">Signal</th>
+                <th scope="col" className="text-left px-4 py-2 font-medium">Time</th>
+                <th scope="col" className="text-right px-3 py-2 font-medium">Size</th>
+                <th scope="col" className="text-right px-3 py-2 font-medium">Price</th>
+                <th scope="col" className="text-right px-3 py-2 font-medium">vs VWAP</th>
+                <th scope="col" className="text-center px-3 py-2 font-medium">Type</th>
+                <th scope="col" className="text-center px-3 py-2 font-medium">Signal</th>
               </tr>
             </thead>
             <tbody>

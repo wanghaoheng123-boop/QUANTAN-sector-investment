@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import type { SectorScore, SectorSignal } from '@/lib/quant/sectorRotation'
+import { formatFreshness } from '@/lib/format'
 
 interface ApiResponse {
   scores: SectorScore[]
@@ -121,11 +122,11 @@ export default function SectorRotationPanel() {
                   <ScoreBar value={s.composite} max={maxComposite} />
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-gray-600">Momentum</span>
+                  <span className="text-xs text-gray-400">Momentum</span>
                   <ScoreBar value={s.momentum} max={maxComposite} />
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-gray-600">MeanRev</span>
+                  <span className="text-xs text-gray-400">MeanRev</span>
                   <span className={`text-xs font-mono ${s.meanReversion > 0 ? 'text-emerald-500' : s.meanReversion < 0 ? 'text-red-500' : 'text-gray-500'}`}>
                     {s.meanReversion > 0 ? '+' : ''}{(s.meanReversion * 100).toFixed(0)}bp
                   </span>
@@ -144,13 +145,13 @@ export default function SectorRotationPanel() {
         <span className="flex items-center gap-1">
           <span className="w-2 h-2 bg-red-500 rounded-full" /> UNDERWEIGHT (bottom 3)
         </span>
-        <span className="text-gray-600">
+        <span className="text-gray-400">
           Composite = 0.6 × momentum (3/6/12mo) + 0.4 × RSI mean-reversion
         </span>
       </div>
 
-      <p className="text-xs text-gray-600">
-        Updated: {new Date(data.fetchedAt).toLocaleString()} · 1-hour cache
+      <p className="text-xs text-gray-400">
+        Updated: {formatFreshness(data.fetchedAt)} · 1-hour cache
       </p>
     </div>
   )

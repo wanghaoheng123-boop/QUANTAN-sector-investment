@@ -406,11 +406,13 @@ export default function SectorPage({ params }: { params: { slug: string } }) {
           <div className="xl:col-span-2 space-y-6">
             {/* Tab navigation */}
             <div className="flex items-center justify-between">
-              <div className="flex gap-1 bg-slate-900 rounded-lg p-1 border border-slate-800">
+              <div role="tablist" className="flex gap-1 bg-slate-900 rounded-lg p-1 border border-slate-800">
                 {SECTOR_MAIN_TABS.map(([tab, label]) => (
                   <button
                     key={tab}
                     type="button"
+                    role="tab"
+                    aria-selected={activeTab === tab}
                     onClick={() => setActiveTab(tab)}
                     className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all ${
                       activeTab === tab
@@ -429,6 +431,7 @@ export default function SectorPage({ params }: { params: { slug: string } }) {
                       key={r}
                       type="button"
                       onClick={() => setActiveRange(r)}
+                      aria-pressed={activeRange === r}
                       className={`px-2 py-1 text-[11px] rounded-md transition-all ${
                         activeRange === r
                           ? 'bg-slate-700 text-white'
