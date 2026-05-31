@@ -195,7 +195,7 @@ export default function DarkPoolPanel({
           <div className="text-[10px] text-slate-400 leading-relaxed">
             Source: Yahoo Finance aggregate off-exchange trading data.{' '}
             {apiData.fetchedAt && (
-              <>Fetched: {new Date(apiData.fetchedAt).toLocaleString()}. </>
+              <>Fetched: {formatFreshness(apiData.fetchedAt)}. </>
             )}
             Off-exchange % = Finra BATS/OTCQX/OTCBB volume ÷ total volume.
           </div>
