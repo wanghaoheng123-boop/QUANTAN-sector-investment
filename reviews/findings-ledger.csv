@@ -9,7 +9,7 @@ F1.7,R1,CRITICAL,quant-finance,lib/backtest/portfolioBacktest.ts,"171-191, 325-3
 F1.8,R1,MEDIUM,quant-finance,lib/quant/indicators.ts,canonical,Sortino MAR is configurable + documented,Sortino & van der Meer (1991),AT-F1.8-sortino-mar-config,E1,S2,FIXED-c7fa7902+
 F1.9,R1,MEDIUM,quant-finance,lib/quant/indicators.ts,canonical,Sortino min n_d raised from 3 to 30,Bacon (2008) p107,AT-F1.9-sortino-nmin30,E1,S2,FIXED-c7fa7902+
 F1.10,R1,MEDIUM,quant-finance,lib/backtest/signals.ts,312-416,combinedSignal deleted (used only by its own tests),N/A (SSOT),AT-F1.10-combinedsignal-callers,E1,S2,FIXED
-F1.11,R1,MEDIUM,quant-finance,lib/backtest/signals.ts,561,RSI score linear; should be nonlinear,"Wilder (1978) p65; Murphy (1999) p243",AT-F1.11-rsi-piecewise,E1,S3,open
+F1.11,R1,MEDIUM,quant-finance,lib/backtest/signals.ts,561,RSI score linear; should be nonlinear,"Wilder (1978) p65; Murphy (1999) p243",AT-F1.11-rsi-piecewise,E1,S3,fixed
 F1.12,R1,MEDIUM,quant-finance,lib/backtest/signals.ts,82,bullish divergence cap relaxed to RSI<65,Murphy (1999) p245,AT-F1.12-divergence-rsi-bound,E1,S2,FIXED
 F1.13,R1,LOW,quant-finance,lib/backtest/signals.ts,563,MACD score scale rationale documented,Appel (1979),AT-F1.13-macd-scale-doc,E1,S2,FIXED
 F1.14,R1,LOW,quant-finance,lib/backtest/signals.ts,461-465,VPOC asymmetry rationale + Steidlmayer citation,Steidlmayer (1989),AT-F1.14-vpoc-regime,E1,S2,FIXED
