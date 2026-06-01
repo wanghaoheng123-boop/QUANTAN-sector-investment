@@ -102,6 +102,7 @@ The **LLM Multi-Agent Analysis** tab needs the `server_trading_agents.py` Python
    - Value: `https://your-app.up.railway.app` (must be **`https://`**, no trailing slash)
    - Environments: **Production** (and Preview if you want)
    - Optional (for zero-setup users): set `TRADING_AGENTS_FALLBACK_BASE` to a shared managed backend URL. It is used only when `TRADING_AGENTS_BASE` is not set.
+   - Optional (server-to-server callers): set `QUANTAN_API_KEY` to a long random secret (e.g. `openssl rand -hex 32`). Out-of-band callers (cron jobs, scripts, external services) then send that exact value in an `X-API-Key` header to `POST /api/trading-agents/[ticker]`, bypassing the browser CSRF guard. **Fail-closed:** while `QUANTAN_API_KEY` is unset, the `X-API-Key` path rejects all requests and only an authenticated session can POST — the browser LLM tab is unaffected either way. The key is compared in constant time and never logged.
 
 7. Redeploy the Next.js app - the LLM tab will now connect automatically.
 
