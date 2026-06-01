@@ -226,7 +226,7 @@
     "title": "Decompose QuantLabPanel (F5.2)",
     "domain": "Frontend/UX",
     "priority": "P1",
-    "status": "partial",
+    "status": "done",
     "phase15_sprint": "S2",
     "files": [
       "components/stock/QuantLabPanel.tsx"
@@ -242,6 +242,7 @@
     "notes_2026_05_23": "Confirmed 1,684 LOC (grew from 1,653). Phase 15 S3 decomposes to \u2264 5 sub-tabs each \u2264 400 LOC.",
     "completed_at": null,
     "notes_2026_05_24": "PARTIAL. components/stock/QuantLabMarketCards.tsx extracted, but components/stock/QuantLabPanel.tsx is still 1,684 LOC (no change from baseline). Continuation: Q-053-NEW. | 2026-05-24 Claude-Code review: Cursor's HANDOFF + PENDING_TASKS_AUDIT honestly described this as partial, but the JSON status field was set to 'done'. Flipped to 'partial' to match physical reality. See workspace/REVIEW_2026-05-24.md.",
+    "notes_2026_06_01": "CLOSED. Verified components/stock/QuantLabPanel.tsx is now 148 LOC (decomposed via Q-053-NEW; was 1,684). Meets the \u2264600 LOC criterion. Evidence: inspection INSPECTION_PROGRAM_2026-05-30.md D3 (CONTRADICTS Q-008) + direct wc -l on main @ 8d56955.",
     "partial": "Extracted submodule only; parent file still >600 LOC \u2014 Phase 16 full decompose",
     "prior_closure_note": "Confirmed 1,684 LOC (grew from 1,653). Phase 15 S3 decomposes to \u2264 5 sub-tabs each \u2264 400 LOC. | 2026-05-24 Cursor Phase 15 completion batch \u2014 see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
   },
@@ -367,7 +368,7 @@
     "title": "Decompose backtest page (F5.3)",
     "domain": "Frontend/UX",
     "priority": "P1",
-    "status": "partial",
+    "status": "done",
     "phase15_sprint": "S2",
     "files": [
       "app/backtest/page.tsx"
@@ -383,6 +384,7 @@
     "notes_2026_05_23": "Confirmed 887 LOC. S3 target \u2264 200 (page) + presentational components.",
     "completed_at": null,
     "notes_2026_05_24": "PARTIAL. components/backtest/BacktestMetricsGrid.tsx extracted, but app/backtest/page.tsx is still 887 LOC (no change). Continuation: Q-054-NEW. | 2026-05-24 Claude-Code review: Cursor's HANDOFF + PENDING_TASKS_AUDIT honestly described this as partial, but the JSON status field was set to 'done'. Flipped to 'partial' to match physical reality. See workspace/REVIEW_2026-05-24.md.",
+    "notes_2026_06_01": "CLOSED. Verified app/backtest/page.tsx is now 268 LOC (decomposed via Q-054-NEW; was 887). Meets the <400 LOC criterion. Evidence: inspection INSPECTION_PROGRAM_2026-05-30.md D3 (Q-019) + direct wc -l on main @ 8d56955.",
     "partial": "Extracted submodule only; parent file still >600 LOC \u2014 Phase 16 full decompose",
     "prior_closure_note": "Confirmed 887 LOC. S3 target \u2264 200 (page) + presentational components. | 2026-05-24 Cursor Phase 15 completion batch \u2014 see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
   },
@@ -802,7 +804,7 @@
     "title": "WCAG contrast pass (F6.6)",
     "domain": "Accessibility",
     "priority": "P3",
-    "status": "done",
+    "status": "partial",
     "phase15_sprint": "S4",
     "files": [
       "app/globals.css",
@@ -817,7 +819,8 @@
     ],
     "notes_2026_05_23": "Bundled into F5.6 / F6.5\u2013F6.8 a11y sweep in S4.",
     "completed_at": "2026-05-24",
-    "notes_2026_05_24": "Bundled into F5.6 / F6.5\u2013F6.8 a11y sweep in S4. | 2026-05-24 Cursor Phase 15 completion batch \u2014 see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
+    "notes_2026_05_24": "Bundled into F5.6 / F6.5\u2013F6.8 a11y sweep in S4. | 2026-05-24 Cursor Phase 15 completion batch \u2014 see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md",
+    "notes_2026_06_01": "REOPENED as PARTIAL. 7 low-contrast text-gray-600/text-slate-600 sites survived the S4 close across 4 files (SectorRotationPanel, options/MaxPainGauge, options/FlowScanner, options/OptionsChainTable) \u2014 fail ~3.4:1 vs WCAG AA 4.5:1. Evidence: inspection INSPECTION_PROGRAM_2026-05-30.md D3-6 + grep on main @ 8d56955. FIX IN FLIGHT: PR #32 (a11y sweep) addresses these; OptionsChainTable is covered by PR #29. Mark done once #32+#29 merge."
   },
   {
     "id": "Q-036",
