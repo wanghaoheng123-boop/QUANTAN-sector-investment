@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { DEFAULT_MODELS, type LLMProvider } from '@/lib/trading-agents-config'
+import { csrfHeaders } from '@/lib/api/csrfClient'
 import { isLlmConnectivityCode } from '@/components/stock/quantlab/formatters'
 import type { LlmBackendHealth, QuantLabSubTab } from '@/components/stock/quantlab/types'
 
@@ -98,9 +99,12 @@ export function useQuantLabLlm(ticker: string, sub: QuantLabSubTab) {
         api_key: llmApiKey.trim(),
       }
       if (llmTradeDate) body.trade_date = llmTradeDate
+      // Double-submit CSRF: echo the quantan_csrf cookie as the x-quantan-csrf
+      // header, or the route rejects this POST with 403 csrf_invalid before it
+      // reaches the sidecar. See lib/api/csrfClient.ts + middleware.ts.
       const r = await fetch(`/api/trading-agents/${encodeURIComponent(ticker)}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
         body: JSON.stringify(body),
       })
       let j: Record<string, unknown> = {}
