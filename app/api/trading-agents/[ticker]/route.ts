@@ -5,6 +5,7 @@ import { SUPPORTED_PROVIDERS, DEFAULT_MODELS, type LLMProvider, resolveTradingAg
 import { applyRateLimit } from '@/lib/api/rateLimit'
 import { normalizeTicker, sanitizeError } from '@/lib/api/sanitize'
 import { validateCsrf } from '@/lib/api/csrf'
+import { isValidApiKey } from '@/lib/auth/apiKey'
 
 const TIMEOUT_MS = 5 * 60 * 1000 // 5 minutes — TradingAgents can be slow
 const TA_RATE_LIMIT = { maxRequests: 10, windowSeconds: 60 }
@@ -157,12 +158,20 @@ export async function POST(
   // came from a same-origin context. Cookie is issued by middleware.ts on
   // first page load; client must read it and echo it in the header.
   //
-  // Allow X-API-Key callers to bypass — they're server-to-server, not
-  // browser-initiated, and use a different authentication discipline
-  // (the API key itself proves origin authority). Note CSRF is browser-
-  // session protection; out-of-band API integrations are out of scope.
+  // Allow X-API-Key callers to bypass CSRF — they're server-to-server, not
+  // browser-initiated, and use a different authentication discipline (the API
+  // key itself proves origin authority). CSRF is browser-session protection;
+  // out-of-band API integrations are out of scope.
+  //
+  // D4-1 (inspection 2026-05-30): the bypass MUST require a *valid* key, not
+  // merely a present header. Previously any non-null x-api-key satisfied this
+  // check (and the auth check below) with no QUANTAN_API_KEY to validate
+  // against — an auth bypass allowing unauthenticated LLM-credit burn.
+  // isValidApiKey() is fail-closed (rejects when QUANTAN_API_KEY is unset) and
+  // compares in constant time. See lib/auth/apiKey.ts.
   const apiKeyHeader = req.headers.get('x-api-key')
-  if (!apiKeyHeader && !validateCsrf(req)) {
+  const apiKeyValid = isValidApiKey(apiKeyHeader)
+  if (!apiKeyValid && !validateCsrf(req)) {
     return NextResponse.json(
       { error: 'csrf_invalid', message: 'Missing or invalid CSRF token. Reload the page and retry.' },
       { status: 403 },
@@ -173,11 +182,12 @@ export async function POST(
   const rateLimitResponse = await applyRateLimit(req, 'trading-agents', TA_RATE_LIMIT)
   if (rateLimitResponse) return rateLimitResponse
 
-  // Auth check: require valid session OR API key header (X-API-Key)
+  // Auth check: require a valid session OR a VALID X-API-Key (constant-time
+  // match vs configured QUANTAN_API_KEY; fail-closed when that env is unset).
   const session = await getServerSession(getAuthOptions())
-  if (!session?.user && !apiKeyHeader) {
+  if (!session?.user && !apiKeyValid) {
     return NextResponse.json(
-      { error: 'unauthorized', message: 'Authentication required. Sign in or provide X-API-Key header.' },
+      { error: 'unauthorized', message: 'Authentication required. Sign in or provide a valid X-API-Key header.' },
       { status: 401 }
     )
   }
