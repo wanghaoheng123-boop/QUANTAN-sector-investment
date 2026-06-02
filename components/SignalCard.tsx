@@ -3,7 +3,7 @@
 import { memo } from 'react'
 import { PriceSignal } from '@/lib/sectors'
 import { MetricTooltip } from '@/components/MetricTooltip'
-import { safeFixed } from '@/lib/format'
+import { safeFixed, formatFreshness } from '@/lib/format'
 
 interface SignalCardProps {
   signal: PriceSignal
@@ -152,7 +152,7 @@ function SignalCard({ signal, color, compact = false }: SignalCardProps) {
           )}
           {session && signal.quoteTime && (
             <div className="text-[10px] text-slate-400 mt-0.5 font-mono">
-              Quote {new Date(signal.quoteTime).toLocaleString()}
+              Quote {formatFreshness(signal.quoteTime)}
             </div>
           )}
         </div>

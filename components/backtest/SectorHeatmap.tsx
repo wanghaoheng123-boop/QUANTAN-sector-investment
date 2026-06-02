@@ -41,7 +41,12 @@ export default function SectorHeatmap({ sectorSummary, sectorColors }: Props) {
           else if (abs > 0) bgClass = isPositive ? 'bg-emerald-900/10' : 'bg-red-900/10'
 
           return (
-            <div key={sector} className={`${bgClass} rounded-xl p-4 border border-slate-800 transition-all hover:border-slate-700`}>
+            <div
+              key={sector}
+              role="img"
+              aria-label={`${sector}: ${isPositive ? '+' : '−'}${(ret * 100).toFixed(2)}% annualised`}
+              className={`${bgClass} rounded-xl p-4 border border-slate-800 transition-all hover:border-slate-700`}
+            >
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-medium text-slate-300">{sector}</span>
                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700/50 text-slate-400">{data.tickers.length} tickers</span>

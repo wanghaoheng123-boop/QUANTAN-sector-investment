@@ -54,10 +54,11 @@ export function AnalysisTab({ results, sectorColors }: { results: BacktestResult
         </h3>
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
+            <caption className="sr-only">Performance attribution by sector — annualised return, total return, and ranking</caption>
             <thead>
               <tr className="border-b border-slate-800">
                 {['Sector', 'Ann. Return', 'Total Return', 'Avg Trades', 'vs B&H α', 'Rank'].map(h => (
-                  <th key={h} className="px-4 py-2 text-left text-slate-500 uppercase tracking-wider">{h}</th>
+                  <th key={h} scope="col" className="px-4 py-2 text-left text-slate-500 uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -100,10 +101,11 @@ export function AnalysisTab({ results, sectorColors }: { results: BacktestResult
         </h3>
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
+            <caption className="sr-only">Risk/return matrix — per-ticker annualised return, drawdown, Sharpe, Sortino, win rate, and alpha vs buy-and-hold</caption>
             <thead>
               <tr className="border-b border-slate-800">
                 {['Ticker', 'Sector', 'Ann. Ret', 'Max DD', 'Sharpe', 'Sortino', 'Win Rate', 'PF', 'B&H Ret', 'Alpha'].map(h => (
-                  <th key={h} className="px-3 py-2 text-left text-slate-500 uppercase tracking-wider">{h}</th>
+                  <th key={h} scope="col" className="px-3 py-2 text-left text-slate-500 uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
             </thead>

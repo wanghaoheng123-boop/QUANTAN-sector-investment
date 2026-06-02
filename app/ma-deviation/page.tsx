@@ -178,10 +178,14 @@ export default function MADeviationPage() {
 
   function SortTh({ label, skey }: { label: string; skey: SortKey }) {
     const active = sortKey === skey
+    const ariaLabel = active
+      ? `${label}, sorted ${sortDir === 'asc' ? 'ascending' : 'descending'}`
+      : `Sort by ${label}`
     return (
       <button
         className={`text-left text-[11px] font-medium tracking-wide flex items-center gap-1 transition-colors ${active ? 'text-blue-400' : 'text-slate-500 hover:text-slate-300'}`}
         onClick={() => handleSort(skey)}
+        aria-label={ariaLabel}
       >
         {label}{active ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}
       </button>
@@ -258,10 +262,11 @@ export default function MADeviationPage() {
             </p>
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
+                <caption className="sr-only">Empirical forward returns by deviation zone — median 3M, 6M, and 12M returns with hit rates</caption>
                 <thead>
                   <tr className="border-b border-slate-700">
                     {['Deviation Zone', 'Zone Label', 'Dip Signal', '3M Fwd', '6M Fwd', '12M Fwd', '12M Hit Rate', 'Context'].map(h => (
-                      <th key={h} className="text-left pb-2 pr-4 text-slate-500 font-medium whitespace-nowrap">{h}</th>
+                      <th key={h} scope="col" className="text-left pb-2 pr-4 text-slate-500 font-medium whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -300,6 +305,7 @@ export default function MADeviationPage() {
 
         {/* Main Table */}
         <section className="rounded-2xl border border-slate-800 bg-slate-900/30 overflow-hidden">
+          <div className="overflow-x-auto">
           {/* Table Header */}
           <div className="px-5 py-4 border-b border-slate-800 grid grid-cols-[1.5rem_1fr_4.5rem_4.5rem_4rem_4rem_120px_1fr] gap-3 items-center">
             <span />
@@ -326,6 +332,8 @@ export default function MADeviationPage() {
                 <button
                   className="w-full text-left grid grid-cols-[1.5rem_1fr_4.5rem_4.5rem_4rem_4rem_120px_1fr] gap-3 items-center px-5 py-3.5 hover:bg-slate-800/30 transition-colors group"
                   onClick={() => setExpandedTicker(isExpanded ? null : row.ticker)}
+                  aria-expanded={isExpanded}
+                  aria-controls={`detail-${row.ticker}`}
                 >
                   {/* Icon */}
                   <span className="text-base">{row.icon}</span>
@@ -376,7 +384,7 @@ export default function MADeviationPage() {
 
                 {/* Expanded detail panel */}
                 {isExpanded && regime && (
-                  <div className="px-5 pb-5 pt-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 bg-slate-900/50 border-t border-slate-800/50">
+                  <div id={`detail-${row.ticker}`} className="px-5 pb-5 pt-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 bg-slate-900/50 border-t border-slate-800/50">
                     {/* Zone info */}
                     <div className="rounded-xl border border-slate-700 p-4" style={{ borderColor: `${regime.color}30` }}>
                       <div className="text-xs text-slate-500 mb-1 uppercase tracking-wider">Zone</div>
@@ -435,6 +443,7 @@ export default function MADeviationPage() {
               </div>
             )
           })}
+          </div>
         </section>
 
         {/* Visual Deviation Bar Chart */}

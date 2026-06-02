@@ -141,7 +141,7 @@ export default function FlowScanner({ items, sentiment }: Props) {
         </table>
       </div>
       {items.length > 20 && (
-        <p className="text-xs text-gray-600">Showing top 20 of {items.length} unusual contracts.</p>
+        <p className="text-xs text-gray-400">Showing top 20 of {items.length} unusual contracts.</p>
       )}
     </div>
   )

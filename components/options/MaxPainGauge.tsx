@@ -73,7 +73,7 @@ export default function MaxPainGauge({ maxPain, spot }: Props) {
       </div>
 
       {/* Scale labels */}
-      <div className="flex justify-between text-xs text-gray-600 font-mono">
+      <div className="flex justify-between text-xs text-gray-400 font-mono">
         <span>${min.toFixed(0)}</span>
         <span className="text-gray-400">Spot: <span className="text-indigo-300">${spot.toFixed(2)}</span></span>
         <span>${max.toFixed(0)}</span>
