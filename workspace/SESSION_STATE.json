@@ -2,50 +2,49 @@
   "schema_version": "1.1",
   "project": "QUANTAN-sector-investment",
   "created": "2026-04-28T09:40:00Z",
-  "last_updated": "2026-06-02T09:05:00.000Z",
-  "active_agent": "cursor (handover menu 2026-06-02)",
+  "last_updated": "2026-06-03T00:40:00.000Z",
+  "active_agent": "cursor (handover followup 2026-06-03)",
   "program_doc": "workspace/QUANTAN_EXPERT_TEAM_COMMERCIALIZATION.md",
   "last_inspection": {
-    "timestamp": "2026-06-02T09:05:00.000Z",
+    "timestamp": "2026-06-03T00:37:10.000Z",
     "results": {
-      "handover_menu": "COMPLETE",
-      "branch": "fix/handover-menu-2026-06-02",
+      "git_main_head": "de9a3d5",
+      "git_sync": "local main reset --hard origin/main (34 stale local-only commits discarded)",
+      "pr_41_handover": "MERGED on origin/main",
+      "pr_42_q063": "code on main via #41; #42 merge commit orphaned on old lineage",
+      "pr_43_d5_1": "code on main via #41; #43 merge commit orphaned on old lineage",
+      "pr_44_docs": "OPEN docs/platform-consolidation-2026-06-02",
       "typecheck": "PASS",
-      "tests": "1014+ passed / 84 files",
-      "benchmark_wr_ssot_net": 54.34,
-      "portfolio_sim_wr": 48.37,
-      "pr_queue": "merged #30-40; closed #8 #9 #24",
-      "inspection_waves": "5-10 filed under reviews/",
-      "owner_actions": "workspace/OWNER_ACTIONS_2026-06-02.md"
+      "tests": "1016 passed / 84 files",
+      "benchmark": "NOT_RUN (no signal/backtest changes this session)"
     }
   },
   "tasks": [
     {
-      "id": "HANDOVER-2026-06-02",
-      "title": "Remaining work handover menu implementation",
+      "id": "TASK-GIT-SYNC-2026-06-03",
+      "title": "Reset Drive root main to origin/main",
       "status": "DONE",
       "priority": "P0",
-      "files_touched": [
-        "lib/backtest/core.ts",
-        "lib/backtest/portfolioBacktest.ts",
-        "lib/chartEma.ts",
-        "components/crypto/",
-        "reviews/invariants-baseline.md",
-        "reviews/INSPECTION-WAVE-5-2026-06-02.md"
-      ],
-      "verify_status": { "A": "PASS", "B": "PASS", "C": "PASS", "D": "PASS", "E": "PASS", "F": "PASS" },
-      "notes": "All handover plan tiers addressed; owner blockers documented only"
+      "files_touched": [],
+      "verify_status": {
+        "A": "PASS",
+        "B": "PASS",
+        "C": "PASS",
+        "D": "PASS",
+        "E": "PASS",
+        "F": "PASS"
+      },
+      "notes": "main @ de9a3d5 tracks origin/main; 34 divergent local commits were stale duplicates"
     },
     {
-      "id": "TASK-RECT-WAVE-3",
-      "title": "Platform rectification wave 3",
+      "id": "TASK-BACKLOG-RECONCILE-2026-06-03",
+      "title": "Backlog sync post-handover (#41, owner Tier 0)",
       "status": "DONE",
       "priority": "P0",
       "files_touched": [
-        "README.md",
-        "workspace/VERCEL_OPERATIONS.md",
-        "scripts/backtest/dataLoader.ts (deleted)",
-        "reviews/INSPECTION-WAVE-3-2026-05-26.md"
+        "workspace/IMPROVEMENT_BACKLOG.json",
+        "workspace/SESSION_STATE.json",
+        "workspace/MEMORY_LOG.md"
       ],
       "verify_status": {
         "A": "PASS",
@@ -55,36 +54,30 @@
         "E": "PASS",
         "F": "PASS"
       },
-      "notes": "PR #22 merged to main; production deployed 2026-05-26"
+      "notes": "Q-004 done (FRED prewarm live); Q-063 done; Q-057 target 15.x documented; Q-005 stays partial (KV opt-in)"
     },
     {
-      "id": "TASK-QA-WAVE-6",
-      "title": "Full platform QA + sector rotation fix",
-      "status": "DONE",
+      "id": "TASK-Q-057-NEXTJS-15",
+      "title": "Next.js 15.x upgrade (Q-057-NEW)",
+      "status": "PENDING",
       "priority": "P0",
-      "files_touched": [
-        "app/api/sector-rotation/route.ts",
-        "components/SectorRotationPanel.tsx",
-        "app/heatmap/page.tsx",
-        "workspace/FULL_PLATFORM_QA_2026-05-26.md",
-        "reviews/INSPECTION-WAVE-4-2026-05-26.md"
-      ],
+      "files_touched": [],
       "verify_status": {
-        "A": "PASS",
-        "B": "PASS",
-        "C": "PASS",
-        "D": "PASS",
-        "E": "PASS",
-        "F": "PASS"
+        "A": null,
+        "B": null,
+        "C": null,
+        "D": null,
+        "E": null,
+        "F": null
       },
-      "notes": "Branch fix/qa-wave-6; prod deploy pending merge"
+      "notes": "Owner decided 15.x per workspace/Q-057-NEXTJS_DECISION.md; deferred — semver-major, needs dedicated session"
     }
   ],
   "blockers": [
     {
-      "id": "BLOCKER-ROOT-GIT-DRIFT",
-      "summary": "Drive root was behind origin/main — wave 3 branch merges rectification",
-      "resolution": "PR fix/rectification-wave-3 → main"
+      "id": "BLOCKER-Q057-MIGRATION",
+      "summary": "Next.js 15.x + React 19 migration not started",
+      "resolution": "Branch fix/q-057-nextjs-15; run typecheck + test + dual benchmark after upgrade"
     }
   ],
   "checkpoint": null
