@@ -324,7 +324,12 @@ export function backtestInstrument(
     if (eq > state.peakEquity) state.peakEquity = eq
     const dd = (state.peakEquity - eq) / state.peakEquity
     if (dd >= cfg.maxDrawdownCap && state.openTrade) {
-      closePosition(state, signalPrice)
+      // T+1 exit symmetry: the drawdown breach is OBSERVED at today's close (eq
+      // above uses signalPrice), but the exit FILL is at TOMORROW's open
+      // (nextOpen) — exactly like BUY entries. A same-bar close fill would be
+      // look-ahead: you cannot transact at a close you have only just observed.
+      // (Mirrors the SELL-signal correction below.)
+      closePosition(state, nextOpen)
       continue
     }
 
@@ -366,9 +371,18 @@ export function backtestInstrument(
       state.equityHistory.push(currentEquity(state, entryPrice))
 
     } else if (signal.action === 'SELL' && state.openTrade) {
-      // SELL exits at today's close (signal price) — realistic same-day exit on regime shift.
+      // T+1 exit symmetry: the SELL signal is computed from today's close, so the
+      // fill happens at TOMORROW's open (nextOpen) — exactly like BUY entries
+      // (L339). Previously this exited at signalPrice (today's close), which is
+      // look-ahead: signal and fill shared the same close, a price you cannot
+      // trade at once it has printed. Entries already filled at next-open; this
+      // removes the entry/exit asymmetry and re-baselines WR — see
+      // invariants-baseline.md §1b. ENTRY_SLIPPAGE_BPS is intentionally NOT
+      // mirrored onto the exit price: the 11 bps/side cost in closePosition
+      // already carries a slippage component (executionModel.ts); a separate
+      // exit-side price bump is a distinct methodology question left for later.
       // Phase 14 wave 35: bookkeeping via the shared closePosition primitive.
-      closePosition(state, signalPrice)
+      closePosition(state, nextOpen)
 
     } else {
       // Q1-C-1: HOLD — pass signalPrice so equity reflects open-position mark-to-market.
