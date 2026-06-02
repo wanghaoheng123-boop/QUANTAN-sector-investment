@@ -16,7 +16,7 @@ import FlowScanner from '@/components/options/FlowScanner'
 import { getNewsForSector, generateDarkPoolPrints } from '@/lib/mockData'
 import { DarkPoolPrint, SECTORS } from '@/lib/sectors'
 import type { DarkPoolAnalysis } from '@/lib/darkpool'
-import { CHART_EMA_PERIODS, tradingDefaultEmaFlags, type ChartEmaKey } from '@/lib/chartEma'
+import { buildVisFromIndicatorPreset, type ChartEmaKey } from '@/lib/chartEma'
 import { STOCK_CHART_RANGES, isStockIntradayPollRange } from '@/lib/chartYahoo'
 import { ChartErrorBoundary } from '@/components/ChartErrorBoundary'
 import type { EnrichedChain } from '@/lib/options/chain'
@@ -78,26 +78,7 @@ export default function StockPage({ params }: { params: { ticker: string } }) {
   // Both activeIndicator (preset) and vis (individual toggles) feed into indicatorConfig
   const [vis, setVis] = useState<Record<VisKey, boolean>>(() => buildVisFromIndicatorPreset('ema'))
 
-  // Build initial vis from preset key
-  function buildVisFromIndicatorPreset(preset: string): Record<VisKey, boolean> {
-    const allEmaOn: Record<string, boolean> = {}
-    const allEmaOff: Record<string, boolean> = {}
-    for (const p of CHART_EMA_PERIODS) {
-      const k = `ema${p}` as ChartEmaKey
-      allEmaOn[k] = true
-      allEmaOff[k] = false
-    }
-    const emaTrading = tradingDefaultEmaFlags() as Record<string, boolean>
-    if (preset === 'all') return { ...allEmaOn, vwap: true, bollingerBands: true, fibonacci: true, volSma: true } as Record<VisKey, boolean>
-    if (preset === 'ema') return { ...emaTrading, vwap: false, bollingerBands: false, fibonacci: false, volSma: true } as Record<VisKey, boolean>
-    if (preset === 'vwap') return { ...allEmaOff, vwap: true, bollingerBands: false, fibonacci: false, volSma: true } as Record<VisKey, boolean>
-    if (preset === 'bb') return { ...allEmaOff, vwap: false, bollingerBands: true, fibonacci: false, volSma: true } as Record<VisKey, boolean>
-    return { ...allEmaOff, vwap: false, bollingerBands: false, fibonacci: true, volSma: true } as Record<VisKey, boolean>
-  }
-
-  // indicatorConfig is derived from vis (individual toggles) + a base preset signal
   const indicatorConfig = useMemo(() => {
-    // Start with the preset as baseline, then overlay individual vis toggles
     const base = buildVisFromIndicatorPreset(activeIndicator)
     return { ...base, ...vis }
   }, [activeIndicator, vis])

@@ -95,3 +95,51 @@ export function tradingDefaultEmaFlags(): Record<ChartEmaKey, boolean> {
   for (const k of TRADING_DEFAULT_EMA_KEYS) out[k] = true
   return out
 }
+
+/** BTC/stock chart: default EMA 20 + 50 on (legacy BTC page default). */
+export function btcDefaultEmaSelection(): Record<ChartEmaKey, boolean> {
+  const out = allEmaOff()
+  out.ema20 = true
+  out.ema50 = true
+  return out
+}
+
+export type ChartVisKey = ChartEmaKey | 'vwap' | 'bollingerBands' | 'fibonacci' | 'volSma'
+
+/** SSOT for indicator preset → KLineChart visibility flags (D3-9). */
+export function buildVisFromIndicatorPreset(preset: string): Record<ChartVisKey, boolean> {
+  if (preset === 'all') {
+    return { ...allEmaOn(), vwap: true, bollingerBands: true, fibonacci: true, volSma: true }
+  }
+  if (preset === 'ema') {
+    return { ...tradingDefaultEmaFlags(), vwap: false, bollingerBands: false, fibonacci: false, volSma: true }
+  }
+  if (preset === 'vwap') {
+    return { ...allEmaOff(), vwap: true, bollingerBands: false, fibonacci: false, volSma: true }
+  }
+  if (preset === 'bb') {
+    return { ...allEmaOff(), vwap: false, bollingerBands: true, fibonacci: false, volSma: true }
+  }
+  return { ...allEmaOff(), vwap: false, bollingerBands: false, fibonacci: true, volSma: true }
+}
+
+/** Merge preset baseline with per-line vis toggles (D3-9). */
+export function buildIndicatorConfig(
+  activeIndicator: string,
+  emaSelection: Record<ChartEmaKey, boolean>,
+  vis: Record<ChartVisKey, boolean>,
+): Record<string, boolean> {
+  let base: Record<string, boolean>
+  if (activeIndicator === 'all') {
+    base = { ...allEmaOn(), vwap: true, bollingerBands: true, fibonacci: true }
+  } else if (activeIndicator === 'ema') {
+    base = { ...emaSelection, vwap: false, bollingerBands: false, fibonacci: false }
+  } else if (activeIndicator === 'vwap') {
+    base = { ...allEmaOff(), vwap: true, bollingerBands: false, fibonacci: false }
+  } else if (activeIndicator === 'bb') {
+    base = { ...allEmaOff(), vwap: false, bollingerBands: true, fibonacci: false }
+  } else {
+    base = { ...allEmaOff(), vwap: false, bollingerBands: false, fibonacci: true }
+  }
+  return { ...base, ...vis }
+}

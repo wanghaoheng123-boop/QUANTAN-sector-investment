@@ -29,6 +29,11 @@ flowchart LR
 
 ### Weekly (Sunday UTC aligned with data refresh)
 
+1. GitHub Action **Weekly Data Refresh** runs (`refresh-data.yml`).
+2. Run `npm run benchmark` locally or rely on **Nightly Benchmark** (`nightly-backtest.yml`, weekdays 06:00 UTC).
+3. Log net WR + date to `workspace/MEMORY_LOG.md` Verification Log (see 2026-06-02 HANDOVER-MENU entry).
+4. If portfolio-sim touched: `npm run portfolio:backtest` and compare to `reviews/invariants-baseline.md` §2.
+
 | Step | Command / action | Owner |
 |------|------------------|-------|
 | 1. Data refresh | GitHub Action `Weekly Data Refresh` or `node scripts/fetchBacktestData.mjs` | CI / **Implementer** |

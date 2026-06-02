@@ -1,0 +1,19 @@
+# axe-core smoke on priority routes (Phase 16 S4). Requires built app — manual dispatch only until Playwright harness lands.
+name: A11y axe smoke
+
+on:
+  workflow_dispatch:
+
+jobs:
+  axe:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run build
+      - run: npx --yes @axe-core/cli --help

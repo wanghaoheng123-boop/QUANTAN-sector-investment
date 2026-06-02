@@ -105,7 +105,7 @@
     "title": "Distributed rate limit (F4.3, F7.7)",
     "domain": "Data/API",
     "priority": "P0",
-    "status": "done",
+    "status": "partial",
     "phase15_sprint": "S2",
     "files": [
       "lib/api/rateLimit.ts",
@@ -120,7 +120,8 @@
     ],
     "notes_2026_05_23": "Confirmed open. lib/api/rateLimit.ts:13 still uses per-process Map. Migrate to Vercel KV with Lua atomic update in S2.",
     "completed_at": "2026-05-24",
-    "notes_2026_05_24": "Confirmed open. lib/api/rateLimit.ts:13 still uses per-process Map. Migrate to Vercel KV with Lua atomic update in S2. | 2026-05-24 Cursor Phase 15 completion batch \u2014 see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
+    "notes_2026_05_24": "Confirmed open. lib/api/rateLimit.ts:13 still uses per-process Map. Migrate to Vercel KV with Lua atomic update in S2. | 2026-05-24 Cursor Phase 15 completion batch \u2014 see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md",
+    "notes_2026_06_02_reconcile": "Reconciled 2026-06-02 handover: default remains per-process Map; KV path is opt-in via env (documented in lib/api/rateLimit.ts). Status flipped to partial until KV deployed in production."
   },
   {
     "id": "Q-002",
@@ -1236,7 +1237,7 @@
     "title": "Q-008 continuation: complete QuantLabPanel decomposition",
     "domain": "Frontend/UX",
     "priority": "P1",
-    "status": "pending",
+    "status": "done",
     "dev_plan_phase": "P2",
     "owner_role": "Implementer",
     "phase15_sprint": "S3",
@@ -1253,7 +1254,9 @@
       "npm run check:smoke:local",
       "wc -l components/stock/QuantLabPanel.tsx"
     ],
-    "notes_2026_05_24": "Filed by review: Cursor extracted QuantLabMarketCards.tsx but parent file unchanged at 1684 LOC. See workspace/REVIEW_2026-05-24.md \u00a7Issue 1."
+    "notes_2026_05_24": "Filed by review: Cursor extracted QuantLabMarketCards.tsx but parent file unchanged at 1684 LOC. See workspace/REVIEW_2026-05-24.md \u00a7Issue 1.",
+    "completed_at": "2026-06-02",
+    "notes_2026_06_02_close": "CLOSED — handover verification: QuantLabPanel.tsx is 148 LOC (tabs/hooks extracted post-Q-054). Acceptance <=500 LOC met; decomposition complete."
   },
   {
     "id": "Q-054-NEW",
@@ -1392,5 +1395,102 @@
     "notes_2026_05_25": "Filed per PHASE-16-PLAN.md S1.3. Preconditions for S2 god-component decomposition (Q-053-NEW, Q-054-NEW) AND for Q-057-NEW Next.js upgrade verification. Use BacktestMetricsGrid.test.tsx as the pattern reference. Mock strategy: vi.mock for next-auth, fetch, useSearchParams; jsdom env via per-file `// @vitest-environment jsdom` pragma.",
     "completed_at": "2026-05-25",
     "notes_2026_05_25_close": "DONE in same session. Pattern: pin deterministic loading + error states (not data state — would couple to copy/style tweaks). 6 new tests across 2 files: (1) __tests__/components/stock/QuantLabPanel.test.tsx — 3 tests covering loading skeleton with all 6 tabs, error state with help text, ticker prop propagation. (2) __tests__/components/backtest/BacktestPage.test.tsx — 3 tests covering centered loading spinner, error fallback with Retry button, network rejection. Both files use vi.stubGlobal for fetch (pending promise = loading; resolved 500 / rejected = error). 2 new snapshot files (.snap) committed: QuantLabPanel.test.tsx.snap (242 lines) + BacktestPage.test.tsx.snap (51 lines). Verify: 958 passed + 17 skipped (975 total / 75 + 1 files), benchmark 57.05% WR (unchanged), typecheck clean. Q-053-NEW / Q-054-NEW / Q-057-NEW now have structural regression guards."
+  },
+  {
+    "id": "Q-059-NEW",
+    "title": "Unify live API with engine via resolveBacktestSignal",
+    "domain": "Quant/Backtest",
+    "priority": "P0",
+    "status": "done",
+    "completed_at": "2026-06-02",
+    "files": ["lib/backtest/liveSignal.ts", "app/api/backtest/live/route.ts"],
+    "acceptance_criteria": ["Same bars produce same action as resolveBacktestSignal"],
+    "verify_commands": ["npm run test -- __tests__/backtest/signalParity.test.ts"],
+    "notes_2026_06_02": "Land on main pre-handover; parity test in signalParity.test.ts."
+  },
+  {
+    "id": "Q-060-NEW",
+    "title": "Portfolio sim uses resolveBacktestSignal (flag-aware)",
+    "domain": "Quant/Backtest",
+    "priority": "P0",
+    "status": "done",
+    "completed_at": "2026-06-02",
+    "files": ["lib/backtest/portfolioBacktest.ts"],
+    "acceptance_criteria": ["runPortfolioBacktest calls resolveBacktestSignal not raw enhancedCombinedSignal"],
+    "verify_commands": ["npm run portfolio:backtest"],
+    "notes_2026_06_02": "Confirmed on main; WS2 D2-1/2/7 rebaseline in handover branch."
+  },
+  {
+    "id": "Q-061-NEW",
+    "title": "CI benchmark uses TypeScript SSOT (benchmark-signals.ts)",
+    "domain": "Quant/Backtest",
+    "priority": "P0",
+    "status": "done",
+    "completed_at": "2026-06-02",
+    "files": ["scripts/benchmark-signals.ts", "package.json"],
+    "acceptance_criteria": ["npm run benchmark invokes TS resolveBacktestSignal path"],
+    "verify_commands": ["npm run benchmark"],
+    "notes_2026_06_02": "benchmark-signals.mjs retired; TS script is SSOT per lib/backtest/SIGNAL_SSOT.md."
+  },
+  {
+    "id": "Q-062-NEW",
+    "title": "End-to-end signal parity test (live ≡ engine ≡ CI)",
+    "domain": "Testing",
+    "priority": "P0",
+    "status": "done",
+    "completed_at": "2026-06-02",
+    "files": ["__tests__/backtest/signalParity.test.ts"],
+    "acceptance_criteria": ["Parity tests pass on AAPL fixture bars"],
+    "verify_commands": ["npm run test -- __tests__/backtest/signalParity.test.ts"]
+  },
+  {
+    "id": "Q-063-NEW",
+    "title": "UI metric labeling: honest WR / cost disclosure",
+    "domain": "Frontend/UX",
+    "priority": "P1",
+    "status": "partial",
+    "files": ["components/backtest/", "app/backtest/page.tsx"],
+    "acceptance_criteria": ["Desk/backtest UI labels 20d label WR and cost assumptions"],
+    "notes_2026_06_02": "SIGNAL_SSOT.md documents paths; UI copy audit deferred to Wave 7 browser QA."
+  },
+  {
+    "id": "Q-064-NEW",
+    "title": "CPCV / purged splits for grid search",
+    "domain": "Quant/Research",
+    "priority": "P1",
+    "status": "pending",
+    "files": ["lib/optimize/gridSearch.ts"]
+  },
+  {
+    "id": "Q-065-NEW",
+    "title": "Deflated Sharpe + expectancy in benchmark output",
+    "domain": "Quant/Research",
+    "priority": "P1",
+    "status": "pending",
+    "files": ["scripts/benchmark-signals.ts"]
+  },
+  {
+    "id": "Q-066-NEW",
+    "title": "Regime-bucketed WR in benchmark report",
+    "domain": "Quant/Research",
+    "priority": "P2",
+    "status": "pending",
+    "files": ["scripts/benchmark-signals.ts", "lib/quant/regimeDetection.ts"]
+  },
+  {
+    "id": "Q-067-NEW",
+    "title": "Shadow signal log (timestamp, path hash, action)",
+    "domain": "Data/API",
+    "priority": "P2",
+    "status": "pending",
+    "files": ["workspace/shadow/"]
+  },
+  {
+    "id": "Q-068-NEW",
+    "title": "Re-run optimization Loops 1-3 with locked holdout",
+    "domain": "Quant/Research",
+    "priority": "P2",
+    "status": "pending",
+    "files": ["scripts/optimize-grid.ts", "reviews/optimization-loop1.md"]
   }
 ]

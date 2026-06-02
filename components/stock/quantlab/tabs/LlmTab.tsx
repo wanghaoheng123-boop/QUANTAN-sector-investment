@@ -1,5 +1,6 @@
 'use client'
 
+import { memo } from 'react'
 import { Eye, EyeOff, Lock, CheckCircle2 } from 'lucide-react'
 import { LlmDeployAssistant } from '@/components/stock/LlmDeployAssistant'
 import { isLlmConnectivityCode, isLlmProviderAuthFailure } from '@/components/stock/quantlab/formatters'
@@ -36,7 +37,7 @@ export type LlmTabProps = {
   handleProviderChange: (p: LLMProvider) => void
 }
 
-export function LlmTab(props: LlmTabProps) {
+export const LlmTab = memo(function LlmTab(props: LlmTabProps) {
   const {
     llmResult,
     llmError,
@@ -466,4 +467,4 @@ export function LlmTab(props: LlmTabProps) {
             </div>
     </div>
   )
-}
+})

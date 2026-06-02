@@ -100,6 +100,32 @@ Best config: hold25_pt10_trail6_panic4 (ranked by risk-adjusted Sharpe)
 
 Targets per plan: WR ≥ 60%, max DD ≤ 12%. **Current baseline misses both targets** — Loop 3 optimization deferred to Phase 8 execution; baseline is frozen for regression tracking only.
 
+### 2b. Portfolio-sim re-baseline — C1/C2 (2026-06-02, handover WS2 D2-1/2/7)
+
+**C1 (pre-fix, post-#28+#29 main @ 532f0c4):**
+
+| Metric | Value |
+|--------|-------|
+| Win rate | 54.66% (236 trades) |
+| Max drawdown | 14.24% |
+| Sharpe | -1.0655 |
+| Best config | hold25_pt10_trail6_panic4 |
+
+**C2 (post-fix `fix/handover-menu-2026-06-02`, D2-1 T+1 entry + D2-2 net pnlPct + D2-7 calendar annualization):**
+
+Command: `npm run portfolio:backtest` (2026-06-02, 121s elapsed)
+
+| Metric | Old | New | Justification |
+|--------|-----|-----|---------------|
+| Win rate | 54.66% | **48.37%** (184 trades) | D2-1 removes same-bar close look-ahead; D2-2 counts net-of-cost trade WR |
+| Max drawdown | 14.24% | **15.20%** | T+1 entry + net accounting |
+| Sharpe | -1.0655 | **-0.9422** | Combined execution + cost honesty |
+| Profit factor | (prior) | **1.29** | Net pnlPct series |
+
+**Frozen §2 values (update regression tracking):** WR **48.37%**, max DD **15.20%**, Sharpe **-0.9422**, best config **hold25_pt10_trail6_panic4**.
+
+References: WS2.md D2-1 (engine FIX-C2 T+1), D2-2 (net round-trip costs), D2-7 (`tradingDaysPerYear` 365 when BTC in universe).
+
 ## 3. Test inventory — re-measured 2026-05-23
 
 ```

@@ -179,11 +179,13 @@ export function sma200Slope(closes: number[]): number | null {
  */
 export function priceWasNearSmaRecently(closes: number[], thresholdPct = 5): boolean {
   if (closes.length < 220) return false
-  const window = closes.slice(-20)
-  const smaNow = sma(closes, 200)
-  if (smaNow == null) return false
-  for (const px of window) {
-    const dev = ((px - smaNow) / smaNow) * 100
+  const start = closes.length - 20
+  for (let i = start; i < closes.length; i++) {
+    const slice = closes.slice(0, i + 1)
+    const smaAtBar = sma(slice, 200)
+    if (smaAtBar == null) continue
+    const px = closes[i]
+    const dev = ((px - smaAtBar) / smaAtBar) * 100
     if (dev >= -thresholdPct) return true
   }
   return false
@@ -550,7 +552,8 @@ export function enhancedCombinedSignal(
     // displacement to a score of ±10 (clamped to ±1 by `clamp()`), which lines
     // up with practitioner heuristics for "meaningful MACD divergence".
     ? clamp(macdHist / (atrLast * 0.1), -1, 1) : 0
-  const atrScore = Number.isFinite(atrPct) ? clamp((atrPct - 1.5) / 2.0, -1, 1) : 0
+  // D2-6: dip-buy favors calmer vol — high ATR% is cautious (negative), not bullish
+  const atrScore = Number.isFinite(atrPct) ? clamp((1.5 - atrPct) / 2.0, -1, 1) : 0
   const bbScore = Number.isFinite(bbPctB) ? clamp(1 - 2 * bbPctB, -1, 1) : 0
   const vpocScore = volumeZoneScore(vpZone)
   // mtf.alignmentScore is in [-3, +3] (sum of 3 timeframe contributions);

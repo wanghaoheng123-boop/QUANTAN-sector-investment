@@ -1,40 +1,8 @@
 /**
- * Factor exposure attribution (Phase 15 Q-044-NEW) — **NAIVE PROXY, NOT
- * CANONICAL FAMA-FRENCH / CARHART**.
+ * Factor exposure attribution — multivariate OLS (Fama-French / Carhart style).
  *
- * ⚠️ Do NOT surface the output of this module to institutional users as
- * "Fama-French attribution" or "Carhart 5-factor attribution" — the
- * implementation is statistically biased relative to those canonical
- * models. Specifically:
- *
- *   1. **Univariate, not multivariate.** Each factor loading is computed
- *      by an independent OLS of asset returns on that single factor.
- *      Real Fama-French / Carhart attribution requires a joint
- *      multivariate regression because the factors (MKT, SMB, HML, MOM,
- *      QMJ) are correlated; univariate betas absorb each other's
- *      explanatory power and are therefore biased.
- *
- *   2. **R² is fabricated**, not measured. The `rSquared` field returns
- *      `Math.min(0.95, |mktBeta| × 0.5)` — a heuristic placeholder. It is
- *      NOT the coefficient of determination (SS_residual / SS_total).
- *
- *   3. **Alpha is single-factor.** `alpha = mean(returns) - mktBeta *
- *      mean(MKT)` ignores contributions from SMB/HML/MOM/QMJ.
- *
- * This stub exists so the API surface (`/api/portfolio/factor-attribution`
- * and the dashboard panel) can render data while the real multivariate
- * OLS implementation is deferred to Phase 16 (Q-044-NEW continuation —
- * see workspace/IMPROVEMENT_BACKLOG.json).
- *
- * Citation for the canonical models this stub does NOT yet implement:
- *   • Fama, E. & French, K. (1992) "The cross-section of expected stock
- *     returns," J. Finance 47(2).
- *   • Carhart, M. (1997) "On persistence in mutual fund performance,"
- *     J. Finance 52(1).
- *
- * Phase 16 acceptance: replace `olsBeta` with a QR-decomposition multivariate
- * solve; compute real R² as 1 - SSres/SStot; rename or remove this
- * disclaimer when the real implementation lands.
+ * Joint regression of asset excess returns on [MKT, SMB, HML, MOM, QMJ] with
+ * intercept (alpha). R² is computed from SS_res / SS_tot on the fitted model.
  */
 
 export interface FactorReturns {
@@ -45,60 +13,132 @@ export interface FactorReturns {
   QMJ: number[]
 }
 
-export type FactorAttributionMethodology = 'naive_univariate_proxy'
+export type FactorAttributionMethodology = 'multivariate_ols'
 
 export interface FactorAttribution {
   ticker: string
   loadings: Record<keyof FactorReturns, number>
   alpha: number
-  /** Null — not a real OLS R²; multivariate OLS deferred (Phase 16+). */
   rSquared: number | null
   methodology: FactorAttributionMethodology
   disclaimer: string
 }
 
+const FACTOR_NAMES = ['MKT', 'SMB', 'HML', 'MOM', 'QMJ'] as const
+
 export function regressFactorLoadings(
   assetReturns: number[],
   factors: FactorReturns,
 ): FactorAttribution {
-  const n = Math.min(assetReturns.length, factors.MKT.length)
-  const names = ['MKT', 'SMB', 'HML', 'MOM', 'QMJ'] as const
+  const n = Math.min(
+    assetReturns.length,
+    ...FACTOR_NAMES.map(name => factors[name].length),
+  )
   const loadings = { MKT: 0, SMB: 0, HML: 0, MOM: 0, QMJ: 0 }
   const disclaimer =
-    'Naive univariate factor betas — not Fama-French / Carhart attribution. Do not use for institutional reporting.'
-  if (n < 10) {
-    return { ticker: '', loadings, alpha: 0, rSquared: null, methodology: 'naive_univariate_proxy', disclaimer }
+    'Multivariate OLS factor attribution (5-factor + intercept). For research dashboards — not audited for regulatory reporting.'
+  if (n < FACTOR_NAMES.length + 5) {
+    return { ticker: '', loadings, alpha: 0, rSquared: null, methodology: 'multivariate_ols', disclaimer }
   }
-  // Simple univariate proxy per factor (full multivariate OLS deferred to Phase 16).
-  for (const name of names) {
-    const f = factors[name].slice(-n)
-    const a = assetReturns.slice(-n)
-    loadings[name] = olsBeta(a, f)
+
+  const y = assetReturns.slice(-n)
+  const X: number[][] = []
+  for (let i = 0; i < n; i++) {
+    X.push([1, ...FACTOR_NAMES.map(name => factors[name][factors[name].length - n + i])])
   }
-  const mktBeta = loadings.MKT
-  const alpha = mean(assetReturns.slice(-n)) - mktBeta * mean(factors.MKT.slice(-n))
-  return {
-    ticker: '',
-    loadings,
-    alpha,
-    rSquared: null,
-    methodology: 'naive_univariate_proxy',
-    disclaimer,
+
+  const beta = olsMultivariate(y, X)
+  if (!beta) {
+    return { ticker: '', loadings, alpha: 0, rSquared: null, methodology: 'multivariate_ols', disclaimer }
   }
+
+  loadings.MKT = beta[1]
+  loadings.SMB = beta[2]
+  loadings.HML = beta[3]
+  loadings.MOM = beta[4]
+  loadings.QMJ = beta[5]
+  const alpha = beta[0]
+
+  const yMean = mean(y)
+  let ssTot = 0
+  let ssRes = 0
+  for (let i = 0; i < n; i++) {
+    const fitted = X[i].reduce((s, xj, j) => s + xj * beta[j], 0)
+    ssTot += (y[i] - yMean) ** 2
+    ssRes += (y[i] - fitted) ** 2
+  }
+  const rSquared = ssTot > 1e-12 ? Math.max(0, 1 - ssRes / ssTot) : null
+
+  return { ticker: '', loadings, alpha, rSquared, methodology: 'multivariate_ols', disclaimer }
 }
 
 function mean(xs: number[]): number {
   return xs.reduce((a, b) => a + b, 0) / xs.length
 }
 
-function olsBeta(y: number[], x: number[]): number {
-  const mx = mean(x)
-  const my = mean(y)
-  let num = 0
-  let den = 0
-  for (let i = 0; i < y.length; i++) {
-    num += (x[i] - mx) * (y[i] - my)
-    den += (x[i] - mx) ** 2
+/** Normal-equations solve for multivariate OLS; drops zero-variance factor columns. */
+function olsMultivariate(y: number[], X: number[][]): number[] | null {
+  const n = y.length
+  const p = X[0]?.length ?? 0
+  if (n < p || p === 0) return null
+
+  const activeCols = [0]
+  for (let j = 1; j < p; j++) {
+    const col = X.map(row => row[j])
+    const m = mean(col)
+    const v = col.reduce((s, x) => s + (x - m) ** 2, 0) / Math.max(1, n - 1)
+    if (v > 1e-14) activeCols.push(j)
   }
-  return den > 0 ? num / den : 0
+
+  const q = activeCols.length
+  const xtx: number[][] = Array.from({ length: q }, () => Array(q).fill(0))
+  const xty: number[] = Array(q).fill(0)
+
+  for (let i = 0; i < n; i++) {
+    for (let aj = 0; aj < q; aj++) {
+      const xj = X[i][activeCols[aj]]
+      xty[aj] += xj * y[i]
+      for (let ak = 0; ak < q; ak++) {
+        xtx[aj][ak] += xj * X[i][activeCols[ak]]
+      }
+    }
+  }
+
+  const reduced = solveLinearSystem(xtx, xty)
+  if (!reduced) return null
+
+  const beta = Array(p).fill(0)
+  for (let j = 0; j < q; j++) beta[activeCols[j]] = reduced[j]
+  return beta
+}
+
+/** Gaussian elimination with partial pivoting */
+function solveLinearSystem(A: number[][], b: number[]): number[] | null {
+  const n = b.length
+  const M = A.map(row => [...row])
+  const v = [...b]
+
+  for (let col = 0; col < n; col++) {
+    let pivot = col
+    for (let row = col + 1; row < n; row++) {
+      if (Math.abs(M[row][col]) > Math.abs(M[pivot][col])) pivot = row
+    }
+    if (Math.abs(M[pivot][col]) < 1e-12) return null
+    ;[M[col], M[pivot]] = [M[pivot], M[col]]
+    ;[v[col], v[pivot]] = [v[pivot], v[col]]
+
+    for (let row = col + 1; row < n; row++) {
+      const factor = M[row][col] / M[col][col]
+      for (let k = col; k < n; k++) M[row][k] -= factor * M[col][k]
+      v[row] -= factor * v[col]
+    }
+  }
+
+  const x = Array(n).fill(0)
+  for (let row = n - 1; row >= 0; row--) {
+    let sum = v[row]
+    for (let k = row + 1; k < n; k++) sum -= M[row][k] * x[k]
+    x[row] = sum / M[row][row]
+  }
+  return x
 }
