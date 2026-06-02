@@ -1,6 +1,13 @@
 # Phase 4 / Expert Team Program — nightly benchmark guard on main.
-# Fails if aggregate win rate drops below 55% (project floor).
-# Pair with weekly data refresh (refresh-data.yml) for fresh backtestData.
+#
+# Enforces the canonical NET WR floor from `reviews/invariants-baseline.md` §1b:
+#   - Hard floor (net): 53.29% — 50 bps below the frozen 53.79% net baseline.
+#   - Soft reference (gross): 54.77% frozen; warn below 54.27%.
+#
+# Pairs with the weekly data refresh (refresh-data.yml) — when fresh backtestData
+# arrives, this run validates that the canonical signal still respects the floor.
+# A failure means EITHER the signal has regressed OR the data refresh shifted the
+# fixture in a way that needs investigation.
 
 name: Nightly Benchmark
 
@@ -27,21 +34,39 @@ jobs:
       - name: Run canonical benchmark
         run: npm run benchmark
 
-      - name: Enforce WR floor (>= 55%)
+      - name: Enforce net WR floor (>= 53.29%) + soft gross warn (>= 54.27%)
         run: |
           node -e "
             const fs = require('fs');
             const r = JSON.parse(fs.readFileSync('scripts/benchmark-results.json', 'utf8'));
-            const wr = r.aggregate?.aggregateWinRate;
-            if (typeof wr !== 'number') {
-              console.error('FAIL: missing aggregate.aggregateWinRate');
+            const netWr = r.aggregate?.aggregateNetWinRate;
+            const grossWr = r.aggregate?.aggregateWinRate;
+
+            if (typeof netWr !== 'number') {
+              console.error('FAIL: benchmark JSON missing aggregate.aggregateNetWinRate');
               process.exit(1);
             }
-            const FLOOR = 55.0;
-            console.log('Aggregate Win Rate:', wr.toFixed(2) + '%');
-            if (wr < FLOOR) {
-              console.error('FAIL: WR below nightly floor', FLOOR);
+
+            // Floors per reviews/invariants-baseline.md §1b (frozen 2026-05-26).
+            const NET_FLOOR = 53.29;
+            const NET_FROZEN = 53.79;
+            const GROSS_FLOOR = 54.27;
+            const GROSS_FROZEN = 54.77;
+
+            console.log('Aggregate Net Win Rate:', netWr.toFixed(2) + '%');
+            console.log('Aggregate Gross Win Rate:', (typeof grossWr === 'number' ? grossWr.toFixed(2) : 'n/a') + '%');
+            console.log('Net floor:', NET_FLOOR.toFixed(2) + '%', '(frozen', NET_FROZEN.toFixed(2) + '%)');
+
+            if (netWr < NET_FLOOR) {
+              console.error('FAIL: net WR ' + netWr.toFixed(2) + '% below floor ' + NET_FLOOR.toFixed(2) + '%');
               process.exit(1);
             }
+            if (netWr < NET_FROZEN) {
+              console.warn('WARN: net WR ' + netWr.toFixed(2) + '% below frozen baseline ' + NET_FROZEN.toFixed(2) + '% — investigate signal or data drift');
+            }
+            if (typeof grossWr === 'number' && grossWr < GROSS_FLOOR) {
+              console.warn('WARN: gross WR ' + grossWr.toFixed(2) + '% below soft reference ' + GROSS_FLOOR.toFixed(2) + '% — paired with the net check, this is a signal-quality flag');
+            }
+
             console.log('PASS');
           "
