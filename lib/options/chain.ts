@@ -6,6 +6,7 @@
 import YahooFinance from 'yahoo-finance2'
 import { greeks } from './greeks'
 import type { Greeks } from './greeks'
+import { withRetry } from '@/lib/api/reliability'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -197,14 +198,20 @@ export async function fetchOptionsChain(
   date?: Date,
   dividendYield = 0,
 ): Promise<EnrichedChain> {
-  // Use validateResult: false to tolerate Yahoo schema drift
-  const raw = await (yahooFinance as unknown as {
-    options(
-      symbol: string,
-      queryOptions?: { date?: Date },
-      moduleOptions?: { validateResult: boolean },
-    ): Promise<Record<string, unknown>>
-  }).options(symbol, date ? { date } : {}, { validateResult: false })
+  // Use validateResult: false to tolerate Yahoo schema drift.
+  // Wrapped in withRetry to apply a per-call timeout and one retry,
+  // matching the pattern used by /api/prices and /api/fundamentals.
+  const raw = await withRetry(
+    () =>
+      (yahooFinance as unknown as {
+        options(
+          symbol: string,
+          queryOptions?: { date?: Date },
+          moduleOptions?: { validateResult: boolean },
+        ): Promise<Record<string, unknown>>
+      }).options(symbol, date ? { date } : {}, { validateResult: false }),
+    { attempts: 2, timeoutMs: 7000, retryLabel: `options chain ${symbol}` },
+  )
 
   const quote = raw.quote as Record<string, unknown> | undefined
   const spot = Number(quote?.regularMarketPrice ?? 0)
