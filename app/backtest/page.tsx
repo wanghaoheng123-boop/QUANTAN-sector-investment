@@ -225,6 +225,17 @@ export default function BacktestPage() {
         {/* ── Key metrics strip ── */}
         <KeyMetricsStrip portfolio={portfolio} instrumentCount={results.length} />
 
+        {/* Q-063-NEW: honest WR / cost disclosure. These metrics come from the
+            cost-aware engine simulation (lib/backtest/engine.ts) — see invariants
+            §1c. No hardcoded WR (it drifts with each rebaseline). */}
+        <p className="text-[11px] leading-relaxed text-slate-500">
+          <span className="font-medium text-slate-400">How these are measured:</span>{' '}
+          metrics come from a cost-aware simulation — trades fill at the next
+          session&apos;s open (T+1) and include round-trip transaction costs of
+          ≈22&nbsp;bps (11&nbsp;bps/side). <span className="text-slate-400">Win&nbsp;Rate</span>{' '}
+          is the share of closed trades that ended net-profitable after those costs.
+        </p>
+
         {/* ── Tabs ── */}
         <div className="flex flex-wrap gap-1 bg-slate-900 rounded-lg p-1 border border-slate-800 w-fit">
           {(['overview', 'instruments', 'trades', 'signals', 'analysis'] as const).map(tab => (

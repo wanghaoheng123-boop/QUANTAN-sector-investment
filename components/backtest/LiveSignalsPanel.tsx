@@ -350,6 +350,12 @@ export function LiveSignalsPanel() {
           </div>
         )}
       </div>
+
+      {/* Q-063-NEW: factual caveat — this panel is current model state, not P&L. */}
+      <p className="text-[10px] leading-relaxed text-slate-500">
+        Live signals reflect the current model state, not realized trade P&amp;L.
+        Backtested win rate and cost assumptions are shown in the metrics summary above.
+      </p>
     </div>
   )
 }
