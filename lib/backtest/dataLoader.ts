@@ -53,14 +53,25 @@ export function loadStockHistory(ticker: string): OhlcvRow[] {
   if (isWarehouseAvailable()) {
     const bars = getCandles(ticker)
     if (bars && bars.length > 0) {
-      return bars.map((b) => ({
-        time: Math.floor(new Date(b.date).getTime() / 1000),
-        open: b.open,
-        high: b.high,
-        low: b.low,
-        close: b.close,
-        volume: b.volume,
-      }))
+      // D5-1: mirror the JSON path's non-finite guard below. Without this the
+      // warehouse path passed NaN/Infinity OHLC — or a NaN `time` from an
+      // unparseable `b.date` — straight into the indicators (ATR/EMA/etc.),
+      // unlike the JSON path which already drops such rows. A warehouse hit
+      // still short-circuits the JSON fallback; we only drop the bad rows.
+      const out: OhlcvRow[] = []
+      for (const b of bars) {
+        const time = Math.floor(new Date(b.date).getTime() / 1000)
+        if (
+          Number.isFinite(time) &&
+          Number.isFinite(b.open) &&
+          Number.isFinite(b.high) &&
+          Number.isFinite(b.low) &&
+          Number.isFinite(b.close)
+        ) {
+          out.push({ time, open: b.open, high: b.high, low: b.low, close: b.close, volume: b.volume ?? 0 })
+        }
+      }
+      return out
     }
   }
 

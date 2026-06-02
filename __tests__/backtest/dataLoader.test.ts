@@ -145,6 +145,38 @@ describe('loadStockHistory', () => {
     expect(mockedFs.existsSync).not.toHaveBeenCalled()
   })
 
+  it('drops warehouse rows with non-finite OHLC or an unparseable date (D5-1)', () => {
+    // Mirrors the JSON-path guard: the warehouse path previously passed these
+    // rows through unfiltered, feeding NaN/Infinity into the indicators.
+    mockedWh.isWarehouseAvailable.mockReturnValue(true)
+    mockedWh.getCandles.mockReturnValue([
+      { date: '2025-01-02', open: 100, high: 102, low: 99, close: 101, volume: 1000 }, // valid
+      { date: '2025-01-03', open: NaN, high: 103, low: 100, close: 102, volume: 1100 }, // invalid open
+      { date: '2025-01-06', open: 101, high: Infinity, low: 100, close: 103, volume: 1200 }, // invalid high
+      { date: 'not-a-date', open: 100, high: 101, low: 99, close: 100, volume: 900 }, // NaN time
+      { date: '2025-01-07', open: 102, high: 104, low: 101, close: 103 }, // missing volume → 0
+    ])
+    const rows = loadStockHistory('AAPL')
+    expect(rows).toHaveLength(2)
+    expect(rows[0].close).toBe(101)
+    expect(rows[1].close).toBe(103)
+    expect(rows[1].volume).toBe(0)
+    // A warehouse hit still short-circuits the JSON fallback.
+    expect(mockedFs.existsSync).not.toHaveBeenCalled()
+  })
+
+  it('returns empty (no JSON fallthrough) when every warehouse row is non-finite (D5-1)', () => {
+    mockedWh.isWarehouseAvailable.mockReturnValue(true)
+    mockedWh.getCandles.mockReturnValue([
+      { date: '2025-01-02', open: NaN, high: 102, low: 99, close: 101, volume: 1000 },
+    ])
+    const rows = loadStockHistory('AAPL')
+    expect(rows).toEqual([])
+    // Documented behavior: a non-empty warehouse hit short-circuits JSON even
+    // when all rows are dropped (does NOT fall through).
+    expect(mockedFs.existsSync).not.toHaveBeenCalled()
+  })
+
   it('falls back to JSON when warehouse returns empty', () => {
     mockedWh.isWarehouseAvailable.mockReturnValue(true)
     mockedWh.getCandles.mockReturnValue([])
