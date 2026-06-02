@@ -5,10 +5,10 @@
  * Q-054-NEW (Phase 16 S2): extracted from app/backtest/page.tsx as part of
  * the god-component decomposition. Pure presentational; no state, no effects.
  *
- * The companion `BacktestMetricsGrid.tsx` (Phase 15 Q-019 partial) handles
- * a different concern — that's the 3-tile WR/trades/avg-return summary used
- * elsewhere. This file is the single-tile primitive that the backtest page's
- * 6-metric strip composes.
+ * This is the single-tile primitive that `KeyMetricsStrip` composes into the
+ * backtest page's 6-metric row. (The old `BacktestMetricsGrid.tsx` 3-tile
+ * variant from Phase 15 Q-019 was removed as dead code — superseded by
+ * KeyMetricsStrip.)
  */
 
 export interface BacktestMetricCardProps {
