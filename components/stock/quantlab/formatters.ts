@@ -1,3 +1,5 @@
+import { formatPercent } from '@/lib/format'
+
 export function fmtB(n: number | null | undefined) {
   if (n == null || !Number.isFinite(n)) return '—'
   const abs = Math.abs(n)
@@ -9,8 +11,8 @@ export function fmtB(n: number | null | undefined) {
 }
 
 export function fmtPct(n: number | null | undefined) {
-  if (n == null || !Number.isFinite(n)) return '—'
-  return `${(n * 100).toFixed(2)}%`
+  // SSOT: lib/format.formatPercent (2 decimals, unsigned).
+  return formatPercent(n, 2)
 }
 
 export function isLlmConnectivityCode(code: string | null): boolean {

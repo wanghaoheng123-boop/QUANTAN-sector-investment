@@ -25,6 +25,7 @@ import {
 } from '@/lib/backtest/exitRules'
 import type { OpenPosition, ExitConfig, ExitReason } from '@/lib/backtest/exitRules'
 import { SECTOR_PROFILES } from '@/lib/optimize/sectorProfiles'
+import { perSideCostPct } from '@/lib/backtest/executionModel'
 
 export interface PortfolioConfig extends BacktestConfig {
   maxPositions: number        // max concurrent positions (default 10)
@@ -300,7 +301,7 @@ export function runPortfolioBacktest(
         const pnlPct = (exitPrice - pos.entryPrice) / pos.entryPrice
         const pnlDollar = exitShares * (exitPrice - pos.entryPrice)
 
-        const exitTxCost = exitShares * exitPrice * 0.0011  // 11bps exit cost
+        const exitTxCost = exitShares * exitPrice * perSideCostPct()  // per-side cost (executionModel SSOT)
         capital += (exitShares * exitPrice - exitTxCost)
         dayPnl += (pnlDollar - exitTxCost)
 
@@ -413,7 +414,7 @@ export function runPortfolioBacktest(
         const shares = Math.floor(allowed / price)
         if (shares <= 0) continue
 
-        const txCost = shares * price * 0.0011  // 11bps entry cost
+        const txCost = shares * price * perSideCostPct()  // per-side cost (executionModel SSOT)
         capital -= (shares * price + txCost)
         openPositions.set(ticker, {
           ticker,
@@ -451,7 +452,7 @@ export function runPortfolioBacktest(
         const pidx = priceIndex[ticker]?.get(currentTime)
         const prow = pidx != null ? instrumentData[ticker][pidx] : null
         const exitPrice = prow?.close ?? pos.lastKnownClose ?? pos.entryPrice
-        capital += pos.currentShares * exitPrice * (1 - 0.0011)  // 11bps exit cost
+        capital += pos.currentShares * exitPrice * (1 - perSideCostPct())  // per-side cost (executionModel SSOT)
         closedTrades.push({
           ticker, sector: sectorMap[ticker] ?? 'Unknown',
           entryDate: pos.entryDate, exitDate: currentDate,
@@ -488,7 +489,7 @@ export function runPortfolioBacktest(
     const rows = instrumentData[ticker]
     const lastRow = rows[rows.length - 1]
     const exitPrice = lastRow.close
-    capital += pos.currentShares * exitPrice * (1 - 0.0011)  // 11bps exit cost
+    capital += pos.currentShares * exitPrice * (1 - perSideCostPct())  // per-side cost (executionModel SSOT)
     closedTrades.push({
       ticker, sector: sectorMap[ticker] ?? 'Unknown',
       entryDate: pos.entryDate, exitDate: finalDate,
