@@ -26,6 +26,18 @@ import {
 import type { OpenPosition, ExitConfig, ExitReason } from '@/lib/backtest/exitRules'
 import { SECTOR_PROFILES } from '@/lib/optimize/sectorProfiles'
 import { perSideCostPct } from '@/lib/backtest/executionModel'
+import { tradingDaysPerYear } from '@/lib/backtest/core'
+
+/** T+1 entry friction (matches engine.ts FIX-C2). */
+const ENTRY_SLIPPAGE_BPS = 2
+
+/** Net holding-period return per share after entry + exit per-side costs (D2-2). */
+function netPnlPctFromPrices(entryPrice: number, exitPrice: number): number {
+  const c = perSideCostPct()
+  const entryAllIn = entryPrice * (1 + c)
+  const exitNet = exitPrice * (1 - c)
+  return (exitNet - entryAllIn) / entryAllIn
+}
 
 export interface PortfolioConfig extends BacktestConfig {
   maxPositions: number        // max concurrent positions (default 10)
@@ -298,7 +310,7 @@ export function runPortfolioBacktest(
           continue  // keep position intact, partialExitDone stays false
         }
 
-        const pnlPct = (exitPrice - pos.entryPrice) / pos.entryPrice
+        const pnlPct = netPnlPctFromPrices(pos.entryPrice, exitPrice)
         const pnlDollar = exitShares * (exitPrice - pos.entryPrice)
 
         const exitTxCost = exitShares * exitPrice * perSideCostPct()  // per-side cost (executionModel SSOT)
@@ -340,10 +352,13 @@ export function runPortfolioBacktest(
 
         const rows = instrumentData[ticker]
         const idx = priceIndex[ticker].get(currentTime)
-        if (idx == null || idx < 220) continue
+        // D2-1: need next bar to fill at tomorrow's open (mirrors engine FIX-C2).
+        if (idx == null || idx < 220 || idx + 1 >= rows.length) continue
 
         const row = rows[idx]
-        const price = row.close
+        const signalPrice = row.close
+        const nextOpen = rows[idx + 1].open
+        if (!Number.isFinite(nextOpen) || nextOpen <= 0) continue
 
         const lookback = rows.slice(0, idx + 1)
         const closes = lookback.map(r => r.close)
@@ -355,9 +370,8 @@ export function runPortfolioBacktest(
 
         let sig
         try {
-          // Phase 12-A: pass per-ticker sector gate
           sig = resolveBacktestSignal(
-            ticker, currentDate, price, closes, bars, ohlcv, cfg,
+            ticker, currentDate, signalPrice, closes, bars, ohlcv, cfg,
             sectorGateByTicker[ticker],
           )
         } catch { continue }
@@ -407,30 +421,30 @@ export function runPortfolioBacktest(
         // Defensive guard: never spend more than we have.
         const cashCap = Math.max(0, capital * 0.99)  // small buffer for tx cost
         const allowed = Math.min(maxAllocation, cashCap)
-        if (allowed < price) continue
+        const entryPrice = nextOpen * (1 + ENTRY_SLIPPAGE_BPS / 10000)
+        if (allowed < entryPrice) continue
 
-        const atrResult = atrAdaptiveStop(price, bars, cfg.exit.atrStopMultiplier)
-        // F1.18: size shares from `allowed` (cash-bounded), not maxAllocation.
-        const shares = Math.floor(allowed / price)
+        const atrResult = atrAdaptiveStop(signalPrice, bars, cfg.exit.atrStopMultiplier)
+        const shares = Math.floor(allowed / entryPrice)
         if (shares <= 0) continue
 
-        const txCost = shares * price * perSideCostPct()  // per-side cost (executionModel SSOT)
-        capital -= (shares * price + txCost)
+        const txCost = shares * entryPrice * perSideCostPct()
+        capital -= (shares * entryPrice + txCost)
         openPositions.set(ticker, {
           ticker,
           sector: sectorMap[ticker] ?? 'Unknown',
           entryIdx: di,
-          entryPrice: price,
+          entryPrice,
           entryDate: currentDate,
           entryATRPct: atrResult.atrPct,
           stopLossPrice: atrResult.stopLossPrice,
           initialShares: shares,
           currentShares: shares,
-          highestPrice: price,
+          highestPrice: entryPrice,
           partialExitDone: false,
           confidence: sig.confidence,
           reason: sig.reason,
-          capital: shares * price,
+          capital: shares * entryPrice,
         })
 
         if (openPositions.size >= cfg.maxPositions) break
@@ -458,7 +472,7 @@ export function runPortfolioBacktest(
           entryDate: pos.entryDate, exitDate: currentDate,
           entryPrice: pos.entryPrice, exitPrice,
           shares: pos.currentShares,
-          pnlPct: (exitPrice - pos.entryPrice) / pos.entryPrice,
+          pnlPct: netPnlPctFromPrices(pos.entryPrice, exitPrice),
           pnlDollar: pos.currentShares * (exitPrice - pos.entryPrice),
           exitReason: 'max_drawdown',
           confidence: pos.confidence,
@@ -495,7 +509,7 @@ export function runPortfolioBacktest(
       entryDate: pos.entryDate, exitDate: finalDate,
       entryPrice: pos.entryPrice, exitPrice,
       shares: pos.currentShares,
-      pnlPct: (exitPrice - pos.entryPrice) / pos.entryPrice,
+      pnlPct: netPnlPctFromPrices(pos.entryPrice, exitPrice),
       pnlDollar: pos.currentShares * (exitPrice - pos.entryPrice),
       exitReason: 'end_of_data',
       confidence: pos.confidence,
@@ -505,7 +519,8 @@ export function runPortfolioBacktest(
   // ── Compute metrics ───────────────────────────────────────────────────────
   const finalCapital = capital
   const totalReturn = (finalCapital - initialCapital) / initialCapital
-  const years = dates.length / 252
+  const annualizationDays = tickers.some(t => tradingDaysPerYear(t, sectorMap[t] ?? '') === 365) ? 365 : 252
+  const years = dates.length / annualizationDays
   const annualizedReturn = years > 0 ? (1 + totalReturn) ** (1 / years) - 1 : 0
 
   let peak2 = initialCapital, maxDd = 0
@@ -531,14 +546,14 @@ export function runPortfolioBacktest(
   // prevailing 1-year Treasury yield (DGS1); in tests / CI / canonical benchmark
   // the cache is cold and returns BACKTEST_RFR_ANNUAL (0.045) verbatim — so
   // this drop-in is reproducibility-safe.
-  const rfD = getRiskFreeRateSync(365) / 252
+  const rfD = getRiskFreeRateSync(365) / annualizationDays
   if (dailyReturns.length > 30) {
     const mean = dailyReturns.reduce((a, b) => a + b, 0) / dailyReturns.length
     const variance = dailyReturns.reduce((s, x) => s + (x - mean) ** 2, 0) / Math.max(1, dailyReturns.length - 1)
     const sd = Math.sqrt(Math.max(variance, 0))
-    if (sd > 0) sharpe = ((mean - rfD) / sd) * Math.sqrt(252)
+    if (sd > 0) sharpe = ((mean - rfD) / sd) * Math.sqrt(annualizationDays)
   }
-  const sortino = sortinoRatio(dailyReturns, rfD, 252)
+  const sortino = sortinoRatio(dailyReturns, rfD, annualizationDays)
 
   // Sector attribution
   const sectorAttr: Record<string, { trades: number; wins: number; totalReturn: number }> = {}

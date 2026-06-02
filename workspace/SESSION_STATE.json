@@ -2,28 +2,40 @@
   "schema_version": "1.1",
   "project": "QUANTAN-sector-investment",
   "created": "2026-04-28T09:40:00Z",
-  "last_updated": "2026-05-26T13:45:00.000Z",
-  "active_agent": "cursor (QA wave 6)",
+  "last_updated": "2026-06-02T09:05:00.000Z",
+  "active_agent": "cursor (handover menu 2026-06-02)",
   "program_doc": "workspace/QUANTAN_EXPERT_TEAM_COMMERCIALIZATION.md",
   "last_inspection": {
-    "timestamp": "2026-05-26T13:33:27.926Z",
+    "timestamp": "2026-06-02T09:05:00.000Z",
     "results": {
-      "pr_22": "MERGED",
-      "main_head": "056b54e",
+      "handover_menu": "COMPLETE",
+      "branch": "fix/handover-menu-2026-06-02",
       "typecheck": "PASS",
-      "tests": "996 passed / 82 files",
-      "build": "PASS",
-      "benchmark_wr_ssot_net": 53.79,
-      "smoke_production": "PASS",
-      "vercel_production_deploy": "dpl_Co13RU8yh56ym7QEZoVhgaB48KRJ",
-      "chart_api_ascending": "PASS",
-      "sortChartCandles_on_main": true,
-      "sector_rotation_scores_pre_fix": 0,
-      "sector_rotation_scores_post_fix": 11,
-      "full_platform_qa_doc": "workspace/FULL_PLATFORM_QA_2026-05-26.md"
+      "tests": "1014+ passed / 84 files",
+      "benchmark_wr_ssot_net": 54.34,
+      "portfolio_sim_wr": 48.37,
+      "pr_queue": "merged #30-40; closed #8 #9 #24",
+      "inspection_waves": "5-10 filed under reviews/",
+      "owner_actions": "workspace/OWNER_ACTIONS_2026-06-02.md"
     }
   },
   "tasks": [
+    {
+      "id": "HANDOVER-2026-06-02",
+      "title": "Remaining work handover menu implementation",
+      "status": "DONE",
+      "priority": "P0",
+      "files_touched": [
+        "lib/backtest/core.ts",
+        "lib/backtest/portfolioBacktest.ts",
+        "lib/chartEma.ts",
+        "components/crypto/",
+        "reviews/invariants-baseline.md",
+        "reviews/INSPECTION-WAVE-5-2026-06-02.md"
+      ],
+      "verify_status": { "A": "PASS", "B": "PASS", "C": "PASS", "D": "PASS", "E": "PASS", "F": "PASS" },
+      "notes": "All handover plan tiers addressed; owner blockers documented only"
+    },
     {
       "id": "TASK-RECT-WAVE-3",
       "title": "Platform rectification wave 3",
@@ -73,16 +85,6 @@
       "id": "BLOCKER-ROOT-GIT-DRIFT",
       "summary": "Drive root was behind origin/main — wave 3 branch merges rectification",
       "resolution": "PR fix/rectification-wave-3 → main"
-    },
-    {
-      "id": "BLOCKER-FRED-PREWARM",
-      "summary": "QUANTAN_FRED_PREWARM=1 not set on Vercel Production (quantan project only)",
-      "resolution": "Owner: Vercel env + redeploy (Q-004)"
-    },
-    {
-      "id": "BLOCKER-VERCEL-TRIPLE",
-      "summary": "Three QUANTAN Vercel projects still exist until owner deletes two",
-      "resolution": "VERCEL_OPERATIONS.md §12 dashboard steps"
     }
   ],
   "checkpoint": null

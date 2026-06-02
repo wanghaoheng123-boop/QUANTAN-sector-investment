@@ -16,7 +16,7 @@
  */
 
 import type { OhlcvRow } from './dataLoader'
-import { backtestInstrument } from './engine'
+import { backtestInstrument } from './core'
 import { getRiskFreeRateSync } from '@/lib/quant/riskFreeRate'
 
 // ─── Public types ───────────────────────────────────────────────────────────

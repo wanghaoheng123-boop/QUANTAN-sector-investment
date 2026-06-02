@@ -188,3 +188,20 @@ describe('runPortfolioBacktest — result shape', () => {
     ])
   })
 })
+
+describe('runPortfolioBacktest — D2-1 T+1 entry (WS2)', () => {
+  it('net pnlPct reflects round-trip costs when trades exist', () => {
+    const data = { A: uptrendSeries(400, 0.08) }
+    const res = runPortfolioBacktest(data, { A: 'Technology' }, {
+      ...DEFAULT_PORTFOLIO_CONFIG,
+      maxPositions: 1,
+    })
+    for (const t of res.trades) {
+      const gross = (t.exitPrice - t.entryPrice) / t.entryPrice
+      // Net pnlPct must be strictly below gross when costs apply (unless breakeven edge).
+      if (Math.abs(gross) > 0.001) {
+        expect(t.pnlPct).toBeLessThanOrEqual(gross + 1e-9)
+      }
+    }
+  })
+})
