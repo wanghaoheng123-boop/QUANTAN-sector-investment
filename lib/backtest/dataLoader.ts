@@ -7,7 +7,7 @@
 
 import { readFileSync, existsSync, readdirSync } from 'fs'
 import { join } from 'path'
-import type { OhlcBar } from '@/lib/quant/technicals'
+import type { OhlcBar } from '@/lib/quant/indicators'
 import { getCandles, isWarehouseAvailable, warehouseTickers } from '@/lib/data/warehouse'
 
 export interface OhlcvRow extends OhlcBar {

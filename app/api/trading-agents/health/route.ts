@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { applyRateLimit } from '@/lib/api/rateLimit'
 import { resolveTradingAgentsBase } from '@/lib/trading-agents-config'
 import { sanitizeError } from '@/lib/api/sanitize'
 
@@ -14,7 +15,13 @@ import { sanitizeError } from '@/lib/api/sanitize'
 // through `sanitizeError`.
 const isProd = process.env.NODE_ENV === 'production'
 
-export async function GET() {
+export async function GET(request: Request) {
+  const rateLimitResponse = await applyRateLimit(request, 'trading-agents-health', {
+    maxRequests: 30,
+    windowSeconds: 60,
+  })
+  if (rateLimitResponse) return rateLimitResponse
+
   const resolved = resolveTradingAgentsBase()
   if (!resolved.ok) {
     return NextResponse.json(

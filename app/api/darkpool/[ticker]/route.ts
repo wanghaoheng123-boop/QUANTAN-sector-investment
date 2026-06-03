@@ -276,10 +276,11 @@ export async function GET(
   } catch (err) {
     console.error(`[DarkPool API] ${ticker}:`, err)
     // Phase 13 S2 fix (F4.8): never leak raw error in production response.
+    const details = sanitizeError(err)
     return NextResponse.json(
       {
         error: 'Failed to fetch dark pool data',
-        details: sanitizeError(err) ?? null,
+        ...(details ? { details } : {}),
       } as unknown as DarkPoolAnalysis,
       { status: 502 }
     )

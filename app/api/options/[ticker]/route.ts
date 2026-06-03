@@ -89,8 +89,9 @@ export async function GET(req: Request, { params }: { params: { ticker: string }
   } catch (e) {
     console.error('[Options API]', symbol, e)
     // Phase 13 S2 fix (F4.8): sanitized error message in production.
+    const details = sanitizeError(e)
     return NextResponse.json(
-      { error: 'Failed to fetch options data', details: sanitizeError(e) ?? null },
+      { error: 'Failed to fetch options data', ...(details ? { details } : {}) },
       { status: 502 },
     )
   }
