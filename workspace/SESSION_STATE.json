@@ -2,21 +2,29 @@
   "schema_version": "1.1",
   "project": "QUANTAN-sector-investment",
   "created": "2026-04-28T09:40:00Z",
-  "last_updated": "2026-06-03T00:40:00.000Z",
-  "active_agent": "cursor (handover followup 2026-06-03)",
+  "last_updated": "2026-06-03T02:35:00.000Z",
+  "active_agent": "cursor (wave-11 inspection + audit-reports 2026-06-03)",
   "program_doc": "workspace/QUANTAN_EXPERT_TEAM_COMMERCIALIZATION.md",
   "last_inspection": {
-    "timestamp": "2026-06-03T00:37:10.000Z",
+    "timestamp": "2026-06-03T02:35:00.000Z",
+    "wave": 11,
+    "review_file": "reviews/INSPECTION-WAVE-11-2026-06-03.md",
+    "go_no_go": "GO",
+    "go_no_go_note": "CONDITIONAL GO cleared after pre-flight benchmark",
     "results": {
       "git_main_head": "de9a3d5",
-      "git_sync": "local main reset --hard origin/main (34 stale local-only commits discarded)",
+      "git_sync": "main reset --hard origin/main (de9a3d5)",
       "pr_41_handover": "MERGED on origin/main",
       "pr_42_q063": "code on main via #41; #42 merge commit orphaned on old lineage",
       "pr_43_d5_1": "code on main via #41; #43 merge commit orphaned on old lineage",
-      "pr_44_docs": "OPEN docs/platform-consolidation-2026-06-02",
+      "pr_44_docs": "OPEN docs/platform-consolidation-2026-06-02 \u2014 CI SUCCESS",
       "typecheck": "PASS",
-      "tests": "1016 passed / 84 files",
-      "benchmark": "NOT_RUN (no signal/backtest changes this session)"
+      "tests": "1017 passed / 85 files",
+      "benchmark_wr_ssot_net": 54.34,
+      "benchmark_wr_ssot_gross": 55.31,
+      "benchmark_floor_net": 53.29,
+      "benchmark_preflight": "PASS 2026-06-03",
+      "security_audit": "reviews/SECURITY-API-AUDIT-2026-06-03.md (0 crit / 0 high)"
     }
   },
   "tasks": [
@@ -25,7 +33,14 @@
       "title": "Reset Drive root main to origin/main",
       "status": "DONE",
       "priority": "P0",
-      "files_touched": [],
+      "files_touched": [
+        "lib/backtest/core.ts",
+        "lib/backtest/portfolioBacktest.ts",
+        "lib/chartEma.ts",
+        "components/crypto/",
+        "reviews/invariants-baseline.md",
+        "reviews/INSPECTION-WAVE-5-2026-06-02.md"
+      ],
       "verify_status": {
         "A": "PASS",
         "B": "PASS",
@@ -34,7 +49,7 @@
         "E": "PASS",
         "F": "PASS"
       },
-      "notes": "main @ de9a3d5 tracks origin/main; 34 divergent local commits were stale duplicates"
+      "notes": "main @ de9a3d5 tracks origin/main; handover tiers addressed"
     },
     {
       "id": "TASK-BACKLOG-RECONCILE-2026-06-03",
@@ -70,7 +85,7 @@
         "E": null,
         "F": null
       },
-      "notes": "Owner decided 15.x per workspace/Q-057-NEXTJS_DECISION.md; deferred — semver-major, needs dedicated session"
+      "notes": "Owner decided 15.x per workspace/Q-057-NEXTJS_DECISION.md; deferred \u2014 semver-major, needs dedicated session"
     }
   ],
   "blockers": [
