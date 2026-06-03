@@ -5,7 +5,7 @@ import LiveBriefClient from './LiveBriefClient'
 export const dynamic = 'force-dynamic'
 
 interface Props {
-  params: { sector: string }
+  params: Promise<{ sector: string }>
 }
 
 async function getBriefData(slug: string) {
@@ -22,8 +22,9 @@ async function getBriefData(slug: string) {
 }
 
 export default async function LiveBriefPage({ params }: Props) {
-  const slug = params.sector || ''
-  const sector = SECTORS.find(s => s.slug === slug)
-  const brief = await getBriefData(slug)
-  return <LiveBriefClient slug={slug} initialBrief={brief} />
+  const { sector: slug } = await params
+  const slugNorm = slug || ''
+  const sector = SECTORS.find(s => s.slug === slugNorm)
+  const brief = await getBriefData(slugNorm)
+  return <LiveBriefClient slug={slugNorm} initialBrief={brief} />
 }

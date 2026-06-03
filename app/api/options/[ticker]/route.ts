@@ -9,7 +9,8 @@ import { normalizeTicker, sanitizeError } from '@/lib/api/sanitize'
 
 const yahooFinance = new YahooFinance()
 
-export async function GET(req: Request, { params }: { params: { ticker: string } }) {
+export async function GET(req: Request, { params }: { params: Promise<{ ticker: string }> }) {
+  const { ticker: tickerParam } = await params
   // Rate limit: 30 req/min per IP
   const rateLimitResponse = await applyRateLimit(req, 'options', { maxRequests: 30, windowSeconds: 60 })
   if (rateLimitResponse) return rateLimitResponse
@@ -18,7 +19,7 @@ export async function GET(req: Request, { params }: { params: { ticker: string }
   // yahooSymbolFromParam (no character whitelist — F7.3 risk) to the strict
   // normalizeTicker SSOT in lib/api/sanitize.ts. Routes accepting a ticker
   // path param MUST validate it before reaching the upstream Yahoo client.
-  const symbol = normalizeTicker(params.ticker)
+  const symbol = normalizeTicker(tickerParam)
   if (!symbol) {
     return NextResponse.json({ error: 'Invalid ticker symbol' }, { status: 400 })
   }

@@ -212,7 +212,7 @@ function OptionsChainTableImpl({ chain }: Props) {
         </table>
       </div>
 
-      <p className="text-xs text-gray-600">
+      <p className="text-xs text-gray-400">
         Spot: ${fmtNum(spot)} · {calls.length} calls · {puts.length} puts · ITM highlighted
       </p>
     </div>

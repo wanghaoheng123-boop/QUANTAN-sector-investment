@@ -2,7 +2,7 @@ id,reviewer,severity,domain,file,line,one_line,citation,acceptance_test_id,assig
 F1.1,R1,CRITICAL,quant-finance,lib/backtest/engine.ts,605-650,walk-forward fixed via trade-attribution (single backtest + window partition by entry date),"Pardo (2008) Ch.11; Bailey & Lopez de Prado (2014) JPM 40(5)",AT-F1.1-walkforward-osnonzero,E1,S2,FIXED
 F1.2,R1,CRITICAL,quant-finance,lib/backtest/engine.ts,545,portfolio max DD now uses combined-curve,"Magdon-Ismail & Atiya (2004); Bacon (2008) p102-105",AT-F1.2-portfolio-dd,E1,S2,FIXED-c7340323+
 F1.3,R1,CRITICAL,quant-finance,"lib/backtest/engine.ts","186, 205, 224",stops use close not intraday low,"Pardo (2008) Ch.8 p161-164; Aronson (2007) p202-205",AT-F1.3-intraday-stop,E1,S2,closed
-F1.4,R1,HIGH,quant-finance,lib/backtest/engine.ts,"373, 385, 525, 601",RFR hardcoded 4%,Sharpe (1994) JPM 21(1),AT-F1.4-rfr-fred,E1+E3,S2,open
+F1.4,R1,HIGH,quant-finance,lib/backtest/engine.ts,"373, 385, 525, 601",RFR via getRiskFreeRateSync + FRED prewarm (Q-004),Sharpe (1994) JPM 21(1),AT-F1.4-rfr-fred,E1+E3,S2,FIXED-Q-004-2026-06-02
 F1.5,R1,HIGH,quant-finance,lib/backtest/engine.ts,343,B&H ignores dividends,"Sharpe (1994); Bacon (2008) p44",AT-F1.5-bnh-totalreturn,E1+E3,S2,open
 F1.6,R1,HIGH,quant-finance,lib/backtest/engine.ts,many,crypto annualization now 365 via tradingDaysPerYear(),Bacon (2008) p43,AT-F1.6-crypto-365,E1,S2,FIXED
 F1.7,R1,CRITICAL,quant-finance,lib/backtest/portfolioBacktest.ts,"171-191, 325-341",correlation-Kelly now implemented via lib/quant/correlation.ts,"Thorp (2006); Maillard et al (2010)",AT-F1.7-corr-kelly,E1,S2,FIXED-c11591f1+
@@ -34,7 +34,7 @@ F3.7,R3,MEDIUM,options,lib/options/chain.ts,99,ACT/365 day-count convention docu
 F3.8,R3,LOW,options,lib/options/greeks.ts,146,IV_TOLERANCE relaxed from 1e-6 to 1e-4 (matches option tick),N/A,AT-F3.8-iv-tolerance,E1,S2,FIXED-c11591f1+
 F4.1,R4,HIGH,data-engineering,app/api/prices/route.ts,38,bloomberg bridge degradation surfaced as bloombergStatus + console.warn,N/A (observability),AT-F4.1-bb-degraded-status,E3,S2,FIXED
 F4.2,R4,HIGH,data-engineering,lib/data/mergeQuotes.ts,39-54,QuoteProvenance interface tracks per-field source,ISO 20022 / FIX best-practice,AT-F4.2-field-provenance,E3,S2,FIXED
-F4.3,R4,HIGH,data-engineering,lib/api/rateLimit.ts,13,per-process bucket ineffective in serverless,Vercel docs / AWS Lambda BP,AT-F4.3-distributed-ratelimit,E3,S2,open
+F4.3,R4,HIGH,data-engineering,lib/api/rateLimit.ts,applyRateLimit,KV opt-in via KV_REST_*; memory fallback,Vercel docs,AT-F4.3-distributed-ratelimit,E3,S2,partial-KV-opt-in-2026-06-03
 F4.4,R4,HIGH,data-engineering,lib/api/reliability.ts,9-20,exponential backoff with full jitter added,"Brooker (2015) AWS; SRE Beyer (2016) Ch.22",AT-F4.4-exp-backoff,E3,S2,FIXED-c81db8f2+
 F4.5,R4,HIGH,data-engineering,(every yahoo route),yahoo-finance2 commercial redistribution,Yahoo Finance ToS §2,AT-F4.5-compliance-banner,E3,S4,open
 F4.6,R4,MEDIUM,data-engineering,app/api/prices/route.ts,47-58,falsy fallback to 0 hides missing data,N/A,AT-F4.6-nullish-coalesce,E3,S2,FIXED-c7340323+
@@ -45,7 +45,7 @@ F4.10,R4,MEDIUM,data-engineering,app/api/prices/route.ts,30,^VIX normalization i
 F4.11,R4,LOW,data-engineering,app/api/prices/route.ts,70,dataSources.yahoo hardcoded true,N/A,AT-F4.11-yahoo-detect,E3,S2,FIXED-c7340323+
 F5.1,R5,CRITICAL,frontend-architecture,components/KLineChart.tsx,147-220,indicator math reimplemented inline; SSOT violation,N/A (SSOT),AT-F5.1-chart-canonical-indicators,E2,S2,FIXED-c7fa7902+
 F5.2,R5,HIGH,frontend-architecture,components/stock/QuantLabPanel.tsx,173-1535,1362-line single function,Martin (2008) Clean Code,AT-F5.2-quantlab-decompose,E2,S3,FIXED-Q-053-2026-05-26
-F5.3,R5,HIGH,frontend-architecture,app/backtest/page.tsx,"73, 415, 556, 664",page-as-application; 4 panels colocated,N/A (architecture),AT-F5.3-backtest-decompose,E2,S3,open
+F5.3,R5,HIGH,frontend-architecture,app/backtest/page.tsx,shell,268 LOC page-as-shell (Q-054),N/A (architecture),AT-F5.3-backtest-decompose,E2,S3,FIXED-Q-054-2026-05-26
 F5.4,R5,HIGH,frontend-architecture,(4 files),4 silent .catch(()=>{}) replaced with diagnostic console.warn,Phase 12 H5,AT-F5.4-zero-silent-catch,E2,S2,FIXED-c7340323+
 F5.5,R5,MEDIUM,frontend-architecture,components/**/*.tsx,various,37 inline styles; no design tokens,N/A,AT-F5.5-design-tokens,E2,S3,open
 F5.6,R5,MEDIUM,frontend-architecture,(cross-component),various,32 ARIA attrs sparse coverage,WCAG 2.2 4.1.2,AT-F5.6-aria-coverage,E2+R6,S4,open
@@ -68,7 +68,7 @@ F7.3,R7,HIGH,security,(API routes accepting tickers),various,tickers flow to yah
 F7.4,R7,HIGH,security,(POST routes),trading-agents/backtest,no CSRF protection (need verify),OWASP CSRF Prevention,AT-F7.4-csrf-guard,E3,S4,open
 F7.5,R7,MEDIUM,security,lib/data/bloomberg/bridgeClient.ts,upstream,timing-safe secret comparison (need verify),Brumley & Boneh (2005),AT-F7.5-timing-safe,E3,S4,open
 F7.6,R7,MEDIUM,security,next.config.js,headers,security headers added (HSTS/X-Frame/Referrer/Permissions/CSP-RO),OWASP Secure Headers,AT-F7.6-secure-headers,E3,S2,FIXED-c7340323+
-F7.7,R7,MEDIUM,security,lib/api/rateLimit.ts,(cross-ref F4.3),rate-limit ineffective,OWASP API4,AT-F4.3-distributed-ratelimit,E3,S2,open
+F7.7,R7,MEDIUM,security,lib/api/rateLimit.ts,(cross-ref F4.3),KV opt-in documented in .env.example,OWASP API4,AT-F4.3-distributed-ratelimit,E3,S2,partial-KV-opt-in-2026-06-03
 F7.8,R7,MEDIUM,security,(every yahoo route),(cross-ref F4.5),yahoo commercial use,Yahoo ToS,AT-F4.5-compliance-banner,E3,S4,open
 F7.9,R7,MEDIUM,security,lib/auth.ts,74-80,JWT callback validates name/email/image via safeStringField+safeUrlField,OWASP ASVS V5,AT-F7.9-jwt-validate,E3,S2,FIXED
 F7.10,R7,LOW,security,app/api/prices/route.ts,19,public-API design + caching strategy explicitly documented,N/A (design clarification),AT-F7.10-doc,E3,S2,FIXED
@@ -85,7 +85,7 @@ F1.18,R1,HIGH,quant-finance,lib/backtest/portfolioBacktest.ts,301-305,Kelly appl
 F1.19,R1,MEDIUM,quant-finance,lib/backtest/portfolioBacktest.ts,"294, 339, 367",mark-to-market forward-fills last-known close,N/A (data integrity),AT-F1.19-forward-fill,E1,S2,FIXED-c81db8f2+
 F1.20,R1,MEDIUM,quant-finance,lib/backtest/portfolioBacktest.ts,459-464,VaR thresholds raised to 100\/250 (95\/99 percentile stability),Jorion (2006) p119-122,AT-F1.20-var-sample,E1,S2,FIXED-c81db8f2+
 F1.21,R1,MEDIUM,quant-finance,lib/backtest/portfolioBacktest.ts,247-253,dead state-machine code removed,N/A (maintenance),AT-F1.21-cleanup,E1,S2,FIXED-c81db8f2+
-F3.9,R3,HIGH,options,lib/options/chain.ts,66,RISK_FREE_RATE hardcoded 5.25% for all Greeks,"Hull (2017) p385-388; Merton (1973)",AT-F3.9-fred-rfr,E3+E1,S2,open
+F3.9,R3,HIGH,options,lib/options/chain.ts,enrichContract,tenor-matched getRiskFreeRateSync per contract,"Hull (2017) p385-388; Merton (1973)",AT-F3.9-fred-rfr,E3+E1,S2,FIXED-Q-052-2026-05-24
 F1.22,R1,MEDIUM,quant-finance,lib/backtest/exitRules.ts,80-82,atrAdaptiveStop includes still-forming entry bar (look-ahead micro-bias),N/A (Phase 12 H3 class),AT-F1.22-atr-prior-bar,E1,S2,open
 F1.23,R1,LOW,quant-finance,lib/backtest/exitRules.ts,33-40,DEFAULT_EXIT_CONFIG magic numbers without citation,N/A (documentation),AT-F1.23-exit-config-doc,E1,S3,open
 F-NEW-MACD,R2,HIGH,indicators,lib/quant/indicators.ts,184,MACD signal line was offset by sig-1 bars; last 8 bars always NaN — silently disabled MACD weight in signal layer,Appel (1979),AT-FNEW-macd-offset,E1,S2,FIXED
