@@ -5,7 +5,7 @@
 import type { OhlcvRow } from './dataLoader'
 import { resolveBacktestSignal, rsi, macdFn, atr, bollinger } from './signals'
 import { rowsToSignalInputs } from './benchmarkLabel'
-import type { OhlcBar } from '@/lib/quant/technicals'
+import type { OhlcBar } from '@/lib/quant/indicators'
 
 export interface LiveInstrumentSignal {
   ticker: string
