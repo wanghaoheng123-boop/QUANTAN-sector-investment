@@ -126,14 +126,14 @@ Command: `npm run portfolio:backtest` (2026-06-02, 121s elapsed)
 
 References: WS2.md D2-1 (engine FIX-C2 T+1), D2-2 (net round-trip costs), D2-7 (`tradingDaysPerYear` 365 when BTC in universe).
 
-## 3. Test inventory — re-measured 2026-05-23
+## 3. Test inventory — re-measured 2026-06-03 (Wave 12 rectification)
 
 ```
-Test files: 48 (was 21 in Phase 13 S1)
-Total test cases: 816 (was 798 on 2026-05-23; 279 in Phase 13 S1)
+Test files: 85 (was 48 on 2026-05-23; 21 in Phase 13 S1)
+Total test cases: 1017 (was 816 on 2026-05-23; 279 in Phase 13 S1)
 ```
 
-**Floor:** test count never drops below **816**. Test-file count never drops below **53**. Coverage by module captured per-sprint by R8 in `reviews/R8-testing.md`.
+**Floor:** test count never drops below **1017**. Test-file count never drops below **85**. Coverage by module captured per-sprint by R8 in `reviews/R8-testing.md`.
 
 **Coverage scope (vitest.config.ts):** currently includes `lib/quant`, `lib/backtest`, `lib/qa`, `lib/options`. Phase 15 Q-022 expands to `lib/api`, `lib/data`, `lib/portfolio`, `lib/optimize`, `lib/ml`, `hooks`.
 

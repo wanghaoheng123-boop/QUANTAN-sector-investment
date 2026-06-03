@@ -110,3 +110,7 @@ Pattern reference: `app/api/sector-rotation/route.ts` (fan-out 10/min), `app/api
 ---
 
 *Generated from subagent `8fdd3fc9` manifest; FAIL rows remediated on `fix/rectification-wave-12-2026-06-03`.*
+
+## D4-6 — omit null details/message
+
+All five routes **FIXED** in Wave 12 follow-up.
