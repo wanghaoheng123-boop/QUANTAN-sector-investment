@@ -1496,5 +1496,61 @@
     "priority": "P2",
     "status": "pending",
     "files": ["scripts/optimize-grid.ts", "reviews/optimization-loop1.md"]
+  },
+  {
+    "id": "Q-069",
+    "title": "Document /monitor → /desk redirect expectation (F-01)",
+    "domain": "Frontend/UX",
+    "priority": "P3",
+    "status": "pending",
+    "files": ["app/desk/page.tsx", "reviews/FUNCTION-AUDIT-UI-2026-06-03.md"],
+    "notes_2026_06_03": "UI audit F-01: /monitor 404 by design; desk is monitor substitute."
+  },
+  {
+    "id": "Q-070",
+    "title": "Document quant-lab as /stock/[ticker] tab (F-02)",
+    "domain": "Frontend/UX",
+    "priority": "P3",
+    "status": "pending",
+    "files": ["app/stock/[ticker]/page.tsx"],
+    "notes_2026_06_03": "UI audit F-02: standalone /quant-lab route does not exist."
+  },
+  {
+    "id": "Q-071",
+    "title": "Harden sector-rotation / ma-deviation probe timeouts (F-03, F-05)",
+    "domain": "Data/API",
+    "priority": "P2",
+    "status": "pending",
+    "files": ["app/api/sector-rotation/route.ts", "app/api/ma-deviation/route.ts"],
+    "notes_2026_06_03": "Agent probe timeouts; likely env/cold-start not code defect."
+  },
+  {
+    "id": "Q-072",
+    "title": "Briefs / options API probe reliability (F-06, F-07)",
+    "domain": "Data/API",
+    "priority": "P2",
+    "status": "pending",
+    "files": ["app/api/briefs/route.ts", "app/api/options/[ticker]/route.ts"],
+    "notes_2026_06_03": "UI audit probe timeouts under agent load."
+  },
+  {
+    "id": "Q-073",
+    "title": "Trading-agents route cold-start / timeout docs (F-08)",
+    "domain": "Data/API",
+    "priority": "P2",
+    "status": "pending",
+    "files": ["app/api/trading-agents/[ticker]/route.ts", "README.md"],
+    "notes_2026_06_03": "5-minute upstream timeout; probe may fail without TRADING_AGENTS_BASE."
+  },
+  {
+    "id": "Q-074",
+    "title": "Direct unit tests for 24 untested quant exports",
+    "domain": "Testing",
+    "priority": "P1",
+    "status": "pending",
+    "files": ["lib/quant/", "__tests__/quant/"],
+    "acceptance_criteria": ["All 24 exports in FUNCTION-AUDIT-QUANT-2026-06-03.md have ≥1 direct test reference"],
+    "verify_commands": ["npm run test"],
+    "notes_2026_06_03": "Quant audit 197b833e: 183 exports, 24 untested, 0 algorithm bugs."
   }
 ]
