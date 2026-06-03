@@ -151,10 +151,10 @@
     "title": "FRED risk-free rate (F1.4, F3.9)",
     "domain": "Quant/Backtest",
     "priority": "P1",
-    "status": "partial",
+    "status": "done",
     "dev_plan_phase": "P0",
     "owner_role": "Owner (PM)",
-    "human_blocker": "Set QUANTAN_FRED_PREWARM=1 in Vercel production env (code ready; Q-052 wired)",
+    "human_blocker": null,
     "phase15_sprint": "S2",
     "files": [
       "lib/quant/constants.ts",
@@ -171,8 +171,9 @@
       "npm run typecheck"
     ],
     "notes_2026_05_23": "Open. FRED provider exists (lib/data/providers/fred.ts) but not wired to RFR consumers. Phase 15 S2 priority \u2014 triggers WR baseline re-freeze.",
-    "completed_at": null,
+    "completed_at": "2026-06-02",
     "notes_2026_05_24": "PARTIAL. lib/quant/riskFreeRate.ts exists with sync + async + FRED CSV. engine.ts:434/445/591/671 calls getRiskFreeRateSync. BUT (a) the cache is never hydrated (no module-init async warm-up), so sync calls return the static fallback BACKTEST_RFR_ANNUAL=0.045 verbatim \u2014 Q-004 is functionally inert for the benchmark; (b) lib/options/chain.ts:56 still imports the static OPTIONS_RFR_ANNUAL constant directly; (c) lib/backtest/portfolioBacktest.ts:529 still uses BACKTEST_RFR_ANNUAL directly. Continuation: Q-052-NEW. | 2026-05-24 Claude-Code review: Cursor's HANDOFF + PENDING_TASKS_AUDIT honestly described this as partial, but the JSON status field was set to 'done'. Flipped to 'partial' to match physical reality. See workspace/REVIEW_2026-05-24.md.",
+    "notes_2026_06_02": "PROD ACTIVE. Owner set QUANTAN_FRED_PREWARM=1 on quantan Production (deploy dpl_6huKCcxVyL11rkAJ8TzoQX7aCz5t). Code: lib/quant/riskFreeRate.ts module-init prewarm; chain.ts + portfolioBacktest.ts on getRiskFreeRateSync. Benchmark WR unchanged in CI (cold cache by design); prod Sharpe/Sortino/Greeks FRED-backed.",
     "prior_closure_note": "Open. FRED provider exists (lib/data/providers/fred.ts) but not wired to RFR consumers. Phase 15 S2 priority \u2014 triggers WR baseline re-freeze. | 2026-05-24 Cursor Phase 15 completion batch \u2014 see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
   },
   {
@@ -1336,13 +1337,13 @@
   },
   {
     "id": "Q-057-NEW",
-    "title": "Next.js upgrade \u2014 close 23 active CVEs in next@14.2.15",
+    "title": "Next.js upgrade \u2014 15.x (React 19) to close remaining CVEs",
     "domain": "Security",
     "priority": "P0",
     "status": "pending",
     "dev_plan_phase": "P1",
     "owner_role": "Owner (PM)",
-    "human_blocker": "Sign off Next.js target: 14.x patch vs 15.x (recommended) vs 16.x — see workspace/DEVELOPMENT_PLAN_2026-05-26.md P1",
+    "human_blocker": null,
     "phase15_sprint": "S1",
     "files": [
       "package.json",
@@ -1365,7 +1366,8 @@
       "npm run test",
       "npm run benchmark"
     ],
-    "notes_2026_05_25": "Filed by audit: reviews/npm-audit-2026-05-25.md. Critical is next itself (14.2.15) with 23 advisories incl. Authorization Bypass in Middleware, SSRF, multiple cache-poisoning, XSS in CSP nonces \u2014 directly intersects the Q-040-NEW/Q-055-NEW/Q-029 work that just landed. npm audit fix --force proposes next@16.2.6 (semver-major: React 19 + partial-prerendering + config migration). next@15.x is intermediate (React 19 required). Owner sign-off needed on target version before any package.json mutation. Coordinate with Q-040-NEW CSP completion."
+    "notes_2026_05_25": "Filed by audit: reviews/npm-audit-2026-05-25.md. Critical is next itself (14.2.15) with 23 advisories incl. Authorization Bypass in Middleware, SSRF, multiple cache-poisoning, XSS in CSP nonces \u2014 directly intersects the Q-040-NEW/Q-055-NEW/Q-029 work that just landed. npm audit fix --force proposes next@16.2.6 (semver-major: React 19 + partial-prerendering + config migration). next@15.x is intermediate (React 19 required). Owner sign-off needed on target version before any package.json mutation. Coordinate with Q-040-NEW CSP completion.",
+    "notes_2026_06_02": "Interim: main on next@14.2.35. Owner decision: target Next.js 15.x + React 19 (workspace/Q-057-NEXTJS_DECISION.md). Branch fix/q-057-nextjs-15. Gates: Q-058 snapshots + csrf tests + dual benchmark hash. Deferred 2026-06-03 handover (semver-major)."
   },
   {
     "id": "Q-058-NEW",
@@ -1448,10 +1450,12 @@
     "title": "UI metric labeling: honest WR / cost disclosure",
     "domain": "Frontend/UX",
     "priority": "P1",
-    "status": "partial",
+    "status": "done",
+    "completed_at": "2026-06-02",
     "files": ["components/backtest/", "app/backtest/page.tsx"],
     "acceptance_criteria": ["Desk/backtest UI labels 20d label WR and cost assumptions"],
-    "notes_2026_06_02": "SIGNAL_SSOT.md documents paths; UI copy audit deferred to Wave 7 browser QA."
+    "notes_2026_06_02": "SIGNAL_SSOT.md documents paths; UI copy audit deferred to Wave 7 browser QA.",
+    "notes_2026_06_03": "DONE on canonical main via PR #41 (handover): app/backtest/page.tsx methodology note (T+1 next-open fills, ~22 bps round-trip); LiveSignalsPanel caveat (live table ≠ realized P&L). PRs #42/#43 merged on orphaned local lineage only — code present at de9a3d5."
   },
   {
     "id": "Q-064-NEW",
