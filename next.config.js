@@ -88,12 +88,7 @@ const nextConfig = {
       { protocol: 'https', hostname: 'images.financialcontent.com' },
     ],
   },
-  // Prevent Next.js from bundling yahoo-finance2 and its broken ESM shim.
-  // Resolved by Node.js natively at runtime instead.
-  // Next.js 14 uses experimental.serverComponentsExternalPackages
-  experimental: {
-    serverComponentsExternalPackages: ['yahoo-finance2'],
-  },
+  serverExternalPackages: ['yahoo-finance2'],
   async headers() {
     return [
       {

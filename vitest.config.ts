@@ -67,8 +67,6 @@ export default defineConfig({
         // Grid search — long-running optimization; tested via end-to-end
         // benchmark instead. Phase 16 splits this into unit-testable units.
         'lib/optimize/gridSearch.ts',
-        // Bare framework definitions — type-level only, no runtime behavior
-        'lib/quant/frameworks.ts',
         'lib/quant/buildFundamentalsPayload.ts',
       ],
       reporter: ['text', 'text-summary', 'json-summary'],

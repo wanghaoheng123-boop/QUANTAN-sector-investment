@@ -30,8 +30,9 @@ type YahooInterval = '1m' | '2m' | '5m' | '15m' | '1h' | '2h' | '4h' | '1d' | '1
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { ticker: string } }
+  { params }: { params: Promise<{ ticker: string }> }
 ) {
+  const { ticker: tickerParam } = await params
   // Rate limit: 60 req/min per IP
   const rateLimitResponse = await applyRateLimit(req, 'chart', { maxRequests: 60, windowSeconds: 60 })
   if (rateLimitResponse) return rateLimitResponse
@@ -39,7 +40,7 @@ export async function GET(
   // Phase 13 S2 fix (F4.10 + F7.3): full US-index whitelist + strict ticker
   // character validation. Previously only VIX was auto-prefixed and there was
   // no character whitelist, allowing arbitrary user input through to yahoo.
-  const normalized = normalizeTicker(params.ticker)
+  const normalized = normalizeTicker(tickerParam)
   if (!normalized) {
     return NextResponse.json({ error: 'Invalid ticker symbol' }, { status: 400 })
   }

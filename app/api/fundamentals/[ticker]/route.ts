@@ -28,14 +28,15 @@ const MODULES = [
   'earningsHistory',
 ] as const
 
-export async function GET(req: NextRequest, { params }: { params: { ticker: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ ticker: string }> }) {
+  const { ticker: tickerParam } = await params
   const rateLimited = await applyRateLimit(req, 'fundamentals', FUNDAMENTALS_RATE_LIMIT)
   if (rateLimited) return rateLimited
 
   // Phase 16 audit (2026-05-24): strict ticker validation via SSOT
   // normalizeTicker. The prior yahooSymbolFromParam was permissive and would
   // forward any uppercased path-encoded string to Yahoo (F7.3 risk).
-  const symbol = normalizeTicker(params.ticker)
+  const symbol = normalizeTicker(tickerParam)
   if (!symbol) {
     return NextResponse.json({ error: 'Invalid ticker symbol' }, { status: 400 })
   }

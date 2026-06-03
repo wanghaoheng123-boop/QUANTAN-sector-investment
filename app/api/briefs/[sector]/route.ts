@@ -133,7 +133,7 @@ function fetchWithFallback<T>(p: Promise<T>, fallback: T, label?: string): Promi
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { sector: string } }
+  { params }: { params: Promise<{ sector: string }> }
 ): Promise<NextResponse<SectorBrief | { error: string }>> {
   // Phase 14: rate limit — 30 req/min per IP. Brief endpoint hits Yahoo
   // 3+ times per call (quote, summary, news, holdings); unprotected polling
@@ -141,7 +141,8 @@ export async function GET(
   const rl = await applyRateLimit(req, 'briefs-sector', { maxRequests: 30, windowSeconds: 60 })
   if (rl) return rl as NextResponse<{ error: string }>
 
-  const slug = (params.sector || '').trim()
+  const { sector: sectorParam } = await params
+  const slug = (sectorParam || '').trim()
   const sectorMeta = SECTORS.find(s => s.slug === slug)
 
   if (!sectorMeta) {
