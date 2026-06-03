@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, use } from 'react'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import dynamic from 'next/dynamic'
@@ -40,8 +40,9 @@ const SECTOR_MAIN_TABS = [
   ['news', 'News'],
 ] as const
 
-export default function SectorPage({ params }: { params: { slug: string } }) {
-  const sector = getSectorBySlug(params.slug)
+export default function SectorPage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = use(params)
+  const sector = getSectorBySlug(slug)
   if (!sector) notFound()
 
   const [candles, setCandles] = useState<Candle[]>([])

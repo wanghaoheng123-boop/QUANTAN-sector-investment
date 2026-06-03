@@ -20,7 +20,7 @@ vi.mock('yahoo-finance2', () => ({
 import { GET as analyticsGET } from '@/app/api/analytics/[ticker]/route'
 import { GET as fundamentalsGET } from '@/app/api/fundamentals/[ticker]/route'
 
-const PARAMS = { params: { ticker: 'AAPL' } }
+const PARAMS = { params: Promise.resolve({ ticker: 'AAPL' }) }
 const LIMIT = 30
 
 // Distinct IP per case keeps the per-process token buckets isolated.

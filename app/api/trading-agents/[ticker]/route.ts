@@ -55,14 +55,15 @@ export const runtime = 'nodejs'
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { ticker: string } }
+  { params }: { params: Promise<{ ticker: string }> }
 ) {
+  const { ticker: tickerParam } = await params
   // Rate limit: 10 req/min per IP
   const rateLimitResponse = await applyRateLimit(req, 'trading-agents', TA_RATE_LIMIT)
   if (rateLimitResponse) return rateLimitResponse
   // Phase 13 S2 (F7.3): canonical ticker validation — rejects scripts/paths
   // before they reach the upstream Python service.
-  const ticker = normalizeTicker(params.ticker || '')
+  const ticker = normalizeTicker(tickerParam || '')
   if (!ticker) {
     return NextResponse.json({ error: 'Invalid ticker symbol' }, { status: 400 })
   }
@@ -151,7 +152,7 @@ export async function GET(
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { ticker: string } }
+  { params }: { params: Promise<{ ticker: string }> }
 ) {
   // Phase 15 Q-055-NEW: CSRF guard before any other work. The double-submit
   // pattern (cookie + matching x-quantan-csrf header) ensures the request
@@ -192,7 +193,8 @@ export async function POST(
     )
   }
 
-  const ticker = normalizeTicker(params.ticker || '')
+  const { ticker: tickerParam } = await params
+  const ticker = normalizeTicker(tickerParam || '')
   if (!ticker) {
     return NextResponse.json({ error: 'Invalid ticker symbol' }, { status: 400 })
   }
