@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { applyRateLimit } from '@/lib/api/rateLimit'
 import { sanitizeError } from '@/lib/api/sanitize'
 
 export const dynamic = 'force-dynamic'
@@ -7,7 +8,13 @@ export const dynamic = 'force-dynamic'
  * Spot quote for BTC/USD when the browser has not yet received Coinbase ticker WS.
  * CoinGecko simple price — no API key for low-frequency server-side use.
  */
-export async function GET() {
+export async function GET(request: Request) {
+  const rateLimitResponse = await applyRateLimit(request, 'crypto-btc-quote', {
+    maxRequests: 30,
+    windowSeconds: 60,
+  })
+  if (rateLimitResponse) return rateLimitResponse
+
   try {
     const url =
       'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_vol=true&include_24hr_change=true'

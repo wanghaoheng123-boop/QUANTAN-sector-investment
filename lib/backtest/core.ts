@@ -3,7 +3,7 @@
  * Used by Next.js API routes and the CLI runner.
  */
 
-import type { OhlcBar } from '@/lib/quant/technicals'
+import type { OhlcBar } from '@/lib/quant/indicators'
 import { resolveBacktestSignal, DEFAULT_CONFIG, atr, type BacktestConfig } from './signals'
 import { sortinoRatio } from '@/lib/quant/indicators'
 import { getRiskFreeRateSync } from '@/lib/quant/riskFreeRate'
