@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { applyRateLimit } from '@/lib/api/rateLimit'
 import { sanitizeError } from '@/lib/api/sanitize'
 
 export const dynamic = 'force-dynamic'
@@ -19,7 +20,13 @@ type OkxLiqRow = {
   }>
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  const rateLimitResponse = await applyRateLimit(request, 'crypto-btc-liquidations', {
+    maxRequests: 30,
+    windowSeconds: 60,
+  })
+  if (rateLimitResponse) return rateLimitResponse
+
   const now = Date.now()
 
   if (_cache && now < _cache.expiresAt) {

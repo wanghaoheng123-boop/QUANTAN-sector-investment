@@ -102,8 +102,9 @@ export async function GET(
       // error envelopes with secrets.
       const text = await res.text().catch(() => '')
       console.warn('[trading-agents GET] upstream', res.status, text.slice(0, 200))
+      const details = sanitizeError(text)
       return NextResponse.json(
-        { error: 'upstream_error', status: res.status, details: sanitizeError(text) ?? null },
+        { error: 'upstream_error', status: res.status, ...(details ? { details } : {}) },
         { status: 502 }
       )
     }

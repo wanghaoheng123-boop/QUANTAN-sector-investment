@@ -19,9 +19,11 @@ vi.mock('yahoo-finance2', () => ({
 
 import { GET as analyticsGET } from '@/app/api/analytics/[ticker]/route'
 import { GET as fundamentalsGET } from '@/app/api/fundamentals/[ticker]/route'
+import { GET as maDeviationGET } from '@/app/api/ma-deviation/route'
 
 const PARAMS = { params: Promise.resolve({ ticker: 'AAPL' }) }
 const LIMIT = 30
+const FANOUT_LIMIT = 10
 
 // Distinct IP per case keeps the per-process token buckets isolated.
 function req(ip: string): NextRequest {
@@ -64,5 +66,16 @@ describe('rate limiting on Yahoo-fanout routes (D4-3)', () => {
     expect((await analyticsGET(r, PARAMS)).status).toBe(429)
     // Fundamentals from the same IP is still fresh (distinct bucket name).
     expect((await fundamentalsGET(r, PARAMS)).status).not.toBe(429)
+  })
+
+  it('ma-deviation: fan-out route allows 10/min then returns 429', async () => {
+    const r = new NextRequest('http://localhost/api/ma-deviation', {
+      headers: { 'x-real-ip': '10.1.0.4' },
+    })
+    for (let i = 0; i < FANOUT_LIMIT; i++) {
+      const res = await maDeviationGET(r)
+      expect(res.status).not.toBe(429)
+    }
+    expect((await maDeviationGET(r)).status).toBe(429)
   })
 })
