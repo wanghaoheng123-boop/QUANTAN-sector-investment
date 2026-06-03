@@ -2,21 +2,22 @@
   "schema_version": "1.1",
   "project": "QUANTAN-sector-investment",
   "created": "2026-04-28T09:40:00Z",
-  "last_updated": "2026-06-03T00:40:00.000Z",
-  "active_agent": "cursor (handover followup 2026-06-03)",
+  "last_updated": "2026-06-03T02:35:00.000Z",
+  "active_agent": "test-runner (VERIFY A-F 2026-06-03)",
   "program_doc": "workspace/QUANTAN_EXPERT_TEAM_COMMERCIALIZATION.md",
   "last_inspection": {
-    "timestamp": "2026-06-03T00:37:10.000Z",
+    "timestamp": "2026-06-03T02:35:00.000Z",
     "results": {
       "git_main_head": "de9a3d5",
-      "git_sync": "local main reset --hard origin/main (34 stale local-only commits discarded)",
-      "pr_41_handover": "MERGED on origin/main",
-      "pr_42_q063": "code on main via #41; #42 merge commit orphaned on old lineage",
-      "pr_43_d5_1": "code on main via #41; #43 merge commit orphaned on old lineage",
-      "pr_44_docs": "OPEN docs/platform-consolidation-2026-06-02",
-      "typecheck": "PASS",
-      "tests": "1016 passed / 84 files",
-      "benchmark": "NOT_RUN (no signal/backtest changes this session)"
+      "git_fetch": "FAIL (Recv timeout); local main already tracks origin/main",
+      "verify_A_tests": "1016 passed / 0 failed / 0 skipped (84 files)",
+      "verify_B_typecheck": "PASS",
+      "verify_C_secrets_grep": "PASS (0 matches lib/ app/ scripts/)",
+      "verify_D_credential_grep": "PASS (env Bearer + test mock + UI placeholder only)",
+      "verify_E_architecture": "PASS (portfolio/, providers/, indicators.ts, warehouse.ts, SectorRotationPanel.tsx)",
+      "verify_F_benchmark": "PASS — net WR 54.34%, gross 55.31%; no NaN in JSON",
+      "verify_F_portfolio": "PASS — best config hold25 WR 48.37%; no NaN in JSON",
+      "benchmark_enhanced": "51.45% WR (research only, Q-009 not approved)"
     }
   },
   "tasks": [
@@ -71,6 +72,25 @@
         "F": null
       },
       "notes": "Owner decided 15.x per workspace/Q-057-NEXTJS_DECISION.md; deferred — semver-major, needs dedicated session"
+    },
+    {
+      "id": "TASK-VERIFY-AF-2026-06-03",
+      "title": "Full VERIFY A-F on main",
+      "status": "DONE",
+      "priority": "P0",
+      "files_touched": [
+        "workspace/MEMORY_LOG.md",
+        "workspace/SESSION_STATE.json"
+      ],
+      "verify_status": {
+        "A": "PASS",
+        "B": "PASS",
+        "C": "PASS",
+        "D": "PASS",
+        "E": "PASS",
+        "F": "PASS"
+      },
+      "notes": "chore/verify-2026-06-03; SSOT net WR 54.34%; portfolio best 48.37%; enhanced 51.45%"
     }
   ],
   "blockers": [
