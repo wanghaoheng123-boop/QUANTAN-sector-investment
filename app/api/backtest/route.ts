@@ -142,8 +142,9 @@ export async function GET(request: Request) {
     return NextResponse.json(data)
   } catch (e) {
     console.error('[api/backtest] error:', e)
+    const message = sanitizeError(e)
     return NextResponse.json(
-      { error: 'Backtest failed', message: sanitizeError(e) ?? null },
+      { error: 'Backtest failed', ...(message ? { message } : {}) },
       { status: 500 },
     )
   }
@@ -169,8 +170,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ status: 'ok', computedAt: data.computedAt })
   } catch (e) {
     console.error('[api/backtest POST] recompute failed:', e)
+    const message = sanitizeError(e)
     return NextResponse.json(
-      { error: 'Recompute failed', message: sanitizeError(e) ?? null },
+      { error: 'Recompute failed', ...(message ? { message } : {}) },
       { status: 500 },
     )
   }

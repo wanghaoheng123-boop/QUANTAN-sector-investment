@@ -212,8 +212,9 @@ export async function GET(request: Request): Promise<NextResponse<{
   } catch (err) {
     console.error('[Briefs API]', err)
     // Phase 13 S2 fix (F4.8): sanitized error.
+    const details = sanitizeError(err)
     return NextResponse.json(
-      { error: 'Failed to fetch financial news', details: sanitizeError(err) ?? null },
+      { error: 'Failed to fetch financial news', ...(details ? { details } : {}) },
       { status: 502 }
     )
   }
