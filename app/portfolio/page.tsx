@@ -43,11 +43,11 @@ export default function PortfolioPage() {
           </div>
           <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-4">
             <p className="text-xs text-slate-500 uppercase">Win rate</p>
-            <p className="text-lg text-emerald-400">{(best.metrics.winRate * 100).toFixed(2)}%</p>
+            <p className="text-lg text-emerald-400">{best.metrics.winRate.toFixed(2)}%</p>
           </div>
           <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-4">
             <p className="text-xs text-slate-500 uppercase">Max drawdown</p>
-            <p className="text-lg text-amber-400">{(best.metrics.maxDrawdown * 100).toFixed(2)}%</p>
+            <p className="text-lg text-amber-400">{best.metrics.maxDrawdown.toFixed(2)}%</p>
           </div>
         </div>
       )}
