@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import YahooFinance from 'yahoo-finance2'
 import { SECTORS } from '@/lib/sectors'
 import { sma, rsi, ma200Regime } from '@/lib/quant/technicals'
+import { applyRateLimit } from '@/lib/api/rateLimit'
 import { sanitizeError } from '@/lib/api/sanitize'
 import { withRetry } from '@/lib/api/reliability'
 
@@ -17,7 +18,14 @@ const TICKERS = [
   { ticker: 'QQQ', name: 'Nasdaq-100', color: '#8b5cf6', icon: '💻', slug: 'qqq' },
 ]
 
-export async function GET() {
+export async function GET(request: Request) {
+  // ~13 parallel Yahoo chart calls per request — same fan-out profile as sector-rotation.
+  const rateLimitResponse = await applyRateLimit(request, 'ma-deviation', {
+    maxRequests: 10,
+    windowSeconds: 60,
+  })
+  if (rateLimitResponse) return rateLimitResponse
+
   const now = Date.now()
   const cached = _cache.get('ma-deviation')
   if (cached && now < cached.expiresAt) {
