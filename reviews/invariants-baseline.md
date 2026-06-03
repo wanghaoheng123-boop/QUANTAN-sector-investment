@@ -122,9 +122,22 @@ Command: `npm run portfolio:backtest` (2026-06-02, 121s elapsed)
 | Sharpe | -1.0655 | **-0.9422** | Combined execution + cost honesty |
 | Profit factor | (prior) | **1.29** | Net pnlPct series |
 
-**Frozen §2 values (update regression tracking):** WR **48.37%**, max DD **15.20%**, Sharpe **-0.9422**, best config **hold25_pt10_trail6_panic4**.
+**Frozen §2 values (superseded by C3 below):** WR **48.37%**, max DD **15.20%**, Sharpe **-0.9422**, best config **hold25_pt10_trail6_panic4**.
 
-References: WS2.md D2-1 (engine FIX-C2 T+1), D2-2 (net round-trip costs), D2-7 (`tradingDaysPerYear` 365 when BTC in universe).
+**C3 (post-F1 exit symmetry, Wave 12 @ `fix/rectification-wave-12-2026-06-03`, 2026-06-03):**
+
+Command: `npm run portfolio:backtest` (~126s). See `reviews/ALGORITHM-RECTIFICATION-2026-06-03.md`.
+
+| Metric | C2 | C3 | Justification |
+|--------|-----|-----|---------------|
+| Win rate | 48.37% | **49.46%** (+1.09pp) | F1: signal/panic/time/max-DD exits fill at T+1 open, not same-bar close |
+| Max drawdown | 15.20% | **15.84%** | Exit timing honesty |
+| Sharpe | -0.9422 | **-1.013** | Combined with C2 entry/cost model |
+| Profit factor | 1.29 | **1.24** | Net pnlPct series |
+
+**Frozen §2b values (regression tracking):** WR **49.46%**, max DD **15.84%**, Sharpe **-1.013**, best config **hold25_pt10_trail6_panic4**.
+
+References: WS2.md D2-1 (engine FIX-C2 T+1), D2-2 (net round-trip costs), D2-7 (`tradingDaysPerYear` 365 when BTC in universe); F1 rectification `reviews/ALGORITHM-RECTIFICATION-2026-06-03.md`.
 
 ## 3. Test inventory — re-measured 2026-06-03 (Wave 12 rectification)
 

@@ -31,6 +31,30 @@ import { tradingDaysPerYear } from '@/lib/backtest/core'
 /** T+1 entry friction (matches engine.ts FIX-C2). */
 const ENTRY_SLIPPAGE_BPS = 2
 
+/**
+ * End-of-day exit reasons: signal is computed from today's close, so the fill
+ * is at tomorrow's open — mirrors core.ts L327-385 and invariants §1c.
+ * Intraday stop/profit-target fills stay on evaluateStopHit (resting orders).
+ */
+const T_PLUS_ONE_EXIT_REASONS: ReadonlySet<ExitReason> = new Set([
+  'signal',
+  'panic_exit',
+  'time_exit',
+])
+
+function resolvePortfolioExitFillPrice(
+  reason: ExitReason,
+  barIdx: number,
+  rows: OhlcvRow[],
+  intradayFill: number,
+): number | null {
+  if (!T_PLUS_ONE_EXIT_REASONS.has(reason)) return intradayFill
+  if (barIdx + 1 >= rows.length) return null
+  const nextOpen = rows[barIdx + 1].open
+  if (!Number.isFinite(nextOpen) || nextOpen <= 0) return null
+  return nextOpen
+}
+
 /** Net holding-period return per share after entry + exit per-side costs (D2-2). */
 function netPnlPctFromPrices(entryPrice: number, exitPrice: number): number {
   const c = perSideCostPct()
@@ -294,7 +318,11 @@ export function runPortfolioBacktest(
       )
 
       if (exitCheck) {
-        const exitPrice = exitCheck.exitPrice
+        const exitPrice = resolvePortfolioExitFillPrice(
+          exitCheck.reason, idx, rows, exitCheck.exitPrice,
+        )
+        if (exitPrice == null) continue
+
         const exitShares = exitCheck.isPartial
           ? Math.floor(pos.currentShares * exitCheck.partialFraction)
           : pos.currentShares
@@ -461,11 +489,16 @@ export function runPortfolioBacktest(
     if (equity > peakEquity) peakEquity = equity
     const dd = (peakEquity - equity) / peakEquity
     if (dd >= cfg.maxDrawdownCap) {
-      // Portfolio circuit breaker — close all positions
+      // Portfolio circuit breaker — T+1 fill at next bar open (core.ts symmetry).
       for (const [ticker, pos] of openPositions) {
+        const rows = instrumentData[ticker]
         const pidx = priceIndex[ticker]?.get(currentTime)
-        const prow = pidx != null ? instrumentData[ticker][pidx] : null
-        const exitPrice = prow?.close ?? pos.lastKnownClose ?? pos.entryPrice
+        const prow = pidx != null ? rows[pidx] : null
+        let exitPrice = prow?.close ?? pos.lastKnownClose ?? pos.entryPrice
+        if (pidx != null && pidx + 1 < rows.length) {
+          const nextOpen = rows[pidx + 1].open
+          if (Number.isFinite(nextOpen) && nextOpen > 0) exitPrice = nextOpen
+        }
         capital += pos.currentShares * exitPrice * (1 - perSideCostPct())  // per-side cost (executionModel SSOT)
         closedTrades.push({
           ticker, sector: sectorMap[ticker] ?? 'Unknown',
