@@ -1,10 +1,41 @@
 # Algorithm Rectification — 2026-06-03
 
+**Audit ref:** Algorithm verifier `b28e5dad` (Wave 12)  
+**Canonical benchmark:** **PASS** — net WR **54.34%** (floor **53.29%**)
+
+---
+
+
+---
+
+
+<!-- merged from main -->
+
+
+# Algorithm Rectification — 2026-06-03
+
 **Branch:** `fix/rectification-wave-12-2026-06-03` (PR #48)  
 **Audit ref:** Algorithm verifier `b28e5dad` (Wave 12)  
 **Canonical benchmark:** **PASS** — net WR **54.34%** (floor **53.29%**)
 
 ---
+
+## Executive summary
+
+| Gate | Result | Value |
+|------|--------|-------|
+| `npm run benchmark` (§1b net) | **PASS** | **54.34%** |
+| `npm run portfolio:backtest` (§2b) | **REBASELINED** | WR **49.46%** (+1.09pp vs 48.37%) |
+| `npm run test` | **PASS** | 1017 tests |
+
+---
+
+
+---
+
+
+<!-- merged from main -->
+
 
 ## Executive summary
 
@@ -17,6 +48,27 @@
 F1 (HIGH) closed: portfolio-sim close-based exits (`signal`, `panic_exit`, `time_exit`, `max_drawdown`) now fill at **T+1 open**, symmetric with `lib/backtest/core.ts` L327-385 and invariants §1c. Intraday `stop_loss` / `profit_target` paths unchanged (`evaluateStopHit`).
 
 ---
+
+## Findings F1–F5
+
+| ID | Sev | Area | Issue | Status |
+|----|-----|------|-------|--------|
+| **F1** | HIGH | `portfolioBacktest.ts` | Same-bar close exit look-ahead | **FIXED** (Wave 12) |
+| **F2** | — | §1b benchmark | SSOT + net costs floor | **PASS** 54.34% |
+| **F3** | — | §2b entry | D2-1 T+1 entry | **PASS** |
+| **F4** | — | §2b accounting | D2-2 net pnlPct | **PASS** |
+| **F5** | — | `core.ts` §1c | Engine T+1 exit symmetry | **PASS** |
+
+§2b C3 frozen: WR **49.46%**, max DD **15.84%**, Sharpe **-1.013**.
+
+*Generated from subagent `b28e5dad`; consolidated for PR #49 (docs-only).*
+
+
+---
+
+
+<!-- merged from main -->
+
 
 ## Findings F1–F5
 
