@@ -180,7 +180,7 @@ function buildAnalysis(
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { ticker: string } }
+  { params }: { params: Promise<{ ticker: string }> }
 ): Promise<NextResponse<DarkPoolAnalysis | { error: string }>> {
   // Phase 13 S2: rate-limit + canonical ticker validation.
   const rateLimitResponse = await applyRateLimit(req, 'darkpool', {
@@ -189,7 +189,8 @@ export async function GET(
   })
   if (rateLimitResponse) return rateLimitResponse as unknown as NextResponse<{ error: string }>
 
-  const ticker = normalizeTicker(params.ticker || '')
+  const { ticker: tickerParam } = await params
+  const ticker = normalizeTicker(tickerParam || '')
   if (!ticker) {
     return NextResponse.json({ error: 'Invalid ticker symbol' }, { status: 400 })
   }

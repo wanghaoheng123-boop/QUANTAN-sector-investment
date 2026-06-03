@@ -94,7 +94,7 @@ async function fetchNewsForTickers(tickers: string[], sector: string): Promise<N
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { sector: string } }
+  { params }: { params: Promise<{ sector: string }> }
 ): Promise<NextResponse<{ news: NewsItem[]; sector: string; fetchedAt: string; source: string } | { error: string }>> {
   // Phase 14 wave 25: rate limit (30 req/min/IP). News fans out to 5 Yahoo
   // search calls per request — unprotected polling could saturate the upstream
@@ -102,7 +102,8 @@ export async function GET(
   const rl = await applyRateLimit(req, 'news-sector', { maxRequests: 30, windowSeconds: 60 })
   if (rl) return rl as NextResponse<{ error: string }>
 
-  const sector = (params.sector || '').trim()
+  const { sector: sectorParam } = await params
+  const sector = (sectorParam || '').trim()
   if (!sector) {
     return NextResponse.json({ error: 'sector is required' }, { status: 400 })
   }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef, use } from 'react'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
 import DarkPoolPanel from '@/components/DarkPoolPanel'
@@ -54,8 +54,9 @@ const STOCK_INDICATOR_PRESETS = [
   ['all', 'All'],
 ] as const
 
-export default function StockPage({ params }: { params: { ticker: string } }) {
-  const ticker = params.ticker.toUpperCase()
+export default function StockPage({ params }: { params: Promise<{ ticker: string }> }) {
+  const { ticker: tickerRaw } = use(params)
+  const ticker = tickerRaw.toUpperCase()
 
   const [candles, setCandles]           = useState<Candle[]>([])
   const [darkPoolMarkers, setDarkPoolMarkers] = useState<DpMarker[]>([])

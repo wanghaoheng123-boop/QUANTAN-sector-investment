@@ -16,8 +16,9 @@ import { fetchGarchForecast } from '@/lib/quant/garchClient'
  */
 export async function GET(
   req: Request,
-  { params }: { params: { ticker: string } },
+  { params }: { params: Promise<{ ticker: string }> },
 ) {
+  const { ticker: tickerParam } = await params
   // Rate-limit before any work so a request flood is cheap to reject.
   const rateLimitResponse = await applyRateLimit(req, 'conditional-vol', {
     maxRequests: 30,
@@ -25,7 +26,7 @@ export async function GET(
   })
   if (rateLimitResponse) return rateLimitResponse
 
-  const ticker = normalizeTicker(params.ticker)
+  const ticker = normalizeTicker(tickerParam)
   if (!ticker) {
     return NextResponse.json({ error: 'invalid_ticker' }, { status: 400 })
   }

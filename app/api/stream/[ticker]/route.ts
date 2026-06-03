@@ -72,16 +72,17 @@ function sseMessage(event: string, data: unknown): string {
 
 export async function GET(
   req: Request,
-  { params }: { params: { ticker: string } }
+  { params }: { params: Promise<{ ticker: string }> }
 ): Promise<Response> {
   // Phase 13 S2: rate-limit SSE — connections are expensive (long-lived,
   // each consumes a serverless slot). Tighter than POST routes.
   const rateLimitResponse = await applyRateLimit(req, 'stream', { maxRequests: 10, windowSeconds: 60 })
   if (rateLimitResponse) return rateLimitResponse
 
+  const { ticker: tickerParam } = await params
   // Phase 13 S2 fix (F4.10 + F7.3): canonical normalizer with strict char
   // whitelist — was using yahooSymbolFromParam (only handled VIX).
-  const symbol = normalizeTicker(params.ticker)
+  const symbol = normalizeTicker(tickerParam)
   if (!symbol) {
     return new Response(
       JSON.stringify({ error: 'Invalid ticker symbol' }),

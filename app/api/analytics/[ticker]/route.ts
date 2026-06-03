@@ -22,13 +22,14 @@ const finiteOrNull = (v: unknown): number | null =>
   typeof v === 'number' && Number.isFinite(v) ? v : null
 
 /** Extra analytics (win rate, up/down days, beta proxy) — complements `/api/fundamentals`. */
-export async function GET(req: Request, { params }: { params: { ticker: string } }) {
+export async function GET(req: Request, { params }: { params: Promise<{ ticker: string }> }) {
+  const { ticker: tickerParam } = await params
   const rateLimited = await applyRateLimit(req, 'analytics', ANALYTICS_RATE_LIMIT)
   if (rateLimited) return rateLimited
 
   // Phase 16 audit (2026-05-24): strict ticker validation via SSOT
   // normalizeTicker (was permissive yahooSymbolFromParam — F7.3 risk).
-  const symbol = normalizeTicker(params.ticker)
+  const symbol = normalizeTicker(tickerParam)
   if (!symbol) {
     return NextResponse.json({ error: 'Invalid ticker symbol' }, { status: 400 })
   }

@@ -21,7 +21,7 @@ import { GET as analyticsGET } from '@/app/api/analytics/[ticker]/route'
 import { GET as fundamentalsGET } from '@/app/api/fundamentals/[ticker]/route'
 import { GET as maDeviationGET } from '@/app/api/ma-deviation/route'
 
-const PARAMS = { params: { ticker: 'AAPL' } }
+const PARAMS = { params: Promise.resolve({ ticker: 'AAPL' }) }
 const LIMIT = 30
 const FANOUT_LIMIT = 10
 

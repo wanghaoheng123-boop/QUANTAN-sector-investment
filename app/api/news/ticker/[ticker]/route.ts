@@ -36,12 +36,13 @@ export interface NewsItem {
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { ticker: string } }
+  { params }: { params: Promise<{ ticker: string }> }
 ): Promise<NextResponse<{ news: NewsItem[]; ticker: string; fetchedAt: string } | { error: string }>> {
   const rl = await applyRateLimit(req, 'news-ticker', { maxRequests: 30, windowSeconds: 60 })
   if (rl) return rl as NextResponse<{ error: string }>
 
-  const ticker = normalizeTicker(params.ticker)
+  const { ticker: tickerParam } = await params
+  const ticker = normalizeTicker(tickerParam)
   if (!ticker) {
     return NextResponse.json({ error: 'invalid_ticker' }, { status: 400 })
   }

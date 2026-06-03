@@ -18,7 +18,8 @@ import { applyRateLimit } from '@/lib/api/rateLimit'
  *     unconditionally, leaking stack-related context (sidecar URL,
  *     internal hostnames) to any client triggering an error.
  */
-export async function GET(request: NextRequest, { params }: { params: { ticker: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ ticker: string }> }) {
+  const { ticker: tickerParam } = await params
   // Rate limit — 30 req/min/IP. ML predictions are expensive (model
   // inference); even a small attack can saturate the sidecar.
   const rateLimitResponse = await applyRateLimit(request, 'ml-prediction', { maxRequests: 30, windowSeconds: 60 })
@@ -27,7 +28,7 @@ export async function GET(request: NextRequest, { params }: { params: { ticker: 
   // Strict ticker validation. normalizeTicker returns null for any
   // characters outside the allowed set (uppercase letters/digits + . - = ^),
   // length-bounded, and forces US-index prefixing where applicable.
-  const symbol = normalizeTicker(params.ticker)
+  const symbol = normalizeTicker(tickerParam)
   if (!symbol) {
     return NextResponse.json(
       { available: false, error: 'invalid_ticker' },

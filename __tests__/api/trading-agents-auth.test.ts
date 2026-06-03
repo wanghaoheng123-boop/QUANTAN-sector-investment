@@ -17,7 +17,7 @@ vi.mock('next-auth', () => ({ getServerSession: getServerSessionMock }))
 
 import { POST } from '@/app/api/trading-agents/[ticker]/route'
 
-const PARAMS = { params: { ticker: 'AAPL' } }
+const PARAMS = { params: Promise.resolve({ ticker: 'AAPL' }) }
 const SECRET = 'super-secret-key-value'
 
 function postReq(headers: Record<string, string> = {}): NextRequest {
@@ -123,7 +123,7 @@ describe('POST /api/trading-agents/[ticker] — auth gate (D4-1)', () => {
     process.env.QUANTAN_API_KEY = SECRET
     const res = await POST(
       postReq({ 'x-api-key': SECRET }),
-      { params: { ticker: 'not a ticker!!' } },
+      { params: Promise.resolve({ ticker: 'not a ticker!!' }) },
     )
     expect(res.status).toBe(400)
   })
