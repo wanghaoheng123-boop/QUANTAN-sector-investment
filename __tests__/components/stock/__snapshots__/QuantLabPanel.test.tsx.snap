@@ -36,8 +36,7 @@ exports[`QuantLabPanel (Q-058-NEW snapshot precondition) > renders error state w
       type="button"
     >
       <svg
-        aria-hidden="true"
-        class="lucide lucide-refresh-cw w-3.5 h-3.5"
+        class="lucide lucide-refresh-cw w-3.5 h-3.5 "
         fill="none"
         height="24"
         stroke="currentColor"
@@ -158,7 +157,6 @@ exports[`QuantLabPanel (Q-058-NEW snapshot precondition) > renders loading skele
       type="button"
     >
       <svg
-        aria-hidden="true"
         class="lucide lucide-refresh-cw w-3.5 h-3.5 animate-spin"
         fill="none"
         height="24"
