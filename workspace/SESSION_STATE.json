@@ -2,44 +2,35 @@
   "schema_version": "1.1",
   "project": "QUANTAN-sector-investment",
   "created": "2026-04-28T09:40:00Z",
-  "last_updated": "2026-06-03T02:35:00.000Z",
-  "active_agent": "cursor (inspection artifacts 2026-06-03: wave-11 + VERIFY A-F + audit)",
+  "last_updated": "2026-06-03T03:25:00.000Z",
+  "active_agent": "cursor (coordination lead 2026-06-03)",
   "program_doc": "workspace/QUANTAN_EXPERT_TEAM_COMMERCIALIZATION.md",
+  "coordination_doc": "workspace/coordination/PROGRESS_COORDINATION_2026-06-03.md",
   "last_inspection": {
     "timestamp": "2026-06-03T02:35:00.000Z",
     "wave": 11,
     "review_file": "reviews/INSPECTION-WAVE-11-2026-06-03.md",
     "go_no_go": "GO",
-    "go_no_go_note": "CONDITIONAL GO cleared after pre-flight benchmark",
+    "go_no_go_note": "CONDITIONAL GO — production CVE closure pending #46 merge",
     "results": {
-      "git_main_head": "de9a3d5",
-      "git_sync": "main reset --hard origin/main (de9a3d5)",
-      "pr_41_handover": "MERGED on origin/main",
-      "pr_42_q063": "code on main via #41; #42 merge commit orphaned on old lineage",
-      "pr_43_d5_1": "code on main via #41; #43 merge commit orphaned on old lineage",
-      "pr_44_docs": "OPEN docs/platform-consolidation-2026-06-02 \u2014 CI SUCCESS",
+      "git_main_head": "2eb1c56",
+      "git_sync": "origin/main @ 2eb1c56 (post #45 + #44 merges)",
+      "pr_44_docs": "MERGED 2eb1c56",
+      "pr_45_inspection": "MERGED 8547ad8",
+      "pr_46_nextjs15": "OPEN fix/remaining-tasks-2026-06-03 — CI ALL GREEN",
       "typecheck": "PASS",
       "tests": "1017 passed / 85 files",
       "benchmark_wr_ssot_net": 54.34,
       "benchmark_wr_ssot_gross": 55.31,
       "benchmark_floor_net": 53.29,
       "benchmark_preflight": "PASS 2026-06-03",
-      "security_audit": "reviews/SECURITY-API-AUDIT-2026-06-03.md (0 crit / 0 high)",
-      "git_fetch": "FAIL (Recv timeout); local main already tracks origin/main",
-      "verify_A_tests": "1016 passed / 0 failed / 0 skipped (84 files)",
-      "verify_B_typecheck": "PASS",
-      "verify_C_secrets_grep": "PASS (0 matches lib/ app/ scripts/)",
-      "verify_D_credential_grep": "PASS (env Bearer + test mock + UI placeholder only)",
-      "verify_E_architecture": "PASS (portfolio/, providers/, indicators.ts, warehouse.ts, SectorRotationPanel.tsx)",
-      "verify_F_benchmark": "PASS \u2014 net WR 54.34%, gross 55.31%; no NaN in JSON",
-      "verify_F_portfolio": "PASS \u2014 best config hold25 WR 48.37%; no NaN in JSON",
-      "benchmark_enhanced": "51.45% WR (research only, Q-009 not approved)"
+      "security_audit": "reviews/SECURITY-API-AUDIT-2026-06-03.md (0 crit / 0 high)"
     }
   },
   "tasks": [
     {
-      "id": "TASK-GIT-SYNC-2026-06-03",
-      "title": "Reset Drive root main to origin/main",
+      "id": "HANDOVER-2026-06-02",
+      "title": "Remaining work handover menu implementation",
       "status": "DONE",
       "priority": "P0",
       "files_touched": [
@@ -58,17 +49,18 @@
         "E": "PASS",
         "F": "PASS"
       },
-      "notes": "main @ de9a3d5 tracks origin/main; handover tiers addressed"
+      "notes": "All handover plan tiers addressed; owner blockers documented only"
     },
     {
-      "id": "TASK-BACKLOG-RECONCILE-2026-06-03",
-      "title": "Backlog sync post-handover (#41, owner Tier 0)",
+      "id": "TASK-RECT-WAVE-3",
+      "title": "Platform rectification wave 3",
       "status": "DONE",
       "priority": "P0",
       "files_touched": [
-        "workspace/IMPROVEMENT_BACKLOG.json",
-        "workspace/SESSION_STATE.json",
-        "workspace/MEMORY_LOG.md"
+        "README.md",
+        "workspace/VERCEL_OPERATIONS.md",
+        "scripts/backtest/dataLoader.ts (deleted)",
+        "reviews/INSPECTION-WAVE-3-2026-05-26.md"
       ],
       "verify_status": {
         "A": "PASS",
@@ -78,31 +70,37 @@
         "E": "PASS",
         "F": "PASS"
       },
-      "notes": "Q-004 done (FRED prewarm live); Q-063 done; Q-057 target 15.x documented; Q-005 stays partial (KV opt-in)"
+      "notes": "PR #22 merged to main; production deployed 2026-05-26"
     },
     {
-      "id": "TASK-Q-057-NEXTJS-15",
-      "title": "Next.js 15.x upgrade (Q-057-NEW)",
-      "status": "PENDING",
-      "priority": "P0",
-      "files_touched": [],
-      "verify_status": {
-        "A": null,
-        "B": null,
-        "C": null,
-        "D": null,
-        "E": null,
-        "F": null
-      },
-      "notes": "Owner decided 15.x per workspace/Q-057-NEXTJS_DECISION.md; deferred \u2014 semver-major, needs dedicated session"
-    },
-    {
-      "id": "TASK-VERIFY-AF-2026-06-03",
-      "title": "Full VERIFY A-F on main",
+      "id": "TASK-QA-WAVE-6",
+      "title": "Full platform QA + sector rotation fix",
       "status": "DONE",
       "priority": "P0",
       "files_touched": [
-        "workspace/MEMORY_LOG.md",
+        "app/api/sector-rotation/route.ts",
+        "components/SectorRotationPanel.tsx",
+        "app/heatmap/page.tsx",
+        "workspace/FULL_PLATFORM_QA_2026-05-26.md",
+        "reviews/INSPECTION-WAVE-4-2026-05-26.md"
+      ],
+      "verify_status": {
+        "A": "PASS",
+        "B": "PASS",
+        "C": "PASS",
+        "D": "PASS",
+        "E": "PASS",
+        "F": "PASS"
+      },
+      "notes": "Branch fix/qa-wave-6; prod deploy pending merge"
+    },
+    {
+      "id": "COORD-2026-06-03",
+      "title": "Merge sequence optimization + coordination artifact",
+      "status": "DONE",
+      "priority": "P0",
+      "files_touched": [
+        "workspace/coordination/PROGRESS_COORDINATION_2026-06-03.md",
         "workspace/SESSION_STATE.json"
       ],
       "verify_status": {
@@ -113,14 +111,19 @@
         "E": "PASS",
         "F": "PASS"
       },
-      "notes": "chore/verify-2026-06-03; SSOT net WR 54.34%; portfolio best 48.37%; enhanced 51.45%"
+      "notes": "Merged #45 + #44 (docs). Held #46 for owner sign-off despite green CI. Doc: workspace/coordination/PROGRESS_COORDINATION_2026-06-03.md"
     }
   ],
   "blockers": [
     {
-      "id": "BLOCKER-Q057-MIGRATION",
-      "summary": "Next.js 15.x + React 19 migration not started",
-      "resolution": "Branch fix/q-057-nextjs-15; run typecheck + test + dual benchmark after upgrade"
+      "id": "BLOCKER-Q057-PENDING-MERGE",
+      "summary": "Q-057 Next.js 15 upgrade code on PR #46 — not yet on main",
+      "resolution": "Owner merge #46; re-run dual benchmark on main post-merge"
+    },
+    {
+      "id": "BLOCKER-OWNER-ENV",
+      "summary": "Vercel KV, CSP enforce, FRED prewarm not set in production",
+      "resolution": "Owner provisions env per workspace/VERCEL_OPERATIONS.md"
     }
   ],
   "checkpoint": null
