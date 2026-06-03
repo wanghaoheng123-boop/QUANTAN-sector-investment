@@ -152,10 +152,10 @@
     "title": "FRED risk-free rate (F1.4, F3.9)",
     "domain": "Quant/Backtest",
     "priority": "P1",
-    "status": "partial",
+    "status": "done",
     "dev_plan_phase": "P0",
     "owner_role": "Owner (PM)",
-    "human_blocker": "Set QUANTAN_FRED_PREWARM=1 in Vercel production env (code ready; Q-052 wired)",
+    "human_blocker": null,
     "phase15_sprint": "S2",
     "files": [
       "lib/quant/constants.ts",
@@ -172,8 +172,9 @@
       "npm run typecheck"
     ],
     "notes_2026_05_23": "Open. FRED provider exists (lib/data/providers/fred.ts) but not wired to RFR consumers. Phase 15 S2 priority \u2014 triggers WR baseline re-freeze.",
-    "completed_at": null,
+    "completed_at": "2026-06-02",
     "notes_2026_05_24": "PARTIAL. lib/quant/riskFreeRate.ts exists with sync + async + FRED CSV. engine.ts:434/445/591/671 calls getRiskFreeRateSync. BUT (a) the cache is never hydrated (no module-init async warm-up), so sync calls return the static fallback BACKTEST_RFR_ANNUAL=0.045 verbatim \u2014 Q-004 is functionally inert for the benchmark; (b) lib/options/chain.ts:56 still imports the static OPTIONS_RFR_ANNUAL constant directly; (c) lib/backtest/portfolioBacktest.ts:529 still uses BACKTEST_RFR_ANNUAL directly. Continuation: Q-052-NEW. | 2026-05-24 Claude-Code review: Cursor's HANDOFF + PENDING_TASKS_AUDIT honestly described this as partial, but the JSON status field was set to 'done'. Flipped to 'partial' to match physical reality. See workspace/REVIEW_2026-05-24.md.",
+    "notes_2026_06_02": "PROD ACTIVE. Owner set QUANTAN_FRED_PREWARM=1 on quantan Production (deploy dpl_6huKCcxVyL11rkAJ8TzoQX7aCz5t). Code: lib/quant/riskFreeRate.ts module-init prewarm; chain.ts + portfolioBacktest.ts on getRiskFreeRateSync. Benchmark WR unchanged in CI (cold cache by design); prod Sharpe/Sortino/Greeks FRED-backed.",
     "prior_closure_note": "Open. FRED provider exists (lib/data/providers/fred.ts) but not wired to RFR consumers. Phase 15 S2 priority \u2014 triggers WR baseline re-freeze. | 2026-05-24 Cursor Phase 15 completion batch \u2014 see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
   },
   {
@@ -1340,7 +1341,7 @@
   },
   {
     "id": "Q-057-NEW",
-    "title": "Next.js upgrade \u2014 close 23 active CVEs in next@14.2.15",
+    "title": "Next.js upgrade \u2014 15.x (React 19) to close remaining CVEs",
     "domain": "Security",
     "priority": "P0",
     "status": "done",
@@ -1454,10 +1455,12 @@
     "title": "UI metric labeling: honest WR / cost disclosure",
     "domain": "Frontend/UX",
     "priority": "P1",
-    "status": "partial",
+    "status": "done",
+    "completed_at": "2026-06-02",
     "files": ["components/backtest/", "app/backtest/page.tsx"],
     "acceptance_criteria": ["Desk/backtest UI labels 20d label WR and cost assumptions"],
-    "notes_2026_06_02": "SIGNAL_SSOT.md documents paths; UI copy audit deferred to Wave 7 browser QA."
+    "notes_2026_06_02": "SIGNAL_SSOT.md documents paths; UI copy audit deferred to Wave 7 browser QA.",
+    "notes_2026_06_03": "DONE on canonical main via PR #41 (handover): app/backtest/page.tsx methodology note (T+1 next-open fills, ~22 bps round-trip); LiveSignalsPanel caveat (live table ≠ realized P&L). PRs #42/#43 merged on orphaned local lineage only — code present at de9a3d5."
   },
   {
     "id": "Q-064-NEW",
