@@ -122,6 +122,28 @@ function SkeletonRow() {
 type SortKey = 'deviation' | 'rsi' | 'name' | 'price'
 type SortDir = 'asc' | 'desc'
 
+function SortTh({ label, skey, sortKey, sortDir, handleSort }: {
+  label: string
+  skey: SortKey
+  sortKey: SortKey
+  sortDir: SortDir
+  handleSort: (key: SortKey) => void
+}) {
+  const active = sortKey === skey
+  const ariaLabel = active
+    ? `${label}, sorted ${sortDir === 'asc' ? 'ascending' : 'descending'}`
+    : `Sort by ${label}`
+  return (
+    <button
+      className={`text-left text-[11px] font-medium tracking-wide flex items-center gap-1 transition-colors ${active ? 'text-blue-400' : 'text-slate-500 hover:text-slate-300'}`}
+      onClick={() => handleSort(skey)}
+      aria-label={ariaLabel}
+    >
+      {label}{active ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}
+    </button>
+  )
+}
+
 export default function MADeviationPage() {
   const [data, setData] = useState<ApiResponse | null>(null)
   const [loading, setLoading] = useState(true)
@@ -175,22 +197,6 @@ export default function MADeviationPage() {
   const watchCount = data?.rows.filter(r => r.regime?.dipSignal === 'WATCH_DIP').length ?? 0
   const knifeCount = data?.rows.filter(r => r.regime?.dipSignal === 'FALLING_KNIFE').length ?? 0
   const bullCount  = data?.rows.filter(r => r.regime?.dipSignal === 'IN_TREND' || r.regime?.dipSignal === 'OVERBOUGHT').length ?? 0
-
-  function SortTh({ label, skey }: { label: string; skey: SortKey }) {
-    const active = sortKey === skey
-    const ariaLabel = active
-      ? `${label}, sorted ${sortDir === 'asc' ? 'ascending' : 'descending'}`
-      : `Sort by ${label}`
-    return (
-      <button
-        className={`text-left text-[11px] font-medium tracking-wide flex items-center gap-1 transition-colors ${active ? 'text-blue-400' : 'text-slate-500 hover:text-slate-300'}`}
-        onClick={() => handleSort(skey)}
-        aria-label={ariaLabel}
-      >
-        {label}{active ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}
-      </button>
-    )
-  }
 
   return (
     <div className="min-h-screen">
@@ -309,11 +315,11 @@ export default function MADeviationPage() {
           {/* Table Header */}
           <div className="px-5 py-4 border-b border-slate-800 grid grid-cols-[1.5rem_1fr_4.5rem_4.5rem_4rem_4rem_120px_1fr] gap-3 items-center">
             <span />
-            <SortTh label="Sector / ETF" skey="name" />
-            <SortTh label="Price" skey="price" />
+            <SortTh label="Sector / ETF" skey="name" sortKey={sortKey} sortDir={sortDir} handleSort={handleSort} />
+            <SortTh label="Price" skey="price" sortKey={sortKey} sortDir={sortDir} handleSort={handleSort} />
             <span className="text-[11px] text-slate-500 font-medium">SMA 200</span>
-            <SortTh label="Dev %" skey="deviation" />
-            <SortTh label="RSI 14" skey="rsi" />
+            <SortTh label="Dev %" skey="deviation" sortKey={sortKey} sortDir={sortDir} handleSort={handleSort} />
+            <SortTh label="RSI 14" skey="rsi" sortKey={sortKey} sortDir={sortDir} handleSort={handleSort} />
             <span className="text-[11px] text-slate-500 font-medium">200MA Slope</span>
             <span className="text-[11px] text-slate-500 font-medium">Dip Signal</span>
           </div>
