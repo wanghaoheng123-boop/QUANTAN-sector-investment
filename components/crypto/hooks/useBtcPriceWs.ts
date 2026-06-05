@@ -150,8 +150,11 @@ export function useBtcPriceWs() {
     return () => {
       if (priceReconnectTimerRef.current) clearTimeout(priceReconnectTimerRef.current)
       priceReconnectTimerRef.current = null
-      priceWsRef.current?.close()
-      priceWsRef.current = null
+      if (priceWsRef.current) {
+        priceWsRef.current.onclose = null
+        priceWsRef.current.close()
+        priceWsRef.current = null
+      }
     }
   }, [connectPriceWs])
 
