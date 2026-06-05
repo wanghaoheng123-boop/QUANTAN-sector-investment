@@ -18,6 +18,9 @@ import type { MacroDataProvider, DataProvider, DailyBar, QuoteSnapshot, MacroSer
 const FRED_BASE = 'https://fred.stlouisfed.org/graph/fredgraph.csv'
 const FRED_API_BASE = 'https://api.stlouisfed.org/fred'
 
+/** Timeout for all FRED fetch calls — prevents hung serverless workers. */
+const FETCH_TIMEOUT_MS = 8_000
+
 export class FredProvider implements MacroDataProvider {
   readonly name = 'fred'
   private readonly apiKey: string
@@ -64,7 +67,7 @@ export class FredProvider implements MacroDataProvider {
 
   private async _fetchViaCsv(seriesId: string, from: string): Promise<MacroSeries | null> {
     const url = `${FRED_BASE}?id=${seriesId}&vintage_date=&cosd=${from}`
-    const res = await fetch(url)
+    const res = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
     if (!res.ok) return null
     const text = await res.text()
     const lines = text.trim().split('\n')
@@ -83,7 +86,7 @@ export class FredProvider implements MacroDataProvider {
 
   private async _fetchViaApi(seriesId: string, from: string): Promise<MacroSeries | null> {
     const url = `${FRED_API_BASE}/series/observations?series_id=${seriesId}&observation_start=${from}&api_key=${this.apiKey}&file_type=json`
-    const res = await fetch(url)
+    const res = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
     if (!res.ok) return null
     const data = await res.json() as {
       observations?: Array<{ date: string; value: string }>
