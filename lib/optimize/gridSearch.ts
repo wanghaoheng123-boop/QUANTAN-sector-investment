@@ -7,6 +7,15 @@
  *   - Optimization objective: maximize OOS Sharpe ratio (not just win rate).
  *   - Minimum OOS trades: 10 (insufficient data if fewer).
  *
+ * ⚠️ METHODOLOGY CAVEATS (research tool — NOT a live/CI path):
+ *   1. SELECTION-ON-OOS BIAS: the "best" params are chosen by maximizing OOS Sharpe
+ *      and the SAME OOS Sharpe is then reported. The reported OOS metrics are therefore
+ *      upward-biased (the OOS set was used for selection, not held out). An unbiased
+ *      estimate needs a THIRD untouched test split (train → validate → test) or nested
+ *      CV. Treat the reported OOS numbers as optimistic, not as expected live performance.
+ *   2. The grid optimizes the fast SIMPLIFIED backtest (simpleBacktestSlice), not the
+ *      production enhanced signal, so tuned params may not transfer 1:1 (see generateGrid).
+ *
  * Usage:
  *   const best = gridSearch(rows, paramGrid)
  *   // Apply best.params to signal config
@@ -57,25 +66,35 @@ export interface GridSearchSummary {
 }
 
 /**
- * Generate all combinations from a parameter grid.
+ * Generate grid combinations.
+ *
+ * ⚠️ HONESTY FIX: the fast inline backtest (`simpleBacktestSlice`) only CONSUMES
+ * `slopeThreshold` and `atrStopMultiplier`. The other three fields
+ * (`buyWScoreThreshold`, `sellWScoreThreshold`, `confidenceThreshold`) are legacy
+ * ENHANCED-signal parameters that this simplified dev/RSI/EMA backtest never reads.
+ * Iterating over them previously inflated `totalCombinations` (e.g. 768) while
+ * producing IDENTICAL results across their values — so the "optimal" buy/sell/conf
+ * the search reported were pure artifacts. We now iterate ONLY the two consumed
+ * dimensions and hold the inert fields at their first provided value (retained in the
+ * GridPoint shape because scripts/optimize-grid.ts reads them for its result/reporting
+ * contract). To genuinely optimize buy/sell/conf the grid must call the enhanced signal
+ * (resolveBacktestSignal), which is deliberately avoided here for speed (~100× cost).
  */
 export function generateGrid(grid: ParamGrid): GridPoint[] {
   const combos: GridPoint[] = []
+  // Inert (not consumed by simpleBacktestSlice) — held at first provided value.
+  const buy0 = grid.buyWScoreThreshold[0] ?? 0
+  const sell0 = grid.sellWScoreThreshold[0] ?? 0
+  const conf0 = grid.confidenceThreshold[0] ?? 0
   for (const slope of grid.slopeThreshold) {
-    for (const buy of grid.buyWScoreThreshold) {
-      for (const sell of grid.sellWScoreThreshold) {
-        for (const conf of grid.confidenceThreshold) {
-          for (const atr of grid.atrStopMultiplier) {
-            combos.push({
-              slopeThreshold: slope,
-              buyWScoreThreshold: buy,
-              sellWScoreThreshold: sell,
-              confidenceThreshold: conf,
-              atrStopMultiplier: atr,
-            })
-          }
-        }
-      }
+    for (const atr of grid.atrStopMultiplier) {
+      combos.push({
+        slopeThreshold: slope,
+        buyWScoreThreshold: buy0,
+        sellWScoreThreshold: sell0,
+        confidenceThreshold: conf0,
+        atrStopMultiplier: atr,
+      })
     }
   }
   return combos
