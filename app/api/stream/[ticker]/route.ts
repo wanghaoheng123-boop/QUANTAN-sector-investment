@@ -74,11 +74,9 @@ export async function GET(
   req: Request,
   { params }: { params: Promise<{ ticker: string }> }
 ): Promise<Response> {
-  // Phase 13 S2: rate-limit SSE — connections are expensive (long-lived,
-  // each consumes a serverless slot). Tighter than POST routes.
-  const rateLimitResponse = await applyRateLimit(req, 'stream', { maxRequests: 10, windowSeconds: 60 })
-  if (rateLimitResponse) return rateLimitResponse
-
+  // Fix (api-resilience): validate ticker BEFORE applying the rate limit so
+  // invalid-ticker probes (e.g. port-scanner noise, path-traversal attempts)
+  // return 400 without consuming a token from the IP's bucket.
   const { ticker: tickerParam } = await params
   // Phase 13 S2 fix (F4.10 + F7.3): canonical normalizer with strict char
   // whitelist — was using yahooSymbolFromParam (only handled VIX).
@@ -89,6 +87,12 @@ export async function GET(
       { status: 400, headers: { 'Content-Type': 'application/json' } },
     )
   }
+
+  // Phase 13 S2: rate-limit SSE — connections are expensive (long-lived,
+  // each consumes a serverless slot). Tighter than POST routes.
+  // Applied after ticker validation so invalid probes don't drain the bucket.
+  const rateLimitResponse = await applyRateLimit(req, 'stream', { maxRequests: 10, windowSeconds: 60 })
+  if (rateLimitResponse) return rateLimitResponse
 
   // Capture the request's AbortSignal so we can clean up when the client disconnects.
   // `req.signal` is aborted when the HTTP connection is dropped by the client.

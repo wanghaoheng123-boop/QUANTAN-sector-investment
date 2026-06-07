@@ -146,7 +146,11 @@ export async function GET(request: Request): Promise<NextResponse<{
     const sectorEntries = Object.entries(SECTOR_QUERY_MAP)
     let totalCalls = 0
     let failedCalls = 0
-    const newsBySector = await Promise.all(
+    // Fix (api-resilience): outer Promise.all → Promise.allSettled so a single
+    // sector's runtime throw (e.g. Yahoo 503 mid-batch) does not reject the
+    // whole payload and return a 502. Fulfilled sectors are still returned;
+    // rejected ones are counted against the degraded threshold.
+    const sectorResults = await Promise.allSettled(
       sectorEntries.map(async ([slug, config]) => {
         const targetTickers = config.tickers.slice(0, 3)
         const settled = await Promise.allSettled(
@@ -174,9 +178,15 @@ export async function GET(request: Request): Promise<NextResponse<{
     )
     const degraded = totalCalls > 0 && failedCalls * 2 > totalCalls
 
-    // Flatten and deduplicate
-    for (const sectorBriefs of newsBySector) {
-      for (const brief of sectorBriefs) {
+    // Flatten and deduplicate — skip rejected sector promises (they were already
+    // counted against failedCalls inside the per-sector worker above, but the
+    // outer settle can also reject if the sector worker itself throws).
+    for (const sectorResult of sectorResults) {
+      if (sectorResult.status === 'rejected') {
+        console.warn('[briefs] sector worker rejected', sectorResult.reason)
+        continue
+      }
+      for (const brief of sectorResult.value) {
         if (seenLinks.has(brief.link)) continue
         seenLinks.add(brief.link)
         allBriefs.push(brief)
