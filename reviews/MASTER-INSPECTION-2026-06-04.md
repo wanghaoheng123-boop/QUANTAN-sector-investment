@@ -213,5 +213,36 @@ invest to make it beat the baseline, or formally retire it to shrink the maintai
 
 ---
 
-*All findings above are review observations. No code, algorithms, configs, or tests were
-modified in this inspection. Two CI gates (tsc, vitest) were executed read-only to confirm state.*
+## 7. Remediation wave — owner-authorized "Everything" (2026-06-04)
+
+Implemented on branch **`fix/inspection-remediation-2026-06-04`** (off green HEAD `9862a51`).
+**NOT pushed, NOT merged to main, NOT deployed** — fully reviewable. Every commit gated
+`tsc --noEmit` clean; final full suite **1009 passed / 0 failed**. 4 safe clusters were done by
+parallel worktree-isolated agents (disjoint files), then cherry-picked + centrally re-gated;
+the methodology + security clusters were done by the coordinator (one agent's partial
+factorAttribution work was recovered from its worktree after it hit the session limit).
+
+| Commit | Area | What |
+|---|---|---|
+| `89392d4` + `9308c88` | Data | Provider fetch timeouts (alphavantage/polygon/fred); AlphaVantage **skip-bar/null on non-finite** OHLC/price (not 0-coercion — 0 defeats the warehouse filter); polygon ns/ms bounds guard; Yahoo %/decimal heuristic via implied-value match. |
+| `eb2d1c2` | a11y | `role`/`aria-sort`/`aria-expanded`/`aria-controls` on SignalCard, LiveSignalsPanel, FrameworksTab, ComplianceBanner. |
+| `4837e9f` | Frontend | AbortController fetch-race guards (stock page + LiveBriefClient); hoisted nested SortTh/SortIcon; full tab ARIA (stock+sector). |
+| `f42e0ce` | **P0×2** | BtcQuantLab hooks-order (Rules of Hooks) + error boundary; **liquidations raw-error leak → sanitizeError**; useBtcPriceWs unmount leak. |
+| `f799493` | Quant | factorAttribution diagnostics — SE, t-stats, adj-R², condition-number, min-N→60. |
+| `2856db4` | Quant | aggregatePortfolio common-window end-align + portfolio (252/365) annualization (was bar-index + flat-pad + hardcoded 252). |
+| `d0622a9` | Quant | gridSearch collapse inert dims (honest combo count) + survivorship + OOS-selection-bias docs. |
+| `1374adc` | Security | `eval()` → restricted-AST evaluator in alpha_miner.py + multi_agent_factor_mining/agents.py (5 escape vectors verified blocked; 12 py tests pass). |
+
+**Deferred to owner (could not be safely auto-verified):**
+- **next-auth/uuid (P1-M)** — analysed as **not exploitable in practice** (next-auth uses `uuid.v4()`
+  with no buffer arg; the advisory is the v3/v5/v6+`buf` path). uuid-11 override or Auth.js v5 migration
+  both need a real sign-in smoke test that vitest can't run. See `inspection-2026-06-04/auth-uuid-decision.md`.
+- **Survivorship data** (P1-A) — documented as a standing caveat; an unbiased fix needs point-in-time
+  index constituents (data not in repo), not a code change.
+- **Structure refactors** (god-file splits, dead-module removal) — left for separate reviewable PRs.
+
+---
+
+*Sections §0–§6 are read-only review observations. §7 records the owner-authorized remediation
+applied on the `fix/inspection-remediation-2026-06-04` branch only (not merged/deployed). All
+changes were gated with tsc + vitest; the branch is green (1009 pass / 0 fail).*
