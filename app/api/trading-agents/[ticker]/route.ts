@@ -58,15 +58,17 @@ export async function GET(
   { params }: { params: Promise<{ ticker: string }> }
 ) {
   const { ticker: tickerParam } = await params
-  // Rate limit: 10 req/min per IP
-  const rateLimitResponse = await applyRateLimit(req, 'trading-agents', TA_RATE_LIMIT)
-  if (rateLimitResponse) return rateLimitResponse
   // Phase 13 S2 (F7.3): canonical ticker validation — rejects scripts/paths
-  // before they reach the upstream Python service.
+  // before they reach the upstream Python service. Validate BEFORE the rate
+  // limit so invalid-ticker probes can't drain the IP's bucket (mirrors the
+  // stream route ordering).
   const ticker = normalizeTicker(tickerParam || '')
   if (!ticker) {
     return NextResponse.json({ error: 'Invalid ticker symbol' }, { status: 400 })
   }
+  // Rate limit: 10 req/min per IP
+  const rateLimitResponse = await applyRateLimit(req, 'trading-agents', TA_RATE_LIMIT)
+  if (rateLimitResponse) return rateLimitResponse
 
   const resolved = resolveTradingAgentsBase()
   if (!resolved.ok) {
