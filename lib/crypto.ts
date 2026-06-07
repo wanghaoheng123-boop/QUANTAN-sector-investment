@@ -34,37 +34,15 @@ export interface BtcCandle {
 }
 
 /**
- * On-chain MVRV ratio — flags overvaluation / undervaluation zones.
+ * On-chain MVRV ratio and Stock-to-Flow price — re-exported from
+ * `lib/quant/btc-indicators.ts` (canonical SSOT).
  *
- * Phase 14 wave 11: returns null when inputs are unmeasurable, matching the
- * SSOT in lib/quant/btc-indicators.ts (kept in sync via the cross-source
- * test in __tests__/quant/cryptoIndicators.test.ts).
- * Citation: Puell (2018) — MVRV undefined when RC = 0.
+ * Phase 14 wave 11 + SSOT dedup: inline copies removed; same pattern as
+ * calcVWAP below. The cross-source sync test in
+ * __tests__/quant/cryptoIndicators.test.ts guards that both names resolve
+ * to the identical implementation.
  */
-export function calcMVRV(price: number, realizedCap: number): number | null {
-  if (!Number.isFinite(price) || !Number.isFinite(realizedCap)) return null
-  if (realizedCap <= 0 || price <= 0) return null
-  return price / realizedCap
-}
-
-/**
- * Stock-to-Flow model price (PlanB power-law approximation).
- *
- * NOTE: PlanB's S2F model has been falsified statistically (Burniske 2021,
- * NYDIG critique 2022) — it does not predict actual BTC price post-2021.
- * Retained as an educational visualization, not a forecast.
- *
- * Original PlanB regression: price ≈ exp(-1.84) × sf^3.36
- * The simplified form below (sf^3 × 0.001) approximates within an order of
- * magnitude in the historical fit window.
- *
- * Phase 14 wave 11: returns null on non-finite or negative input
- * (matching btc-indicators.ts SSOT).
- */
-export function calcS2FPrice(totalS2F: number): number | null {
-  if (!Number.isFinite(totalS2F) || totalS2F < 0) return null
-  return Math.pow(totalS2F, 3) * 0.001
-}
+export { calcMVRV, calcS2FPrice } from './quant/btc-indicators'
 
 /** RSI — delegates to canonical Wilder RSI in lib/quant/indicators. */
 export function calcRSI(prices: number[], period = 14): number[] {

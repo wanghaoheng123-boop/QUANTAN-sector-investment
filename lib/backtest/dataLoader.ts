@@ -10,10 +10,12 @@ import { join } from 'path'
 import type { OhlcBar } from '@/lib/quant/indicators'
 import { getCandles, isWarehouseAvailable, warehouseTickers } from '@/lib/data/warehouse'
 
-export interface OhlcvRow extends OhlcBar {
-  time: number // Unix seconds
-  volume: number
-}
+// ─── OhlcvRow SSOT: canonical definition lives in ./core (includes optional
+//     `dividend?` field consumed by computeBuyAndHoldReturn). dataLoader.ts is
+//     the data-loading layer; the type is re-exported here so existing imports
+//     from '@/lib/backtest/dataLoader' continue to resolve unchanged.
+export type { OhlcvRow } from './core'
+import type { OhlcvRow } from './core'
 
 export interface DataFile {
   ticker: string
