@@ -3,9 +3,16 @@
  */
 
 import type { OhlcvRow } from './dataLoader'
-import { resolveBacktestSignal, rsi, macdFn, atr, bollinger } from './signals'
+import { resolveBacktestSignal } from './signals'
 import { rowsToSignalInputs } from './benchmarkLabel'
 import type { OhlcBar } from '@/lib/quant/indicators'
+// Indicators imported from the canonical SSOT directly (not re-exported via signals.ts).
+import {
+  rsiArray as rsi,
+  macdArray as macdFn,
+  atrArray as atr,
+  bollingerArray as bollinger,
+} from '@/lib/quant/indicators'
 
 export interface LiveInstrumentSignal {
   ticker: string

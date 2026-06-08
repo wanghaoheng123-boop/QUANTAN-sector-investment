@@ -7,7 +7,6 @@ import type { OhlcBar, OhlcvBar } from '@/lib/quant/indicators'
 import { useEnhancedCombinedSignal } from '@/lib/featureFlags'
 import {
   smaLatest as sma,
-  ema,
   emaFull,
   rsiArray as rsi,
   macdArray as macdFn,
@@ -19,7 +18,9 @@ import { detectRegime, type RegimeState as VolRegimeState } from '@/lib/quant/re
 import { volumeProfile, priceRelativeToPOC, type PriceZone } from '@/lib/quant/volumeProfile'
 import { halfKelly } from '@/lib/quant/kelly'
 
-export { sma, ema, rsi, macdFn, atr, bollinger }
+// NOTE: indicators are NOT re-exported from here. Consumers import them from the
+// canonical SSOT (`@/lib/quant/indicators`) directly so signals.ts is not a second
+// import surface for indicator functions (structure review P1-06).
 
 // ─── Loop 1 signal improvement helpers ──────────────────────────────────────
 
