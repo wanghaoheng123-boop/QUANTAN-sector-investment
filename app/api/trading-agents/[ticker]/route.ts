@@ -58,15 +58,17 @@ export async function GET(
   { params }: { params: Promise<{ ticker: string }> }
 ) {
   const { ticker: tickerParam } = await params
-  // Rate limit: 10 req/min per IP
-  const rateLimitResponse = await applyRateLimit(req, 'trading-agents', TA_RATE_LIMIT)
-  if (rateLimitResponse) return rateLimitResponse
   // Phase 13 S2 (F7.3): canonical ticker validation — rejects scripts/paths
-  // before they reach the upstream Python service.
+  // before they reach the upstream Python service. Validate BEFORE the rate
+  // limit so invalid-ticker probes can't drain the IP's bucket (mirrors the
+  // stream route ordering).
   const ticker = normalizeTicker(tickerParam || '')
   if (!ticker) {
     return NextResponse.json({ error: 'Invalid ticker symbol' }, { status: 400 })
   }
+  // Rate limit: 10 req/min per IP
+  const rateLimitResponse = await applyRateLimit(req, 'trading-agents', TA_RATE_LIMIT)
+  if (rateLimitResponse) return rateLimitResponse
 
   const resolved = resolveTradingAgentsBase()
   if (!resolved.ok) {
@@ -296,16 +298,21 @@ export async function POST(
   const queryString = queryParams.toString()
   const url = `${TA_BASE}/analyze/${encodeURIComponent(ticker)}${queryString ? '?' + queryString : ''}`
 
-  // Body sent to Python server — api_key only if user provided it
+  // Body sent to Python server — api_key only if user provided it.
+  // Fix (api-resilience): use the clamped mdr/mrd locals instead of the raw
+  // body values so hostile inputs (e.g. 1e6 rounds) cannot reach the sidecar
+  // via the request body, bypassing the clampRound validation applied above
+  // to the query-string params. Conditionally set mirrors the queryParams
+  // omit-on-null pattern — absent/invalid values are omitted (not null).
   const upstreamBody: Record<string, unknown> = {
     llm_provider: provider,
     deep_think_llm: queryParams.get('deep_think_llm'),
     quick_think_llm: queryParams.get('quick_think_llm'),
-    max_debate_rounds: body.max_debate_rounds,
-    max_risk_discuss_rounds: body.max_risk_discuss_rounds,
     data_vendor: body.data_vendor,
     trade_date: body.trade_date,
   }
+  if (mdr !== null) upstreamBody.max_debate_rounds = mdr
+  if (mrd !== null) upstreamBody.max_risk_discuss_rounds = mrd
 
   if (apiKey) {
     upstreamBody.api_key = apiKey

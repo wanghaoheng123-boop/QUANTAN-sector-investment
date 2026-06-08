@@ -20,6 +20,11 @@ function fmtRatio(v: number | null): string {
   return v == null ? '—' : v === Infinity ? '∞' : v.toFixed(2)
 }
 
+function SortIcon({ k, sortKey, sortDir }: { k: SortKey; sortKey: SortKey; sortDir: 'asc' | 'desc' }) {
+  if (sortKey !== k) return <span className="text-slate-400 ml-1">⇅</span>
+  return <span className="text-cyan-400 ml-1">{sortDir === 'desc' ? '↓' : '↑'}</span>
+}
+
 export default function InstrumentTable({ results, sectorColors }: Props) {
   const [sortKey, setSortKey] = useState<SortKey>('annualizedReturn')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
@@ -48,11 +53,6 @@ export default function InstrumentTable({ results, sectorColors }: Props) {
   function toggleSort(key: SortKey) {
     if (sortKey === key) setSortDir(d => d === 'desc' ? 'asc' : 'desc')
     else { setSortKey(key); setSortDir('desc') }
-  }
-
-  function SortIcon({ k }: { k: SortKey }) {
-    if (sortKey !== k) return <span className="text-slate-400 ml-1">⇅</span>
-    return <span className="text-cyan-400 ml-1">{sortDir === 'desc' ? '↓' : '↑'}</span>
   }
 
   const cols: { key: SortKey; label: string; align?: string; metricKey?: string }[] = [
@@ -98,7 +98,7 @@ export default function InstrumentTable({ results, sectorColors }: Props) {
                     onClick={() => toggleSort(col.key)}
                     className="cursor-pointer hover:text-slate-300 inline-flex items-center"
                   >
-                    {col.label}<SortIcon k={col.key} />
+                    {col.label}<SortIcon k={col.key} sortKey={sortKey} sortDir={sortDir} />
                   </span>
                   {col.metricKey && <MetricTooltip metricKey={col.metricKey} compact />}
                 </th>

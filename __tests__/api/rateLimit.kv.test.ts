@@ -30,7 +30,7 @@ describe('applyRateLimit — Vercel KV path', () => {
     globalThis.fetch = savedFetch
   })
 
-  function stubKvFetch(impl: (path: string) => { result?: number; status?: number }) {
+  function stubKvFetch(impl: (path: string) => { result?: number | string | null; status?: number }) {
     globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
       const u = typeof url === 'string' ? url : url instanceof URL ? url.href : url.url
       fetchCalls.push({ url: u, init })
@@ -52,21 +52,27 @@ describe('applyRateLimit — Vercel KV path', () => {
     expect(fetched).toBe(false)
   })
 
-  it('hits KV INCR + EXPIRE on the first request of a window (count=1)', async () => {
+  it('creates the window atomically via SET key 1 EX <window> NX on the first request (count=1)', async () => {
+    // Regression guard for the KV EXPIRE-failure DoS fix: the first request must set
+    // the key AND its TTL in ONE atomic call (SET ... EX ... NX), never INCR-then-EXPIRE
+    // (where a failed EXPIRE would leave a TTL-less key that blocks the IP forever).
     process.env.KV_REST_API_URL = 'https://kv.test'
     process.env.KV_REST_API_TOKEN = 'tok'
     stubKvFetch((path) => {
-      if (path.startsWith('/incr/')) return { result: 1, status: 200 }
-      if (path.startsWith('/expire/')) return { result: 1, status: 200 }
+      if (path.startsWith('/set/')) return { result: 'OK', status: 200 } // NX created the key
       return { status: 404 }
     })
     const req = new Request('http://localhost/x', { headers: { 'x-real-ip': '2.2.2.2' } })
     const result = await applyRateLimit(req, 'kv-first', { maxRequests: 5, windowSeconds: 60 })
-    expect(result).toBeNull() // allowed
-    // INCR + EXPIRE both fire on first request.
+    expect(result).toBeNull() // allowed (count=1 ≤ 5)
+    const setCall = fetchCalls.find((c) => new URL(c.url).pathname.startsWith('/set/'))
+    expect(setCall).toBeDefined()
+    // Atomic TTL: the SET path must carry both EX (window) and NX (create-only).
+    expect(setCall!.url).toContain('/EX/60/NX')
+    // On the 'OK' (first-request) branch, NO separate INCR fires.
     const paths = fetchCalls.map((c) => new URL(c.url).pathname)
-    expect(paths.some((p) => p.startsWith('/incr/'))).toBe(true)
-    expect(paths.some((p) => p.startsWith('/expire/'))).toBe(true)
+    expect(paths.some((p) => p.startsWith('/incr/'))).toBe(false)
+    expect(paths.some((p) => p.startsWith('/expire/'))).toBe(false)
   })
 
   it('skips EXPIRE on subsequent requests of the same window (count > 1)', async () => {

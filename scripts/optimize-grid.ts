@@ -1,19 +1,20 @@
 /**
  * scripts/optimize-grid.ts — Phase 8 Loop 1 + Loop 2: Walk-forward grid search
  *
- * Loop 1: Wide 768-combo grid per instrument (4×4×4×3×4).
- *         Strict IS/OOS: 70% in-sample, 30% OOS. Max 8pp overfit gap.
- *         Objective: maximize OOS Sharpe.
- *
- * Loop 2: After aggregating Loop 1 best params, runs 288-combo narrowed grid
- *         on each sector to surface per-sector optimal configurations.
+ * Loop 1/2: Walk-forward grid per instrument. Strict IS/OOS: 70% in-sample, 30% OOS,
+ *         max 8pp overfit gap, objective = maximize OOS Sharpe.
+ *         NOTE: as of the 2026-06 honesty fix, generateGrid only iterates the grid
+ *         dimensions the simplified backtest actually consumes (slope × atr); the
+ *         buy/sell/confidence dimensions are inert there, so the real combination
+ *         count is far smaller than the nominal 4×4×4×3×4 (see lib/optimize/gridSearch.ts).
  *
  * Output: scripts/optimization-results-loop1.json
  *
- * Loop 1 summary (2026-04-29 run — see reviews/optimization-loop1.md):
- *   - Aggregate OOS win rate ~25.7% — far below 56.35% production floor.
- *   - Do NOT ship grid winners as production defaults until enhanced path recovers.
- *   - Best sector rollup: Utilities ~52% OOS; many sectors flagged CRITICAL.
+ * ⚠️ TWO STANDING CAVEATS (this is a RESEARCH tool — do not read its numbers as live perf):
+ *   1. Loop 1 (2026-04-29 run): aggregate OOS WR ~25.7%, far below the production floor.
+ *      Do NOT ship grid winners as production defaults until the enhanced path recovers.
+ *   2. OOS metrics are SELECTION-BIASED (params chosen by max OOS Sharpe, then that same
+ *      OOS Sharpe reported — needs a 3rd held-out test split). See gridSearch.ts header.
  *
  * Usage: npm run optimize:grid
  */
@@ -37,6 +38,17 @@ const __dirname = dirname(__filename)
 const dataDir = join(__dirname, 'backtestData')
 
 // ─── Sector universe ──────────────────────────────────────────────────────────
+//
+// ⚠️ SURVIVORSHIP BIAS (known limitation, affects EVERY metric this script reports):
+// This is a hard-coded list of TODAY's large-cap survivors. Backtesting only the
+// names that survived to the present systematically inflates win rate, return, and
+// Sharpe — losers that were delisted, acquired, or fell out of the index are absent,
+// so the sample is conditioned on success. The same bias flows into any production
+// benchmark/CI floor derived from this universe. An UNBIASED estimate requires
+// POINT-IN-TIME index constituents (the membership as it actually was on each
+// historical date, including names later delisted) — data this repo does not have.
+// Until then, treat all reported edge as an UPPER BOUND, not an expectation.
+// (See reviews/MASTER-INSPECTION-2026-06-04.md P1-A.)
 
 const SECTORS_MAP: Record<string, string> = {
   NVDA: 'Technology', MSFT: 'Technology', AAPL: 'Technology', AVGO: 'Technology', AMD: 'Technology',

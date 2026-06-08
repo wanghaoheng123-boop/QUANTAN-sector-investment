@@ -57,7 +57,7 @@ export async function GET(request: Request) {
           fetchedAt: new Date().toISOString(),
           degraded: true as const,
           userMessage: `Liquidation history unavailable (HTTP ${res.status}).`,
-          error: text.slice(0, 200),
+          ...(sanitizeError(text) ? { error: sanitizeError(text) } : {}),
         },
         { status: 200, headers: { 'Cache-Control': 'no-store' } }
       )

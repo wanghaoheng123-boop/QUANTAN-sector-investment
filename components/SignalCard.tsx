@@ -64,6 +64,7 @@ function SignalCard({ signal, color, compact = false }: SignalCardProps) {
   if (compact) {
     return (
       <div
+        role="region"
         className={`rounded-xl p-4 border ${config.bg} ${config.border} hover:brightness-110 transition-all animate-card-enter`}
         style={{ boxShadow: `0 0 20px ${color}10` }}
         aria-label={directionAriaLabel(signal.direction, session)}
@@ -100,6 +101,7 @@ function SignalCard({ signal, color, compact = false }: SignalCardProps) {
 
   return (
     <div
+      role="region"
       className={`rounded-2xl p-5 border ${config.bg} ${config.border} animate-card-enter`}
       style={{ boxShadow: `0 0 40px ${color}15, 0 4px 20px rgba(0,0,0,0.3)` }}
       aria-label={directionAriaLabel(signal.direction, session)}

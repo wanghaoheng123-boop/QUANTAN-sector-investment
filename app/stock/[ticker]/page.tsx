@@ -100,15 +100,16 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
   const color = tickerSector?.color ?? '#3b82f6'
 
   // Stable callbacks — defined with useCallback to avoid stale closures
-  const fetchChartData = useCallback((range: string) => {
+  const fetchChartData = useCallback((range: string, signal?: AbortSignal) => {
     setLoading(true)
     setChartError(null)
-    fetch(`/api/chart/${encodeURIComponent(ticker)}?range=${encodeURIComponent(range)}`)
+    fetch(`/api/chart/${encodeURIComponent(ticker)}?range=${encodeURIComponent(range)}`, { signal })
       .then((r) => {
         if (!r.ok) return Promise.reject(new Error(`HTTP ${r.status}`))
         return r.json()
       })
       .then((data) => {
+        if (signal?.aborted) return
         if (data.error) {
           throw new Error(typeof data.error === 'string' ? data.error : 'Chart data unavailable')
         }
@@ -122,13 +123,14 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
         }
       })
       .catch((e) => {
+        if (signal?.aborted || (e instanceof DOMException && e.name === 'AbortError')) return
         const msg = e instanceof Error ? e.message : 'Chart fetch failed'
         console.error('[Chart] Error:', e)
         setChartError(msg)
         setCandles([])
         setDarkPoolMarkers([])
       })
-      .finally(() => setLoading(false))
+      .finally(() => { if (!signal?.aborted) setLoading(false) })
   }, [ticker])
 
   // Phase 14 wave 36 (real-time platform initiative):
@@ -155,7 +157,9 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
   // Chart data: fetch on mount and whenever timeframe changes
   useEffect(() => {
     if (activeTab !== 'chart') return
-    fetchChartData(activeRange)
+    const controller = new AbortController()
+    fetchChartData(activeRange, controller.signal)
+    return () => controller.abort()
   }, [activeTab, activeRange, fetchChartData])
 
   // Chart polling — short intervals for 1m/3m/5m so bars stay near live quote
@@ -164,8 +168,16 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
     if (!isStockIntradayPollRange(activeRange)) return
 
     const ms = CHART_POLL_MS(activeRange)
-    const poll = setInterval(() => fetchChartData(activeRange), ms)
-    return () => clearInterval(poll)
+    let activeController = new AbortController()
+    const poll = setInterval(() => {
+      activeController.abort()
+      activeController = new AbortController()
+      fetchChartData(activeRange, activeController.signal)
+    }, ms)
+    return () => {
+      clearInterval(poll)
+      activeController.abort()
+    }
   }, [activeTab, activeRange, fetchChartData])
 
   // Phase 14 wave 36 — REAL-TIME QUOTE STREAM (replaces 15 s polling).
@@ -353,10 +365,28 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div role="tablist" className="flex flex-wrap gap-1 bg-slate-900 rounded-lg p-1 border border-slate-800">
+          <div
+            role="tablist"
+            className="flex flex-wrap gap-1 bg-slate-900 rounded-lg p-1 border border-slate-800"
+            onKeyDown={(e) => {
+              const tabs = STOCK_MAIN_TABS.map(([t]) => t)
+              const idx = tabs.indexOf(activeTab)
+              if (e.key === 'ArrowRight') { e.preventDefault(); setActiveTab(tabs[(idx + 1) % tabs.length]) }
+              if (e.key === 'ArrowLeft')  { e.preventDefault(); setActiveTab(tabs[(idx - 1 + tabs.length) % tabs.length]) }
+            }}
+          >
             {STOCK_MAIN_TABS.map(([tab, label]) => (
-              <button key={tab} type="button" role="tab" aria-selected={activeTab === tab} onClick={() => setActiveTab(tab)}
-                className={`px-3 sm:px-4 py-1.5 text-xs font-medium rounded-md transition-all ${activeTab === tab ? 'bg-slate-700 text-white' : 'text-slate-500 hover:text-slate-300'}`}>
+              <button
+                key={tab}
+                id={`tab-${tab}`}
+                type="button"
+                role="tab"
+                aria-selected={activeTab === tab}
+                aria-controls={`panel-${tab}`}
+                tabIndex={activeTab === tab ? 0 : -1}
+                onClick={() => setActiveTab(tab)}
+                className={`px-3 sm:px-4 py-1.5 text-xs font-medium rounded-md transition-all ${activeTab === tab ? 'bg-slate-700 text-white' : 'text-slate-500 hover:text-slate-300'}`}
+              >
                 {label}
               </button>
             ))}
@@ -387,12 +417,14 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
         </div>
 
         {activeTab === 'quant' ? (
-          <QuantLabPanel ticker={ticker} />
+          <div role="tabpanel" id="panel-quant" aria-labelledby="tab-quant">
+            <QuantLabPanel ticker={ticker} />
+          </div>
         ) : (
           <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
             <div className="xl:col-span-3 space-y-6">
               {activeTab === 'chart' && (
-                <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-4 shadow-xl">
+                <div role="tabpanel" id="panel-chart" aria-labelledby="tab-chart" className="bg-slate-900/60 rounded-2xl border border-slate-800 p-4 shadow-xl">
                   <div className="flex items-center justify-between mb-3">
                     <span className="text-sm font-semibold text-white">{ticker} · Advanced Technicals</span>
                     <div className="flex items-center gap-3 text-xs text-slate-500 font-mono">
@@ -452,7 +484,7 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
               )}
 
               {activeTab === 'options' && (
-                <div className="space-y-6">
+                <div role="tabpanel" id="panel-options" aria-labelledby="tab-options" className="space-y-6">
                   {/* Phase 14 wave 41 UX-F6: distinguishable loading state with a spinner
                       so users see "still working" vs the gray "no data" empty state. */}
                   {optionsLoading && (
@@ -563,11 +595,17 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
               )}
 
               {activeTab === 'darkpool' && (
-                <DarkPoolPanel prints={darkPoolPrints} ticker={ticker} color={color}
-                  apiData={darkPoolApiData} apiLoading={darkPoolApiLoading} />
+                <div role="tabpanel" id="panel-darkpool" aria-labelledby="tab-darkpool">
+                  <DarkPoolPanel prints={darkPoolPrints} ticker={ticker} color={color}
+                    apiData={darkPoolApiData} apiLoading={darkPoolApiLoading} />
+                </div>
               )}
 
-              {activeTab === 'news' && <NewsFeed news={news} color={color} />}
+              {activeTab === 'news' && (
+                <div role="tabpanel" id="panel-news" aria-labelledby="tab-news">
+                  <NewsFeed news={news} color={color} />
+                </div>
+              )}
             </div>
 
             {/* Sidebar — 2-col layout: Session Snapshot + IndicatorPanel */}

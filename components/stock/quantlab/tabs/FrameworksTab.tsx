@@ -22,6 +22,8 @@ export function FrameworksTab() {
                   >
                     <button
                       type="button"
+                      aria-expanded={open}
+                      aria-controls={`framework-panel-${f.id}`}
                       onClick={() => setOpenFrameworkId(open ? null : f.id)}
                       className="cursor-pointer w-full flex items-center gap-3 p-4 text-left"
                     >
@@ -33,7 +35,7 @@ export function FrameworksTab() {
                       <ChevronDown className={`w-4 h-4 text-slate-500 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
                     </button>
                     {open && (
-                      <div className="px-4 pb-4 pt-0 space-y-3 border-t border-slate-800/60">
+                      <div id={`framework-panel-${f.id}`} className="px-4 pb-4 pt-0 space-y-3 border-t border-slate-800/60">
                         <ul className="text-xs text-slate-400 space-y-1 list-disc pl-4">
                           {f.themes.map((t) => (
                             <li key={t}>{t}</li>

@@ -407,13 +407,25 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
           <div className="xl:col-span-2 space-y-6">
             {/* Tab navigation */}
             <div className="flex items-center justify-between">
-              <div role="tablist" className="flex gap-1 bg-slate-900 rounded-lg p-1 border border-slate-800">
+              <div
+                role="tablist"
+                className="flex gap-1 bg-slate-900 rounded-lg p-1 border border-slate-800"
+                onKeyDown={(e) => {
+                  const tabs = SECTOR_MAIN_TABS.map(([t]) => t)
+                  const idx = tabs.indexOf(activeTab as typeof tabs[number])
+                  if (e.key === 'ArrowRight') { e.preventDefault(); setActiveTab(tabs[(idx + 1) % tabs.length]) }
+                  if (e.key === 'ArrowLeft')  { e.preventDefault(); setActiveTab(tabs[(idx - 1 + tabs.length) % tabs.length]) }
+                }}
+              >
                 {SECTOR_MAIN_TABS.map(([tab, label]) => (
                   <button
                     key={tab}
+                    id={`tab-${tab}`}
                     type="button"
                     role="tab"
                     aria-selected={activeTab === tab}
+                    aria-controls={`panel-${tab}`}
+                    tabIndex={activeTab === tab ? 0 : -1}
                     onClick={() => setActiveTab(tab)}
                     className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all ${
                       activeTab === tab
@@ -448,7 +460,7 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
 
             {/* Chart tab */}
             {activeTab === 'chart' && (
-              <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-4">
+              <div role="tabpanel" id="panel-chart" aria-labelledby="tab-chart" className="bg-slate-900/60 rounded-2xl border border-slate-800 p-4">
                 <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
                   <span className="text-sm font-semibold text-white">{sector.etf} · Candlestick Chart</span>
                   <div className="flex items-center gap-3 text-xs text-slate-500 font-mono">
@@ -507,7 +519,7 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
 
             {/* Dark Pool tab */}
             {activeTab === 'darkpool' && (
-              <div>
+              <div role="tabpanel" id="panel-darkpool" aria-labelledby="tab-darkpool">
                 <DarkPoolPanel
                   prints={darkPoolPrints}
                   ticker={sector.etf}
@@ -520,7 +532,7 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
 
             {/* News tab */}
             {activeTab === 'news' && (
-              <div>
+              <div role="tabpanel" id="panel-news" aria-labelledby="tab-news">
                 <h3 className="text-sm font-semibold text-slate-300 mb-4">
                   {sector.name} Sector — Latest News
                 </h3>

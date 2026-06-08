@@ -12,8 +12,10 @@ References FactorEngine / FactorMiner / OpenClaw patterns from 2025-2026 literat
 
 from __future__ import annotations
 
+import ast
 import json
 import logging
+import operator as _op
 import os
 from typing import Any, Optional, TypedDict
 
@@ -50,6 +52,56 @@ class FactorMiningState(TypedDict):
     config: Any  # AgentConfig
     messages: list[str]
     status: str  # 'running', 'completed', 'failed'
+
+
+_SAFE_BINOPS = {
+    ast.Add: _op.add, ast.Sub: _op.sub, ast.Mult: _op.mul,
+    ast.Div: _op.truediv, ast.Pow: _op.pow, ast.Mod: _op.mod,
+    ast.FloorDiv: _op.floordiv,
+}
+_SAFE_UNARYOPS = {ast.UAdd: _op.pos, ast.USub: _op.neg}
+
+
+def _safe_eval_ast(expr: str, namespace: dict) -> Any:
+    """
+    Evaluate an arithmetic factor formula WITHOUT Python's ``eval``.
+
+    Permits only numeric literals, names bound in ``namespace``, calls to callables
+    in ``namespace``, and the operators + - * / // ** % (unary +/-). Attribute access,
+    subscripting, comprehensions, lambdas, and all other node types are rejected — so
+    the classic ``eval`` sandbox escapes (``().__class__.__bases__[0].__subclasses__()``)
+    are STRUCTURALLY impossible rather than relying on an (escapable) empty __builtins__.
+    Raises ValueError on any disallowed construct.
+    """
+    tree = ast.parse(expr, mode="eval")
+
+    def _ev(node: ast.AST) -> Any:
+        if isinstance(node, ast.Expression):
+            return _ev(node.body)
+        if isinstance(node, ast.Constant):
+            if isinstance(node.value, (int, float)) and not isinstance(node.value, bool):
+                return node.value
+            raise ValueError(f"disallowed constant: {node.value!r}")
+        if isinstance(node, ast.BinOp) and type(node.op) in _SAFE_BINOPS:
+            return _SAFE_BINOPS[type(node.op)](_ev(node.left), _ev(node.right))
+        if isinstance(node, ast.UnaryOp) and type(node.op) in _SAFE_UNARYOPS:
+            return _SAFE_UNARYOPS[type(node.op)](_ev(node.operand))
+        if isinstance(node, ast.Name):
+            if node.id in namespace:
+                return namespace[node.id]
+            raise ValueError(f"unknown name: {node.id}")
+        if isinstance(node, ast.Call):
+            if not isinstance(node.func, ast.Name):
+                raise ValueError("only direct calls to named functions are allowed")
+            if node.keywords:
+                raise ValueError("keyword arguments are not allowed")
+            fn = namespace.get(node.func.id)
+            if not callable(fn):
+                raise ValueError(f"not a callable function: {node.func.id}")
+            return fn(*[_ev(a) for a in node.args])
+        raise ValueError(f"disallowed expression node: {type(node).__name__}")
+
+    return _ev(tree)
 
 
 def _safe_eval_formula(formula: str, base_series: dict) -> np.ndarray:
@@ -93,14 +145,15 @@ def _safe_eval_formula(formula: str, base_series: dict) -> np.ndarray:
         "ts_rank": ts_rank,
         "ts_delay": ts_delay,
         "safe_div": safe_div,
-        "np": np,
+        # NOTE: bare "np" intentionally NOT exposed — the restricted evaluator forbids
+        # attribute access, so np.<x> can't be used; explicit funcs below cover the need.
         "abs": np.abs,
         "sqrt": lambda x: np.sqrt(np.abs(x)),
         "log": lambda x: np.log(np.abs(x) + 1e-8),
     }
 
     try:
-        result = eval(formula, {"__builtins__": {}}, namespace)
+        result = _safe_eval_ast(formula, namespace)
         return np.asarray(result, dtype=float)
     except Exception as e:
         logger.debug("Formula eval failed: %s → %s", formula, e)

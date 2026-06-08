@@ -4,8 +4,8 @@
  */
 
 import type { OhlcBar } from '@/lib/quant/indicators'
-import { resolveBacktestSignal, DEFAULT_CONFIG, atr, type BacktestConfig } from './signals'
-import { sortinoRatio } from '@/lib/quant/indicators'
+import { resolveBacktestSignal, DEFAULT_CONFIG, type BacktestConfig } from './signals'
+import { sortinoRatio, atrArray as atr } from '@/lib/quant/indicators'
 import { getRiskFreeRateSync } from '@/lib/quant/riskFreeRate'
 import { evaluateStopHit } from './exitRules'
 import { costBpsPerSide, DEFAULT_EXECUTION_COSTS } from './executionModel'
