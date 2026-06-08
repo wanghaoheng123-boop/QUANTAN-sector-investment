@@ -14,8 +14,7 @@
  * No mock data, no hardcoded values.
  */
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const YahooFinance = require('yahoo-finance2').default
+import YahooFinance from 'yahoo-finance2'
 import { NextRequest, NextResponse } from 'next/server'
 import { SECTORS } from '@/lib/sectors'
 import { parseQuoteTime } from '@/lib/format'

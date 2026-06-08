@@ -5,6 +5,7 @@
 
 import { sortinoRatio } from '@/lib/quant/indicators'
 import { getRiskFreeRateSync } from '@/lib/quant/riskFreeRate'
+import { tradingDaysPerYear } from './core'
 
 export {
   TX_COST_BPS_PER_SIDE,
@@ -64,9 +65,24 @@ export function aggregatePortfolio(results: BacktestResult[], initialCapital: nu
     }
   }
 
-  const maxLen = results.length > 0
-    ? Math.max(...results.map(r => r.equityCurve.length))
+  // Combine per-instrument equity curves over their COMMON window by END-alignment.
+  // BacktestResult.equityCurve is a bare number[] (no dates), and every curve runs
+  // through its final bar ("now"), so the k-th-from-last points line up by calendar
+  // for same-exchange instruments. Using the common (min-length) window is the correct
+  // equal-weight portfolio semantics — the portfolio only exists once ALL constituents
+  // are tradeable — and it fixes the prior bug of forward-padding shorter curves with a
+  // flat (zero-volatility) tail, which understated portfolio vol and inflated Sharpe.
+  // RESIDUAL (documented follow-up): exact per-date alignment across MIXED trading
+  // calendars (crypto 7d/wk vs equity 5d/wk) needs dated equity curves — add an
+  // `equityDates` field to BacktestResult. Annualization below uses the portfolio calendar.
+  const nonEmpty = results.filter(r => r.equityCurve.length > 0)
+  const minLen = nonEmpty.length > 0
+    ? Math.min(...nonEmpty.map(r => r.equityCurve.length))
     : 0
+
+  // Portfolio annualization: 365 if ANY constituent trades 7 days/wk (crypto), else 252.
+  // Mirrors runPortfolioBacktest; replaces the prior hardcoded 252.
+  const annDays = nonEmpty.some(r => tradingDaysPerYear(r.ticker, r.sector) === 365) ? 365 : 252
 
   let sharpe: number | null = null
   let sortino: number | null = null
@@ -77,59 +93,56 @@ export function aggregatePortfolio(results: BacktestResult[], initialCapital: nu
   let portfolioMaxDdFromCurve = 0
   let portfolioMaxDdComputed = false
 
-  if (maxLen > 30 && results.length > 0) {
-    const combinedEquity: number[] = new Array(maxLen).fill(0)
-    for (const r of results) {
+  if (minLen > 30 && nonEmpty.length > 0) {
+    // End-aligned sum over the common window → combinedEquity is strictly positive
+    // (sum of positive equities) at every point, so no findIndex/padding needed.
+    const combinedEquity: number[] = new Array(minLen).fill(0)
+    for (const r of nonEmpty) {
       const curve = r.equityCurve
-      if (curve.length === 0) continue
-      const lastVal = curve[curve.length - 1]
-      for (let i = 0; i < maxLen; i++) {
-        combinedEquity[i] += i < curve.length ? curve[i] : lastVal
+      const offset = curve.length - minLen
+      for (let k = 0; k < minLen; k++) {
+        combinedEquity[k] += curve[offset + k]
       }
     }
 
-    const firstValid = combinedEquity.findIndex(v => v > 0)
-    const lastValid = combinedEquity.length - 1 - [...combinedEquity].reverse().findIndex(v => v > 0)
-    if (firstValid >= 0 && lastValid >= firstValid) {
-      const initialCombined = combinedEquity[firstValid]
-      const finalCombined = combinedEquity[lastValid]
-      combinedInitialEquity = initialCombined
-      combinedFinalEquity = finalCombined
-      truePortfolioReturn = (finalCombined - initialCombined) / initialCombined
-      const years = (lastValid - firstValid) / 252
-      truePortfolioAnnReturn = years > 0 ? ((1 + truePortfolioReturn) ** (1 / years) - 1) : 0
+    const initialCombined = combinedEquity[0]
+    const finalCombined = combinedEquity[minLen - 1]
+    combinedInitialEquity = initialCombined
+    combinedFinalEquity = finalCombined
+    truePortfolioReturn = initialCombined > 0 ? (finalCombined - initialCombined) / initialCombined : 0
+    const years = (minLen - 1) / annDays
+    truePortfolioAnnReturn = years > 0 ? ((1 + truePortfolioReturn) ** (1 / years) - 1) : 0
 
-      let peak = combinedEquity[firstValid]
-      let maxDd = 0
-      for (let i = firstValid; i <= lastValid; i++) {
-        if (combinedEquity[i] > peak) peak = combinedEquity[i]
-        if (peak > 0) {
-          const dd = (peak - combinedEquity[i]) / peak
-          if (dd > maxDd) maxDd = dd
-        }
+    let peak = combinedEquity[0]
+    let maxDd = 0
+    for (let i = 0; i < minLen; i++) {
+      if (combinedEquity[i] > peak) peak = combinedEquity[i]
+      if (peak > 0) {
+        const dd = (peak - combinedEquity[i]) / peak
+        if (dd > maxDd) maxDd = dd
       }
-      portfolioMaxDdFromCurve = maxDd
-      portfolioMaxDdComputed = true
+    }
+    portfolioMaxDdFromCurve = maxDd
+    portfolioMaxDdComputed = true
 
-      const portfolioDailyReturns: number[] = []
-      for (let i = firstValid + 1; i <= lastValid; i++) {
-        if (combinedEquity[i - 1] > 0) {
-          const ret = (combinedEquity[i] - combinedEquity[i - 1]) / combinedEquity[i - 1]
-          if (Number.isFinite(ret)) portfolioDailyReturns.push(ret)
-        }
+    const portfolioDailyReturns: number[] = []
+    for (let i = 1; i < minLen; i++) {
+      if (combinedEquity[i - 1] > 0) {
+        const ret = (combinedEquity[i] - combinedEquity[i - 1]) / combinedEquity[i - 1]
+        if (Number.isFinite(ret)) portfolioDailyReturns.push(ret)
       }
+    }
 
-      if (portfolioDailyReturns.length > 30) {
-        const n = portfolioDailyReturns.length
-        const mean = portfolioDailyReturns.reduce((a, b) => a + b, 0) / n
-        const variance = portfolioDailyReturns.reduce((s, x) => s + (x - mean) ** 2, 0) / Math.max(1, n - 1)
-        const sd = Math.sqrt(Math.max(variance, 0))
-        const rfD = getRiskFreeRateSync() / 252
-        if (sd > 1e-10) {
-          sharpe = ((mean - rfD) / sd) * Math.sqrt(252)
-        }
-        sortino = sortinoRatio(portfolioDailyReturns, rfD, 252)
+    if (portfolioDailyReturns.length > 30) {
+      const n = portfolioDailyReturns.length
+      const mean = portfolioDailyReturns.reduce((a, b) => a + b, 0) / n
+      const variance = portfolioDailyReturns.reduce((s, x) => s + (x - mean) ** 2, 0) / Math.max(1, n - 1)
+      const sd = Math.sqrt(Math.max(variance, 0))
+      const rfD = getRiskFreeRateSync() / annDays
+      if (sd > 1e-10) {
+        sharpe = ((mean - rfD) / sd) * Math.sqrt(annDays)
       }
+      sortino = sortinoRatio(portfolioDailyReturns, rfD, annDays)
     }
   }
 

@@ -17,13 +17,3 @@ export function canonicalizeTickerCase(ticker: string): string {
   if (s === 'VIX' || s === '^VIX') return '^VIX'
   return s
 }
-
-/**
- * @deprecated Use `canonicalizeTickerCase` for local-state callers OR import
- * `normalizeTicker` from `@/lib/api/sanitize` for API input validation.
- *
- * The previous name shadowed the API-strict version in lib/api/sanitize.ts
- * (autoimport could pick either). This alias is kept temporarily for callers
- * we haven't migrated; a follow-up will remove it.
- */
-export const normalizeTicker = canonicalizeTickerCase

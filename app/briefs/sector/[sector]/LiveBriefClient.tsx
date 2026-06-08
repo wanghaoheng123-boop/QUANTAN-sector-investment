@@ -71,6 +71,7 @@ export default function LiveBriefClient({ slug, initialBrief }: { slug: string; 
 
   useEffect(() => {
     if (!slug || initialBrief) return
+    let cancelled = false
     setLoading(true)
     setError(null)
     fetch(`/api/briefs/${encodeURIComponent(slug)}`)
@@ -79,13 +80,16 @@ export default function LiveBriefClient({ slug, initialBrief }: { slug: string; 
         return r.json()
       })
       .then(data => {
+        if (cancelled) return
         setBrief(data)
         setLoading(false)
       })
       .catch(e => {
+        if (cancelled) return
         setError(e.message)
         setLoading(false)
       })
+    return () => { cancelled = true }
   }, [slug, initialBrief])
 
   if (!sector && !loading) {

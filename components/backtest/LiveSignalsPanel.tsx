@@ -241,7 +241,7 @@ export function LiveSignalsPanel() {
           <thead className="bg-slate-900 border-b border-slate-800">
             <tr>
               {[['ticker','Ticker'],['sector','Sector'],['price','Price'],['changePct','Chg%'],['zone','Regime'],['action','Signal'],['confidence','Conf%'],['rsi14','RSI'],['atrPct','ATR%'],['deviationPct','200EMA Dev'],['slopePct','Slope']].map(([k, h]) => (
-                <th key={k} className={thClass(k as SortKey)} onClick={() => {
+                <th key={k} className={thClass(k as SortKey)} aria-sort={sortKey === k ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'} onClick={() => {
                   if (sortKey === k) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
                   else { setSortKey(k as SortKey); setSortDir('desc') }
                 }}>{h}{sortIcon(k as SortKey)}</th>

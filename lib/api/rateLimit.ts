@@ -32,6 +32,15 @@ export interface RateLimitConfig {
   windowSeconds: number
 }
 
+/**
+ * Synchronous rate-limit check against the in-memory token bucket.
+ *
+ * @deprecated For routes that need KV-backed distributed rate limiting, use
+ * `applyRateLimit` instead — it selects KV when the env vars are present and
+ * falls back to memory automatically. This function ALWAYS hits the memory
+ * backend, so concurrent serverless instances each maintain independent
+ * counters and KV is never consulted.
+ */
 export function checkRateLimit(
   key: string,
   config: RateLimitConfig,
@@ -75,12 +84,27 @@ async function checkRateLimitKv(
   const auth = { Authorization: `Bearer ${process.env.KV_REST_API_TOKEN!}` }
   const bucketKey = `rl:${key}`
   try {
-    const incrRes = await fetch(`${base}/incr/${encodeURIComponent(bucketKey)}`, { headers: auth })
-    if (!incrRes.ok) return checkRateLimitMemory(key, config)
-    const body = (await incrRes.json()) as { result?: number }
-    const count = Number(body.result ?? 1)
-    if (count === 1) {
-      await fetch(`${base}/expire/${encodeURIComponent(bucketKey)}/${config.windowSeconds}`, { headers: auth })
+    // Fix (api-resilience): atomic window creation via SET <key> 1 EX <window> NX.
+    // Previously: INCR then conditional EXPIRE on count===1. If INCR succeeded
+    // but EXPIRE failed (network blip), the key had no TTL and permanently
+    // rate-limited that IP (DoS). With SET-NX the TTL is atomic: key is either
+    // created with TTL or the SET is a no-op (key already exists).
+    const setRes = await fetch(
+      `${base}/set/${encodeURIComponent(bucketKey)}/1/EX/${config.windowSeconds}/NX`,
+      { headers: auth, method: 'POST' },
+    )
+    if (!setRes.ok) return checkRateLimitMemory(key, config)
+    const setBody = (await setRes.json()) as { result?: string | null }
+    let count: number
+    if (setBody.result === 'OK') {
+      // Key was newly created with TTL — this is the first request in the window.
+      count = 1
+    } else {
+      // Key already existed; increment the counter.
+      const incrRes = await fetch(`${base}/incr/${encodeURIComponent(bucketKey)}`, { headers: auth })
+      if (!incrRes.ok) return checkRateLimitMemory(key, config)
+      const incrBody = (await incrRes.json()) as { result?: number }
+      count = Number(incrBody.result ?? 1)
     }
     if (count <= config.maxRequests) return { allowed: true }
     return { allowed: false, retryAfter: Math.max(1, config.windowSeconds) }

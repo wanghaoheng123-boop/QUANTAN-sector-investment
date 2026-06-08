@@ -14,10 +14,12 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import ast
 import functools
 import hashlib
 import json
 import logging
+import operator as _op
 import warnings
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -251,6 +253,58 @@ FUNCTION_SET: dict[str, Callable] = {
 }
 
 
+_SAFE_BINOPS = {
+    ast.Add: _op.add, ast.Sub: _op.sub, ast.Mult: _op.mul,
+    ast.Div: _op.truediv, ast.Pow: _op.pow, ast.Mod: _op.mod,
+    ast.FloorDiv: _op.floordiv,
+}
+_SAFE_UNARYOPS = {ast.UAdd: _op.pos, ast.USub: _op.neg}
+
+
+def safe_eval_formula(expr: str, namespace: dict[str, Any]) -> Any:
+    """
+    Evaluate an arithmetic factor formula WITHOUT Python's ``eval``.
+
+    Only numeric literals, names bound in ``namespace``, calls to callables in
+    ``namespace``, and the operators + - * / // ** % (unary +/-) are permitted.
+    Attribute access, subscripting, comprehensions, lambdas, and every other node
+    type are rejected — so the classic ``eval`` sandbox escapes (e.g.
+    ``().__class__.__bases__[0].__subclasses__()``) are STRUCTURALLY impossible,
+    not merely blocked by an empty ``__builtins__`` (which is escapable).
+
+    Raises ValueError on any disallowed construct.
+    """
+    tree = ast.parse(expr, mode="eval")
+
+    def _ev(node: ast.AST) -> Any:
+        if isinstance(node, ast.Expression):
+            return _ev(node.body)
+        if isinstance(node, ast.Constant):
+            if isinstance(node.value, (int, float)) and not isinstance(node.value, bool):
+                return node.value
+            raise ValueError(f"disallowed constant: {node.value!r}")
+        if isinstance(node, ast.BinOp) and type(node.op) in _SAFE_BINOPS:
+            return _SAFE_BINOPS[type(node.op)](_ev(node.left), _ev(node.right))
+        if isinstance(node, ast.UnaryOp) and type(node.op) in _SAFE_UNARYOPS:
+            return _SAFE_UNARYOPS[type(node.op)](_ev(node.operand))
+        if isinstance(node, ast.Name):
+            if node.id in namespace:
+                return namespace[node.id]
+            raise ValueError(f"unknown name: {node.id}")
+        if isinstance(node, ast.Call):
+            if not isinstance(node.func, ast.Name):
+                raise ValueError("only direct calls to named functions are allowed")
+            if node.keywords:
+                raise ValueError("keyword arguments are not allowed")
+            fn = namespace.get(node.func.id)
+            if not callable(fn):
+                raise ValueError(f"not a callable function: {node.func.id}")
+            return fn(*[_ev(a) for a in node.args])
+        raise ValueError(f"disallowed expression node: {type(node).__name__}")
+
+    return _ev(tree)
+
+
 def _build_expression_tree(
     formula_template: str,
     base_series: dict[str, np.ndarray],
@@ -260,7 +314,7 @@ def _build_expression_tree(
 
     Example: "div(volume, ts_mean(volume, 20))" → np.ndarray
     """
-    # Simple expression evaluator for testable formulas
+    # Restricted-AST evaluator (NOT eval) — see safe_eval_formula.
     namespace = {**FUNCTION_SET, **base_series}
     namespace.update({
         "ts_mean": ts_mean,
@@ -272,7 +326,7 @@ def _build_expression_tree(
         "ts_corr": ts_corr,
     })
     try:
-        result = eval(formula_template, {"__builtins__": {}}, namespace)
+        result = safe_eval_formula(formula_template, namespace)
         return np.asarray(result, dtype=float)
     except Exception as e:
         logger.debug("Formula evaluation failed: %s — %s", formula_template, e)

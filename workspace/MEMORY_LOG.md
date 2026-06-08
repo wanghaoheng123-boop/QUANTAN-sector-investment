@@ -139,3 +139,15 @@ Done: Implemented all requested tracks; added baseline + DeepSeek audit artifact
 Verify: A=PASS B=BLOCKED C=PASS D=PASS E=PASS F=PASS
 Blockers: Typecheck command cannot execute due invalid package config in `node_modules/typescript/package.json` on this environment.
 ---
+
+### GitHub/Vercel sync — 2026-06-03T16:22Z (cursor subagent)
+| Field | Value |
+|---|---|
+| origin/main HEAD | `63b2d171` — docs: master function coverage rollup (#49) |
+| Open PRs | 0 (none to merge; #46–#52 already merged) |
+| CI main (latest 3) | success — #49, #52, #51 pushes |
+| Vercel prod alias | https://quantan.vercel.app → `dpl_EF89K6SHtZnevbqCkPbNvUJuXcL4` (Ready, ~pre-#49) |
+| Vercel prod queue | Multiple GitHub production deploys Queued; CLI `vercel deploy --prod` → `dpl_C9F9MKfWiDe7yhngphCExpKFKEJe` Queued (from local diverged tree — prefer GitHub queue) |
+| Env (Production) | QUANTAN_FRED_PREWARM, QUANTAN_API_KEY present (encrypted) |
+| Local pull | Skipped — `git fetch origin` failed (443 timeout); use GIT_HTTP_VERSION=1.1 when network stable |
+

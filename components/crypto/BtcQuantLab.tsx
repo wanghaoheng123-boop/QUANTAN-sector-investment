@@ -89,14 +89,6 @@ async function fetchJsonSafe(path: string): Promise<{ ok: true; data: unknown } 
 }
 
 export default function BtcQuantLab({ candles }: Props) {
-  if (candles.length < 30) {
-    return (
-      <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4 text-sm text-slate-400">
-        Not enough BTC history loaded yet. Quant signals need at least 30 candles.
-      </div>
-    )
-  }
-
   const [metrics, setMetrics] = useState<MetricsData | null>(null)
   const [liq, setLiq] = useState<LiqData | null>(null)
   const [activeMetricTab, setActiveMetricTab] = useState<'funding' | 'liquidations' | 'signals'>('funding')
@@ -313,6 +305,14 @@ export default function BtcQuantLab({ candles }: Props) {
       color: regime.dipSignal === 'STRONG_DIP' ? 'text-green-400' : regime.dipSignal === 'FALLING_KNIFE' ? 'text-red-400' : regime.dipSignal === 'WATCH_DIP' ? 'text-amber-400' : regime.dipSignal === 'OVERBOUGHT' ? 'text-orange-400' : 'text-slate-400',
     },
   ]
+
+  if (candles.length < 30) {
+    return (
+      <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4 text-sm text-slate-400">
+        Not enough BTC history loaded yet. Quant signals need at least 30 candles.
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">

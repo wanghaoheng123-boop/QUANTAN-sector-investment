@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import BtcQuantLab from '@/components/crypto/BtcQuantLab'
+import CryptoChartBoundary from '@/components/crypto/CryptoChartBoundary'
 import BtcHeader from '@/components/crypto/BtcHeader'
 import BtcTabBar from '@/components/crypto/BtcTabBar'
 import BtcChartPanel from '@/components/crypto/BtcChartPanel'
@@ -108,7 +109,9 @@ export default function BtcPage() {
             onVisToggle={handleVisToggle}
           />
         ) : (
-          <BtcQuantLab candles={candles} />
+          <CryptoChartBoundary title="BTC Quant Lab crashed">
+            <BtcQuantLab candles={candles} />
+          </CryptoChartBoundary>
         )}
 
         <div className="text-center text-[10px] text-slate-700 max-w-3xl mx-auto space-y-1">

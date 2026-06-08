@@ -22,6 +22,13 @@ const MAX_FILTER_TICKERS = 100
 let cache: { data: unknown; timestamp: number } | null = null
 const CACHE_TTL_MS = 60 * 60 * 1000 // 1 hour
 
+// Fix (api-resilience): in-flight promise guard prevents concurrent cold GET
+// requests from each spawning an independent full backtest computation. Without
+// this, N simultaneous requests each pay the full compute cost and the last one
+// to finish wins — wasting CPU and potentially returning stale data for most
+// callers. With the guard, all concurrent cold requests await the same Promise.
+let computing: ReturnType<typeof runBacktest> | null = null
+
 // ─── Run backtest ────────────────────────────────────────────────────────────
 
 async function runBacktest(filterTickers?: string[]): Promise<{
@@ -131,15 +138,29 @@ export async function GET(request: Request) {
         .slice(0, MAX_FILTER_TICKERS)
     : undefined
 
+  // Fix (api-resilience): add Cache-Control to match the 1-hour cache TTL intent.
+  // Previously success paths returned no cache headers, so CDN/proxies would not
+  // cache the response even though the module-level `cache` gates recomputes.
+  const CACHE_HEADERS = { 'Cache-Control': 's-maxage=3600, stale-while-revalidate=7200' }
+
   // Serve from cache for full (unfiltered) runs
   if (!filterTickers && cache && Date.now() - cache.timestamp < CACHE_TTL_MS) {
-    return NextResponse.json(cache.data)
+    return NextResponse.json(cache.data, { headers: CACHE_HEADERS })
   }
 
   try {
-    const data = await runBacktest(filterTickers)
-    if (!filterTickers) cache = { data, timestamp: Date.now() }
-    return NextResponse.json(data)
+    let data: Awaited<ReturnType<typeof runBacktest>>
+    if (!filterTickers) {
+      // Coalesce concurrent cold requests onto one computation.
+      if (!computing) {
+        computing = runBacktest().finally(() => { computing = null })
+      }
+      data = await computing
+      cache = { data, timestamp: Date.now() }
+    } else {
+      data = await runBacktest(filterTickers)
+    }
+    return NextResponse.json(data, { headers: CACHE_HEADERS })
   } catch (e) {
     console.error('[api/backtest] error:', e)
     const message = sanitizeError(e)

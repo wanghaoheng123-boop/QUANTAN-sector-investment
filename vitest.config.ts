@@ -47,6 +47,11 @@ export default defineConfig({
         // EventSource lifecycle — needs heavy jsdom/MockEvent harness; defer
         'hooks/useLiveQuote.ts',
         'hooks/useLiveQuotes.ts',
+        // Imperative lightweight-charts canvas lifecycle — extracted from
+        // components/KLineChart.tsx (which was never in `include`); has no unit
+        // tests by design (canvas rendering, verified via runtime/build instead).
+        // Same category as the EventSource hooks above.
+        'hooks/useKLineChart.ts',
         // localStorage + next-auth coupling — needs auth/session mocks
         'hooks/useLivePrices.ts',
         'hooks/useDialogA11y.ts',

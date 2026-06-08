@@ -2,7 +2,7 @@
 
 import { useSession } from 'next-auth/react'
 import { useCallback, useEffect, useState } from 'react'
-import { normalizeTicker } from '@/lib/tickerNormalize'
+import { canonicalizeTickerCase } from '@/lib/tickerNormalize'
 
 const GUEST_KEY = 'ag-watchlist-guest'
 const MAX_ITEMS = 64
@@ -12,7 +12,7 @@ function safeParse(raw: string | null): string[] {
   try {
     const v = JSON.parse(raw) as unknown
     if (!Array.isArray(v)) return []
-    return v.filter((x): x is string => typeof x === 'string').map((s) => normalizeTicker(s))
+    return v.filter((x): x is string => typeof x === 'string').map((s) => canonicalizeTickerCase(s))
   } catch (err) {
     // Phase 14 wave 24: corrupted localStorage entry. Logging makes the
     // condition diagnosable instead of silently resetting the watchlist.
@@ -46,7 +46,7 @@ export function useWatchlist() {
 
   const persist = useCallback(
     (next: string[]) => {
-      const capped = Array.from(new Set(next.map((t) => normalizeTicker(t)))).slice(0, MAX_ITEMS)
+      const capped = Array.from(new Set(next.map((t) => canonicalizeTickerCase(t)))).slice(0, MAX_ITEMS)
       setItems(capped)
       try {
         localStorage.setItem(storageKey, JSON.stringify(capped))
@@ -62,7 +62,7 @@ export function useWatchlist() {
 
   const toggle = useCallback(
     (ticker: string) => {
-      const u = normalizeTicker(ticker)
+      const u = canonicalizeTickerCase(ticker)
       if (items.includes(u)) persist(items.filter((x) => x !== u))
       else persist([...items, u])
     },
@@ -71,13 +71,13 @@ export function useWatchlist() {
 
   const remove = useCallback(
     (ticker: string) => {
-      const u = normalizeTicker(ticker)
+      const u = canonicalizeTickerCase(ticker)
       persist(items.filter((x) => x !== u))
     },
     [items, persist]
   )
 
-  const has = useCallback((ticker: string) => items.includes(normalizeTicker(ticker)), [items])
+  const has = useCallback((ticker: string) => items.includes(canonicalizeTickerCase(ticker)), [items])
 
   return { items, toggle, remove, has, hydrated, storageKey, isGuest: storageKey === GUEST_KEY }
 }

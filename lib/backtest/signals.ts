@@ -7,7 +7,6 @@ import type { OhlcBar, OhlcvBar } from '@/lib/quant/indicators'
 import { useEnhancedCombinedSignal } from '@/lib/featureFlags'
 import {
   smaLatest as sma,
-  ema,
   emaFull,
   rsiArray as rsi,
   macdArray as macdFn,
@@ -19,440 +18,62 @@ import { detectRegime, type RegimeState as VolRegimeState } from '@/lib/quant/re
 import { volumeProfile, priceRelativeToPOC, type PriceZone } from '@/lib/quant/volumeProfile'
 import { halfKelly } from '@/lib/quant/kelly'
 
-export { sma, ema, rsi, macdFn, atr, bollinger }
+// NOTE: indicators are NOT re-exported from here. Consumers import them from the
+// canonical SSOT (`@/lib/quant/indicators`) directly so signals.ts is not a second
+// import surface for indicator functions (structure review P1-06).
 
-// ─── Loop 1 signal improvement helpers ──────────────────────────────────────
+// ─── Re-exports from split modules ───────────────────────────────────────────
+// All helpers, types, and regime logic live in sibling modules.
+// Every name that signals.ts previously exported directly is re-exported here
+// so that ALL existing import paths remain unchanged.
 
-/**
- * Golden cross check: EMA50 > EMA200 (bullish trend structure).
- * Critical fix for Technology sector — prevents buying dips in secular downtrends.
- * AAPL went from 16.7% → expected ~55%+ win rate after applying this gate.
- */
-/**
- * Piecewise RSI score (Wilder 1978; Phase 15 Q-025 / F1.11).
- * RSI &lt; 30 → +1.0; 30–70 linear; &gt; 70 → −1.0 (mean-reversion framing).
- */
-export function piecewiseRsiScore(rsi14: number): number {
-  if (!Number.isFinite(rsi14)) return 0
-  if (rsi14 < 30) return 1.0
-  if (rsi14 > 70) return -1.0
-  if (rsi14 <= 50) return (50 - rsi14) / 20
-  return -(rsi14 - 50) / 20
-}
+export {
+  piecewiseRsiScore,
+  isGoldenCross,
+  hasPositiveMomentum,
+  detectBullishDivergence,
+  detectVolumeClimax,
+  isMACompression,
+  sma200DeviationPct,
+  sma200Slope,
+  priceWasNearSmaRecently,
+} from './signalHelpers'
 
-export function isGoldenCross(closes: number[]): boolean {
-  if (closes.length < 200) return false
-  const ema50Arr = emaFull(closes, 50)
-  const ema200Arr = emaFull(closes, 200)
-  const last50 = ema50Arr[ema50Arr.length - 1]
-  const last200 = ema200Arr[ema200Arr.length - 1]
-  return Number.isFinite(last50) && Number.isFinite(last200) && last50 > last200
-}
+export type {
+  DipSignal,
+  RegimeSignal,
+  BacktestConfig,
+  ConfirmSignal,
+  CombinedSignal,
+  WeightedConfirm,
+  EnhancedCombinedSignal,
+  SectorGateConfig,
+} from './signalTypes'
 
-/**
- * Momentum filter: 3-month (63-day) return must be positive.
- * Filters out stocks in secular downtrends (NVDA during corrections).
- */
-export function hasPositiveMomentum(closes: number[], period = 63): boolean {
-  if (closes.length < period + 1) return false
-  const start = closes[closes.length - period - 1]
-  const end = closes[closes.length - 1]
-  return start > 0 && end > start
-}
+export { DEFAULT_CONFIG } from './signalTypes'
 
-/**
- * RSI Divergence detection (bullish).
- * Bullish divergence: price makes a lower low but RSI makes a higher low.
- * A strong reversal signal that adds +0.3 to weighted score when detected.
- *
- * Lookback: last 20 bars for local lows.
- */
-export function detectBullishDivergence(closes: number[], rsiValues: number[], lookback = 20): boolean {
-  if (closes.length < lookback + 2 || rsiValues.length < lookback + 2) return false
-  const priceWindow = closes.slice(-lookback)
-  const rsiWindow = rsiValues.slice(-lookback)  // keep alignment with priceWindow
-  if (rsiWindow.filter(r => Number.isFinite(r)).length < 5) return false
+export { regimeSignal } from './regimeSignal'
 
-  // Find two recent troughs in price
-  const priceTroughs: number[] = []
-  for (let i = 1; i < priceWindow.length - 1; i++) {
-    if (priceWindow[i] < priceWindow[i - 1] && priceWindow[i] < priceWindow[i + 1]) {
-      priceTroughs.push(i)
-    }
-  }
-  if (priceTroughs.length < 2) return false
-  const t1 = priceTroughs[priceTroughs.length - 2]
-  const t2 = priceTroughs[priceTroughs.length - 1]
-
-  // Price makes lower low at t2
-  if (priceWindow[t2] >= priceWindow[t1]) return false
-
-  // RSI makes higher low at t2 (divergence) — check finiteness at comparison time
-  const rsi1 = rsiWindow[t1]
-  const rsi2 = rsiWindow[t2]
-  if (!Number.isFinite(rsi1) || !Number.isFinite(rsi2)) return false
-
-  // Phase 13 S2 fix (F1.12): the previous `rsi2 < 50` gate excluded valid
-  // bullish divergences in the 50-70 RSI range. Murphy (1999) op cit. p245
-  // defines bullish divergence as price-lower-low-with-rsi-higher-low —
-  // independent of absolute RSI level. We retain `rsi2 < 65` as a soft cap
-  // to avoid flagging divergences inside near-overbought ranges where the
-  // signal is unreliable; this is more permissive than the old 50 cutoff
-  // but still excludes the >70 overbought zone where mean-reversion dominates.
-  return rsi2 > rsi1 && rsi2 < 65
-}
-
-/**
- * Volume climax detection: selling climax = large bearish candle with volume spike.
- * Bullish reversal signal — panic sellers exhausted.
- */
-export function detectVolumeClimax(
-  bars: OhlcvBar[],
-  lookback = 20,
-): boolean {
-  if (bars.length < lookback + 2) return false
-  const window = bars.slice(-lookback)
-  const avgVol = window.slice(0, -1).reduce((s, b) => s + b.volume, 0) / (window.length - 1)
-  const last = window[window.length - 1]
-  const prev = window[window.length - 2]
-
-  // Volume spike > 2× average
-  const volSpike = last.volume > avgVol * 2.0
-  // Large bearish candle (close < open, range > 1.5% of price)
-  const bearishCandle = last.close < last.open
-  const bodyPct = Math.abs(last.close - last.open) / last.open
-  const largePanic = bodyPct > 0.015
-
-  // Price reversal: today closed above the midpoint of yesterday's range
-  const prevMid = (prev.high + prev.low) / 2
-  const recovery = last.close > prevMid
-
-  return volSpike && bearishCandle && largePanic && recovery
-}
-
-/**
- * Moving Average Ribbon compression check.
- * All four EMAs (20/50/100/200) converging within 5% suggests coiled spring.
- * Low-risk entry zone when price is compressed and breakout is imminent.
- */
-export function isMACompression(closes: number[], tolerancePct = 0.05): boolean {
-  if (closes.length < 200) return false
-  const e20 = emaFull(closes, 20)
-  const e50 = emaFull(closes, 50)
-  const e100 = emaFull(closes, 100)
-  const e200 = emaFull(closes, 200)
-  const last20 = e20[e20.length - 1]
-  const last50 = e50[e50.length - 1]
-  const last100 = e100[e100.length - 1]
-  const last200 = e200[e200.length - 1]
-  if (!Number.isFinite(last20) || !Number.isFinite(last50) || !Number.isFinite(last100) || !Number.isFinite(last200)) return false
-  const maxEMA = Math.max(last20, last50, last100, last200)
-  const minEMA = Math.min(last20, last50, last100, last200)
-  return maxEMA > 0 && (maxEMA - minEMA) / maxEMA < tolerancePct
-}
-
-export function sma200DeviationPct(price: number, sma200: number): number | null {
-  // Reject non-finite OR non-positive price/SMA — negative or zero prices
-  // produce mathematically-finite-but-meaningless deviations (e.g. a price
-  // of -50 vs SMA 100 yields dev = -150%, which would fall into the
-  // CRASH_ZONE branch downstream and emit a 78%-confidence BUY/SELL).
-  if (!Number.isFinite(sma200) || sma200 <= 0) return null
-  if (!Number.isFinite(price) || price <= 0) return null
-  return ((price - sma200) / sma200) * 100
-}
-
-/**
- * 200SMA slope — percent change of the 200SMA over 20 bars.
- * Positive = 200SMA is rising (long-term uptrend).
- * Require slope > 0.005 (0.5%) to filter out noise in flat markets.
- */
-export function sma200Slope(closes: number[]): number | null {
-  if (closes.length < 221) return null
-  const now = sma(closes, 200)
-  const prev = sma(closes.slice(0, closes.length - 20), 200)
-  if (now == null || prev == null || prev === 0) return null
-  return (now - prev) / prev
-}
-
-/**
- * Price was within +5% of 200SMA in the last 20 bars — confirms it's not a "forever falling" stock.
- */
-export function priceWasNearSmaRecently(closes: number[], thresholdPct = 5): boolean {
-  if (closes.length < 220) return false
-  const start = closes.length - 20
-  for (let i = start; i < closes.length; i++) {
-    const slice = closes.slice(0, i + 1)
-    const smaAtBar = sma(slice, 200)
-    if (smaAtBar == null) continue
-    const px = closes[i]
-    const dev = ((px - smaAtBar) / smaAtBar) * 100
-    if (dev >= -thresholdPct) return true
-  }
-  return false
-}
-
-// ─── Regime classifier ─────────────────────────────────────────────────────────
-
-export type DipSignal =
-  | 'STRONG_DIP' | 'WATCH_DIP' | 'FALLING_KNIFE'
-  | 'OVERBOUGHT' | 'IN_TREND' | 'INSUFFICIENT_DATA'
-
-export interface RegimeSignal {
-  zone: string
-  dipSignal: DipSignal
-  deviationPct: number | null
-  slopePct: number | null
-  slopePositive: boolean | null
-  action: 'BUY' | 'HOLD' | 'SELL'
-  confidence: number
-  label: string
-}
-
-/**
- * Classify price regime based on 200SMA deviation and slope.
- *
- * FIX A: Require slope > 0.005 (0.5% over 20 bars) to filter flat/noise markets.
- * FIX D: Require price was within +5% of 200SMA in last 20 bars for dip BUY zones.
- *
- * Deviation zones (price vs 200SMA):
- *   >+20%  EXTREME_BULL  → HOLD (overbought, don't chase)
- *   >+10%  EXTENDED_BULL → HOLD
- *   >= 0%  HEALTHY_BULL  → HOLD (slightly above SMA = normal)
- *   -10 to 0%  FIRST_DIP  → BUY if slope positive AND price was recently near SMA (else HOLD/WATCH_DIP)
- *   -20 to -10% DEEP_DIP  → BUY if slope positive AND near SMA (else SELL — falling knife)
- *   -30 to -20% BEAR_ALERT → BUY only with positive slope + near SMA (else SELL)
- *   <-30%  CRASH_ZONE    → BUY only if slope positive + near SMA (else SELL — never buy crash in downtrend)
- */
-export function regimeSignal(price: number, closes: number[], rsi14?: number): RegimeSignal {
-  if (closes.length < 200) {
-    return {
-      zone: 'INSUFFICIENT_DATA', dipSignal: 'INSUFFICIENT_DATA',
-      deviationPct: null, slopePct: null, slopePositive: null,
-      action: 'HOLD', confidence: 0, label: 'Insufficient Data',
-    }
-  }
-
-  const dev = sma200DeviationPct(price, sma(closes, 200)!)
-  const slope = sma200Slope(closes)
-  // FIX A: Require meaningful slope > 0.005 (0.5%)
-  const slopePos = slope != null ? slope > 0.005 : null
-  // FIX D: Was price recently within +5% of SMA?
-  const nearSma = priceWasNearSmaRecently(closes, 5)
-
-  // Fail-closed when deviation can't be computed (non-finite price, broken
-  // SMA). Previously the function fell through every `if (dev != null ...)`
-  // branch and silently classified the position as CRASH_ZONE BUY or SELL
-  // with 78–95% confidence — emitting real trading actions from bad data.
-  if (dev == null) {
-    return {
-      zone: 'INSUFFICIENT_DATA', dipSignal: 'INSUFFICIENT_DATA',
-      deviationPct: null, slopePct: slope, slopePositive: slopePos,
-      action: 'HOLD', confidence: 0, label: 'Insufficient Data',
-    }
-  }
-
-  // ── Deviation-based zones ──────────────────────────────────────────────
-  // EXTREME_BULL: >+20% — extremely extended, no buy
-  if (dev != null && dev > 20) {
-    return { zone: 'EXTREME_BULL', dipSignal: 'OVERBOUGHT', deviationPct: dev, slopePct: slope, slopePositive: slopePos, action: 'HOLD', confidence: 40, label: 'EXTREME_BULL' }
-  }
-  // EXTENDED_BULL: >+10% — extended, hold
-  if (dev != null && dev > 10) {
-    return { zone: 'EXTENDED_BULL', dipSignal: 'OVERBOUGHT', deviationPct: dev, slopePct: slope, slopePositive: slopePos, action: 'HOLD', confidence: 45, label: 'EXTENDED_BULL' }
-  }
-  // HEALTHY_BULL: 0 to +10% — above SMA, in trend, no new entry
-  if (dev != null && dev >= 0) {
-    return { zone: 'HEALTHY_BULL', dipSignal: 'IN_TREND', deviationPct: dev, slopePct: slope, slopePositive: slopePos, action: 'HOLD', confidence: 55, label: 'HEALTHY_BULL' }
-  }
-
-  // ── Dip zones (price below 200SMA) ────────────────────────────────────
-  // FIX D: Only buy dips if price was recently near SMA (not a "forever falling" stock)
-  const canBuyDip = slopePos === true && nearSma
-
-  // FIRST_DIP: -10% to -5% — mild pullback, primary buy zone
-  if (dev != null && dev >= -10) {
-    if (canBuyDip) {
-      const conf = rsi14 != null && rsi14 < 35 ? 90 : 75
-      return { zone: 'FIRST_DIP', dipSignal: 'STRONG_DIP', deviationPct: dev, slopePct: slope, slopePositive: slopePos, action: 'BUY', confidence: conf, label: 'FIRST_DIP' }
-    }
-    // Not near SMA recently — hold, don't chase
-    return { zone: 'FIRST_DIP', dipSignal: 'WATCH_DIP', deviationPct: dev, slopePct: slope, slopePositive: slopePos, action: 'HOLD', confidence: 35, label: 'FIRST_DIP' }
-  }
-
-  // DEEP_DIP: -20% to -10% — meaningful correction, high-conviction buy zone
-  if (dev != null && dev >= -20) {
-    if (canBuyDip) {
-      return { zone: 'DEEP_DIP', dipSignal: 'STRONG_DIP', deviationPct: dev, slopePct: slope, slopePositive: slopePos, action: 'BUY', confidence: 88, label: 'DEEP_DIP' }
-    }
-    // Falling/near-flat SMA or price already far below SMA — falling knife
-    return { zone: 'DEEP_DIP', dipSignal: 'FALLING_KNIFE', deviationPct: dev, slopePct: slope, slopePositive: slopePos, action: 'SELL', confidence: 82, label: 'DEEP_DIP' }
-  }
-
-  // BEAR_ALERT: -30% to -20% — severe drawdown, only buy with strongest confirm
-  if (dev != null && dev >= -30) {
-    if (canBuyDip) {
-      return { zone: 'BEAR_ALERT', dipSignal: 'STRONG_DIP', deviationPct: dev, slopePct: slope, slopePositive: slopePos, action: 'BUY', confidence: 80, label: 'BEAR_ALERT' }
-    }
-    return { zone: 'BEAR_ALERT', dipSignal: 'FALLING_KNIFE', deviationPct: dev, slopePct: slope, slopePositive: slopePos, action: 'SELL', confidence: 90, label: 'BEAR_ALERT' }
-  }
-
-  // CRASH_ZONE: <-30% — crash territory
-  if (canBuyDip) {
-    return { zone: 'CRASH_ZONE', dipSignal: 'STRONG_DIP', deviationPct: dev, slopePct: slope, slopePositive: slopePos, action: 'BUY', confidence: 78, label: 'CRASH_ZONE' }
-  }
-  return { zone: 'CRASH_ZONE', dipSignal: 'FALLING_KNIFE', deviationPct: dev, slopePct: slope, slopePositive: slopePos, action: 'SELL', confidence: 95, label: 'CRASH_ZONE' }
-}
-
-// ─── Combined signal ───────────────────────────────────────────────────────────
-
-export interface BacktestConfig {
-  initialCapital: number
-  stopLossPct: number
-  confidenceThreshold: number
-  maxDrawdownCap: number
-  halfKelly: boolean
-}
-
-export const DEFAULT_CONFIG: BacktestConfig = {
-  initialCapital: 100_000,
-  // stopLossPct is now ATR-adaptive in the engine (1.5x ATR, capped 5-15%).
-  // This config value serves as the floor for the ATR formula.
-  stopLossPct: 0.10,
-  confidenceThreshold: 50,  // Lowered from 55 — weighted scoring is inherently more selective
-  maxDrawdownCap: 0.25,
-  halfKelly: true,
-}
-
-export interface ConfirmSignal {
-  name: string
-  value: number | null
-  bullish: boolean
-}
-
-export interface CombinedSignal {
-  ticker: string
-  date: string
-  price: number
-  regime: RegimeSignal
-  confirms: ConfirmSignal[]
-  action: 'BUY' | 'HOLD' | 'SELL'
-  confidence: number
-  KellyFraction: number
-  reason: string
-}
-
-// Phase 13 S2 fix (F1.10): the legacy `combinedSignal` was a 4-confirmation
-// bullishCount-based version superseded by `enhancedCombinedSignal` below
-// (7-factor weighted confluence). It was only ever consumed by its own
-// tests — no production caller — so it has been removed to honour the
-// "single canonical signal path" invariant.  The `CombinedSignal` interface
-// is retained because `EnhancedCombinedSignal` extends it.
-//
-// Migration: callers that previously used combinedSignal should switch to
-// enhancedCombinedSignal with sectorGates=undefined; behaviour is broadly
-// equivalent for the default config but uses weighted-score thresholds
-// instead of a binary bullishCount gate.
-
-function deviationLabel(dev: number | null): string {
-  if (dev === null) return '?'
-  if (dev >= 0) return `+${dev.toFixed(1)}%`
-  return `${dev.toFixed(1)}%`
-}
+// ─── Private imports for enhancedCombinedSignal ───────────────────────────────
+import {
+  piecewiseRsiScore,
+  isGoldenCross,
+  hasPositiveMomentum,
+  detectBullishDivergence,
+  detectVolumeClimax,
+  isMACompression,
+} from './signalHelpers'
+import type {
+  BacktestConfig,
+  ConfirmSignal,
+  WeightedConfirm,
+  EnhancedCombinedSignal,
+  SectorGateConfig,
+} from './signalTypes'
+import { DEFAULT_CONFIG } from './signalTypes'
+import { regimeSignal, clamp, WEIGHT_PROFILES, volumeZoneScore, volRegimeScore } from './regimeSignal'
 
 // ─── Enhanced weighted confluence signal ──────────────────────────────────────
-
-export interface WeightedConfirm extends ConfirmSignal {
-  weight: number         // 0.0-1.0
-  score: number          // -1 to +1
-  weightedScore: number  // weight * score
-}
-
-export interface EnhancedCombinedSignal extends CombinedSignal {
-  weightedConfirms: WeightedConfirm[]
-  volRegime: VolRegimeState
-  multiTfScore: number
-  volumeZone: PriceZone | null
-  totalWeightedScore: number
-}
-
-/** Clamp a value between min and max. */
-function clamp(val: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, val))
-}
-
-/**
- * Default weight profiles. Weights must sum to 1.0.
- * Adjusted based on regime: trend-following boosts MACD/Multi-TF,
- * mean-reversion boosts RSI/BB%B.
- */
-const WEIGHT_PROFILES: Record<string, { rsi: number; macd: number; atr: number; bb: number; vpoc: number; mtf: number; volReg: number }> = {
-  default:         { rsi: 0.20, macd: 0.15, atr: 0.10, bb: 0.15, vpoc: 0.10, mtf: 0.20, volReg: 0.10 },
-  trend_following: { rsi: 0.15, macd: 0.20, atr: 0.10, bb: 0.10, vpoc: 0.10, mtf: 0.25, volReg: 0.10 },
-  mean_reversion:  { rsi: 0.25, macd: 0.10, atr: 0.10, bb: 0.20, vpoc: 0.10, mtf: 0.15, volReg: 0.10 },
-  neutral:         { rsi: 0.20, macd: 0.15, atr: 0.10, bb: 0.15, vpoc: 0.10, mtf: 0.20, volReg: 0.10 },
-}
-
-/**
- * Volume-profile zone score.
- *
- * Phase 13 S2 documentation (F1.14): the asymmetry below_va=+0.8 vs
- * above_va=-0.5 reflects a MEAN-REVERSION prior — the default signal mode
- * for this codebase. Steidlmayer's Market Profile (1989) treats below-VA
- * as accumulation territory (institutional buyers absorbing supply) and
- * above-VA as distribution territory; the asymmetric weights bias the
- * confluence score toward dip-buying, which historically produces the
- * dip-buy bias in the confluence score (see SIGNAL_SSOT.md for honest WR metrics).
- *
- * For TREND-FOLLOWING regimes (high ADX), an above-VA breakout is
- * bullish, not bearish. The current implementation does not flip the
- * sign for trend regimes; this is a known limitation queued for a
- * future pass that would make the score regime-dependent (passing
- * `volRegime.strategyHint` into this helper).
- *
- * Reference: Steidlmayer, J. P. (1989). Steidlmayer on Markets. Wiley.
- */
-function volumeZoneScore(zone: PriceZone | null): number {
-  if (zone === null) return 0
-  switch (zone) {
-    case 'below_va': return 0.8   // below value area = potential support = bullish (mean-rev prior)
-    case 'at_poc':   return 0.3   // at POC = fair value
-    case 'in_va':    return 0.0   // inside value area = neutral
-    case 'above_va': return -0.5  // above value area = extended (mean-rev prior)
-  }
-}
-
-/** Volatility regime to score mapping. */
-function volRegimeScore(regime: VolRegimeState): number {
-  switch (regime.volatilityRegime) {
-    case 'low':    return 0.5   // compression = potential breakout
-    case 'normal': return 0.2
-    case 'high':   return -0.3
-    case 'crisis': return -0.8
-  }
-}
-
-// ─── Sector gate config ──────────────────────────────────────────────���────────
-
-/**
- * Optional sector-specific gates applied on top of the weighted signal.
- * These implement the Loop 1 fixes for problem sectors.
- */
-export interface SectorGateConfig {
-  /** Require EMA50 > EMA200 (golden cross) for BUY. Default: false. */
-  goldenCrossGate?: boolean
-  /** Require 3-month return > 0 for BUY. Default: false. */
-  requirePositiveMomentum?: boolean
-  /** Override the BUY weighted score threshold. */
-  buyWScoreThreshold?: number
-  /** Override the SELL weighted score threshold. */
-  sellWScoreThreshold?: number
-  /** Override the 200SMA slope threshold for regime signal. */
-  slopeThreshold?: number
-  /** If true, apply rate-sensitivity penalty for REITs/Utilities (TLT proxy). */
-  tlrGate?: boolean
-  /** If true, apply yield-curve penalty for Financials (rate-cycle proxy). */
-  yieldCurveGate?: boolean
-}
 
 /**
  * Enhanced signal using weighted multi-factor confluence.

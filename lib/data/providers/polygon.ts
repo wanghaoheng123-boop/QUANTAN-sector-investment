@@ -10,6 +10,13 @@ import type { DataProvider, DailyBar, QuoteSnapshot } from './types'
 const POLYGON_BASE = 'https://api.polygon.io'
 const RATE_LIMIT_MS = 13_000  // ~5 req/min with 1 req per 13s
 
+/** Timeout for all Polygon fetch calls — prevents hung serverless workers. */
+const FETCH_TIMEOUT_MS = 8_000
+
+/** Plausible year range for Polygon timestamps (used in bounds sanity checks). */
+const TS_YEAR_MIN = 2000
+const TS_YEAR_MAX = 2100
+
 let lastCallMs = 0
 
 async function rateLimitedFetch(url: string, apiKey: string): Promise<Response> {
@@ -17,7 +24,9 @@ async function rateLimitedFetch(url: string, apiKey: string): Promise<Response> 
   const wait = RATE_LIMIT_MS - (now - lastCallMs)
   if (wait > 0) await new Promise((r) => setTimeout(r, wait))
   lastCallMs = Date.now()
-  return fetch(`${url}${url.includes('?') ? '&' : '?'}apiKey=${apiKey}`)
+  return fetch(`${url}${url.includes('?') ? '&' : '?'}apiKey=${apiKey}`, {
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+  })
 }
 
 export class PolygonProvider implements DataProvider {
@@ -61,12 +70,27 @@ export class PolygonProvider implements DataProvider {
       if (!res.ok) return null
       const data = await res.json() as { results?: { p: number; t: number } }
       if (!data.results) return null
+
+      // /v2/last/trade returns `t` in nanoseconds (ns→ms: divide by 1e6).
+      // /v2/aggs results use `t` in milliseconds directly (no conversion needed).
+      // Guard: if the resulting year is implausible, fall back to now() so a
+      // future endpoint format change can't silently produce year-2970 dates.
+      const tsMs = data.results.t / 1_000_000
+      const tsDate = new Date(tsMs)
+      const tsYear = tsDate.getUTCFullYear()
+      const updatedAt = (tsYear >= TS_YEAR_MIN && tsYear <= TS_YEAR_MAX)
+        ? tsDate.toISOString()
+        : (() => {
+            console.warn(`[polygon] fetchQuote(${ticker}): implausible timestamp year ${tsYear} (raw t=${data.results!.t}), falling back to now()`)
+            return new Date().toISOString()
+          })()
+
       return {
         ticker,
         price: data.results.p,
         change: 0,
         changePct: 0,
-        updatedAt: new Date(data.results.t / 1_000_000).toISOString(),
+        updatedAt,
       }
     } catch {
       return null
