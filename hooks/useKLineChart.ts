@@ -38,7 +38,7 @@ import {
   type OhlcBar,
 } from '@/lib/quant/indicators'
 import { chartTimeKey, sortChartCandles } from '@/lib/sortChartCandles'
-import type { KLineIndicatorFlags } from '@/components/KLineChart'
+import type { KLineIndicatorFlags } from '@/components/klineTypes'
 
 // ─── re-exported types used internally ───────────────────────────────────────
 
