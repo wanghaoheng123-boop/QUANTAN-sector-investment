@@ -54,9 +54,12 @@ class FactorMiningState(TypedDict):
     status: str  # 'running', 'completed', 'failed'
 
 
+# F-PY-01: Pow (`**`) is intentionally excluded. Formulas are LLM-generated
+# (semi-untrusted) and `**` on scalar ints (e.g. `9**9**9**9`) blows up CPU/memory
+# with arbitrary-precision integers — a cheap DoS. No factor formula uses `**`.
 _SAFE_BINOPS = {
     ast.Add: _op.add, ast.Sub: _op.sub, ast.Mult: _op.mul,
-    ast.Div: _op.truediv, ast.Pow: _op.pow, ast.Mod: _op.mod,
+    ast.Div: _op.truediv, ast.Mod: _op.mod,
     ast.FloorDiv: _op.floordiv,
 }
 _SAFE_UNARYOPS = {ast.UAdd: _op.pos, ast.USub: _op.neg}
@@ -67,7 +70,8 @@ def _safe_eval_ast(expr: str, namespace: dict) -> Any:
     Evaluate an arithmetic factor formula WITHOUT Python's ``eval``.
 
     Permits only numeric literals, names bound in ``namespace``, calls to callables
-    in ``namespace``, and the operators + - * / // ** % (unary +/-). Attribute access,
+    in ``namespace``, and the operators + - * / // % (unary +/-); ``**`` (Pow) is
+    excluded as a DoS guard (F-PY-01). Attribute access,
     subscripting, comprehensions, lambdas, and all other node types are rejected — so
     the classic ``eval`` sandbox escapes (``().__class__.__bases__[0].__subclasses__()``)
     are STRUCTURALLY impossible rather than relying on an (escapable) empty __builtins__.

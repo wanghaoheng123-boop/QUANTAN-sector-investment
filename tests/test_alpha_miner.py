@@ -21,6 +21,7 @@ from alpha_miner import (
     evaluate_factor,
     search_factors,
     _build_expression_tree,
+    safe_eval_formula,
     FORMULA_CANDIDATES,
 )
 
@@ -155,6 +156,25 @@ class TestSearchFactors:
         factors = search_factors(df, n_top=10)
         for i in range(len(factors) - 1):
             assert abs(factors[i].rank_ic) >= abs(factors[i + 1].rank_ic)
+
+
+class TestPowGuard:
+    """F-PY-01: `**` is rejected so LLM-generated formulas can't DoS via bignum."""
+
+    def test_pow_operator_is_rejected(self):
+        with pytest.raises(ValueError):
+            safe_eval_formula("close ** 2", {"close": np.arange(5, dtype=float)})
+
+    def test_chained_pow_bignum_is_rejected_not_evaluated(self):
+        # The classic DoS: 9**9**9**9 would allocate an astronomically large int.
+        # It must be rejected at parse-walk time, never evaluated.
+        with pytest.raises(ValueError):
+            safe_eval_formula("9 ** 9 ** 9 ** 9", {})
+
+    def test_allowed_operators_still_work(self):
+        ns = {"close": np.array([2.0, 4.0, 6.0])}
+        out = safe_eval_formula("close / 2 + 1", ns)
+        assert np.allclose(out, [2.0, 3.0, 4.0])
 
 
 class TestFormulaCandidates:
