@@ -35,11 +35,11 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import concurrent.futures
+import contextlib
 import os
-import threading
 import traceback
 import uuid
-from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import datetime, date
 from typing import Any, Optional
@@ -56,23 +56,9 @@ from tradingagents.default_config import DEFAULT_CONFIG
 # module so its restore logic is unit-testable without the tradingagents package.
 from trading_agents_env_guard import ApiKeyEnvGuard as _ApiKeyEnvGuard
 
-
-# ─────────────────────────────────────────────
-# Thread-local context for per-request API keys
-# ─────────────────────────────────────────────
-
-_thread_ctx: ContextVar[dict] = ContextVar("thread_ctx", default={})
-
-
-def set_request_api_key(key: str | None) -> None:
-    """Set the API key in the current async task's context."""
-    ctx = _thread_ctx.get()
-    ctx["api_key"] = key
-
-
-def get_request_api_key() -> str | None:
-    """Get the API key for the current request (if any)."""
-    return _thread_ctx.get().get("api_key")
+# Dependency-free runtime helpers (bounded cache + per-provider locks), extracted
+# so their concurrency/eviction logic is unit-testable without tradingagents.
+from trading_agents_runtime import BoundedResultCache, ProviderLockRegistry
 
 
 # ─────────────────────────────────────────────
@@ -118,8 +104,10 @@ class AnalysisResult(BaseModel):
 # Result cache (thread-safe, never stores api_key)
 # ─────────────────────────────────────────────
 
-_results: dict[str, AnalysisResult] = {}
-_results_lock = threading.Lock()
+# Bounded so the sidecar can't grow memory without limit (F-PY-16). Per-provider
+# locks serialize concurrent same-provider key injection (F-PY-13).
+_results: BoundedResultCache[AnalysisResult] = BoundedResultCache()
+_provider_locks = ProviderLockRegistry()
 
 
 def grade_to_confidence(decision: str) -> str:
@@ -208,15 +196,27 @@ def _run_analysis(
     # Inject the user's own API key into this thread's environment
     # only for the duration of this analysis call. It never touches
     # disk, logs, or the result cache.
-    with _ApiKeyEnvGuard(provider, req.api_key):
+    # Serialize same-provider requests that inject a per-request key: the guard
+    # mutates the process-global os.environ, so concurrent same-provider calls
+    # would otherwise race on the key (F-PY-13). Keyless / server-default-key
+    # requests don't mutate env and need no lock.
+    provider_lock = _provider_locks.get(provider) if req.api_key else contextlib.nullcontext()
+    with provider_lock, _ApiKeyEnvGuard(provider, req.api_key):
         start = datetime.utcnow()
         try:
             ta = TradingAgentsGraph(debug=False, config=config)
-            # Wrap LLM call with 120s timeout to prevent indefinite hangs
-            import concurrent.futures
-            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            # Bound the LLM call with a 120s timeout. Don't use the executor as a
+            # context manager — its __exit__ joins the worker (wait=True), which
+            # would block forever on a hung propagate() and defeat the timeout.
+            # Shut down without waiting and cancel anything still queued (F-PY-15);
+            # a running thread can't be force-killed in CPython, but the request
+            # no longer blocks on it.
+            executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+            try:
                 future = executor.submit(ta.propagate, ticker, trade_date_str)
                 _, decision = future.result(timeout=120)
+            finally:
+                executor.shutdown(wait=False, cancel_futures=True)
             elapsed = (datetime.utcnow() - start).total_seconds()
             result = build_result(
                 ticker=ticker, trade_date_str=trade_date_str,
@@ -235,9 +235,7 @@ def _run_analysis(
             )
 
     # Cache result (no api_key in result object — safe)
-    with _results_lock:
-        _results[job_id] = result
-        _results[f"{ticker}_latest"] = result
+    _results.put(job_id, ticker, result)
 
     return result
 
@@ -302,30 +300,24 @@ async def analyze(ticker: str, req: AnalyzeRequest = AnalyzeRequest()):
 
     job_id = str(uuid.uuid4())[:8]
 
-    # Set api_key in the async context so run_in_executor thread inherits it
-    set_request_api_key(req.api_key)
-
-    try:
-        loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(
-            None,
-            _run_analysis,
-            ticker,
-            trade_date_str,
-            job_id,
-            req,
-        )
-        return result
-    finally:
-        set_request_api_key(None)
+    # _run_analysis receives `req` directly, so the user's key flows through the
+    # call argument, not process- or async-global state.
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(
+        None,
+        _run_analysis,
+        ticker,
+        trade_date_str,
+        job_id,
+        req,
+    )
 
 
 @app.get("/analyze/{ticker}/latest", response_model=Optional[AnalysisResult])
 async def latest_analysis(ticker: str):
     """Return the most recent analysis result for this ticker (in-memory cache)."""
     ticker = ticker.strip().upper()
-    with _results_lock:
-        result = _results.get(f"{ticker}_latest", None)
+    result = _results.latest(ticker)
     if not result:
         raise HTTPException(404, f"No cached analysis found for {ticker}")
     return result
