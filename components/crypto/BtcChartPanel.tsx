@@ -36,7 +36,6 @@ export interface BtcChartPanelProps {
   wsConnected: boolean
   activeRange: string
   indicatorConfig: Record<string, boolean>
-  onIndicatorsChange: (vis: Record<ChartVisKey, boolean>) => void
   activeIndicator: string
   onIndicatorPresetChange: (preset: string) => void
   vis: Record<ChartVisKey, boolean>
@@ -51,7 +50,6 @@ function BtcChartPanel({
   wsConnected,
   activeRange,
   indicatorConfig,
-  onIndicatorsChange,
   activeIndicator,
   onIndicatorPresetChange,
   vis,
@@ -101,7 +99,6 @@ function BtcChartPanel({
                 hideTimeframeSelector
                 showRSI
                 indicators={indicatorConfig}
-                onIndicatorsChange={onIndicatorsChange}
               />
             </CryptoChartBoundary>
           ) : (

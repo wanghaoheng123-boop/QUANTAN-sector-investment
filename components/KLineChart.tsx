@@ -59,9 +59,6 @@ interface KLineChartProps {
   range?: string
   showRSI?: boolean
   indicators?: KLineIndicatorFlags
-  /** Fires whenever a user toggles an indicator via the chart overlay buttons.
-   *  Use this to sync the external indicator selection state (e.g. for a side panel). */
-  onIndicatorsChange?: (vis: Record<VisKey, boolean>) => void
   /** Callback when user selects a timeframe (only when built-in selector is shown) */
   onTimeframeChange?: (tf: Timeframe) => void
   /** When set, parent page controls range via its own toolbar — hide duplicate timeframe row */
@@ -81,6 +78,7 @@ const DEFAULT_INDICATORS: Required<KLineIndicatorFlags> = {
   vwap: false,
   bollingerBands: false,
   fibonacci: false,
+  volSma: true,
 }
 
 import { CHART_EMA_COLORS } from '@/lib/chartEma'
@@ -129,7 +127,7 @@ function buildVisFromProps(ind: KLineIndicatorFlags): Record<VisKey, boolean> {
   out.vwap = ind.vwap === true
   out.bollingerBands = ind.bollingerBands === true
   out.fibonacci = ind.fibonacci === true
-  out.volSma = true // always visible by default; user can toggle via legend
+  out.volSma = ind.volSma !== false // default ON; reflects the real series visibility
   return out
 }
 
@@ -161,7 +159,6 @@ export default function KLineChart({
   ticker,
   showRSI = true,
   indicators: indicatorsIn,
-  onIndicatorsChange,
   onTimeframeChange,
   hideTimeframeSelector,
 }: KLineChartProps) {
@@ -218,6 +215,7 @@ export default function KLineChart({
     bbUpperRef,
     bbMidRef,
     bbLowerRef,
+    volSmaRef,
   } = useKLineChart({
     containerRef,
     rsiRef,
@@ -243,7 +241,8 @@ export default function KLineChart({
     bbUpperRef.current?.applyOptions({ visible: bb })
     bbMidRef.current?.applyOptions({ visible: bb })
     bbLowerRef.current?.applyOptions({ visible: bb })
-  }, [indicatorsProp, emaLineRefs, vwapRef, bbUpperRef, bbMidRef, bbLowerRef])
+    volSmaRef.current?.applyOptions({ visible: indicatorsProp.volSma !== false })
+  }, [indicatorsProp, emaLineRefs, vwapRef, bbUpperRef, bbMidRef, bbLowerRef, volSmaRef])
 
   const INDICATOR_DEFS = useMemo(() => {
     const emaDefs = CHART_EMA_PERIODS.map((p) => ({
@@ -259,27 +258,6 @@ export default function KLineChart({
       { key: 'volSma' as const, label: 'Vol SMA(20)', color: 'bg-indigo-400/60' },
     ]
   }, [])
-
-  const toggleIndicator = useCallback((key: VisKey) => {
-    let next = {} as Record<VisKey, boolean>
-    setVis((prev) => {
-      next = { ...prev, [key]: !prev[key] }
-      const emaMatch = /^ema(\d+)$/.exec(key)
-      if (emaMatch) {
-        const p = Number(emaMatch[1]) as ChartEmaPeriod
-        emaLineRefs.current[p]?.applyOptions({ visible: next[key] })
-      } else if (key === 'vwap' && vwapRef.current) {
-        vwapRef.current.applyOptions({ visible: next.vwap })
-      } else if (key === 'bollingerBands') {
-        bbUpperRef.current?.applyOptions({ visible: next.bollingerBands })
-        bbMidRef.current?.applyOptions({ visible: next.bollingerBands })
-        bbLowerRef.current?.applyOptions({ visible: next.bollingerBands })
-      }
-      return next
-    })
-    // Sync to external state (e.g. side panel)
-    onIndicatorsChange?.(next)
-  }, [onIndicatorsChange, emaLineRefs, vwapRef, bbUpperRef, bbMidRef, bbLowerRef])
 
   const handleTimeframeChange = useCallback((tf: Timeframe) => {
     setSelectedTimeframe(tf)

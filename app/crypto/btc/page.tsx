@@ -102,7 +102,6 @@ export default function BtcPage() {
             wsConnected={wsConnected}
             activeRange={activeRange}
             indicatorConfig={indicatorConfig}
-            onIndicatorsChange={setVis}
             activeIndicator={activeIndicator}
             onIndicatorPresetChange={setActiveIndicator}
             vis={vis}
