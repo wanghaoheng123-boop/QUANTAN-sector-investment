@@ -36,6 +36,9 @@ interface BacktestData {
     totalTrades: number
     totalInstruments: number
     sectorSummary: Record<string, { totalReturn: number; annReturn: number; tickers: string[] }>
+    // F-1/F-1a: instruments dropped from the summary for insufficient history.
+    // Optional for backward-compat with cached responses from before the fix.
+    excludedTickers?: string[]
   }
 }
 
@@ -235,6 +238,23 @@ export default function BacktestPage() {
           ≈22&nbsp;bps (11&nbsp;bps/side). <span className="text-slate-400">Win&nbsp;Rate</span>{' '}
           is the share of closed trades that ended net-profitable after those costs.
         </p>
+
+        {/* F-1/F-1a: disclose any instrument dropped from the portfolio summary
+            because it has < 252 sessions of history (a stub from lib/backtest/core.ts).
+            Previously such an instrument silently zeroed the entire summary; now it is
+            excluded and named here. Renders only when something was excluded. */}
+        {portfolio.excludedTickers && portfolio.excludedTickers.length > 0 && (
+          <div
+            role="status"
+            className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-[11px] leading-relaxed text-amber-200"
+          >
+            <span className="font-medium text-amber-300">Excluded from portfolio summary:</span>{' '}
+            {portfolio.excludedTickers.join(', ')} — insufficient price history
+            (&lt;&nbsp;252&nbsp;sessions) to backtest. These instruments are omitted from
+            the portfolio return, Sharpe, and drawdown figures above; their raw candle
+            counts still appear in the Instruments tab.
+          </div>
+        )}
 
         {/* ── Tabs ── */}
         <div className="flex flex-wrap gap-1 bg-slate-900 rounded-lg p-1 border border-slate-800 w-fit">

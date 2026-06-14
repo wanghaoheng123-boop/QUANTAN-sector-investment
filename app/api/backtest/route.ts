@@ -53,6 +53,7 @@ async function runBacktest(filterTickers?: string[]): Promise<{
     sectorSummary: Record<string, { totalReturn: number; annReturn: number; tickers: string[] }>
     initialCapital: number
     finalCapital: number
+    excludedTickers: string[]
   }
 }> {
   const instruments: { ticker: string; sector: string; candles: number }[] = []
@@ -88,11 +89,9 @@ async function runBacktest(filterTickers?: string[]): Promise<{
 
   const portfolio = aggregatePortfolio(results, 100_000)
 
-  // Reshape to what the frontend expects
-  const bnhAvg = results.length > 0
-    ? results.reduce((s, r) => s + r.bnhReturn, 0) / results.length
-    : 0
-
+  // Reshape to what the frontend expects. bnhAvg now comes from the aggregator so
+  // it stays consistent with `alpha` (both averaged over the same combinable set,
+  // excluding < 252-bar stubs) instead of being recomputed over all results.
   return {
     runId: `run_${Date.now()}`,
     computedAt: new Date().toISOString(),
@@ -102,7 +101,7 @@ async function runBacktest(filterTickers?: string[]): Promise<{
     portfolio: {
       avgReturn: portfolio.totalReturn,
       avgAnnReturn: portfolio.annualizedReturn,
-      bnhAvg,
+      bnhAvg: portfolio.bnhAvg,
       alpha: portfolio.alpha,  // FIX C2: True portfolio alpha from combined equity
       sharpeRatio: portfolio.sharpeRatio,
       sortinoRatio: portfolio.sortinoRatio,
@@ -115,6 +114,7 @@ async function runBacktest(filterTickers?: string[]): Promise<{
       sectorSummary: portfolio.sectorReturns,
       initialCapital: portfolio.initialCapital,
       finalCapital: portfolio.finalCapital,
+      excludedTickers: portfolio.excludedTickers,
     },
   }
 }
