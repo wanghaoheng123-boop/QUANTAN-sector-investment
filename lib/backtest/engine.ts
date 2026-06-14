@@ -36,10 +36,46 @@ export interface PortfolioSummary {
   initialCapital: number
   finalCapital: number
   alpha: number  // Portfolio return minus B&H return
+  /** Equal-weight average buy-and-hold return across the combinable constituents. */
+  bnhAvg: number
+  /**
+   * Tickers dropped from the portfolio aggregation because their equity curve is
+   * too short to join the common-window combine (≤ MIN_COMBINE_LEN points) —
+   * typically recently-listed instruments that core.ts returned as a < 252-bar
+   * STUB. Surfaced so callers can disclose them instead of the summary silently
+   * collapsing to zeros. See aggregatePortfolio.
+   */
+  excludedTickers: string[]
 }
 
+/**
+ * Minimum equity-curve length for a result to participate in the portfolio
+ * combine. Matches the `minLen > MIN_COMBINE_LEN` window gate below. core.ts
+ * emits a length-1 stub curve for < 252-bar instruments, so this also filters
+ * those out — any real backtest (≥ 252 bars) yields ≫ 30 curve points.
+ */
+const MIN_COMBINE_LEN = 30
+
 export function aggregatePortfolio(results: BacktestResult[], initialCapital: number): PortfolioSummary {
-  const allTrades = results.flatMap(r => r.closedTrades)
+  // ── Exclude stub / short-history results before ANY aggregation ─────────────
+  // The route's inclusion gate is only `rows.length >= 100`
+  // (app/api/backtest/route.ts), but core.ts returns a length-1 STUB equityCurve
+  // (`[initialCapital]`) for any instrument with < 252 bars. Such a stub cannot
+  // join the end-aligned equity-curve combine — previously its length-1 curve
+  // dragged `minLen` down to 1, failed the `minLen > 30` gate, and silently
+  // collapsed the ENTIRE portfolio summary to zeros (totalReturn / finalCapital
+  // = 0, Sharpe/Sortino null, alpha = -bnhAvg). We drop those results here and
+  // DISCLOSE them via `excludedTickers`, so one recently-listed ticker can no
+  // longer zero the portfolio. This makes the route's >=100 gate and the
+  // engine's 252-bar stub threshold agree. For a full-history universe the
+  // partition is a no-op (every curve ≫ MIN_COMBINE_LEN) → published WR /
+  // benchmark numbers are unchanged.
+  const combinable = results.filter(r => r.equityCurve.length > MIN_COMBINE_LEN)
+  const excludedTickers = results
+    .filter(r => r.equityCurve.length <= MIN_COMBINE_LEN)
+    .map(r => r.ticker)
+
+  const allTrades = combinable.flatMap(r => r.closedTrades)
   const winningTrades = allTrades.filter(t => (t.pnlPct ?? 0) > 0)
   const winRate = allTrades.length > 0 ? winningTrades.length / allTrades.length : 0
   const grossProfit = winningTrades.reduce((s, t) => s + (t.pnlPct ?? 0), 0)
@@ -49,7 +85,7 @@ export function aggregatePortfolio(results: BacktestResult[], initialCapital: nu
 
   // Sector aggregation
   const sectorMap: Record<string, { sumRet: number; sumAnn: number; tickers: string[]; count: number }> = {}
-  for (const r of results) {
+  for (const r of combinable) {
     if (!sectorMap[r.sector]) sectorMap[r.sector] = { sumRet: 0, sumAnn: 0, tickers: [], count: 0 }
     sectorMap[r.sector].sumRet += r.totalReturn
     sectorMap[r.sector].sumAnn += r.annualizedReturn
@@ -75,14 +111,13 @@ export function aggregatePortfolio(results: BacktestResult[], initialCapital: nu
   // RESIDUAL (documented follow-up): exact per-date alignment across MIXED trading
   // calendars (crypto 7d/wk vs equity 5d/wk) needs dated equity curves — add an
   // `equityDates` field to BacktestResult. Annualization below uses the portfolio calendar.
-  const nonEmpty = results.filter(r => r.equityCurve.length > 0)
-  const minLen = nonEmpty.length > 0
-    ? Math.min(...nonEmpty.map(r => r.equityCurve.length))
+  const minLen = combinable.length > 0
+    ? Math.min(...combinable.map(r => r.equityCurve.length))
     : 0
 
   // Portfolio annualization: 365 if ANY constituent trades 7 days/wk (crypto), else 252.
   // Mirrors runPortfolioBacktest; replaces the prior hardcoded 252.
-  const annDays = nonEmpty.some(r => tradingDaysPerYear(r.ticker, r.sector) === 365) ? 365 : 252
+  const annDays = combinable.some(r => tradingDaysPerYear(r.ticker, r.sector) === 365) ? 365 : 252
 
   let sharpe: number | null = null
   let sortino: number | null = null
@@ -93,11 +128,11 @@ export function aggregatePortfolio(results: BacktestResult[], initialCapital: nu
   let portfolioMaxDdFromCurve = 0
   let portfolioMaxDdComputed = false
 
-  if (minLen > 30 && nonEmpty.length > 0) {
+  if (minLen > MIN_COMBINE_LEN && combinable.length > 0) {
     // End-aligned sum over the common window → combinedEquity is strictly positive
     // (sum of positive equities) at every point, so no findIndex/padding needed.
     const combinedEquity: number[] = new Array(minLen).fill(0)
-    for (const r of nonEmpty) {
+    for (const r of combinable) {
       const curve = r.equityCurve
       const offset = curve.length - minLen
       for (let k = 0; k < minLen; k++) {
@@ -148,9 +183,9 @@ export function aggregatePortfolio(results: BacktestResult[], initialCapital: nu
 
   const maxDrawdown = portfolioMaxDdComputed
     ? portfolioMaxDdFromCurve
-    : Math.max(...results.map(r => r.maxDrawdown), 0)
+    : Math.max(...combinable.map(r => r.maxDrawdown), 0)
 
-  const bnhAvg = results.reduce((s, r) => s + r.bnhReturn, 0) / Math.max(results.length, 1)
+  const bnhAvg = combinable.reduce((s, r) => s + r.bnhReturn, 0) / Math.max(combinable.length, 1)
   const alpha = truePortfolioReturn - bnhAvg
   const finalCapital = combinedFinalEquity
 
@@ -164,12 +199,14 @@ export function aggregatePortfolio(results: BacktestResult[], initialCapital: nu
     profitFactor,
     avgTradeReturn,
     totalTrades: allTrades.length,
-    totalInstruments: results.length,
+    totalInstruments: combinable.length,
     sectorReturns,
     instruments: results,
     initialCapital: combinedInitialEquity,
     finalCapital,
     alpha,
+    bnhAvg,
+    excludedTickers,
   }
 }
 

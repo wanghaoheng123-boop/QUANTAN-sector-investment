@@ -171,6 +171,69 @@ describe('Portfolio Aggregation', () => {
     expect(portfolio.totalInstruments).toBe(0)
     expect(portfolio.totalTrades).toBe(0)
     expect(portfolio.winRate).toBe(0)
+    expect(portfolio.excludedTickers).toEqual([])
+  })
+
+  // F-1 / F-1a (P1 regression): a single short-history instrument must NOT zero
+  // the whole portfolio summary. The route includes any ticker with >=100 bars,
+  // but core.ts returns a length-1 STUB equityCurve for <252 bars. Previously the
+  // stub dragged minLen to 1, failed the minLen>30 combine gate, and collapsed the
+  // entire summary (finalCapital $0, returns 0, Sharpe null, alpha -bnhAvg).
+  it('excludes a <252-bar instrument from the summary instead of zeroing it', () => {
+    // Generate rows ONCE so the assertion is deterministic regardless of Math.random:
+    // the same BacktestResult objects feed both the mixed and full-only portfolios.
+    const full1 = backtestInstrument('AAPL', 'Technology', generateRows(500, 100, 0.0008, 0.02))
+    const full2 = backtestInstrument('MSFT', 'Technology', generateRows(500, 80, 0.0006, 0.02))
+    const short = backtestInstrument('NEWCO', 'Technology', generateRows(150, 50, 0.0005, 0.02))
+
+    // Precondition: the short instrument is a length-1 stub (the bug's trigger).
+    expect(short.days).toBe(150)
+    expect(short.equityCurve).toHaveLength(1)
+
+    const fullOnly = aggregatePortfolio([full1, full2], 100_000)
+    const mixed = aggregatePortfolio([full1, full2, short], 100_000)
+
+    // Regression guard: the summary did NOT degenerate. Before the fix these were 0.
+    expect(mixed.finalCapital).toBeGreaterThan(0)
+    expect(mixed.initialCapital).toBeGreaterThan(0)
+
+    // The stub must not perturb ANY equity-curve-derived figure — it is simply
+    // dropped, so the mixed portfolio matches the full-only portfolio exactly.
+    expect(mixed.finalCapital).toBeCloseTo(fullOnly.finalCapital, 6)
+    expect(mixed.initialCapital).toBeCloseTo(fullOnly.initialCapital, 6)
+    expect(mixed.totalReturn).toBeCloseTo(fullOnly.totalReturn, 10)
+    expect(mixed.annualizedReturn).toBeCloseTo(fullOnly.annualizedReturn, 10)
+    expect(mixed.maxDrawdown).toBeCloseTo(fullOnly.maxDrawdown, 10)
+    expect(mixed.bnhAvg).toBeCloseTo(fullOnly.bnhAvg, 10)
+    expect(mixed.alpha).toBeCloseTo(fullOnly.alpha, 10)
+    expect(mixed.sharpeRatio).toStrictEqual(fullOnly.sharpeRatio)
+    expect(mixed.sortinoRatio).toStrictEqual(fullOnly.sortinoRatio)
+
+    // …and it is disclosed, not silently swallowed.
+    expect(mixed.excludedTickers).toContain('NEWCO')
+    expect(mixed.excludedTickers).not.toContain('AAPL')
+    expect(mixed.excludedTickers).not.toContain('MSFT')
+    expect(fullOnly.excludedTickers).toEqual([])
+
+    // Only the two full-history constituents count toward the portfolio.
+    expect(mixed.totalInstruments).toBe(2)
+    expect(mixed.sectorReturns['Technology'].tickers).not.toContain('NEWCO')
+  })
+
+  // Degenerate-but-honest case: when EVERY instrument is too short, the summary is
+  // zero (genuinely uncomputable) AND every ticker is disclosed as excluded — not
+  // a misleading mix of a real-looking $0 with hidden causes.
+  it('discloses all tickers when the whole universe is short-history', () => {
+    const a = backtestInstrument('AAA', 'Technology', generateRows(120, 100))
+    const b = backtestInstrument('BBB', 'Energy', generateRows(200, 50))
+
+    const portfolio = aggregatePortfolio([a, b], 100_000)
+
+    expect(portfolio.excludedTickers.sort()).toEqual(['AAA', 'BBB'])
+    expect(portfolio.totalInstruments).toBe(0)
+    expect(portfolio.finalCapital).toBe(0)
+    expect(portfolio.totalReturn).toBe(0)
+    expect(portfolio.sharpeRatio).toBeNull()
   })
 })
 
