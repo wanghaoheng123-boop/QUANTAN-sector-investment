@@ -10,10 +10,12 @@
  * options) plus reactive state (chartReadyGen, crosshairData).
  */
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type {
   IChartApi,
   ISeriesApi,
+  IPriceLine,
+  LineStyle,
   CandlestickData,
   HistogramData,
   LineData,
@@ -119,6 +121,14 @@ function calcVolumeSMA(volumes: number[], period = 20): number[] {
   return smaArray(volumes, period)
 }
 
+// ─── constants ───────────────────────────────────────────────────────────────
+
+/** Standard Fibonacci retracement ratios (0 = swing low … 1 = swing high). */
+const FIB_RATIOS = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1] as const
+
+/** Rose-400 — matches the in-chart "Fib" legend chip (bg-rose-400/60). */
+const FIB_COLOR = '#fb7185'
+
 // ─── helper ──────────────────────────────────────────────────────────────────
 
 function isEmaLineVisible(ind: KLineIndicatorFlags, period: ChartEmaPeriod): boolean {
@@ -167,6 +177,7 @@ export interface UseKLineChartResult {
   bbUpperRef: React.MutableRefObject<ISeriesApi<'Line'> | null>
   bbMidRef: React.MutableRefObject<ISeriesApi<'Line'> | null>
   bbLowerRef: React.MutableRefObject<ISeriesApi<'Line'> | null>
+  volSmaRef: React.MutableRefObject<ISeriesApi<'Line'> | null>
 }
 
 // ─── hook ────────────────────────────────────────────────────────────────────
@@ -208,6 +219,15 @@ export function useKLineChart({
   const volSmaRef = useRef<ISeriesApi<'Line'> | null>(null)
   const resizeRef = useRef<ResizeObserver | null>(null)
 
+  // Fibonacci retracement: horizontal price lines drawn on the candle series
+  // from the visible-range swing high/low. Tracked so we can clear/redraw on
+  // toggle, data change, and zoom/pan.
+  const fibLinesRef = useRef<IPriceLine[]>([])
+  const fibVisibleRef = useRef(false)
+  const fibExtremesRef = useRef<{ hi: number; lo: number } | null>(null)
+  /** LineStyle.Dashed captured at init (enum lives in the lazily-imported lib). */
+  const lineStyleDashedRef = useRef<LineStyle>(2 as LineStyle)
+
   const prevCandlesLenRef = useRef(0)
   const firstBarTimeRef = useRef<string | number | null>(null)
 
@@ -215,6 +235,79 @@ export function useKLineChart({
   const [chartReadyGen, setChartReadyGen] = useState(0)
 
   const [crosshairData, setCrosshairData] = useState<CrosshairData | null>(null)
+
+  // ── Fibonacci retracement render ───────────────────────────────────────────
+  // Draws horizontal price lines on the candle series at the standard Fib
+  // ratios, anchored to the swing high/low of the *visible* logical range.
+  // Reads only refs, so a single stable identity is safe to reuse from both the
+  // data effect and the visible-range subscription.
+  const renderFib = useCallback(() => {
+    const series = candleRef.current
+    if (!series) return
+
+    const clear = () => {
+      for (const pl of fibLinesRef.current) {
+        try { series.removePriceLine(pl) } catch { /* series may be disposed */ }
+      }
+      fibLinesRef.current = []
+    }
+
+    if (!fibVisibleRef.current) {
+      if (fibLinesRef.current.length) clear()
+      fibExtremesRef.current = null
+      return
+    }
+
+    const data = series.data() as CandlestickData<Time>[]
+    if (!data.length) {
+      if (fibLinesRef.current.length) clear()
+      return
+    }
+
+    // Visible logical range → clamped data indices (fallback: full series).
+    const range = chartRef.current?.timeScale().getVisibleLogicalRange() ?? null
+    let lo = 0
+    let hi = data.length - 1
+    if (range) {
+      lo = Math.max(0, Math.floor(range.from))
+      hi = Math.min(data.length - 1, Math.ceil(range.to))
+      if (lo > hi) { lo = 0; hi = data.length - 1 }
+    }
+
+    let high = -Infinity
+    let low = Infinity
+    for (let i = lo; i <= hi; i++) {
+      const d = data[i]
+      if (!d) continue
+      if (d.high > high) high = d.high
+      if (d.low < low) low = d.low
+    }
+
+    if (!Number.isFinite(high) || !Number.isFinite(low) || high <= low) {
+      if (fibLinesRef.current.length) clear()
+      fibExtremesRef.current = null
+      return
+    }
+
+    // Skip the churn of remove+recreate while panning if the extremes (hence
+    // every level) are unchanged from the last draw.
+    const prev = fibExtremesRef.current
+    if (prev && prev.hi === high && prev.lo === low && fibLinesRef.current.length) return
+
+    clear()
+    fibExtremesRef.current = { hi: high, lo: low }
+    for (const r of FIB_RATIOS) {
+      const pl = series.createPriceLine({
+        price: low + (high - low) * r,
+        color: FIB_COLOR,
+        lineWidth: 1,
+        lineStyle: lineStyleDashedRef.current,
+        axisLabelVisible: true,
+        title: `Fib ${(r * 100).toFixed(1)}%`,
+      })
+      fibLinesRef.current.push(pl)
+    }
+  }, [])
 
   // ── A. Mount: create chart once ───────────────────────────────────────────
   useEffect(() => {
@@ -224,6 +317,7 @@ export function useKLineChart({
     const init = async () => {
       const { createChart, CrosshairMode, LineStyle } = await import('lightweight-charts')
       if (!mounted || !containerRef.current) return
+      lineStyleDashedRef.current = LineStyle.Dashed
 
       const main = createChart(containerRef.current, {
         layout: { background: { color: '#0a0a12' }, textColor: '#94a3b8' },
@@ -279,6 +373,12 @@ export function useKLineChart({
       })
       chartRef.current = main
 
+      // Re-anchor Fibonacci levels to the new swing high/low when the user
+      // zooms/pans (no-op when Fib is off or extremes are unchanged).
+      main.timeScale().subscribeVisibleLogicalRangeChange(() => {
+        if (fibVisibleRef.current) renderFib()
+      })
+
       const cs = main.addCandlestickSeries({
         upColor: '#00d084',
         downColor: '#ff4757',
@@ -297,14 +397,15 @@ export function useKLineChart({
       vs.priceScale().applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } })
       volumeRef.current = vs
 
-      // Volume SMA(20) — always created, visibility toggled via applyOptions
+      // Volume SMA(20) — created once; visibility honours `indicatorsProp.volSma`
+      // (default ON) here and via applyOptions from the component's sync effect.
       const volSmaSeries = main.addLineSeries({
         color: '#6366f180',
         lineWidth: 1,
         priceLineVisible: false,
         lastValueVisible: false,
         crosshairMarkerVisible: false,
-        visible: false,
+        visible: indicatorsProp.volSma !== false,
         priceScaleId: 'volume',
       })
       volSmaRef.current = volSmaSeries
@@ -495,6 +596,10 @@ export function useKLineChart({
       atrChartRef.current = null
       atrLineRef.current = null
       volSmaRef.current = null
+      // Candle series is gone with chart.remove(); just drop our references.
+      fibLinesRef.current = []
+      fibVisibleRef.current = false
+      fibExtremesRef.current = null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -589,10 +694,15 @@ export function useKLineChart({
       volumeRef.current?.setData(volArr)
     }
 
-    // Volume SMA(20) line
-    if (volSmaRef.current) {
+    // Volume SMA(20) line — only push data when visible (the SMA itself is
+    // still computed above for the unusual-volume bar colouring).
+    if (volSmaRef.current && indicatorsProp.volSma !== false) {
       volSmaRef.current.setData(lineData(volSMA))
     }
+
+    // Fibonacci retracement — anchored to the visible swing high/low.
+    fibVisibleRef.current = indicatorsProp.fibonacci === true
+    renderFib()
 
     for (const p of CHART_EMA_PERIODS) {
       const series = emaLineRefs.current[p]
@@ -697,7 +807,7 @@ export function useKLineChart({
         /* ignore */
       }
     }
-  }, [candles, darkPoolMarkers, newsMarkers, showRSI, indicatorsProp, visSerialised, chartReadyGen])
+  }, [candles, darkPoolMarkers, newsMarkers, showRSI, indicatorsProp, visSerialised, chartReadyGen, renderFib])
 
   return {
     chartReadyGen,
@@ -708,5 +818,6 @@ export function useKLineChart({
     bbUpperRef,
     bbMidRef,
     bbLowerRef,
+    volSmaRef,
   }
 }

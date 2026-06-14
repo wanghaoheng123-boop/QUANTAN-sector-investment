@@ -20,4 +20,6 @@ export type KLineIndicatorFlags = {
   vwap?: boolean
   bollingerBands?: boolean
   fibonacci?: boolean
+  /** Volume SMA(20) overlay on the volume sub-pane. Defaults ON (undefined ⇒ visible). */
+  volSma?: boolean
 }

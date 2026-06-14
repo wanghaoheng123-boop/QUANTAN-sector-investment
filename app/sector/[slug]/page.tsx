@@ -220,6 +220,7 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
       vwap: false,
       bollingerBands: false,
       fibonacci: false,
+      volSma: true,
     }),
     []
   )

@@ -75,18 +75,15 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
   const [activeIndicator, setActiveIndicator] = useState('ema')
   const [loading, setLoading]           = useState(true)
   const [chartError, setChartError]     = useState<string | null>(null)
-  // Indicator visibility state — synced from KLineChart via onIndicatorsChange
-  // Both activeIndicator (preset) and vis (individual toggles) feed into indicatorConfig
+  // Indicator visibility state. The page owns this; the sidebar IndicatorPanel
+  // and the preset row write it, and it flows down into `indicatorConfig`.
+  // Both activeIndicator (preset) and vis (individual toggles) feed into indicatorConfig.
   const [vis, setVis] = useState<Record<VisKey, boolean>>(() => buildVisFromIndicatorPreset('ema'))
 
   const indicatorConfig = useMemo(() => {
     const base = buildVisFromIndicatorPreset(activeIndicator)
     return { ...base, ...vis }
   }, [activeIndicator, vis])
-
-  const handleVisChange = useCallback((newVis: Record<VisKey, boolean>) => {
-    setVis(newVis)
-  }, [])
 
   const tickerSector = useMemo(() => {
     for (const s of SECTORS) {
@@ -465,7 +462,6 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
                         hideTimeframeSelector
                         showRSI
                         indicators={indicatorConfig}
-                        onIndicatorsChange={handleVisChange}
                       />
                     </ChartErrorBoundary>
                   ) : (
@@ -613,11 +609,7 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
               {activeTab === 'chart' && (
                 <IndicatorPanel
                   vis={vis}
-                  onToggle={(key) => {
-                    const next = { ...vis, [key]: !vis[key] }
-                    setVis(next)
-                    handleVisChange(next)
-                  }}
+                  onToggle={(key) => setVis((prev) => ({ ...prev, [key]: !prev[key] }))}
                   title="Chart Indicators"
                 />
               )}
