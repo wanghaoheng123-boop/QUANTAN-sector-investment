@@ -52,6 +52,10 @@ from pydantic import BaseModel
 from tradingagents.graph.trading_graph import TradingAgentsGraph
 from tradingagents.default_config import DEFAULT_CONFIG
 
+# F-PY-12: leak-safe per-request API-key env guard. Extracted to a dependency-free
+# module so its restore logic is unit-testable without the tradingagents package.
+from trading_agents_env_guard import ApiKeyEnvGuard as _ApiKeyEnvGuard
+
 
 # ─────────────────────────────────────────────
 # Thread-local context for per-request API keys
@@ -69,20 +73,6 @@ def set_request_api_key(key: str | None) -> None:
 def get_request_api_key() -> str | None:
     """Get the API key for the current request (if any)."""
     return _thread_ctx.get().get("api_key")
-
-
-# ─────────────────────────────────────────────
-# Provider → env var mapping
-# ─────────────────────────────────────────────
-
-_PROVIDER_API_KEY_ENV = {
-    "openai":     "OPENAI_API_KEY",
-    "google":     "GOOGLE_API_KEY",
-    "anthropic":  "ANTHROPIC_API_KEY",
-    "xai":        "XAI_API_KEY",
-    "openrouter": "OPENROUTER_API_KEY",
-    # ollama has no API key
-}
 
 
 # ─────────────────────────────────────────────
@@ -184,42 +174,6 @@ def build_result(
         final_trade_decision=cut(final_state.get("final_trade_decision", "")),
         state_keys=[k for k in final_state.keys() if not k.startswith("_")],
     )
-
-
-# ─────────────────────────────────────────────
-# Per-request environment guard
-# ─────────────────────────────────────────────
-
-class _ApiKeyEnvGuard:
-    """
-    Temporarily injects the user's API key into os.environ for the current
-    thread, then restores the original value on exit.
-
-    Usage:
-        guard = _ApiKeyEnvGuard(provider, api_key)
-        with guard:
-            # os.environ has the user's key here
-            ta = TradingAgentsGraph(...)
-    """
-
-    def __init__(self, provider: str, api_key: str | None):
-        self.provider = provider
-        self.api_key = api_key
-        self.env_var = _PROVIDER_API_KEY_ENV.get(provider)
-        self._orig_value: str | None = None
-
-    def __enter__(self) -> None:
-        if self.env_var and self.api_key:
-            # Save original so we can restore it after this request
-            self._orig_value = os.environ.get(self.env_var)
-            os.environ[self.env_var] = self.api_key
-
-    def __exit__(self, *_: Any) -> None:
-        if self.env_var and self._orig_value is not None:
-            if self._orig_value is None:
-                os.environ.pop(self.env_var, None)
-            else:
-                os.environ[self.env_var] = self._orig_value
 
 
 # ─────────────────────────────────────────────
