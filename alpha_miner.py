@@ -253,9 +253,12 @@ FUNCTION_SET: dict[str, Callable] = {
 }
 
 
+# F-PY-01: Pow (`**`) is intentionally excluded. Formulas are LLM-generated
+# (semi-untrusted) and `**` on scalar ints (e.g. `9**9**9**9`) blows up CPU/memory
+# with arbitrary-precision integers — a cheap DoS. No factor formula uses `**`.
 _SAFE_BINOPS = {
     ast.Add: _op.add, ast.Sub: _op.sub, ast.Mult: _op.mul,
-    ast.Div: _op.truediv, ast.Pow: _op.pow, ast.Mod: _op.mod,
+    ast.Div: _op.truediv, ast.Mod: _op.mod,
     ast.FloorDiv: _op.floordiv,
 }
 _SAFE_UNARYOPS = {ast.UAdd: _op.pos, ast.USub: _op.neg}
@@ -266,7 +269,8 @@ def safe_eval_formula(expr: str, namespace: dict[str, Any]) -> Any:
     Evaluate an arithmetic factor formula WITHOUT Python's ``eval``.
 
     Only numeric literals, names bound in ``namespace``, calls to callables in
-    ``namespace``, and the operators + - * / // ** % (unary +/-) are permitted.
+    ``namespace``, and the operators + - * / // % (unary +/-) are permitted.
+    ``**`` (Pow) is excluded — see ``_SAFE_BINOPS`` (F-PY-01 DoS guard).
     Attribute access, subscripting, comprehensions, lambdas, and every other node
     type are rejected — so the classic ``eval`` sandbox escapes (e.g.
     ``().__class__.__bases__[0].__subclasses__()``) are STRUCTURALLY impossible,

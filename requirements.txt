@@ -19,6 +19,10 @@ akshare>=1.14.0
 # Alpha Mining
 gplearn>=0.4.0
 
+# Volatility modeling — GARCH(1,1) MLE (quant_framework/garch.py). When absent,
+# fit_garch11 falls back to the EWMA proxy (no MLE term structure).
+arch>=6.0.0
+
 # Options Analysis
 # py_vollib>=1.0.1  # Uncomment if py_vollib available; scipy used as fallback
 matplotlib>=3.8.0

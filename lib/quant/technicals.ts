@@ -18,6 +18,8 @@ import {
   dailyReturns as dailyReturnsCanonical,
   sharpeRatio as sharpeRatioCanonical,
   sortinoRatio as sortinoRatioCanonical,
+  sma200DeviationPct,
+  sma200Slope,
 } from './indicators'
 import type { OhlcBar } from './indicators'
 
@@ -76,33 +78,11 @@ export function trendLabel(sma50: number | null, sma200: number | null, price: n
   return 'Death cross zone (SMA50 below SMA200)'
 }
 
-/**
- * Phase 13 S2: tightened guard to reject price <= 0 — matches the
- * hardened version in lib/backtest/signals.ts. Without this guard a
- * negative price produced a mathematically-finite-but-meaningless
- * deviation (e.g. price=-50 vs SMA=100 yields dev=-150), which
- * downstream regime classifiers would treat as an extreme CRASH_ZONE
- * signal and emit a real BUY/SELL action from corrupted data.
- *
- * NOTE — duplicated math: this function exists in two files
- *   - lib/quant/technicals.ts (this file, used by BtcQuantLab UI)
- *   - lib/backtest/signals.ts (used by the backtest engine)
- * Both implementations now share the same contract. Consolidating to
- * one location (e.g. lib/quant/indicators.ts) is a queued follow-up.
- */
-export function sma200DeviationPct(price: number, sma200: number): number | null {
-  if (!Number.isFinite(sma200) || sma200 <= 0) return null
-  if (!Number.isFinite(price) || price <= 0) return null
-  return ((price - sma200) / sma200) * 100
-}
-
-export function sma200Slope(closes: number[]): number | null {
-  if (closes.length < 221) return null
-  const sma200Now = sma(closes, 200)
-  const sma200Prev = sma(closes.slice(0, closes.length - 20), 200)
-  if (sma200Now == null || sma200Prev == null || sma200Prev === 0) return null
-  return (sma200Now - sma200Prev) / sma200Prev
-}
+// F-6: sma200DeviationPct / sma200Slope are now defined once in ./indicators
+// (the SSOT both this UI path and lib/backtest/signalHelpers.ts re-export) so the
+// two paths can never drift. Imported above for the internal ma200Regime calls;
+// re-exported here to preserve this module's public API (BtcQuantLab imports them).
+export { sma200DeviationPct, sma200Slope }
 
 export type MA200Zone =
   | 'EXTREME_BULL'

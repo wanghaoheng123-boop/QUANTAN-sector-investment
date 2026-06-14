@@ -105,6 +105,17 @@ async function checkRateLimitKv(
       if (!incrRes.ok) return checkRateLimitMemory(key, config)
       const incrBody = (await incrRes.json()) as { result?: number }
       count = Number(incrBody.result ?? 1)
+      if (count === 1) {
+        // V-1: SET-NX reported the key as existing, but it EXPIRED before this
+        // INCR — so INCR re-created it with NO TTL (the count came back 1, which
+        // is impossible for a still-live window). A TTL-less counter would rate-
+        // limit this IP forever, so re-attach the window. EXPIRE … NX only sets a
+        // TTL when the key has none, so it's a safe no-op if a TTL already exists.
+        await fetch(
+          `${base}/expire/${encodeURIComponent(bucketKey)}/${config.windowSeconds}/NX`,
+          { headers: auth, method: 'POST' },
+        ).catch(() => {})
+      }
     }
     if (count <= config.maxRequests) return { allowed: true }
     return { allowed: false, retryAfter: Math.max(1, config.windowSeconds) }

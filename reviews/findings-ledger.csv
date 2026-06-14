@@ -64,8 +64,8 @@ F6.8,R6,MEDIUM,accessibility,(cross-component),various,aria-live underused for l
 F6.9,R6,LOW,accessibility,app/layout.tsx,root,confirm html lang attribute,WCAG 2.2 SC 3.1.1,AT-F6.9-html-lang,E2,S4,closed
 F7.1,R7,HIGH,security,lib/auth.ts,34-58,NEXTAUTH_SECRET fallback now logs structured event at console.error severity,OWASP ASVS V7,AT-F7.1-secret-alert,E3+E4,S2,FIXED
 F7.2,R7,HIGH,security,lib/api/reliability.ts,50,error responses leak internals,"CWE-209; OWASP API8",AT-F7.2-error-sanitize,E3,S2,open
-F7.3,R7,HIGH,security,(API routes accepting tickers),various,tickers flow to yahoo without validation,"CWE-918; OWASP ASVS V12",AT-F7.3-ticker-whitelist-fuzz,E3,S2,open
-F7.4,R7,HIGH,security,(POST routes),trading-agents/backtest,no CSRF protection (need verify),OWASP CSRF Prevention,AT-F7.4-csrf-guard,E3,S4,open
+F7.3,R7,HIGH,security,lib/api/sanitize.ts,TICKER_REGEX,tickers flow to yahoo without validation,"CWE-918; OWASP ASVS V12",AT-F7.3-ticker-whitelist-fuzz,E3,S2,FIXED-strict-ticker-whitelist (sanitize.ts TICKER_REGEX rejects URL/path chars -> 400; verified 2026-06-14)
+F7.4,R7,HIGH,security,middleware.ts,csrf double-submit,no CSRF protection (need verify),OWASP CSRF Prevention,AT-F7.4-csrf-guard,E3,S4,FIXED-csrf-double-submit (middleware quantan_csrf cookie + x-quantan-csrf header on POST; client via PR #40; verified 2026-06-14)
 F7.5,R7,MEDIUM,security,lib/data/bloomberg/bridgeClient.ts,upstream,timing-safe secret comparison (need verify),Brumley & Boneh (2005),AT-F7.5-timing-safe,E3,S4,open
 F7.6,R7,MEDIUM,security,next.config.js,headers,security headers added (HSTS/X-Frame/Referrer/Permissions/CSP-RO),OWASP Secure Headers,AT-F7.6-secure-headers,E3,S2,FIXED-c7340323+
 F7.7,R7,MEDIUM,security,lib/api/rateLimit.ts,(cross-ref F4.3),KV opt-in documented in .env.example,OWASP API4,AT-F4.3-distributed-ratelimit,E3,S2,partial-KV-opt-in-2026-06-03

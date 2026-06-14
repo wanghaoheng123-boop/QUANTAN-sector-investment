@@ -90,6 +90,29 @@ describe('applyRateLimit — Vercel KV path', () => {
     expect(paths.some((p) => p.startsWith('/expire/'))).toBe(false)
   })
 
+  it('re-attaches the TTL via EXPIRE … NX when the key was re-created TTL-less between SET-NX and INCR (V-1)', async () => {
+    // Race: SET-NX reports the key as existing (result=null), but it EXPIRES
+    // before the INCR, so INCR re-creates it with value 1 and NO TTL. A count of
+    // 1 on the INCR branch is the tell-tale — the limiter must heal it so the IP
+    // isn't blocked forever by a TTL-less counter.
+    process.env.KV_REST_API_URL = 'https://kv.test'
+    process.env.KV_REST_API_TOKEN = 'tok'
+    stubKvFetch((path) => {
+      if (path.startsWith('/set/')) return { result: null, status: 200 } // NX no-op: key "exists"
+      if (path.startsWith('/incr/')) return { result: 1, status: 200 }    // ...but INCR re-created it
+      if (path.startsWith('/expire/')) return { result: 1, status: 200 }
+      return { status: 404 }
+    })
+    const req = new Request('http://localhost/x', { headers: { 'x-real-ip': '10.10.10.10' } })
+    const result = await applyRateLimit(req, 'kv-race', { maxRequests: 5, windowSeconds: 60 })
+    expect(result).toBeNull() // allowed (1 ≤ 5)
+    const expireCall = fetchCalls.find((c) => new URL(c.url).pathname.startsWith('/expire/'))
+    expect(expireCall).toBeDefined()
+    // Must carry the window seconds and the NX flag (only-if-no-TTL).
+    expect(expireCall!.url).toContain('/expire/')
+    expect(expireCall!.url).toContain('/60/NX')
+  })
+
   it('returns 429 with retryAfter when count exceeds maxRequests', async () => {
     process.env.KV_REST_API_URL = 'https://kv.test'
     process.env.KV_REST_API_TOKEN = 'tok'
