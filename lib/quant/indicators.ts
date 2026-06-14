@@ -48,6 +48,34 @@ export function smaLatest(values: number[], period: number): number | null {
   return slice.reduce((a, b) => a + b, 0) / period
 }
 
+/**
+ * 200-SMA deviation of price, in percent. Canonical SSOT (F-6): re-exported by
+ * lib/quant/technicals.ts (BtcQuantLab UI) and lib/backtest/signalHelpers.ts
+ * (backtest engine) so the two paths can never drift.
+ *
+ * Rejects non-finite OR non-positive price/SMA: a negative or zero price yields a
+ * mathematically-finite-but-meaningless deviation (e.g. price −50 vs SMA 100 →
+ * −150%) that downstream regime classifiers would treat as an extreme CRASH_ZONE
+ * signal and emit a real BUY/SELL from corrupted data.
+ */
+export function sma200DeviationPct(price: number, sma200: number): number | null {
+  if (!Number.isFinite(sma200) || sma200 <= 0) return null
+  if (!Number.isFinite(price) || price <= 0) return null
+  return ((price - sma200) / sma200) * 100
+}
+
+/**
+ * 200-SMA slope — fractional change of the 200-SMA over the last 20 bars.
+ * Positive = long-term uptrend. Canonical SSOT (F-6); see {@link sma200DeviationPct}.
+ */
+export function sma200Slope(closes: number[]): number | null {
+  if (closes.length < 221) return null
+  const now = smaLatest(closes, 200)
+  const prev = smaLatest(closes.slice(0, closes.length - 20), 200)
+  if (now == null || prev == null || prev === 0) return null
+  return (now - prev) / prev
+}
+
 // ─── Exponential Moving Average ─────────────────────────────────────────────
 
 /**

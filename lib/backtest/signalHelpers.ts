@@ -136,28 +136,11 @@ export function isMACompression(closes: number[], tolerancePct = 0.05): boolean 
   return maxEMA > 0 && (maxEMA - minEMA) / maxEMA < tolerancePct
 }
 
-export function sma200DeviationPct(price: number, sma200: number): number | null {
-  // Reject non-finite OR non-positive price/SMA — negative or zero prices
-  // produce mathematically-finite-but-meaningless deviations (e.g. a price
-  // of -50 vs SMA 100 yields dev = -150%, which would fall into the
-  // CRASH_ZONE branch downstream and emit a 78%-confidence BUY/SELL).
-  if (!Number.isFinite(sma200) || sma200 <= 0) return null
-  if (!Number.isFinite(price) || price <= 0) return null
-  return ((price - sma200) / sma200) * 100
-}
-
-/**
- * 200SMA slope — percent change of the 200SMA over 20 bars.
- * Positive = 200SMA is rising (long-term uptrend).
- * Require slope > 0.005 (0.5%) to filter out noise in flat markets.
- */
-export function sma200Slope(closes: number[]): number | null {
-  if (closes.length < 221) return null
-  const now = sma(closes, 200)
-  const prev = sma(closes.slice(0, closes.length - 20), 200)
-  if (now == null || prev == null || prev === 0) return null
-  return (now - prev) / prev
-}
+// F-6: sma200DeviationPct / sma200Slope live once in @/lib/quant/indicators (the
+// SSOT). Re-exported here so the backtest engine's import path (signals.ts,
+// regimeSignal.ts) is unchanged while the math can never drift from the UI path
+// (lib/quant/technicals.ts), which re-exports the same source.
+export { sma200DeviationPct, sma200Slope } from '@/lib/quant/indicators'
 
 /**
  * Price was within +5% of 200SMA in the last 20 bars — confirms it's not a "forever falling" stock.
