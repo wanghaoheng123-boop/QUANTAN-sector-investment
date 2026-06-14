@@ -2,8 +2,8 @@
   "schema_version": "1.1",
   "project": "QUANTAN-sector-investment",
   "created": "2026-04-28T09:40:00Z",
-  "last_updated": "2026-06-03T16:22:13.000Z",
-  "active_agent": "cursor (coordination lead 2026-06-03)",
+  "last_updated": "2026-06-14T16:00:00.000Z",
+  "active_agent": "claude opus-4.8 (consolidation 2026-06-14)",
   "program_doc": "workspace/QUANTAN_EXPERT_TEAM_COMMERCIALIZATION.md",
   "coordination_doc": "workspace/coordination/PROGRESS_COORDINATION_2026-06-03.md",
   "last_inspection": {
@@ -142,29 +142,26 @@
   ],
   "checkpoint": null,
   "github_vercel_sync": {
-    "timestamp": "2026-06-03T16:22:13.000Z",
-    "origin_main_head": "63b2d1715f86db8dc25435b998fbe64e15e984dd",
-    "origin_main_subject": "docs: master function coverage rollup 2026-06-03 (#49)",
-    "open_prs": 0,
+    "timestamp": "2026-06-14T16:00:00.000Z",
+    "origin_main_head": "31973a6",
+    "origin_main_subject": "Merge PR #57: fix backtest portfolio-zeroing on <252-bar stub instruments (F-1/F-1a)",
+    "open_prs": 1,
+    "open_pr_detail": "#58 fix/trading-agents-apikey-leak-2026-06-14 (F-PY-12) — CLEAN/MERGEABLE, all CI green; per owner, bundled into the 2026-06-14 consolidation branch rather than merged standalone",
     "recent_merges": [
-      "#46",
-      "#47",
-      "#48",
-      "#49",
-      "#50",
-      "#51",
-      "#52"
+      "#53",
+      "#54",
+      "#55",
+      "#56",
+      "#57"
     ],
-    "ci_main_latest": "success (run 26896531303, #49 push)",
+    "ci_main_latest": "success (#57 merge commit 31973a6: typecheck/test/coverage/benchmark/smoke green; Vercel prod deploy success)",
     "vercel_production_alias": "https://quantan.vercel.app",
-    "vercel_production_deploy_id": "dpl_EF89K6SHtZnevbqCkPbNvUJuXcL4",
-    "vercel_production_status": "Ready (alias); GitHub main deploys + dpl_C9F9MKfWiDe7yhngphCExpKFKEJe Queued",
-    "vercel_production_behind_main": true,
+    "vercel_production_behind_main": false,
     "vercel_env_names_ok": [
       "QUANTAN_FRED_PREWARM",
       "QUANTAN_API_KEY"
     ],
-    "local_git_fetch": "FAILED (github.com:443 timeout from Drive path)",
-    "local_branch": "chore/master-coverage-2026-06-03 @ 9862a517 (diverged from main)"
+    "consolidation_branch_2026_06_14": "chore/consolidation-2026-06-14 (off 31973a6): recovered orphaned GARCH fix + reviews/full-review-2026-06-10; cherry-picked #58; F-PY-13/14/15/16 sidecar hardening; F-PY-01 AST Pow guard; V-1 rate-limit EXPIRE-NX; F-6 sma200 SSOT dedup. tsc clean; python 124p/1s; targeted vitest green. V-8 npm-audit + F-4 net-WR DEFERRED (owner).",
+    "local_branch": "chore/consolidation-2026-06-14 (worktree quirky-kirch-a8f847)"
   }
 }
