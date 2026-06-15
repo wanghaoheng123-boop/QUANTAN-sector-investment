@@ -12,6 +12,7 @@
  */
 
 import type { BacktestResult } from '@/lib/backtest/engine'
+import { formatProfitFactor } from '@/lib/backtest/formatMetrics'
 import { WalkForwardPanel } from './WalkForwardPanel'
 
 interface SectorRow {
@@ -138,7 +139,7 @@ export function AnalysisTab({ results, sectorColors }: { results: BacktestResult
                         {(r.winRate * 100).toFixed(0)}%
                       </td>
                       <td className="px-3 py-2 font-mono text-slate-400">
-                        {r.profitFactor === Infinity ? '∞' : r.profitFactor.toFixed(2)}
+                        {formatProfitFactor(r.profitFactor)}
                       </td>
                       <td className={`px-3 py-2 font-mono ${r.bnhReturn >= 0 ? 'text-slate-300' : 'text-red-300'}`}>
                         {(r.bnhReturn * 100).toFixed(1)}%
