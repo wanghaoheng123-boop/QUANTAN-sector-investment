@@ -41,4 +41,16 @@ interactively on owner "keep going". Cells completed: **Q01, Q02**.
 2. **F-8** T+1 MTM one-bar-early in the equity curve (Q02). Owner-gated (changes Sharpe/DD).
 3. profitFactor response contract `number` → `number | null` (Q01).
 
-**Next cell:** Q03 — `lib/backtest/signals.ts` (signal core; look-ahead; SSOT import block).
+## Q03 — `lib/backtest/signals.ts` (WS-Q) — DONE, VERIFIED CLEAN (no code change)
+- `enhancedCombinedSignal` + `resolveBacktestSignal`. Every per-indicator score is
+  finite-guarded and `clamp`-ed to [-1,1] (documented Phase-13 ensemble-bound audit);
+  thresholds match the docstring (BUY >0.25 / SELL <-0.30); no look-ahead (the caller
+  in core.ts passes lookback-only slices); the SSOT import block (indicators imported
+  from `@/lib/quant/indicators`, NOT re-exported) is correct. The enhanced path is
+  research-only (off in prod via `useEnhancedCombinedSignal()`); prod uses the
+  regime-only branch. Covered by `signals.test.ts` + `signalParity.test.ts`. No bug found.
+
+## Session cells: Q01 (fixed, live) · Q02 (fixed, merged) · Q03 (clean). 
+**Next cell:** Q04 — `signalHelpers.ts` + `signalTypes.ts` (post-F-6 SSOT; confirm parity).
+The scheduled routine continues Q04+ daily; the F-4/F-8/profitFactor-contract escalations
+await owner decisions.
