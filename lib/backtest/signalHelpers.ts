@@ -101,6 +101,12 @@ export function detectVolumeClimax(
   const last = window[window.length - 1]
   const prev = window[window.length - 2]
 
+  // Guard a corrupt last/prev bar: without a finite-positive `open`, the candle-body
+  // ratio `|close-open|/open` is Infinity/NaN and `largePanic` can spuriously fire;
+  // a non-finite prev high/low poisons the recovery midpoint. No valid bar → no climax.
+  if (!Number.isFinite(last.open) || last.open <= 0) return false
+  if (!Number.isFinite(prev.high) || !Number.isFinite(prev.low)) return false
+
   // Volume spike > 2× average
   const volSpike = last.volume > avgVol * 2.0
   // Large bearish candle (close < open, range > 1.5% of price)
