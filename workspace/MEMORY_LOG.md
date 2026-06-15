@@ -7,6 +7,7 @@ _None_
 ## Verification Log
 | Timestamp | Task | A | B | C | D | E | F | Notes |
 |---|---|---|---|---|---|---|---|---|
+| 2026-06-15T22:00:00Z | PROGRAM Q04 signalHelpers/Types | PASS | PASS | PASS | PASS | PASS | PASS | detectVolumeClimax corrupt-bar (open 0/NaN) guard FIXED (+new signalHelpers.test.ts, 5 cases, coverage gap closed); signalTypes pure types clean; F-6 re-export confirmed. SAFE → auto-merge. Next: Q05 regimeSignal.ts |
 | 2026-06-15T21:45:00Z | PROGRAM Q03 signals.ts | PASS | PASS | PASS | PASS | PASS | PASS | VERIFIED CLEAN — no fix; scores clamped [-1,1] + finite-guarded, no look-ahead, SSOT import block correct, enhanced path off in prod. Next: Q04 signalHelpers/signalTypes |
 | 2026-06-15T21:25:00Z | PROGRAM Q02 core.ts | PASS | PASS | PASS | PASS | PASS | PASS | corrupt-next-open NaN-injection guard FIXED (+5 invariant tests, 16/16); SAFE → auto-merge; benchmark unchanged (guard inert on clean data, CI gate). Escalated: F-4 gross WR, F-8 T+1 MTM one bar early. Next: Q03 signals.ts |
 | 2026-06-15T20:40:00Z | PROGRAM Q01 engine.ts | PASS | PASS | PASS | PASS | PASS | PASS | profit-factor Infinity→null render-crash FIXED (formatProfitFactor + 3 tests); SAFE → auto-merge. F-1/F-1a confirmed. Escalated: F-4 gross-WR, profitFactor contract type, dead param. F-8→Q02. Daily: coordination/daily/PROGRAM-DAY-2026-06-15.md |

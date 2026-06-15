@@ -20,7 +20,7 @@ Update the row after each run: status, date, findings/PR, perf delta.
 | Q01 | `lib/backtest/engine.ts` | portfolio aggregation (live `/api/backtest`); F-8 T+1 MTM booked one bar early; common-window alignment | **done 2026-06-15** — fixed profit-factor Infinity→null render crash (see daily report); F-1/F-1a confirmed present; perf single-pass OK. **Escalated:** F-4 gross-WR (owner), profitFactor type `number` emits `null` (contract), unused `initialCapital` param. F-8 → Q02 (core.ts). |
 | Q02 | `lib/backtest/core.ts` | F-4 per-trade WR gross-of-cost (DENY auto-merge → escalate); equity-curve stub <252 (already F-1 fixed, confirm) | **done 2026-06-15** — fixed corrupt-next-open NaN-injection guard (+5 invariant tests); <252 stub confirmed; T+1/slippage/MTM logic sound. **Escalated:** F-4 gross WR, F-8 T+1 MTM one bar early (both change published numbers). |
 | Q03 | `lib/backtest/signals.ts` | signal core; SSOT import block; no look-ahead | **done 2026-06-15 — VERIFIED CLEAN (no fix).** All ensemble scores clamped to [-1,1] with finite-guards (Phase-13 audit); no look-ahead (caller passes lookback slices); SSOT import block correct; enhanced path research-only (off in prod via featureFlags). Covered by signals.test + signalParity. |
-| Q04 | `lib/backtest/signalHelpers.ts` + `signalTypes.ts` | post-F-6 SSOT; confirm parity | pending |
+| Q04 | `lib/backtest/signalHelpers.ts` + `signalTypes.ts` | post-F-6 SSOT; confirm parity | **done 2026-06-15** — fixed detectVolumeClimax corrupt-bar guard (+new test file, 5 cases, closes coverage gap). signalTypes.ts pure types — clean. F-6 re-export confirmed. SAFE → auto-merge. |
 | Q05 | `lib/backtest/regimeSignal.ts` | regime zone thresholds; uses sma200 SSOT | pending |
 | Q06 | `lib/backtest/executionModel.ts` | F-9 entry-slippage double-count vs 22bps SSOT; cost model | pending |
 | Q07 | `lib/backtest/exitRules.ts` | F-3 trailing-stop intra-bar look-ahead + non-ratcheting peak; F-11 maxHoldDays union-calendar vs trading days | pending |
@@ -84,6 +84,7 @@ Update the row after each run: status, date, findings/PR, perf delta.
 ## Run log (newest first)
 _(the daily routine appends one line per run: date · cell · result · PR · merge/escalate)_
 
+- 2026-06-15 — Q04 `signalHelpers.ts`/`signalTypes.ts`: detectVolumeClimax corrupt-bar guard FIXED (+new test file); types clean. SAFE → auto-merge. Next cell: **Q05** `regimeSignal.ts`.
 - 2026-06-15 — Q03 `signals.ts`: VERIFIED CLEAN (no code change; heavily hardened, well-tested). Next cell: **Q04** `signalHelpers.ts`/`signalTypes.ts`.
 - 2026-06-15 — Q02 `core.ts`: corrupt-next-open NaN guard FIXED (PR auto/wsq-q02-core-2026-06-15, SAFE → auto-merge); +5 invariant tests. F-4/F-8 escalated. Next cell: **Q03** `signals.ts`.
 - 2026-06-15 — Q01 `engine.ts`: profit-factor display crash FIXED (PR auto/wsq-q01-engine-2026-06-15, SAFE → auto-merge). 3 escalations logged. Next cell: **Q02** `core.ts`.
