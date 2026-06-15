@@ -97,6 +97,31 @@ describe('R8-C-1: backtest engine — equity bookkeeping invariants', () => {
     })
   }
 
+  // Q02 regression: a corrupt next-open (0 / NaN / Infinity) on a bar where an
+  // entry would otherwise fire used to make `shares` Infinity/NaN — the
+  // `shares <= 0` check misses both — poisoning capital and the whole equity
+  // curve with NaN. The entry-price guard in core.ts must keep the output finite.
+  for (const seed of SEEDS) {
+    it(`seed ${seed}: stays finite when some bar opens are corrupt (0 / NaN)`, () => {
+      const rows = generateRandomRows(400, seed)
+      // Scatter bad opens across the series so at least one lands on an entry bar.
+      for (let i = 0; i < rows.length; i++) {
+        if (i % 37 === 0) rows[i].open = 0
+        else if (i % 53 === 0) rows[i].open = NaN
+      }
+      const result = backtestInstrument('TEST', 'Technology', rows)
+
+      for (const v of result.equityCurve) {
+        expect(Number.isFinite(v)).toBe(true)
+        expect(v).toBeGreaterThan(0)
+      }
+      expect(Number.isFinite(result.totalReturn)).toBe(true)
+      expect(Number.isFinite(result.finalPrice)).toBe(true)
+      expect(result.sharpeRatio === null || Number.isFinite(result.sharpeRatio)).toBe(true)
+      expect(Number.isFinite(result.winRate)).toBe(true)
+    })
+  }
+
   it('flat-position equity is exactly capital (no spurious position value)', () => {
     // A near-constant series should generate few/no trades; the equity
     // curve should remain near initial capital without drift.
