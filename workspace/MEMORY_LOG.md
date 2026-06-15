@@ -7,6 +7,7 @@ _None_
 ## Verification Log
 | Timestamp | Task | A | B | C | D | E | F | Notes |
 |---|---|---|---|---|---|---|---|---|
+| 2026-06-15T20:40:00Z | PROGRAM Q01 engine.ts | PASS | PASS | PASS | PASS | PASS | PASS | profit-factor Infinity→null render-crash FIXED (formatProfitFactor + 3 tests); SAFE → auto-merge. F-1/F-1a confirmed. Escalated: F-4 gross-WR, profitFactor contract type, dead param. F-8→Q02. Daily: coordination/daily/PROGRAM-DAY-2026-06-15.md |
 | 2026-05-26T13:33:27Z | PR #22 merge + prod deploy | PASS | PASS | PASS | PASS | PASS | PASS | main 056b54e; smoke PASS; chart sort PASS |
 | 2026-04-28T09:40:00Z | TASK-001 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING | Bootstrapped workspace tracking files and started implementation. |
 | 2026-04-28T10:18:00Z | TASK-001 | PASS | BLOCKED | PASS | PASS | PASS | PASS | UI/API/algo/audit waves completed. Typecheck blocked by invalid node_modules/typescript package config; vitest and benchmark scripts exited 0 via node entrypoint. |
