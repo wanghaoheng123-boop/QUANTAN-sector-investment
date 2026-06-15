@@ -123,16 +123,22 @@ stalling the program:
    PROGRAM-DAY-YYYY-MM-DD.md`; bump `SESSION_STATE.last_program_run`.
 10. **CHECKPOINT** — if near a limit, write CHECKPOINT and exit cleanly.
 
-## 7. Schedule (cron) — daily + weekly deep sweep
+## 7. Schedule — daily + weekly deep sweep
 
-- **Daily run** — every day **02:00 UTC** (overnight; after the weekday 06:00 UTC
-  nightly benchmark of the *prior* day is irrelevant, before the working day). One cell.
-- **Weekly DEEP SWEEP** — **Monday 03:00 UTC** (after Sunday 22:00 UTC data refresh):
-  full `npm run benchmark` + `benchmark:oos` + `portfolio:backtest` + `stryker` +
-  `npm audit --omit=dev` + cross-cutting perf profile + reconcile `findings-ledger.csv`
-  + milestone update in this doc. No single cell; this is the integration/regression day.
-- Times are UTC and adjustable. Cadence can rise to twice-daily if Pro headroom allows,
-  or fall to weekdays-only if caps are hit (the routine logs usage outcomes to tune this).
+Implemented as the Claude Code scheduled task **`quantan-autonomous-program`**
+(`~/.claude/scheduled-tasks/quantan-autonomous-program/SKILL.md`), cron `0 9 * * *`.
+
+- **Daily run** — every day at **09:00 local time**. NOTE: this scheduler runs while
+  the Claude app is open; if the app was closed when a run was due, it runs **on next
+  launch**. So it is "one bounded cell per day whenever the app is next open," not a
+  server-side cloud cron. One cell per run.
+- **Weekly DEEP SWEEP** — the **Monday** run branches to the deep sweep (same task; the
+  prompt checks day-of-week): full `npm run benchmark` + `benchmark:oos` +
+  `portfolio:backtest` + `stryker` + `npm audit --omit=dev` + cross-cutting perf profile
+  + reconcile `findings-ledger.csv` + milestone update in this doc. No single cell.
+- Time/cadence adjustable via the **Scheduled** sidebar or `update_scheduled_task`. Raise
+  to twice-daily if Pro-plan headroom allows; drop to weekdays-only if usage caps are hit
+  (the routine logs usage outcomes in the daily report to tune this).
 
 ## 8. Milestones / exit criteria
 
