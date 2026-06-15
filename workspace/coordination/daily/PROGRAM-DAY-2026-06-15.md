@@ -1,46 +1,44 @@
-# Program Day — 2026-06-15 (kickoff run, interactive)
+# Program Day — 2026-06-15 (kickoff; interactive multi-cell)
 
-**Cell:** Q01 — `lib/backtest/engine.ts` (WS-Q lead). First program run, executed
-interactively (not via the scheduled task, which first fires next launch ≥09:00 local).
+The scheduled task first fires next launch ≥09:00 local; this day's cells were run
+interactively on owner "keep going". Cells completed: **Q01, Q02**.
 
-## Correctness review
-- `aggregatePortfolio`: the F-1/F-1a stub-exclusion fix (`combinable` partition +
-  `excludedTickers`) is **present and correct**; end-aligned common-window combine,
-  252/365 annualization, sample-variance Sharpe, Sortino, DD-from-curve all sound.
-- **BUG FOUND + FIXED (SAFE):** profit factor is reported as `Infinity` for an
-  all-wins/no-losses instrument (`engine.ts:83`, `core.ts:428`). `Infinity` does not
-  survive `JSON.stringify` — `NextResponse.json` emits `null`. `AnalysisTab.tsx:141`
-  guarded only `=== Infinity`, so the `null` reached `null.toFixed(2)` → **render
-  crash** of the risk-return table for any zero-loss instrument. Fixed via a pure,
-  node-testable `formatProfitFactor()` (`lib/backtest/formatMetrics.ts`) that maps
-  null/non-finite → ∞; wired into AnalysisTab; +3 regression tests.
+---
 
-## Escalations (NOT auto-fixed — per program §4b)
-1. **F-4 — per-trade win rate / profit factor are GROSS of costs** (`core.ts` pnlPct).
-   Fixing changes the published WR / CI floor → **owner re-baseline required**. (Known.)
-2. **profitFactor response-contract inconsistency** — `app/api/backtest/route.ts:49`
-   and `PortfolioSummary` type it `number`, but the engine emits `Infinity`→`null`.
-   Recommend typing it `number | null` (or a documented sentinel) — **contract change**,
-   owner review. (Frontend is now crash-safe regardless.)
-3. **Dead param** — `aggregatePortfolio(results, initialCapital)`: `initialCapital` is
-   unused in the body (the returned `initialCapital` is `combinedEquity[0]`). Cosmetic;
-   removing it changes the call signature (route.ts passes `100_000`). Left as-is.
+## Q01 — `lib/backtest/engine.ts` (WS-Q) — DONE, merged (PR #61, b5515a8, prod ✓)
+- `aggregatePortfolio`: F-1/F-1a stub-exclusion + `excludedTickers` confirmed correct;
+  end-aligned common-window combine, 252/365 annualization, Sharpe/Sortino/DD sound.
+- **BUG FIXED (SAFE):** all-wins profit factor = `Infinity` → `NextResponse.json` emits
+  `null` → `AnalysisTab` `null.toFixed(2)` crashed the table. Fixed via node-testable
+  `lib/backtest/formatMetrics.ts:formatProfitFactor()` (null/non-finite → ∞) + 3 tests.
+  Display-only; no published-number / contract change. Auto-merged; prod deploy success.
+- **Escalated:** F-4 gross-WR (owner re-baseline); profitFactor response type `number`
+  emits `null` (contract → `number | null`); unused `aggregatePortfolio` `initialCapital`
+  param (cosmetic).
+- **Perf:** single-pass O(instruments × minLen), no per-bar alloc → no optimization needed.
 
-## Carry-forward
-- **F-8** (T+1 MTM booked one bar early) lives in `core.ts`, not engine.ts → handle at
-  **Q02**. **Mixed-calendar end-alignment** residual is documented in engine.ts (needs
-  dated equity curves) → WS-P / future.
+## Q02 — `lib/backtest/core.ts` (WS-Q) — DONE (PR auto/wsq-q02-core-2026-06-15)
+- Reviewed `backtestInstrument` end to end: T+1 signal→next-open execution, 2bps entry
+  slippage (long-only, correct after the prior `rows[i].action` fix), ATR-adaptive +
+  trailing + lock stops via the `evaluateStopHit` SSOT, DD circuit breaker with T+1 exit,
+  `currentEquity` mark-to-market, `closePosition` SSOT, 252/365 annualization. All sound.
+  `<252`-bar stub (the F-1 root) confirmed present.
+- **BUG FIXED (SAFE):** entry sizing had no finite/positive guard on `entryPrice`
+  (= nextOpen + slippage). A corrupt bar (open 0/NaN/Infinity) → `shares` Infinity/NaN
+  (the `shares <= 0` check misses both) → NaN poisons capital + the whole equity curve +
+  totalReturn/Sharpe/maxDD. Added an explicit guard (skip-and-mark on unpriceable bar).
+  Behavior-preserving on clean data → benchmark WR unchanged (CI gate). +5 corrupt-open
+  invariant tests (16/16 pass); tsc clean.
+- **Escalated (change published numbers — owner re-baseline, per §4b):**
+  - **F-4** — `closePosition:171` books gross pnlPct (no cost subtraction) → winRate /
+    profitFactor / the published ~54% WR + CI floor are GROSS of cost.
+  - **F-8** — the equity curve marks MTM at `rows[i].close` (today) while fills are at
+    `rows[i+1].open` (tomorrow) → MTM "booked one bar early"; affects Sharpe / DD /
+    dailyReturns. Self-consistent but a half-bar timing skew.
 
-## Performance
-- `aggregatePortfolio` is a single pass O(instruments × minLen) with no per-bar
-  allocation beyond the combined-equity array. **No hot-path issue**; no optimization
-  needed at this size. (Profiling target for large universes deferred to WS-P/P1.)
+## Open escalation queue (owner decisions)
+1. **F-4** net-of-cost per-trade WR + CI-floor re-baseline (Q01+Q02). Highest-value, owner-gated.
+2. **F-8** T+1 MTM one-bar-early in the equity curve (Q02). Owner-gated (changes Sharpe/DD).
+3. profitFactor response contract `number` → `number | null` (Q01).
 
-## Verify
-- `formatMetrics` test 3/3 · `tsc --noEmit` clean. benchmark unaffected (display-only
-  change, not in the signal path) → CI gate.
-- Disposition: **SAFE → PR auto/wsq-q01-engine-2026-06-15 → auto-merge on green CI**;
-  post-merge prod smoke. Browser-render of the fix not done locally (auth-gated backtest
-  page + FUSE jsdom freeze) — covered by the pure-fn test + CI; prod smoke after merge.
-
-**Next cell:** Q02 — `lib/backtest/core.ts` (incl. F-8 T+1 MTM, F-1 stub confirm, F-4 context).
+**Next cell:** Q03 — `lib/backtest/signals.ts` (signal core; look-ahead; SSOT import block).

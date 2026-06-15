@@ -18,7 +18,7 @@ Update the row after each run: status, date, findings/PR, perf delta.
 | # | Cell | Watch / known findings to check | Status |
 |---|------|---------------------------------|--------|
 | Q01 | `lib/backtest/engine.ts` | portfolio aggregation (live `/api/backtest`); F-8 T+1 MTM booked one bar early; common-window alignment | **done 2026-06-15** — fixed profit-factor Infinity→null render crash (see daily report); F-1/F-1a confirmed present; perf single-pass OK. **Escalated:** F-4 gross-WR (owner), profitFactor type `number` emits `null` (contract), unused `initialCapital` param. F-8 → Q02 (core.ts). |
-| Q02 | `lib/backtest/core.ts` | F-4 per-trade WR gross-of-cost (DENY auto-merge → escalate); equity-curve stub <252 (already F-1 fixed, confirm) | pending |
+| Q02 | `lib/backtest/core.ts` | F-4 per-trade WR gross-of-cost (DENY auto-merge → escalate); equity-curve stub <252 (already F-1 fixed, confirm) | **done 2026-06-15** — fixed corrupt-next-open NaN-injection guard (+5 invariant tests); <252 stub confirmed; T+1/slippage/MTM logic sound. **Escalated:** F-4 gross WR, F-8 T+1 MTM one bar early (both change published numbers). |
 | Q03 | `lib/backtest/signals.ts` | signal core; SSOT import block; no look-ahead | pending |
 | Q04 | `lib/backtest/signalHelpers.ts` + `signalTypes.ts` | post-F-6 SSOT; confirm parity | pending |
 | Q05 | `lib/backtest/regimeSignal.ts` | regime zone thresholds; uses sma200 SSOT | pending |
@@ -84,5 +84,6 @@ Update the row after each run: status, date, findings/PR, perf delta.
 ## Run log (newest first)
 _(the daily routine appends one line per run: date · cell · result · PR · merge/escalate)_
 
+- 2026-06-15 — Q02 `core.ts`: corrupt-next-open NaN guard FIXED (PR auto/wsq-q02-core-2026-06-15, SAFE → auto-merge); +5 invariant tests. F-4/F-8 escalated. Next cell: **Q03** `signals.ts`.
 - 2026-06-15 — Q01 `engine.ts`: profit-factor display crash FIXED (PR auto/wsq-q01-engine-2026-06-15, SAFE → auto-merge). 3 escalations logged. Next cell: **Q02** `core.ts`.
 - 2026-06-15 — queue seeded (claude opus-4.8, consolidation session). First run picks **Q01**.

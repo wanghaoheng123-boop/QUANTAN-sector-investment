@@ -342,6 +342,14 @@ export function backtestInstrument(
       const allocation = state.capital * kellyFrac
       // Long entries: pay slightly above the open (adverse selection / friction).
       const entryPrice = nextOpen * (1 + ENTRY_SLIPPAGE_BPS / 10000)
+      // Guard a corrupt next-open (0 / NaN / Infinity): sizing on it makes `shares`
+      // Infinity or NaN — and the `shares <= 0` check below misses BOTH — which then
+      // poisons `capital` and the entire equity curve / totalReturn with NaN. A bar
+      // that can't be priced can't be traded: mark-to-market at today's close and skip.
+      if (!Number.isFinite(entryPrice) || entryPrice <= 0) {
+        state.equityHistory.push(currentEquity(state, signalPrice))
+        continue
+      }
       const shares = Math.floor(allocation / entryPrice)
       if (shares <= 0) {
         state.equityHistory.push(currentEquity(state))
