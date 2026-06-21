@@ -121,16 +121,18 @@ export function regimeSignal(price: number, closes: number[], rsi14?: number): R
   }
 
   // ── Deviation-based zones ──────────────────────────────────────────────
+  // `dev` is non-null past the fail-closed guard above, so the zone checks
+  // below are unguarded comparisons (no redundant `dev != null &&`).
   // EXTREME_BULL: >+20% — extremely extended, no buy
-  if (dev != null && dev > 20) {
+  if (dev > 20) {
     return { zone: 'EXTREME_BULL', dipSignal: 'OVERBOUGHT', deviationPct: dev, slopePct: slope, slopePositive: slopePos, action: 'HOLD', confidence: 40, label: 'EXTREME_BULL' }
   }
   // EXTENDED_BULL: >+10% — extended, hold
-  if (dev != null && dev > 10) {
+  if (dev > 10) {
     return { zone: 'EXTENDED_BULL', dipSignal: 'OVERBOUGHT', deviationPct: dev, slopePct: slope, slopePositive: slopePos, action: 'HOLD', confidence: 45, label: 'EXTENDED_BULL' }
   }
   // HEALTHY_BULL: 0 to +10% — above SMA, in trend, no new entry
-  if (dev != null && dev >= 0) {
+  if (dev >= 0) {
     return { zone: 'HEALTHY_BULL', dipSignal: 'IN_TREND', deviationPct: dev, slopePct: slope, slopePositive: slopePos, action: 'HOLD', confidence: 55, label: 'HEALTHY_BULL' }
   }
 
@@ -138,8 +140,8 @@ export function regimeSignal(price: number, closes: number[], rsi14?: number): R
   // FIX D: Only buy dips if price was recently near SMA (not a "forever falling" stock)
   const canBuyDip = slopePos === true && nearSma
 
-  // FIRST_DIP: -10% to -5% — mild pullback, primary buy zone
-  if (dev != null && dev >= -10) {
+  // FIRST_DIP: -10% to 0% — mild pullback, primary buy zone
+  if (dev >= -10) {
     if (canBuyDip) {
       const conf = rsi14 != null && rsi14 < 35 ? 90 : 75
       return { zone: 'FIRST_DIP', dipSignal: 'STRONG_DIP', deviationPct: dev, slopePct: slope, slopePositive: slopePos, action: 'BUY', confidence: conf, label: 'FIRST_DIP' }
@@ -149,7 +151,7 @@ export function regimeSignal(price: number, closes: number[], rsi14?: number): R
   }
 
   // DEEP_DIP: -20% to -10% — meaningful correction, high-conviction buy zone
-  if (dev != null && dev >= -20) {
+  if (dev >= -20) {
     if (canBuyDip) {
       return { zone: 'DEEP_DIP', dipSignal: 'STRONG_DIP', deviationPct: dev, slopePct: slope, slopePositive: slopePos, action: 'BUY', confidence: 88, label: 'DEEP_DIP' }
     }
@@ -158,7 +160,7 @@ export function regimeSignal(price: number, closes: number[], rsi14?: number): R
   }
 
   // BEAR_ALERT: -30% to -20% — severe drawdown, only buy with strongest confirm
-  if (dev != null && dev >= -30) {
+  if (dev >= -30) {
     if (canBuyDip) {
       return { zone: 'BEAR_ALERT', dipSignal: 'STRONG_DIP', deviationPct: dev, slopePct: slope, slopePositive: slopePos, action: 'BUY', confidence: 80, label: 'BEAR_ALERT' }
     }
