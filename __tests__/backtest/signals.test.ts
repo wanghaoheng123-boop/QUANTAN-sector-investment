@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { regimeSignal, enhancedCombinedSignal, DEFAULT_CONFIG } from '@/lib/backtest/signals'
+import { smaLatest } from '@/lib/quant/indicators'
 import type { OhlcBar, OhlcvBar } from '@/lib/quant/indicators'
 
 // Generate synthetic close series for regime testing
@@ -107,6 +108,109 @@ describe('Regime Signal', () => {
     const price = closes[closes.length - 1]
     const result = regimeSignal(price, closes)
     expect(result.deviationPct).toBeGreaterThan(0)
+  })
+})
+
+/**
+ * Q05 (program 2026-06-22): deterministic zone-boundary + invariant coverage.
+ *
+ * `regimeSignal(price, closes, rsi14?)` derives slope/near-SMA from `closes`
+ * but the deviation zone from `price`, so we hold slope/near-SMA fixed via the
+ * array and drive the zone exactly via the `price` argument:
+ *   - `flat`   = 260 bars at 100 → SMA200 = 100, slope = 0 (NOT > 0.005) →
+ *                slopePositive false → canBuyDip false (dips are not buyable).
+ *   - `rising` = 260 bars at 100 + 0.1·i → SMA200 rising > 0.5% over 20 bars →
+ *                slopePositive true + price recently near SMA → canBuyDip true.
+ */
+describe('Regime Signal — zone boundaries & invariants', () => {
+  const flat = Array.from({ length: 260 }, () => 100)        // SMA200 = 100, slope 0
+  const rising = Array.from({ length: 260 }, (_, i) => 100 + i * 0.1) // rising SMA
+  const sFlat = smaLatest(flat, 200)!
+  const sRising = smaLatest(rising, 200)!
+
+  it('flat series has zero (non-positive) slope → dips are not buyable', () => {
+    const r = regimeSignal(sFlat * 0.95, flat)
+    expect(r.slopePositive).toBe(false)
+  })
+
+  it('rising series has positive slope and recent near-SMA → dips buyable', () => {
+    const r = regimeSignal(sRising * 0.97, rising)
+    expect(r.slopePositive).toBe(true)
+  })
+
+  // ── Bull-zone thresholds (price above SMA200; canBuyDip irrelevant) ──
+  it.each([
+    [1.25, 'EXTREME_BULL', 40],
+    [1.15, 'EXTENDED_BULL', 45],
+    [1.05, 'HEALTHY_BULL', 55],
+    [1.00, 'HEALTHY_BULL', 55], // dev exactly 0 → HEALTHY_BULL (>= 0)
+  ] as const)('price %s× SMA200 → %s (HOLD, conf %d)', (mult, zone, conf) => {
+    const r = regimeSignal(sFlat * mult, flat)
+    expect(r.zone).toBe(zone)
+    expect(r.action).toBe('HOLD')
+    expect(r.confidence).toBe(conf)
+    expect(r.deviationPct).toBeGreaterThanOrEqual(0)
+  })
+
+  // ── Dip zones with NON-positive slope → never BUY (HOLD or SELL knife) ──
+  it('FIRST_DIP without positive slope → WATCH_DIP HOLD (not a falling knife)', () => {
+    const r = regimeSignal(sFlat * 0.95, flat) // dev -5%
+    expect(r.zone).toBe('FIRST_DIP')
+    expect(r.dipSignal).toBe('WATCH_DIP')
+    expect(r.action).toBe('HOLD')
+    expect(r.confidence).toBe(35)
+  })
+
+  it.each([
+    [0.85, 'DEEP_DIP', 82],
+    [0.75, 'BEAR_ALERT', 90],
+    [0.60, 'CRASH_ZONE', 95],
+  ] as const)('price %s× SMA200, falling → %s FALLING_KNIFE SELL (conf %d)', (mult, zone, conf) => {
+    const r = regimeSignal(sFlat * mult, flat)
+    expect(r.zone).toBe(zone)
+    expect(r.dipSignal).toBe('FALLING_KNIFE')
+    expect(r.action).toBe('SELL')
+    expect(r.confidence).toBe(conf)
+    expect(r.deviationPct!).toBeLessThan(0)
+  })
+
+  // ── Dip zones WITH positive slope + near SMA → BUY (canBuyDip true) ──
+  it.each([
+    [0.97, 'FIRST_DIP', 75],
+    [0.85, 'DEEP_DIP', 88],
+    [0.75, 'BEAR_ALERT', 80],
+    [0.60, 'CRASH_ZONE', 78],
+  ] as const)('price %s× SMA200, uptrend → %s STRONG_DIP BUY (conf %d)', (mult, zone, conf) => {
+    const r = regimeSignal(sRising * mult, rising)
+    expect(r.zone).toBe(zone)
+    expect(r.dipSignal).toBe('STRONG_DIP')
+    expect(r.action).toBe('BUY')
+    expect(r.confidence).toBe(conf)
+    expect(r.slopePositive).toBe(true)
+  })
+
+  it('FIRST_DIP BUY confidence is boosted when RSI < 35', () => {
+    expect(regimeSignal(sRising * 0.97, rising).confidence).toBe(75)
+    expect(regimeSignal(sRising * 0.97, rising, 30).confidence).toBe(90)
+    expect(regimeSignal(sRising * 0.97, rising, 50).confidence).toBe(75)
+  })
+
+  // ── Cross-cutting invariants (hold for every classification) ──
+  it('invariants: BUY⇒slopePositive, SELL⟺FALLING_KNIFE, confidence∈[0,100]', () => {
+    const cases = [
+      ...[1.25, 1.15, 1.05, 1.0, 0.95, 0.85, 0.75, 0.6].map((m) => regimeSignal(sFlat * m, flat)),
+      ...[0.97, 0.85, 0.75, 0.6].map((m) => regimeSignal(sRising * m, rising)),
+    ]
+    for (const r of cases) {
+      expect(r.confidence).toBeGreaterThanOrEqual(0)
+      expect(r.confidence).toBeLessThanOrEqual(100)
+      if (r.action === 'BUY') expect(r.slopePositive).toBe(true)
+      expect(r.action === 'SELL').toBe(r.dipSignal === 'FALLING_KNIFE')
+    }
+  })
+
+  it('is a pure function — identical inputs yield identical output', () => {
+    expect(regimeSignal(sRising * 0.97, rising, 30)).toEqual(regimeSignal(sRising * 0.97, rising, 30))
   })
 })
 
