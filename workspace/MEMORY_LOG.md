@@ -31,6 +31,7 @@ _None_
 | 2026-06-02T01:15:00Z | TIER0-VERCEL-OWNER | PASS | N/A | PASS | PASS | PASS | PASS | QUANTAN_FRED_PREWARM=1 + QUANTAN_API_KEY on quantan Production; removed duplicate Vercel projects; prod deploy dpl_6huKCcxVyL11rkAJ8TzoQX7aCz5t. |
 | 2026-06-03T00:37:10Z | HANDOVER-FOLLOWUP-2026-06-03 | PASS | PASS | PASS | PASS | PASS | PASS | Git: main reset to de9a3d5=origin/main; backlog Q-004/Q-063 done; Q-057 target 15.x; 1016 tests; typecheck clean; no benchmark (docs-only). |
 | 2026-06-03T02:35:00Z | FULL-VERIFY-AF-2026-06-03 | PASS | PASS | PASS | PASS | PASS | PASS | main @ de9a3d5; 1016/0/0 tests (84 files); net WR 54.34% gross 55.31%; portfolio best WR 48.37%; enhanced 51.45% (not prod); git fetch timed out (local=origin). |
+| 2026-06-22T17:13:00Z | PROGRAM-Q05-regimeSignal | PASS | PASS | PASS | PASS | PASS | PASS | Manual Opus-4.8 run (recovered queue after 6 days of scheduled fires 400-ing on disabled Fable 5). Q05 regimeSignal.ts VERIFIED CLEAN; parity-safe cleanup (dropped 6 dead `dev != null &&` guards + zone comment) + 11 deterministic/invariant tests (signals 26→37, signalParity 2/2). C=CI benchmark pass (WR floor held; local froze on FUSE). PR #66 → main ac4ce09; prod smoke /,sector-rotation,analytics/AAPL all 200. Next: Q06 executionModel.ts. |
 
 ## Session History
 ### Session — 2026-05-26 — Expert Team & Commercialization (Cursor subagent)

@@ -2,10 +2,20 @@
   "schema_version": "1.1",
   "project": "QUANTAN-sector-investment",
   "created": "2026-04-28T09:40:00Z",
-  "last_updated": "2026-06-14T16:00:00.000Z",
-  "active_agent": "claude opus-4.8 (consolidation 2026-06-14)",
+  "last_updated": "2026-06-22T17:13:00.000Z",
+  "active_agent": "claude opus-4.8 (program Q05 + Fable-stall diagnosis 2026-06-22)",
   "program_doc": "workspace/QUANTAN_EXPERT_TEAM_COMMERCIALIZATION.md",
   "coordination_doc": "workspace/coordination/PROGRESS_COORDINATION_2026-06-03.md",
+  "last_program_run": {
+    "date": "2026-06-22",
+    "cell": "Q05",
+    "result": "done (VERIFIED CLEAN + parity-safe cleanup + 11 tests)",
+    "pr": 66,
+    "git_main_head": "ac4ce09",
+    "prod_smoke": "PASS",
+    "next_cell": "Q06 (lib/backtest/executionModel.ts)",
+    "note": "Manual run. Scheduled 09:08 fires have 400-failed daily since 06-16 on the disabled Fable 5 model; owner must re-point the schedule/default model to Opus 4.8 to resume autonomous runs. Monday weekly deep sweep still due."
+  },
   "last_inspection": {
     "timestamp": "2026-06-03T02:35:00.000Z",
     "wave": 11,
