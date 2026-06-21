@@ -58,7 +58,19 @@ zone from `price`: a **flat** array (slope 0 → dips not buyable) and a **risin
 cross-cutting invariants (`BUY ⇒ slopePositive`, `SELL ⟺ FALLING_KNIFE`, `confidence ∈
 [0,100]`, purity). signals.test.ts 26 → **37**.
 
-**No escalations.** No published-number/contract/auth/secret change → SAFE category.
+**The shipped change is SAFE** (no published-number/contract/auth/secret change → auto-merge).
+
+**One latent finding ESCALATED (pre-existing, NOT introduced here; owner-gated → ledger `Q05-1`):**
+At **201–220 bars**, `sma200Slope` returns null (it needs ≥221: a 200-SMA now and 20 bars
+ago) so `slopePositive` is false, and a sub-−10% dip then emits a **confident
+`FALLING_KNIFE` SELL (82–95%)** purely from *missing-slope data* — which contradicts this
+file's own `dev==null` fail-closed intent. It is **reachable in the prod backtest path**:
+`resolveBacktestSignal` (the non-enhanced default) is called from `core.ts:238`
+`for (let i = 200; …)` with `closes.slice(0, i+1)`, i.e. 201–220 bars on each instrument's
+first ~20 evaluated bars. Long-only, so a SELL-when-flat is a no-op; the real effect is
+spurious early exits if a position is already held that early. **Owner-gated** because the
+honest fix (treat slope-uncomputable dips as INSUFFICIENT/HOLD, extending the fail-closed
+intent) changes backtest output → published numbers. Did **not** fix it in this cell.
 
 ## Verification (VERIFY A–F)
 - **A typecheck:** `tsc --noEmit` clean.
@@ -75,6 +87,7 @@ cross-cutting invariants (`BUY ⇒ slopePositive`, `SELL ⟺ FALLING_KNIFE`, `co
 
 ## Next cell
 **Q06** — `lib/backtest/executionModel.ts` (F-9 entry-slippage double-count vs 22bps SSOT;
-cost model). Still owner-gated and unchanged: **F-4 gross→net WR re-baseline** (Q01/Q02
-escalation), and the **scheduled-task model re-point to Opus** (root cause of the stall).
-Monday weekly deep sweep also still due.
+cost model). Owner-gated and unchanged: **F-4 gross→net WR re-baseline** (Q01/Q02
+escalation), **Q05-1** regime slope-null FALLING_KNIFE (this run, ledger), and the
+**scheduled-task model re-point to Opus** (root cause of the stall). Monday weekly deep
+sweep also still due.
