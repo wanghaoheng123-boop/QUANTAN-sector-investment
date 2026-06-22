@@ -473,8 +473,26 @@ SSOT (drift risk; architectural dup — fold into a consolidation).
 ### Verify (VERIFY A–F)
 - **A/B/C** n/a (no code change; btc-indicators has cryptoIndicators.test.ts). **D/E** n/a. **F** recorded.
 
+## Q26 — `quant_framework/garch.py` + `regime_hmm.py` (Python tier) — DONE, VERIFIED CLEAN
+
+**GARCH(1,1) MLE fix CONFIRMED LIVE — and actually RUN** (the one tier where pytest works on this
+FUSE mount). With `arch 8.0.0` installed, `fit_garch11`'s MLE branch executes and returns
+`method="garch11_mle"` with a finite/positive, non-flat per-step term structure — the 2026-06-10
+fix is intact: `np.atleast_1d(np.asarray(forecast.variance.values[-1], dtype=float))` vectorizes
+(replacing the `float(ndarray)` TypeError that the old bare `except` swallowed), the `except` is
+narrowed, there's a shape/finite/`>0` validation guard, and `float()` casts for JSON.
+**`pytest quant_framework/test_analytics.py` → 4/4 PASS**; inline MLE + regime checks pass.
+`regime_hmm.py` is a documented **rule-based stub** that mirrors the TS `ruleBasedRegime` (probs
+sum→1, short→Normal default; a real HMM needs `hmmlearn`, a known infra item). Both files hardcode
+`sqrt(252)` — the dormant Python sibling of **Q25-1** (the sidecar isn't wired in prod). Minor
+latent: `np.log(closes)`/`closes[-64]` lack a `>0` guard (no effect on sanitized data).
+
+### Verify (VERIFY A–F)
+- **A** n/a (no code change). **B** **pytest 4/4 PASS** + GARCH MLE inline-confirmed (`garch11_mle`,
+  non-flat). **C/D/E** n/a. **F** recorded.
+
 ## Next cell
-**Q26** — `quant_framework/garch.py` + `regime_hmm.py` (GARCH MLE — just fixed 2026-06-10, confirm
-live; HMM). NB Python tier — `pytest` runs fine on the FUSE mount (unlike vitest). Owner-gated
-backlog unchanged (F-4, F-9, F-2, F-11, F-3, Q05-1, Q09-1, Q14-1, Q25-1, + scheduled-task model
-re-point to Opus). Monday weekly deep sweep also still due.
+**Q27** — `quant_framework/backtest.py` + `strategy.py` + `analysis.py` + `data_engine.py` (offline
+framework parity). Last WS-Q cell. Owner-gated backlog unchanged (F-4, F-9, F-2, F-11, F-3, Q05-1,
+Q09-1, Q14-1, Q23-1, Q25-1, + scheduled-task model re-point to Opus). Monday weekly deep sweep also
+still due.
