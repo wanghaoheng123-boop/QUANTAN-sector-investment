@@ -348,7 +348,20 @@ confirms `buildFundamentalsPayload` is equity-only** (the linchpin for the Q16+Q
 ### Verify (VERIFY A–F)
 - **A/B/C** n/a (no code change; has volatility.test.ts). **D/E** n/a. **F** recorded.
 
+## Q18 — `correlation.ts` + `intermarket.ts` (WS-Q) — DONE, VERIFIED CLEAN (no code change)
+
+Exemplary. `pearsonCorrelation`: length-match + min-2, zero-variance (`varA<=0||varB<=0→null`),
+finite check, clamp [-1,1]. `maxCorrelationVsPeers`: fail-closed (the prior fail-OPEN `<minWindow
+→ 0` bug is fixed → now `→ null`) + SIGNED-max per Markowitz (penalize +rho overlap, reward −rho
+hedges) with a tail-correlation caveat. `correlationAdjustedKelly`: fail-closed on unmeasurable
+rho (→0), `denom=max(1e-9,1−gate)` div-guard, continuous linear shrink. `intermarketCorrelations`:
+n≥63/252 window guards; `classifyRegime`: null-safe (requires both SPY & VIX corr non-null before
+thresholds, else 'mixed'). All NaN-handled; both tested. No findings.
+
+### Verify (VERIFY A–F)
+- **A/B/C** n/a (no code change; correlation.test.ts + intermarket.test.ts). **D/E** n/a. **F** recorded.
+
 ## Next cell
-**Q18** — `lib/quant/correlation.ts` + `intermarket.ts` (correlation math; NaN handling).
-Owner-gated backlog unchanged (F-4, F-9, F-2, F-11, F-3, Q05-1, Q09-1, Q14-1, + scheduled-task
-model re-point to Opus). Monday weekly deep sweep also still due.
+**Q19** — `lib/quant/kelly.ts` (Kelly sizing — has a property test; bounds). Owner-gated backlog
+unchanged (F-4, F-9, F-2, F-11, F-3, Q05-1, Q09-1, Q14-1, + scheduled-task model re-point to
+Opus). Monday weekly deep sweep also still due.
