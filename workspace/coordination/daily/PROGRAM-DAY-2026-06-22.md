@@ -278,10 +278,26 @@ are computed but never returned (dead) — dev-only, no deploy warranted.
 - **A/B/C** n/a (no code change). **D/E** n/a (no deploy). **F** recorded (queue/run-log/ledger
   Q13-1/this report/MEMORY_LOG/SESSION_STATE).
 
+## Q14 — `parameterSets.ts` + `sectorProfiles.ts` (WS-Q) — DONE; Q14-1 escalated (no code change)
+
+**Config VERIFIED SANE.** Grid combo counts correct (LOOP1 = 4⁵ = 1024, LOOP2 = 4×4×3×2×3 =
+288); baselines/targets/`PARAM_INTERPRETATION` coherent; `SectorProfile` thresholds in sensible
+ranges; both files tested.
+
+**Escalated Q14-1 (dormant enhanced-path — ledger):** incomplete macro-gate plumbing —
+(a) `SectorProfile.maxVixForBuy` is defined per-sector (Technology 30, etc.) + glossed but **read
+by no signal logic** → inert (the VIX gate is unimplemented); (b) `SectorGateConfig.yieldCurveGate`
+(`signalTypes.ts:102`) has **no `SectorProfile` source** and the core signal files don't consume
+it → Financials' yield-curve gate is unwired; (c) doc nit: `parameterSets.ts:5` says "768
+combinations" vs the actual 1024. All enhanced-path (off in prod) → part of the enhanced
+retire-or-invest decision.
+
+### Verify (VERIFY A–F)
+- **A/B/C** n/a (no code change). **D/E** n/a (no deploy). **F** recorded (queue/run-log/ledger
+  Q14-1/this report/MEMORY_LOG/SESSION_STATE).
+
 ## Next cell
-**Q14** — `lib/optimize/parameterSets.ts` + `sectorProfiles.ts` (parameter ranges; macro gate
-fields). Owner-gated backlog: **F-4** gross→net WR re-baseline, **F-9** entry double-count, **F-2**
-alpha mismatched windows, **F-11** union-calendar holdDays, **F-3** close-based trailing peak,
-**Q05-1** regime slope-null FALLING_KNIFE, **Q09-1** live sectorGates parity, and the
-**scheduled-task model re-point to Opus** (root cause of the stall). Monday weekly deep sweep
-also still due.
+**Q15** — `lib/quant/indicators.ts` (SSOT primitives sma/ema/rsi/macd/atr/bollinger + sma200*;
+EMA seeding). **This is a core LIVE SSOT** — higher scrutiny. Owner-gated backlog unchanged
+(F-4, F-9, F-2, F-11, F-3, Q05-1, Q09-1, + scheduled-task model re-point to Opus). Monday weekly
+deep sweep also still due.
