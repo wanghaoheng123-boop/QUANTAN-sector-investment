@@ -194,11 +194,33 @@ retire-or-invest; the fix is a prod-no-op but the enhanced path is unvalidated. 
   **C/D/E** n/a (no deploy). **F** recorded (queue/run-log/ledger Q09-1/this report/MEMORY_LOG/
   SESSION_STATE).
 
+## Q10 — `lib/backtest/portfolioBacktest.ts` (WS-Q) — DONE; F-2 escalated (no code change)
+
+**Cell file is the DORMANT engine.** `portfolioBacktest.ts` is a dev script
+(`scripts/portfolio-backtest.ts`), in no API route / no CI gate. Its `sectorGateByTicker`
+wiring (`:215-232`) is correct-but-dormant (gates only bite the enhanced path); it computes
+no alpha. F-3/F-11 already live here.
+
+**F-2 was mis-scoped to this file — it actually lives in the LIVE path `engine.ts`
+`aggregatePortfolio`:** `alpha = truePortfolioReturn − bnhAvg` (`engine.ts:189`). The portfolio
+leg (`truePortfolioReturn`) is the **end-aligned common (min-length) window** combine, but
+`bnhAvg` (`:188`) averages each instrument's **full-history** `bnhReturn` (`core.ts:422`
+`computeBuyAndHoldReturn` over all rows). For unequal-length instruments the two legs span
+different horizons → alpha is apples-to-oranges. **LATENT** on the current 56-file dataset (all
+1255 bars → common == full → alpha currently correct), but `/api/backtest` accepts arbitrary
+tickers, so mixed-length sets are reachable in production and alpha is shown in the backtest UI.
+**Escalated** (ledger `F-2`): changes a published metric, and `aggregatePortfolio` is **not**
+covered by the CI benchmark (which uses `benchmarkLabel`), so a fix can't be WR-gated → owner
+re-baseline. Not changed.
+
+### Verify (VERIFY A–F)
+- **A** n/a (no code change). **B** unchanged. **C/D/E** n/a (no deploy). **F** recorded
+  (queue/run-log/ledger F-2/this report/MEMORY_LOG/SESSION_STATE).
+
 ## Next cell
-**Q10** — `lib/backtest/portfolioBacktest.ts` (F-2 alpha mismatched windows after the
-common-window fix; sectorGates wiring). NB this is the dormant portfolio engine (no API route,
-no CI gate) — F-3/F-11 already live here. Owner-gated backlog (growing): **F-4** gross→net WR
-re-baseline, **F-9** entry double-count, **F-11** union-calendar holdDays, **F-3** close-based
+**Q11** — `lib/backtest/walkForward.ts` (F-12 hardcoded 252 / rf-252 for BTC; OOS non-zero).
+Owner-gated backlog (growing): **F-4** gross→net WR re-baseline, **F-9** entry double-count,
+**F-2** alpha mismatched windows, **F-11** union-calendar holdDays, **F-3** close-based
 trailing peak, **Q05-1** regime slope-null FALLING_KNIFE, **Q09-1** live sectorGates parity, and
 the **scheduled-task model re-point to Opus** (root cause of the stall). Monday weekly deep
 sweep also still due.
