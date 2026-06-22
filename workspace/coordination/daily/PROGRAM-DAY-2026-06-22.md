@@ -373,7 +373,21 @@ enforced at call sites (`Math.min(KellyFraction, 0.50)` in core.ts; 0.30/0.15 ca
 ### Verify (VERIFY A–F)
 - **A/B/C** n/a (no code change; property-tested). **D/E** n/a. **F** recorded.
 
+## Q20 — `regimeDetection.ts` + `regimeHmmClient.ts` (WS-Q, live) — DONE, VERIFIED CLEAN
+
+`detectRegime` is **fail-closed and exemplary**: the `volKnown`/`trendKnown` flags fix prior
+fail-OPEN bugs (no `+10` confidence boost or `strategyHint` on unmeasured data), `vol60>0` +
+`Number.isFinite(lastAdx)` guards, `volRatio` surfaced as null when unmeasured, confidence clamped
+`[0,100]`. The **HMM client fallback is robust**: `fetchHmmRegime` uses an 8 s `AbortSignal.timeout`,
+`catch`-swallows all errors → `ruleBasedRegime`, and always returns a valid result; `ruleBasedRegime`
+is guarded (`n<60` default, `vol60>0` ratio guard, probabilities sum to 1). Minor latent (not
+escalated): `ruleBasedRegime`'s `closes[n-64]` denominator + `logReturns` lack a `>0` guard — no
+effect on sanitized data (0 ≤0-price rows in the 70,796-row scan). No findings.
+
+### Verify (VERIFY A–F)
+- **A/B/C** n/a (no code change; regimeDetection.test.ts). **D/E** n/a. **F** recorded.
+
 ## Next cell
-**Q20** — `lib/quant/regimeDetection.ts` + `regimeHmmClient.ts` (regime labels; HMM client
-fallback). Owner-gated backlog unchanged (F-4, F-9, F-2, F-11, F-3, Q05-1, Q09-1, Q14-1, +
-scheduled-task model re-point to Opus). Monday weekly deep sweep also still due.
+**Q21** — `lib/quant/pivots.ts` + `priceBands.ts` + `volumeProfile.ts` (level math; off-by-one).
+Owner-gated backlog unchanged (F-4, F-9, F-2, F-11, F-3, Q05-1, Q09-1, Q14-1, + scheduled-task
+model re-point to Opus). Monday weekly deep sweep also still due.
