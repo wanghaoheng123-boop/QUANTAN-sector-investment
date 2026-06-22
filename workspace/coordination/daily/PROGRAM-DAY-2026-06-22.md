@@ -117,9 +117,39 @@ exit). The fix (reconcile to a single 2 bps source) shifts net returns / the pub
   **E** prod smoke `/`,`/api/sector-rotation`,`/api/analytics/AAPL` all 200. **F** recorded
   (queue/run-log/ledger F-9/this report/MEMORY_LOG/SESSION_STATE).
 
+## Q07 — `lib/backtest/exitRules.ts` (WS-Q) — DONE, VERIFIED CLEAN (no code change)
+
+**Target verdict: VERIFIED CLEAN.** The exit primitives are correct and exhaustively
+tested (50 cases): `evaluateStopHit` (intra-bar breach + gap-fill SSOT), `atrAdaptiveStop`
+(forming-bar exclusion F1.22, floor/ceiling, property invariants), `checkExitConditions`
+(priority stop>panic>signal>profit>trail>time, F1.3 intraday semantics), `computeExitStats`.
+The **live** path (`core.ts`) imports only the clean `evaluateStopHit` primitive — NOT the
+`checkExitConditions`/`maxHoldDays`/trailing machinery.
+
+**Both seeded findings are caller-side in `portfolioBacktest.ts` and ESCALATED (ledger):**
+that engine is a **dev script** (`scripts/portfolio-backtest.ts`) — in **no API route and no
+CI gate**, so its output is not published.
+- **F-11 (real bug, dormant):** `holdDays = currentIdx − entryIdx` (`exitRules.ts:252`) is fed
+  **union-calendar** indices (`portfolioBacktest.ts:151` builds the union; passes `di` at `:316`,
+  `entryIdx: di` at `:464`). An instrument that doesn't trade on some union dates has its hold
+  window inflated by other tickers' sessions → `time_exit` on the wrong horizon. Fix needs a
+  per-instrument bar count + a portfolio test (none exists).
+- **F-3 (methodology note):** `updatePosition(pos, row.close)` (`:268`) ratchets `highestPrice`
+  on the **close**, not the intra-bar high, so the trailing anchor understates the true peak.
+  Arguably a *deliberate* conservative choice, and there is **no same-bar look-ahead**
+  (checkExitConditions receives the pre-update `pos`, so today's close can't move today's trail).
+
+Neither is auto-fixable under §4b: dormant engine with no validating gate, and F-3 is a
+judgment call. No code change → tracking-only commit.
+
+### Verify (VERIFY A–F)
+- **A** n/a (no code change). **B** existing exitRules 50/50 (unchanged). **C** n/a (no
+  behavior change). **D/E** n/a (no deploy). **F** recorded (queue/run-log/ledger F-11+F-3/
+  this report/MEMORY_LOG/SESSION_STATE).
+
 ## Next cell
-**Q07** — `lib/backtest/exitRules.ts` (F-3 trailing-stop intra-bar look-ahead + non-ratcheting
-peak; F-11 maxHoldDays union-calendar vs trading days). Owner-gated and unchanged: **F-4**
-gross→net WR re-baseline, **F-9** entry double-count (this run), **Q05-1** regime slope-null
-FALLING_KNIFE, and the **scheduled-task model re-point to Opus** (root cause of the stall).
-Monday weekly deep sweep also still due.
+**Q08** — `lib/backtest/benchmarkLabel.ts` (label parity with `resolveBacktestSignal`;
+`signalParity` test). Owner-gated backlog (growing): **F-4** gross→net WR re-baseline, **F-9**
+entry double-count, **F-11** union-calendar holdDays, **F-3** close-based trailing peak,
+**Q05-1** regime slope-null FALLING_KNIFE, and the **scheduled-task model re-point to Opus**
+(root cause of the stall). Monday weekly deep sweep also still due.
