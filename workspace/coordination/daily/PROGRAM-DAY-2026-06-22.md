@@ -515,8 +515,27 @@ verified clean**; **11 findings escalated** to `reviews/findings-ledger.csv` (F-
 Q05-1, Q09-1, Q13-1, Q14-1, Q15-1, Q23-1, Q25-1; Q16/Q17 resolved benign at the Q22 equity-only
 linchpin). GARCH MLE fix confirmed live (pytest). **Next workstream: WS-PY** (Python sidecar).
 
+## PY1 — trading-agents sidecar (WS-PY) — DONE, HARDENINGS CONFIRMED INTACT
+
+The F-PY-12/13/14/15/16 hardening (consolidation 2026-06-14) is all present and tested:
+- **F-PY-12** (API-key leak): `ApiKeyEnvGuard.__exit__` tracks `_injected` and **pops** the injected
+  key when there was no prior server value (no leak past the request), else restores the original.
+- **F-PY-13** (per-provider lock): `ProviderLockRegistry` (stable lock per provider, meta-lock guards
+  the creation race) wired at `server:203-204` — `with provider_lock, _ApiKeyEnvGuard(...)` serializes
+  same-provider `os.environ` mutation + the LLM call; different providers stay concurrent.
+- **F-PY-14** (unblockable shutdown): `executor.shutdown(wait=False, cancel_futures=True)` (`:219`).
+- **F-PY-15**: the dead `ContextVar` is **gone**.
+- **F-PY-16** (bounded cache): `BoundedResultCache` (FIFO `OrderedDict`, thread-safe, bounds ≥ 1)
+  wired at `:109`; the result cache **never stores `api_key`** (privacy).
+
+**`pytest tests/test_trading_agents_runtime.py tests/test_api_key_guard.py` → 15/15 PASS;
+`py_compile` OK.** Offline sidecar (not in the Vercel request path) — this is the privacy/concurrency
+contract. No new findings.
+
+### Verify (VERIFY A–F)
+- **A** n/a (no code change). **B** **pytest 15/15 PASS** + py_compile OK. **C/D/E** n/a. **F** recorded.
+
 ## Next cell
-**PY1** (WS-PY) — `server_trading_agents.py` + `trading_agents_runtime.py` +
-`trading_agents_env_guard.py` (just hardened F-PY-12/13/14/15/16 — confirm). Owner-gated backlog
-unchanged (F-4, F-9, F-2, F-8, F-11, F-3, Q05-1, Q09-1, Q13-1, Q14-1, Q15-1, Q23-1, Q25-1, +
-scheduled-task model re-point to Opus). Monday weekly deep sweep also still due.
+**PY2** (WS-PY) — `server_options.py` (CORS, bridge, options math). Owner-gated backlog unchanged
+(F-4, F-9, F-2, F-8, F-11, F-3, Q05-1, Q09-1, Q13-1, Q14-1, Q15-1, Q23-1, Q25-1, + scheduled-task
+model re-point to Opus). Monday weekly deep sweep also still due.
