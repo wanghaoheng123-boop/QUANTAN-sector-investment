@@ -453,8 +453,28 @@ fail-closed and delegates to the `normalizeTicker` SSOT (F7.3 SSRF hardening int
 ### Verify (VERIFY A–F)
 - **A/B/C** n/a (no code change). **D/E** n/a. **F** recorded.
 
+## Q25 — `btc-indicators` + `garchClient` + `earningsParse` + `frameworks` + `chartQuoteFilter` — DONE
+
+Mostly clean; **1 real finding escalated.** MVRV/S2F/PiCycle math is clean and guarded:
+`calcMVRV` (finite + `realizedCap>0`/`price>0`), `calcS2FPrice` (finite + ≥0), `calcPiCycleTop`
+(finite + `ema350>0`) — the documented NaN-rejection fixes are intact. `fetchGarchForecast`'s
+fallback is robust (8 s `AbortSignal.timeout`, `catch`→EWMA).
+
+**Escalated Q25-1 (MEDIUM, LIVE — ledger):** `ewmaVolForecast` annualizes with `sqrt(252)`, but
+this is the **BTC** conditional-vol forecast — served by `app/api/conditional-vol/[ticker]` and
+shown in BtcQuantLab, and (per the 2026-06-10 review) the EWMA fallback is what's actually
+displayed (no `/garch` route wired). BTC trades 365 days, so `sqrt(252)` **understates BTC
+conditional vol by ~17%** (same F-12 class as Q11, but garch IS published + crypto-reachable —
+unlike Q16/Q17 whose caller was equity-only). Fix = parameterize annualization and pass 365 for
+crypto; changes a displayed API number and isn't benchmark-gated → owner-gated. Also noted:
+`btc-indicators.ts` reimplements `calcEMA/RSI/MACD/ATR/OBV/ADX` separately from the `indicators.ts`
+SSOT (drift risk; architectural dup — fold into a consolidation).
+
+### Verify (VERIFY A–F)
+- **A/B/C** n/a (no code change; btc-indicators has cryptoIndicators.test.ts). **D/E** n/a. **F** recorded.
+
 ## Next cell
-**Q25** — `lib/quant/btc-indicators.ts` + `garchClient.ts` + `earningsParse.ts` + `frameworks.ts` +
-`chartQuoteFilter.ts` (MVRV/S2F; garch TS EWMA fallback). Owner-gated backlog unchanged (F-4, F-9,
-F-2, F-11, F-3, Q05-1, Q09-1, Q14-1, + scheduled-task model re-point to Opus). Monday weekly deep
-sweep also still due.
+**Q26** — `quant_framework/garch.py` + `regime_hmm.py` (GARCH MLE — just fixed 2026-06-10, confirm
+live; HMM). NB Python tier — `pytest` runs fine on the FUSE mount (unlike vitest). Owner-gated
+backlog unchanged (F-4, F-9, F-2, F-11, F-3, Q05-1, Q09-1, Q14-1, Q25-1, + scheduled-task model
+re-point to Opus). Monday weekly deep sweep also still due.
