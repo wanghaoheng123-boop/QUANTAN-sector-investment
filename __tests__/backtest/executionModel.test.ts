@@ -31,4 +31,23 @@ describe('executionModel', () => {
     expect(roundTripCostPct()).toBeCloseTo(2 * perSideCostPct(), 12)
     expect(TX_COST_PCT_PER_SIDE).toBe(perSideCostPct())
   })
+
+  // Q06: the config argument was never exercised — only the default was tested,
+  // so a regression in the parameterization (e.g. a function ignoring its config)
+  // would pass silently. These lock the config-injection path.
+  it('honours a custom ExecutionCostConfig (parameterization flows through)', () => {
+    const custom = { spreadBpsPerSide: 10, slippageBpsPerSide: 3, commissionBpsPerSide: 7 } // 20/side
+    expect(costBpsPerSide(custom)).toBe(20)
+    expect(perSideCostPct(custom)).toBeCloseTo(0.0020, 10)
+    expect(roundTripCostPct(custom)).toBeCloseTo(0.0040, 10)
+    expect(netReturnAfterCosts(0.05, custom)).toBeCloseTo(0.05 - 0.0040, 10)
+  })
+
+  it('zero-cost config is a frictionless identity (net == gross)', () => {
+    const free = { spreadBpsPerSide: 0, slippageBpsPerSide: 0, commissionBpsPerSide: 0 }
+    expect(costBpsPerSide(free)).toBe(0)
+    expect(roundTripCostPct(free)).toBe(0)
+    expect(netReturnAfterCosts(0.0731, free)).toBe(0.0731)
+    expect(netReturnAfterCosts(-0.042, free)).toBe(-0.042)
+  })
 })

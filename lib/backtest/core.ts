@@ -356,6 +356,12 @@ export function backtestInstrument(
         continue
       }
       const costBasis = shares * entryPrice
+      // F-9 (findings-ledger, owner-gated): `entryPrice` already embeds the 2 bps
+      // ENTRY_SLIPPAGE_BPS, AND `txCost` = 11 bps/side already includes a 2 bps
+      // slippage component (executionModel `slippageBpsPerSide`). So the 2 bps of
+      // open friction is counted TWICE at entry (~13 bps vs the 11 bps/side SSOT;
+      // round-trip ~24 vs 22). Correcting it changes net returns / the published WR
+      // → needs an owner re-baseline, so it is intentionally left as-is here.
       const txCost = costBasis * TX_COST_PCT_PER_SIDE
       state.capital -= (costBasis + txCost)  // buy at next-open + slippage + transaction cost
       state.position += shares
