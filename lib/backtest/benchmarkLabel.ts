@@ -90,7 +90,14 @@ export function signalAtBarIndex(
 
   const entryPrice = rows[i + 1].close
   const exitPrice = rows[Math.min(i + 1 + LABEL_HOLD_DAYS, rows.length - 1)].close
-  if (!Number.isFinite(entryPrice) || entryPrice <= 0) {
+  // Fail closed on a corrupt entry OR exit close. The entry was already guarded;
+  // the exit needs the same treatment — a non-finite/<=0 exit makes grossReturn
+  // NaN, which slips through the caller's `== null` filter (NaN != null) and is
+  // then counted as a loss (`NaN > 0` is false) while poisoning avgReturn20d.
+  // Benchmark-neutral on the current dataset (0 non-finite/<=0 closes across all
+  // 56 backtestData files / 70,796 rows); guards only a latent corrupt-bar case.
+  if (!Number.isFinite(entryPrice) || entryPrice <= 0 ||
+      !Number.isFinite(exitPrice) || exitPrice <= 0) {
     return { action, grossReturn: null, netReturn: null }
   }
   const grossReturn = (exitPrice - entryPrice) / entryPrice
