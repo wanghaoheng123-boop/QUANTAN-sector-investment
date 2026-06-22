@@ -70,7 +70,10 @@ export function loadStockHistory(ticker: string): OhlcvRow[] {
           Number.isFinite(b.low) &&
           Number.isFinite(b.close)
         ) {
-          out.push({ time, open: b.open, high: b.high, low: b.low, close: b.close, volume: b.volume ?? 0 })
+          // `?? 0` only catches null/undefined; a NaN/Infinity volume would slip
+          // through into the volume indicators (VWAP/VPOC/OBV/volSMA). Coerce any
+          // non-finite volume to 0, consistent with the missing-volume default.
+          out.push({ time, open: b.open, high: b.high, low: b.low, close: b.close, volume: Number.isFinite(b.volume) ? b.volume : 0 })
         }
       }
       return out
@@ -89,7 +92,7 @@ export function loadStockHistory(ticker: string): OhlcvRow[] {
       Number.isFinite(c.low) &&
       Number.isFinite(c.close)
     ) {
-      out.push({ time: c.time, open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume ?? 0 })
+      out.push({ time: c.time, open: c.open, high: c.high, low: c.low, close: c.close, volume: Number.isFinite(c.volume) ? c.volume : 0 })
     }
   }
   return out
@@ -111,7 +114,7 @@ export function loadBtcHistory(): OhlcvRow[] {
       Number.isFinite(c.low) &&
       Number.isFinite(c.close)
     ) {
-      out.push({ time: c.time, open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume ?? 0 })
+      out.push({ time: c.time, open: c.open, high: c.high, low: c.low, close: c.close, volume: Number.isFinite(c.volume) ? c.volume : 0 })
     }
   }
   return out

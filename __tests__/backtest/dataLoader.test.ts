@@ -165,6 +165,25 @@ describe('loadStockHistory', () => {
     expect(mockedFs.existsSync).not.toHaveBeenCalled()
   })
 
+  it('coerces a non-finite warehouse volume to 0 but KEEPS the row (Q12)', () => {
+    // The warehouse path is where non-finite values are reachable (same source as
+    // the D5-1 OHLC fix; JSON can't carry NaN — it serializes to null). `?? 0`
+    // only catches null/undefined, so a NaN/Infinity volume slipped through into
+    // the volume indicators (VWAP/VPOC/OBV/volSMA). The OHLC are valid, so the bar
+    // is kept with volume zeroed — consistent with the missing-volume default.
+    mockedWh.isWarehouseAvailable.mockReturnValue(true)
+    mockedWh.getCandles.mockReturnValue([
+      { date: '2025-01-02', open: 100, high: 102, low: 99, close: 101, volume: NaN },       // NaN vol → 0
+      { date: '2025-01-03', open: 101, high: 103, low: 100, close: 102, volume: Infinity }, // Inf vol → 0
+      { date: '2025-01-06', open: 102, high: 104, low: 101, close: 103, volume: 1200 },     // preserved
+    ])
+    const rows = loadStockHistory('AAPL')
+    expect(rows).toHaveLength(3) // OHLC valid → rows kept
+    expect(rows[0].volume).toBe(0)
+    expect(rows[1].volume).toBe(0)
+    expect(rows[2].volume).toBe(1200)
+  })
+
   it('returns empty (no JSON fallthrough) when every warehouse row is non-finite (D5-1)', () => {
     mockedWh.isWarehouseAvailable.mockReturnValue(true)
     mockedWh.getCandles.mockReturnValue([
