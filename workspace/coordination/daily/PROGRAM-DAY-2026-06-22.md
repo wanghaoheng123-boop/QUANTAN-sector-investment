@@ -85,9 +85,41 @@ intent) changes backtest output → published numbers. Did **not** fix it in thi
 - **F record:** this report + PROGRAM_QUEUE Q05→done + run-log + MEMORY_LOG row +
   SESSION_STATE bump.
 
+## Q06 — `lib/backtest/executionModel.ts` (WS-Q) — DONE, merged (PR #67, `0c138fc`, prod ✓)
+
+**Target verdict: VERIFIED CLEAN.** `executionModel.ts` is pure, correct cost math
+(`spread 5 + slippage 2 + commission 4 = 11 bps/side` → 22 bps round-trip), and already
+has an engine-parity test (`TX_COST_BPS_PER_SIDE === costBpsPerSide()`).
+
+**Seeded F-9 finding CONFIRMED REAL — ESCALATED, not auto-fixed (ledger `F-9`, owner-gated):**
+the double-count is in the engine, not the SSOT. In `core.ts backtestInstrument` a BUY pays
+**both**:
+1. a 2 bps `ENTRY_SLIPPAGE_BPS` bump baked into `entryPrice` (`core.ts:344`), and
+2. `txCost = costBasis × 11 bps/side` (`core.ts:358-360`) — and 11 bps **already includes**
+   a 2 bps `slippageBpsPerSide` component.
+
+So the 2 bps open friction is **counted twice at entry** → entry ≈ **13 bps** vs the SSOT's
+11 bps/side; round-trip ≈ **24 vs 22 bps**. Exit (`closePosition`, `core.ts:169`) is clean at
+11 bps with no price bump (an existing comment already declines to mirror entry slippage onto
+exit). The fix (reconcile to a single 2 bps source) shifts net returns / the published WR →
+**owner re-baseline**, so it was left as-is.
+
+**SAFE shipped (behavior-preserving — `signalParity` 2/2):**
+- `executionModel.test.ts`: +2 tests for a custom `ExecutionCostConfig` and a zero-cost
+  identity. The config-injection path was previously untested (only the default) → a
+  parameterization regression would have passed silently.
+- `core.ts`: a **doc-only** comment at the entry-cost site marking the F-9 double-count + the
+  re-baseline caveat, so it is not silently "fixed" without a re-baseline.
+
+### Verify (VERIFY A–F)
+- **A** tsc clean. **B** executionModel 6/6 + signalParity 2/2. **C** benchmark unchanged
+  (no behavior change; CI `benchmark` pass 43s). **D** Vercel prod deploy READY (`0c138fc`).
+  **E** prod smoke `/`,`/api/sector-rotation`,`/api/analytics/AAPL` all 200. **F** recorded
+  (queue/run-log/ledger F-9/this report/MEMORY_LOG/SESSION_STATE).
+
 ## Next cell
-**Q06** — `lib/backtest/executionModel.ts` (F-9 entry-slippage double-count vs 22bps SSOT;
-cost model). Owner-gated and unchanged: **F-4 gross→net WR re-baseline** (Q01/Q02
-escalation), **Q05-1** regime slope-null FALLING_KNIFE (this run, ledger), and the
-**scheduled-task model re-point to Opus** (root cause of the stall). Monday weekly deep
-sweep also still due.
+**Q07** — `lib/backtest/exitRules.ts` (F-3 trailing-stop intra-bar look-ahead + non-ratcheting
+peak; F-11 maxHoldDays union-calendar vs trading days). Owner-gated and unchanged: **F-4**
+gross→net WR re-baseline, **F-9** entry double-count (this run), **Q05-1** regime slope-null
+FALLING_KNIFE, and the **scheduled-task model re-point to Opus** (root cause of the stall).
+Monday weekly deep sweep also still due.
