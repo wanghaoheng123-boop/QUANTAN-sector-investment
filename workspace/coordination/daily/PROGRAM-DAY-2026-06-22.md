@@ -217,10 +217,34 @@ re-baseline. Not changed.
 - **A** n/a (no code change). **B** unchanged. **C/D/E** n/a (no deploy). **F** recorded
   (queue/run-log/ledger F-2/this report/MEMORY_LOG/SESSION_STATE).
 
+## Q11 — `lib/backtest/walkForward.ts` (WS-Q) — DONE, merged (PR #69, `0dc8122`, prod ✓)
+
+**"OOS non-zero" already fixed** (F1.1 trade-attribution rework — see docstring; no action).
+
+**F-12 FIXED (SAFE):** `annualized()` / `windowSharpe()` hardcoded **252** trading-days/yr for
+IS/OS returns, the rf daily rate, and the Sharpe √T → wrong for **crypto (365)**. Threaded
+`tradingDaysPerYear(ticker, sector)` (default 252 preserves equities).
+
+**Why SAFE / nothing published changes:** `walkForward` is a **diagnostic** — not in any API
+route, not UI-surfaced, not a CI gate; its only consumer is `engine.test.ts` (equity). The fix
+is a **no-op for equities** (`→ 252`) and only corrects crypto, so the **engine suite (21
+tests) is unchanged** and the CI `benchmark` (which uses `benchmarkLabel`, not `walkForward`)
+is unaffected.
+
+**Test (`__tests__/backtest/walkForward.test.ts`, new):** on real AAPL data, crypto (365)
+annualizes the same window returns to a strictly **larger magnitude** than equity (252); equity
+output identical across sectors (regression lock); crypto summary invariants hold.
+
+### Verify (VERIFY A–F)
+- **A** tsc clean. **B** walkForward 3/3 + engine 21/21. **C** benchmark unaffected (not in the
+  walkForward path; CI `benchmark` pass 42s). **D** Vercel prod deploy READY (`0dc8122`,
+  `dpl_AJMv…`). **E** prod smoke — first pass showed `/`=HTTP 000 (transient curl failure mid
+  deploy-finalize; APIs were 200); **re-smoke `/`=200 ×2 + both APIs 200** → healthy, **no
+  auto-revert** (re-smoke-before-revert per the workflow). **F** recorded.
+
 ## Next cell
-**Q11** — `lib/backtest/walkForward.ts` (F-12 hardcoded 252 / rf-252 for BTC; OOS non-zero).
-Owner-gated backlog (growing): **F-4** gross→net WR re-baseline, **F-9** entry double-count,
-**F-2** alpha mismatched windows, **F-11** union-calendar holdDays, **F-3** close-based
-trailing peak, **Q05-1** regime slope-null FALLING_KNIFE, **Q09-1** live sectorGates parity, and
-the **scheduled-task model re-point to Opus** (root cause of the stall). Monday weekly deep
-sweep also still due.
+**Q12** — `lib/backtest/dataLoader.ts` (non-finite OHLC sanitize; NaN time). Owner-gated
+backlog: **F-4** gross→net WR re-baseline, **F-9** entry double-count, **F-2** alpha mismatched
+windows, **F-11** union-calendar holdDays, **F-3** close-based trailing peak, **Q05-1** regime
+slope-null FALLING_KNIFE, **Q09-1** live sectorGates parity, and the **scheduled-task model
+re-point to Opus** (root cause of the stall). Monday weekly deep sweep also still due.
