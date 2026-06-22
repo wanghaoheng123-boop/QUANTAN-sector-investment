@@ -491,8 +491,32 @@ latent: `np.log(closes)`/`closes[-64]` lack a `>0` guard (no effect on sanitized
 - **A** n/a (no code change). **B** **pytest 4/4 PASS** + GARCH MLE inline-confirmed (`garch11_mle`,
   non-flat). **C/D/E** n/a. **F** recorded.
 
+## Q27 — `quant_framework` backtest/strategy/analysis/data_engine — DONE; **WS-Q COMPLETE**
+
+Offline framework (not in the live Vercel path). `BacktestEngine.run` uses **T+1 fills**
+(`opens[min(i+1,n-1)]·(1+slippage)`, line 155) + commission → no look-ahead; `_compute_sharpe`/
+`_compute_sortino` use `sqrt(252)` + N-1 denominator + `excess = ret − rf/252`, plus maxDD and
+ann-vol — the **same conventions as the live TS path** (T+1 / cost / 252 / N-1, matching `core.ts`
++ `indicators.ts`). **`pytest quant_framework/` → 4/4 PASS.** The 252 annualization is the
+offline-research convention (same crypto-365 theme as Q25-1, but offline → lowest priority). No new
+findings.
+
+### Verify (VERIFY A–F)
+- **A** n/a (no code change). **B** **pytest 4/4 PASS**. **C/D/E** n/a. **F** recorded.
+
+---
+
+## ✅ WS-Q COMPLETE — Q01–Q27 (the entire quant workstream)
+
+Q01–Q04 ran on the 2026-06-15 scheduled days; **Q05–Q27 this manual Opus-4.8 session (2026-06-22)**.
+Coverage: the full signal → backtest engine → indicators SSOT → optimization → valuation → crypto →
+Python framework surface. **5 SAFE fixes shipped to prod** (Q05/Q06/Q08/Q11/Q12); **the rest
+verified clean**; **11 findings escalated** to `reviews/findings-ledger.csv` (F-2, F-3, F-9, F-11,
+Q05-1, Q09-1, Q13-1, Q14-1, Q15-1, Q23-1, Q25-1; Q16/Q17 resolved benign at the Q22 equity-only
+linchpin). GARCH MLE fix confirmed live (pytest). **Next workstream: WS-PY** (Python sidecar).
+
 ## Next cell
-**Q27** — `quant_framework/backtest.py` + `strategy.py` + `analysis.py` + `data_engine.py` (offline
-framework parity). Last WS-Q cell. Owner-gated backlog unchanged (F-4, F-9, F-2, F-11, F-3, Q05-1,
-Q09-1, Q14-1, Q23-1, Q25-1, + scheduled-task model re-point to Opus). Monday weekly deep sweep also
-still due.
+**PY1** (WS-PY) — `server_trading_agents.py` + `trading_agents_runtime.py` +
+`trading_agents_env_guard.py` (just hardened F-PY-12/13/14/15/16 — confirm). Owner-gated backlog
+unchanged (F-4, F-9, F-2, F-8, F-11, F-3, Q05-1, Q09-1, Q13-1, Q14-1, Q15-1, Q23-1, Q25-1, +
+scheduled-task model re-point to Opus). Monday weekly deep sweep also still due.
