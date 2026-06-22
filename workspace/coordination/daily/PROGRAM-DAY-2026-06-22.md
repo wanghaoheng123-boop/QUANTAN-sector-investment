@@ -173,9 +173,32 @@ lock.
   (proven by dataset scan; CI benchmark pass). **D** Vercel prod deploy READY (`4e801b8`).
   **E** prod smoke `/`,`/api/sector-rotation`,`/api/analytics/AAPL` all 200. **F** recorded.
 
+## Q09 — `lib/backtest/liveSignal.ts` (WS-Q) — DONE, VERIFIED CLEAN (no code change)
+
+**Verdict: production-consistent and clean.** `buildLiveInstrumentSignal` maps OHLCV rows to
+the live desk payload through the **same `resolveBacktestSignal` SSOT** as the backtest; every
+indicator (rsi/macd/atr/bb/atrPct) is wrapped in `Number.isFinite(x) ? x : null`; `price =
+last close`, no look-ahead. `signalParity` already locks `live.action/confidence/KellyFraction
+=== resolveBacktestSignal` on the latest bar.
+
+**Escalated Q09-1 (dormant, ledger):** `liveSignal` calls `resolveBacktestSignal` with **no
+`sectorGates` arg** (`:85-92`) while `benchmarkLabel` passes `sectorGatesForTicker(ticker)`
+(`:77`). `sectorGates` only affect the **enhanced** path, which is **off in production**
+(`featureFlags.ts:15` → false when `NODE_ENV=production`), so live and backtest are identical
+today. If enhanced is ever enabled, the live desk would skip sector gating the backtest
+applies → divergence on gated tickers. Owner-gated: enhanced is research-only and slated
+retire-or-invest; the fix is a prod-no-op but the enhanced path is unvalidated. Not changed.
+
+### Verify (VERIFY A–F)
+- **A** n/a (no code change). **B** signalParity 2/2 (live↔backtest parity, unchanged).
+  **C/D/E** n/a (no deploy). **F** recorded (queue/run-log/ledger Q09-1/this report/MEMORY_LOG/
+  SESSION_STATE).
+
 ## Next cell
-**Q09** — `lib/backtest/liveSignal.ts` (live path vs backtest path consistency). Owner-gated
-backlog (growing): **F-4** gross→net WR re-baseline, **F-9** entry double-count, **F-11**
-union-calendar holdDays, **F-3** close-based trailing peak, **Q05-1** regime slope-null
-FALLING_KNIFE, and the **scheduled-task model re-point to Opus** (root cause of the stall).
-Monday weekly deep sweep also still due.
+**Q10** — `lib/backtest/portfolioBacktest.ts` (F-2 alpha mismatched windows after the
+common-window fix; sectorGates wiring). NB this is the dormant portfolio engine (no API route,
+no CI gate) — F-3/F-11 already live here. Owner-gated backlog (growing): **F-4** gross→net WR
+re-baseline, **F-9** entry double-count, **F-11** union-calendar holdDays, **F-3** close-based
+trailing peak, **Q05-1** regime slope-null FALLING_KNIFE, **Q09-1** live sectorGates parity, and
+the **scheduled-task model re-point to Opus** (root cause of the stall). Monday weekly deep
+sweep also still due.
