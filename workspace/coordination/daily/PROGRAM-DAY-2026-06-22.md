@@ -333,7 +333,22 @@ a footgun only if a crypto Sharpe is ever wired through them.
 - **A/B/C** n/a (no code change; technicals has its own tests + indicators SSOT tested).
   **D/E** n/a (no deploy). **F** recorded.
 
+## Q17 — `lib/quant/volatility.ts` (WS-Q) — DONE, VERIFIED CLEAN (no code change)
+
+Single export `annualizedVolFromCloses` (31 LOC): strong finite guards (filters non-finite/≤0;
+`c.length<8 → 0.22` default), log returns on positive-filtered data (no `log(≤0)`),
+`sqrt(max(var,0))`, `/max(1,n-1)` sample variance. Math correct. ("Parkinson" in the cell label
+is a misnomer — this is close-based realized vol; range-based vol is in regimeDetection, Q20.)
+The regimeDetection/relativeStrength "consumers" are only docstring mentions — the **sole caller
+is `buildFundamentalsPayload.ts`**. Latent note (same F-12 theme as Q16, not escalated):
+`sqrt(252)` is hardcoded and the fn takes only `closes`, so it can't annualize crypto (365) — but
+`buildFundamentalsPayload` is equity fundamentals/DCF (BTC has none), so 252 is correct. **Q22
+confirms `buildFundamentalsPayload` is equity-only** (the linchpin for the Q16+Q17 latent notes).
+
+### Verify (VERIFY A–F)
+- **A/B/C** n/a (no code change; has volatility.test.ts). **D/E** n/a. **F** recorded.
+
 ## Next cell
-**Q17** — `lib/quant/volatility.ts` (Parkinson / realized vol; finite guards). Owner-gated
-backlog unchanged (F-4, F-9, F-2, F-11, F-3, Q05-1, Q09-1, Q14-1, + scheduled-task model re-point
-to Opus). Monday weekly deep sweep also still due.
+**Q18** — `lib/quant/correlation.ts` + `intermarket.ts` (correlation math; NaN handling).
+Owner-gated backlog unchanged (F-4, F-9, F-2, F-11, F-3, Q05-1, Q09-1, Q14-1, + scheduled-task
+model re-point to Opus). Monday weekly deep sweep also still due.
