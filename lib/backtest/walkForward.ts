@@ -16,7 +16,7 @@
  */
 
 import type { OhlcvRow } from './dataLoader'
-import { backtestInstrument } from './core'
+import { backtestInstrument, tradingDaysPerYear } from './core'
 import { getRiskFreeRateSync } from '@/lib/quant/riskFreeRate'
 
 // ─── Public types ───────────────────────────────────────────────────────────
@@ -53,19 +53,22 @@ export function computeOosRatio(isAnn: number, osAnn: number): { raw: number; di
   return { raw, display: Math.min(2, Math.max(-1, raw)) }
 }
 
-function annualized(totalReturn: number, days: number): number {
-  const years = days / 252
+// F-12: `periodDays` is the asset's trading days per year (252 equities / 365
+// crypto). Hardcoding 252 mis-annualized BTC walk-forward IS/OS returns + Sharpe.
+// Defaults to 252 to preserve equity behaviour for any caller that omits it.
+function annualized(totalReturn: number, days: number, periodDays = 252): number {
+  const years = days / periodDays
   return years > 0 ? ((1 + totalReturn) ** (1 / years) - 1) : 0
 }
 
-function windowSharpe(dailyReturns: number[]): number | null {
+function windowSharpe(dailyReturns: number[], periodDays = 252): number | null {
   if (dailyReturns.length < 30) return null
   const mean = dailyReturns.reduce((a, b) => a + b, 0) / dailyReturns.length
   const variance = dailyReturns.reduce((s, x) => s + (x - mean) ** 2, 0) / Math.max(1, dailyReturns.length - 1)
   const sd = Math.sqrt(Math.max(variance, 0))
   if (sd < 1e-10) return null
-  const rfD = getRiskFreeRateSync() / 252
-  return ((mean - rfD) / sd) * Math.sqrt(252)
+  const rfD = getRiskFreeRateSync() / periodDays
+  return ((mean - rfD) / sd) * Math.sqrt(periodDays)
 }
 
 /** Compute daily returns from an equity-curve slice [a, b). */
@@ -127,6 +130,9 @@ export function walkForwardAnalysis(
   const WARMUP = 252
   if (n < WARMUP + trainDays + testDays) return windows
 
+  // F-12: annualize per the asset's trading calendar (365 for crypto, 252 equities).
+  const annDays = tradingDaysPerYear(ticker, sector)
+
   // Single backtest on full series — produces all trades + equity curve.
   // Note: even when zero trades fire, we still emit windows with 0/0
   // returns so the temporal scaffolding (window labels, dates) is
@@ -167,8 +173,8 @@ export function walkForwardAnalysis(
       }
     }
 
-    const isAnn = annualized(isReturnSum, trainDays)
-    const osAnn = annualized(osReturnSum, testDays)
+    const isAnn = annualized(isReturnSum, trainDays, annDays)
+    const osAnn = annualized(osReturnSum, testDays, annDays)
 
     // Sharpe per window: compute from equityHistory slice. equityHistory[0]
     // is initial capital (set BEFORE the loop), and the loop pushes one
@@ -179,8 +185,8 @@ export function walkForwardAnalysis(
     const histTestEnd = Math.max(histTrainEnd, testEnd - 199)
     const isReturns = sliceDailyReturns(fullResult.equityCurve, histStart, histTrainEnd)
     const osReturns = sliceDailyReturns(fullResult.equityCurve, histTrainEnd, histTestEnd)
-    const isSharpe = windowSharpe(isReturns)
-    const osSharpe = windowSharpe(osReturns)
+    const isSharpe = windowSharpe(isReturns, annDays)
+    const osSharpe = windowSharpe(osReturns, annDays)
 
     const { raw: oosRatioRaw, display: oosRatio } = computeOosRatio(isAnn, osAnn)
 
