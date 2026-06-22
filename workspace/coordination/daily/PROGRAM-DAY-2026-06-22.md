@@ -401,9 +401,25 @@ fail-closed on insufficient/≤0 price, correct median, NaN-handled vol (cap 1.5
 ### Verify (VERIFY A–F)
 - **A/B/C** n/a (no code change; volumeProfile.test.ts). **D/E** n/a. **F** recorded.
 
+## Q22 — `dcf.ts` + `researchScore.ts` + `buildFundamentalsPayload.ts` (WS-Q, live) — DONE, CLEAN
+
+`runDcf` is **exemplary** — every classic DCF failure mode is guarded: the **Gordon-divide guard**
+(`wacc<=terminalGrowth→null`), `wacc∈(0,0.5)`, `terminalGrowth∈[−2%,6%]`, `explicitGrowth∈[−30%,45%]`,
+the FCFF→equity bridge via `netDebt` (the documented Damodaran fix), insolvency rejection
+(`equityValue<=0→null`), and finite/positive `valuePerShare`. `buildFundamentalsPayload` coerces all
+statement fields through a strict `num()` (`isFinite ? x : null`); `researchScore` clamps to [0,100]
+with finite guards + insufficient-data fallbacks. All three tested.
+
+**Linchpin resolved:** `buildFundamentalsPayload` is **equity-only** — the DCF requires
+FCF / shares / balance-sheet net debt, which crypto (BTC) has none of; its sole route is
+`/api/fundamentals/[ticker]`. Therefore the **Q16 (technicals `sharpe`/`sortino` adapter) and Q17
+(`annualizedVolFromCloses`) latent `sqrt(252)`-for-crypto notes are CONFIRMED BENIGN** — their only
+caller never runs for crypto, so the 252 annualization is always correct. No findings.
+
+### Verify (VERIFY A–F)
+- **A/B/C** n/a (no code change; dcf.test.ts + researchScore.test.ts). **D/E** n/a. **F** recorded.
+
 ## Next cell
-**Q22** — `lib/quant/dcf.ts` + `researchScore.ts` + `buildFundamentalsPayload.ts` (valuation math).
-**Linchpin: confirm `buildFundamentalsPayload` is equity-only** — validates the Q16+Q17 latent
-sqrt(252)-for-crypto notes (sharpe adapter + annualizedVolFromCloses). Owner-gated backlog
-unchanged (F-4, F-9, F-2, F-11, F-3, Q05-1, Q09-1, Q14-1, + scheduled-task model re-point to
-Opus). Monday weekly deep sweep also still due.
+**Q23** — `lib/quant/multiTimeframe.ts` + `relativeStrength.ts` + `sectorRotation.ts` (RS vs
+benchmark; rotation scores). Owner-gated backlog unchanged (F-4, F-9, F-2, F-11, F-3, Q05-1, Q09-1,
+Q14-1, + scheduled-task model re-point to Opus). Monday weekly deep sweep also still due.
