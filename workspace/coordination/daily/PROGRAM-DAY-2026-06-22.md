@@ -316,8 +316,24 @@ has (F2.9) — at `period=1` it returns degenerate collapsed bands instead of nu
 - **A/B/C** n/a (no code change; file is heavily tested — indicators.test.ts + sma200Ssot +
   cryptoIndicators + multiTimeframe). **D/E** n/a (no deploy). **F** recorded.
 
+## Q16 — `lib/quant/technicals.ts` (WS-Q, live) — DONE, VERIFIED CLEAN (no code change)
+
+Thin-adapter layer over the indicators SSOT, used by the analytics + ma-deviation APIs and
+BtcQuantLab. The `sma/rsi/macd/bollinger/atr/maxDrawdown/dailyReturns/sharpe/sortino` adapters
+all **delegate** to the canonical indicators (no reimplementation → no drift; D1-5 WON'T-FIX
+thin-adapter verdict confirmed); `sma200DeviationPct`/`sma200Slope` re-exported from the F-6 SSOT.
+**`ma200Regime` is fail-closed** (`:131` null sma / non-finite-or-≤0 price; `:134` null dev →
+INSUFFICIENT_DATA — same guard as `regimeSignal` Q05) and its zone thresholds **exactly match**
+`regimeSignal`, so the analytics/UI regime and the backtest regime can't diverge. Minor latent
+note (not escalated): the `sharpeRatio`/`sortinoRatio` adapters drop the canonical `annualization`
+param (always 252) — fine for their only caller `buildFundamentalsPayload` (equity-only, Q22);
+a footgun only if a crypto Sharpe is ever wired through them.
+
+### Verify (VERIFY A–F)
+- **A/B/C** n/a (no code change; technicals has its own tests + indicators SSOT tested).
+  **D/E** n/a (no deploy). **F** recorded.
+
 ## Next cell
-**Q16** — `lib/quant/technicals.ts` (thin adapters over indicators; `ma200Regime`). NB the
-2026-06-04 inspection flagged technicals.ts as a deliberate thin adapter (D1-5 WON'T-FIX). Owner-
-gated backlog unchanged (F-4, F-9, F-2, F-11, F-3, Q05-1, Q09-1, Q14-1, + scheduled-task model
-re-point to Opus). Monday weekly deep sweep also still due.
+**Q17** — `lib/quant/volatility.ts` (Parkinson / realized vol; finite guards). Owner-gated
+backlog unchanged (F-4, F-9, F-2, F-11, F-3, Q05-1, Q09-1, Q14-1, + scheduled-task model re-point
+to Opus). Monday weekly deep sweep also still due.
