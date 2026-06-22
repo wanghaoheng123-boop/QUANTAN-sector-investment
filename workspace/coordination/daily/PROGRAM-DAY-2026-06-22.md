@@ -438,8 +438,23 @@ same-calendar US equities (sector ETFs; single-vs-SPY). Fix = align by date befo
 ### Verify (VERIFY A–F)
 - **A/B/C** n/a (no code change; 3 test files). **D/E** n/a. **F** recorded.
 
+## Q24 — `riskFreeRate.ts` + `constants.ts` + `fundingConstants.ts` + `yahooSymbol.ts` — DONE, CLEAN
+
+**rf double-divide = FALSE ALARM CONFIRMED** (re-confirms 2026-06-04): the rate is stored as a
+**decimal annual** value — `fetchFredLatestPercent` does the one-time `/100` percent→decimal at
+fetch (`:78`), and consumers (`windowSharpe`, `sharpeRatio`) annualize with `/252` once. These are
+orthogonal divisions (percent normalization vs annualization), not a double-divide. FRED fetch is
+robust (24h `revalidate`, walks backwards for the latest non-missing observation since FRED uses
+`"."` for missing, `val>0` guard, `catch→null→static fallback`); `getRiskFreeRateSync` is
+deterministic (cache-or-fallback; no-prewarm → static constant, keeping the benchmark
+byte-reproducible); `seriesForTenor` clamps NaN/negative tenors. `yahooSymbolFromParam` is
+fail-closed and delegates to the `normalizeTicker` SSOT (F7.3 SSRF hardening intact). No findings.
+
+### Verify (VERIFY A–F)
+- **A/B/C** n/a (no code change). **D/E** n/a. **F** recorded.
+
 ## Next cell
-**Q24** — `lib/quant/riskFreeRate.ts` + `constants.ts` + `fundingConstants.ts` + `yahooSymbol.ts`
-(rf double-divide — prior false alarm, confirm; symbol mapping). Owner-gated backlog unchanged
-(F-4, F-9, F-2, F-11, F-3, Q05-1, Q09-1, Q14-1, + scheduled-task model re-point to Opus). Monday
-weekly deep sweep also still due.
+**Q25** — `lib/quant/btc-indicators.ts` + `garchClient.ts` + `earningsParse.ts` + `frameworks.ts` +
+`chartQuoteFilter.ts` (MVRV/S2F; garch TS EWMA fallback). Owner-gated backlog unchanged (F-4, F-9,
+F-2, F-11, F-3, Q05-1, Q09-1, Q14-1, + scheduled-task model re-point to Opus). Monday weekly deep
+sweep also still due.
