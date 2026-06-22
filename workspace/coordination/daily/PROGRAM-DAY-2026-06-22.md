@@ -361,7 +361,19 @@ thresholds, else 'mixed'). All NaN-handled; both tested. No findings.
 ### Verify (VERIFY A–F)
 - **A/B/C** n/a (no code change; correlation.test.ts + intermarket.test.ts). **D/E** n/a. **F** recorded.
 
+## Q19 — `lib/quant/kelly.ts` (WS-Q, live) — DONE, VERIFIED CLEAN (no code change)
+
+`kellyFraction` correct (`f = p − (1−p)/b`) with the explicit non-finite guard (R8-H-1 — the
+`NaN<=0===false` slip is fixed, covered by `kelly.property.test.ts`), valid-probability `0<p<1` +
+positive-payoff guards, no ÷0 (`avgLoss>0` guaranteed). `halfKelly` floors at 0. Raw fraction is
+intentionally unbounded-above (educational; docstring directs UI to half-Kelly); upper bounds are
+enforced at call sites (`Math.min(KellyFraction, 0.50)` in core.ts; 0.30/0.15 caps in
+`resolveBacktestSignal`). No findings.
+
+### Verify (VERIFY A–F)
+- **A/B/C** n/a (no code change; property-tested). **D/E** n/a. **F** recorded.
+
 ## Next cell
-**Q19** — `lib/quant/kelly.ts` (Kelly sizing — has a property test; bounds). Owner-gated backlog
-unchanged (F-4, F-9, F-2, F-11, F-3, Q05-1, Q09-1, Q14-1, + scheduled-task model re-point to
-Opus). Monday weekly deep sweep also still due.
+**Q20** — `lib/quant/regimeDetection.ts` + `regimeHmmClient.ts` (regime labels; HMM client
+fallback). Owner-gated backlog unchanged (F-4, F-9, F-2, F-11, F-3, Q05-1, Q09-1, Q14-1, +
+scheduled-task model re-point to Opus). Monday weekly deep sweep also still due.
