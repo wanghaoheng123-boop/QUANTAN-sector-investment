@@ -419,7 +419,27 @@ caller never runs for crypto, so the 252 annualization is always correct. No fin
 ### Verify (VERIFY A–F)
 - **A/B/C** n/a (no code change; dcf.test.ts + researchScore.test.ts). **D/E** n/a. **F** recorded.
 
+## Q23 — `multiTimeframe.ts` + `relativeStrength.ts` + `sectorRotation.ts` (WS-Q, live) — DONE
+
+VERIFIED CLEAN + 1 LOW latent. `aggregateToWeekly`/`Monthly` correct: UTC Monday boundary
+(`mondayOffset = day===0 ? -6 : 1-day` handles Sunday), OHLCV agg open=first/high=max/low=min/
+close=last/vol=sum, DST caveat documented. `relativeStrength`: `alignCloses` date-keyed + positive
+guard; `logReturns` `>0`-guarded; `correlation` delegates to the SSOT (n≥10); `trailingReturn`/
+`excessReturn` guarded. `sectorRotation`: `momentumScore` = 12-1 multi-horizon (`0.4·3m+0.3·6m+
+0.3·12m−1m`, all-or-null); `meanReversionBoost` RSI thresholds in correct extreme-first order. All
+3 tested.
+
+**Escalated Q23-1 (LOW, ledger):** `relativeStrengthVsBenchmark` uses **index-based** lookback
+(`closes[len−22]` vs `spy[len−22]`) and only *documents* "same date alignment expected" — it
+doesn't enforce it (unlike the sibling `alignCloses`). A ticker with a halt-gap or shorter history
+compares mismatched calendar dates → slightly wrong RS %/ranking. Mitigated: current callers feed
+same-calendar US equities (sector ETFs; single-vs-SPY). Fix = align by date before the lookbacks.
+
+### Verify (VERIFY A–F)
+- **A/B/C** n/a (no code change; 3 test files). **D/E** n/a. **F** recorded.
+
 ## Next cell
-**Q23** — `lib/quant/multiTimeframe.ts` + `relativeStrength.ts` + `sectorRotation.ts` (RS vs
-benchmark; rotation scores). Owner-gated backlog unchanged (F-4, F-9, F-2, F-11, F-3, Q05-1, Q09-1,
-Q14-1, + scheduled-task model re-point to Opus). Monday weekly deep sweep also still due.
+**Q24** — `lib/quant/riskFreeRate.ts` + `constants.ts` + `fundingConstants.ts` + `yahooSymbol.ts`
+(rf double-divide — prior false alarm, confirm; symbol mapping). Owner-gated backlog unchanged
+(F-4, F-9, F-2, F-11, F-3, Q05-1, Q09-1, Q14-1, + scheduled-task model re-point to Opus). Monday
+weekly deep sweep also still due.
