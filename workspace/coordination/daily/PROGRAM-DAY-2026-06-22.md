@@ -242,9 +242,29 @@ output identical across sectors (regression lock); crypto summary invariants hol
   deploy-finalize; APIs were 200); **re-smoke `/`=200 ×2 + both APIs 200** → healthy, **no
   auto-revert** (re-smoke-before-revert per the workflow). **F** recorded.
 
+## Q12 — `lib/backtest/dataLoader.ts` (WS-Q) — DONE, merged (PR #70, `5c78ecf`, prod ✓)
+
+**OHLC + NaN-time sanitize VERIFIED CORRECT** across all three paths (warehouse + 2 JSON;
+the D5-1 mirror is consistent). **One gap FIXED (SAFE):** all three pushed
+`volume: x.volume ?? 0` — and `??` only catches null/undefined, so a **NaN/Infinity volume**
+slipped through into the volume indicators (VWAP/VPOC/OBV/volSMA/`detectVolumeClimax`).
+**Reachable on the warehouse path** (same non-finite source as D5-1; JSON serializes NaN→null,
+so `?? 0` sufficed there). All three now `Number.isFinite(v) ? v : 0` — non-finite volume → 0,
+valid price bar preserved.
+
+**Why SAFE / benchmark-neutral:** scanned all 56 `backtestData` files / **70,796 rows = 0
+non-finite volume** (latent guard); and the production signal (`regimeSignal`) uses **price
+only, not volume** → cannot move the WR. +1 warehouse `NaN`/`Infinity`-volume test (row kept,
+volume zeroed).
+
+### Verify (VERIFY A–F)
+- **A** tsc clean. **B** dataLoader 22/22. **C** benchmark-neutral (scan + price-only signal;
+  CI `benchmark` pass 44s). **D** Vercel prod deploy READY (`5c78ecf`). **E** prod smoke
+  `/`,`/api/sector-rotation`,`/api/analytics/AAPL` all 200. **F** recorded.
+
 ## Next cell
-**Q12** — `lib/backtest/dataLoader.ts` (non-finite OHLC sanitize; NaN time). Owner-gated
-backlog: **F-4** gross→net WR re-baseline, **F-9** entry double-count, **F-2** alpha mismatched
-windows, **F-11** union-calendar holdDays, **F-3** close-based trailing peak, **Q05-1** regime
-slope-null FALLING_KNIFE, **Q09-1** live sectorGates parity, and the **scheduled-task model
-re-point to Opus** (root cause of the stall). Monday weekly deep sweep also still due.
+**Q13** — `lib/optimize/gridSearch.ts` (survivorship + OOS-selection bias; inert grid dims 3/5).
+Owner-gated backlog: **F-4** gross→net WR re-baseline, **F-9** entry double-count, **F-2** alpha
+mismatched windows, **F-11** union-calendar holdDays, **F-3** close-based trailing peak, **Q05-1**
+regime slope-null FALLING_KNIFE, **Q09-1** live sectorGates parity, and the **scheduled-task
+model re-point to Opus** (root cause of the stall). Monday weekly deep sweep also still due.
