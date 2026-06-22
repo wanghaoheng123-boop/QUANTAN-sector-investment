@@ -147,9 +147,35 @@ judgment call. No code change → tracking-only commit.
   behavior change). **D/E** n/a (no deploy). **F** recorded (queue/run-log/ledger F-11+F-3/
   this report/MEMORY_LOG/SESSION_STATE).
 
+## Q08 — `lib/backtest/benchmarkLabel.ts` (WS-Q) — DONE, merged (PR #68, `4e801b8`, prod ✓)
+
+**Verdict: parity-correct + one SAFE latent fix.** The label path calls the same
+`resolveBacktestSignal` SSOT (parity guarded by `signalParity`); T+1 entry/exit indices,
+warmup and bounds are correct.
+
+**Latent bug FIXED (SAFE, benchmark-neutral):** `signalAtBarIndex` guarded `entryPrice` but
+**not `exitPrice`** (`benchmarkLabel.ts:91-96`). A non-finite/≤0 exit close → `grossReturn`
+NaN → slips the caller's `out.grossReturn == null` filter (`NaN != null`, `:137`) → counted as
+a **loss** (`NaN > 0` is false) + poisons `avgReturn20d`. Added the symmetric exit guard (same
+corrupt-bar class as Q02/Q04).
+
+**Proven benchmark-neutral:** scanned all **56 `scripts/backtestData` files / 70,796 rows → 0
+non-finite or ≤0 closes**, so no current BUY has a bad exit → the guard skips nothing today →
+CI `benchmark` WR unchanged (CI `benchmark` pass 41s confirms). It only closes a latent leak.
+
+**Test (`__tests__/backtest/benchmarkLabel.test.ts`, new):** exercises the guard through the
+**real production BUY path** on committed AAPL data — corrupt EXIT close (`NaN`/`Infinity`/`0`/
+`-5`) → null returns, action unchanged (signal uses `[0..buyBar]`); + an entry-guard regression
+lock.
+
+### Verify (VERIFY A–F)
+- **A** tsc clean. **B** benchmarkLabel 2/2 + signalParity 2/2. **C** benchmark WR unchanged
+  (proven by dataset scan; CI benchmark pass). **D** Vercel prod deploy READY (`4e801b8`).
+  **E** prod smoke `/`,`/api/sector-rotation`,`/api/analytics/AAPL` all 200. **F** recorded.
+
 ## Next cell
-**Q08** — `lib/backtest/benchmarkLabel.ts` (label parity with `resolveBacktestSignal`;
-`signalParity` test). Owner-gated backlog (growing): **F-4** gross→net WR re-baseline, **F-9**
-entry double-count, **F-11** union-calendar holdDays, **F-3** close-based trailing peak,
-**Q05-1** regime slope-null FALLING_KNIFE, and the **scheduled-task model re-point to Opus**
-(root cause of the stall). Monday weekly deep sweep also still due.
+**Q09** — `lib/backtest/liveSignal.ts` (live path vs backtest path consistency). Owner-gated
+backlog (growing): **F-4** gross→net WR re-baseline, **F-9** entry double-count, **F-11**
+union-calendar holdDays, **F-3** close-based trailing peak, **Q05-1** regime slope-null
+FALLING_KNIFE, and the **scheduled-task model re-point to Opus** (root cause of the stall).
+Monday weekly deep sweep also still due.
