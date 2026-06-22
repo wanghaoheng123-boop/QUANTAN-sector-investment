@@ -296,8 +296,28 @@ retire-or-invest decision.
 - **A/B/C** n/a (no code change). **D/E** n/a (no deploy). **F** recorded (queue/run-log/ledger
   Q14-1/this report/MEMORY_LOG/SESSION_STATE).
 
+## Q15 — `lib/quant/indicators.ts` (WS-Q, core LIVE SSOT) — DONE, VERIFIED CLEAN
+
+Reviewed all **25 primitives** in depth — **exemplary, no live issue:** `ema` (SMA-seeded;
+short-array footgun documented F2.8) + `emaFull` (index-aligned); `rsi`/`rsiLatest` (Wilder
+smoothing); **`macd` signal-line anchoring `signal[i+slow+sig-2]` is correct** (the F-NEW offset
+fix fills the recent bars); `bollinger` (period≥2 guard, `sd=√max(var,0)`, `pctB` only when
+`upper≠lower`); `trueRange`/`atr` (Wilder + correct index alignment); `obv` (F2.6 throws on
+length mismatch); `vwap` (`cumVol>0`); `stochRsi` (`max−min>0 ? : 50`); `adx` (`trVal>0` +
+`pdi+mdi>0`, F2.2); `sharpe` (configurable annualization, `sd==0→null`); `sortino` (canonical
+F1.16, `n_d≥30`, `dsd<1e-12→null`). Every primitive is finite/÷0-guarded and carries documented
+fixes for all prior bugs. **EMA seeding (the named concern) is correct.**
+
+**Nit Q15-1 (LOW, ledger):** `bollingerLatest` lacks the `period<2` guard that `bollingerArray`
+has (F2.9) — at `period=1` it returns degenerate collapsed bands instead of null. Not a live bug
+(default 20, unreachable); SSOT-consistency only. No deploy warranted.
+
+### Verify (VERIFY A–F)
+- **A/B/C** n/a (no code change; file is heavily tested — indicators.test.ts + sma200Ssot +
+  cryptoIndicators + multiTimeframe). **D/E** n/a (no deploy). **F** recorded.
+
 ## Next cell
-**Q15** — `lib/quant/indicators.ts` (SSOT primitives sma/ema/rsi/macd/atr/bollinger + sma200*;
-EMA seeding). **This is a core LIVE SSOT** — higher scrutiny. Owner-gated backlog unchanged
-(F-4, F-9, F-2, F-11, F-3, Q05-1, Q09-1, + scheduled-task model re-point to Opus). Monday weekly
-deep sweep also still due.
+**Q16** — `lib/quant/technicals.ts` (thin adapters over indicators; `ma200Regime`). NB the
+2026-06-04 inspection flagged technicals.ts as a deliberate thin adapter (D1-5 WON'T-FIX). Owner-
+gated backlog unchanged (F-4, F-9, F-2, F-11, F-3, Q05-1, Q09-1, Q14-1, + scheduled-task model
+re-point to Opus). Monday weekly deep sweep also still due.
