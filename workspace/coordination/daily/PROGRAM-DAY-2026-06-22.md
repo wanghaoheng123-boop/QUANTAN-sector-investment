@@ -262,9 +262,26 @@ volume zeroed).
   CI `benchmark` pass 44s). **D** Vercel prod deploy READY (`5c78ecf`). **E** prod smoke
   `/`,`/api/sector-rotation`,`/api/analytics/AAPL` all 200. **F** recorded.
 
+## Q13 — `lib/optimize/gridSearch.ts` (WS-Q) — DONE, VERIFIED CLEAN (no code change)
+
+Dev-only optimizer (consumers `parameterSets.ts` + `scripts/optimize-grid.ts`; **not in any API
+route / no CI gate**). The **2026-06-04 remediation is intact**: the SELECTION-ON-OOS bias is
+prominently documented (`:11-15`) — reported OOS metrics are upward-biased, treat as optimistic;
+the inert 3/5 grid dims are collapsed + documented (`:71-85`); survivorship is a known data
+limitation. **Code correct:** the OOS slice's 220-bar overlap (`:259`) is **warmup-only** — the
+trade loop's `i=220` start counts trades from exactly `splitIdx`, so **no IS-trade leaks into
+OOS**; T+1 entry (`:200`); no look-ahead; trade-level Sharpe guarded (`returns.length ≥ 5`,
+`sd > 0`). **Nit (ledger `Q13-1`, LOW):** `equity`/`dailyRets` locals in `simpleBacktestSlice`
+are computed but never returned (dead) — dev-only, no deploy warranted.
+
+### Verify (VERIFY A–F)
+- **A/B/C** n/a (no code change). **D/E** n/a (no deploy). **F** recorded (queue/run-log/ledger
+  Q13-1/this report/MEMORY_LOG/SESSION_STATE).
+
 ## Next cell
-**Q13** — `lib/optimize/gridSearch.ts` (survivorship + OOS-selection bias; inert grid dims 3/5).
-Owner-gated backlog: **F-4** gross→net WR re-baseline, **F-9** entry double-count, **F-2** alpha
-mismatched windows, **F-11** union-calendar holdDays, **F-3** close-based trailing peak, **Q05-1**
-regime slope-null FALLING_KNIFE, **Q09-1** live sectorGates parity, and the **scheduled-task
-model re-point to Opus** (root cause of the stall). Monday weekly deep sweep also still due.
+**Q14** — `lib/optimize/parameterSets.ts` + `sectorProfiles.ts` (parameter ranges; macro gate
+fields). Owner-gated backlog: **F-4** gross→net WR re-baseline, **F-9** entry double-count, **F-2**
+alpha mismatched windows, **F-11** union-calendar holdDays, **F-3** close-based trailing peak,
+**Q05-1** regime slope-null FALLING_KNIFE, **Q09-1** live sectorGates parity, and the
+**scheduled-task model re-point to Opus** (root cause of the stall). Monday weekly deep sweep
+also still due.
