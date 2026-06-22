@@ -387,7 +387,23 @@ effect on sanitized data (0 ≤0-price rows in the 70,796-row scan). No findings
 ### Verify (VERIFY A–F)
 - **A/B/C** n/a (no code change; regimeDetection.test.ts). **D/E** n/a. **F** recorded.
 
+## Q21 — `pivots.ts` + `priceBands.ts` + `volumeProfile.ts` (WS-Q) — DONE, VERIFIED CLEAN
+
+No off-by-one. `volumeProfile`: bin clamping (`min(numBins−1,…)`) handles `bar.high==maxPrice`
+(no overflow); NaN/negative-volume guard (`:69`); the value-area expansion is the standard
+POC-outward algorithm with correct `-1` sentinels + a bounded loop; VA edges = `bin center ±
+binSize/2`; `priceRelativeToPOC` clean. `pivots`: classic floor-trader formulas correct;
+`todayInMarketTimezone` uses `America/New_York` (fixes UTC misalignment with Yahoo Eastern bars);
+`priorSessionBar` picks the last COMPLETED session (fixes the prior always-`length-2` weekend
+staleness) with empty/mismatch/`idx<0` guards. `priceBands`: finite+positive anchor filter,
+fail-closed on insufficient/≤0 price, correct median, NaN-handled vol (cap 1.5). No findings.
+
+### Verify (VERIFY A–F)
+- **A/B/C** n/a (no code change; volumeProfile.test.ts). **D/E** n/a. **F** recorded.
+
 ## Next cell
-**Q21** — `lib/quant/pivots.ts` + `priceBands.ts` + `volumeProfile.ts` (level math; off-by-one).
-Owner-gated backlog unchanged (F-4, F-9, F-2, F-11, F-3, Q05-1, Q09-1, Q14-1, + scheduled-task
-model re-point to Opus). Monday weekly deep sweep also still due.
+**Q22** — `lib/quant/dcf.ts` + `researchScore.ts` + `buildFundamentalsPayload.ts` (valuation math).
+**Linchpin: confirm `buildFundamentalsPayload` is equity-only** — validates the Q16+Q17 latent
+sqrt(252)-for-crypto notes (sharpe adapter + annualizedVolFromCloses). Owner-gated backlog
+unchanged (F-4, F-9, F-2, F-11, F-3, Q05-1, Q09-1, Q14-1, + scheduled-task model re-point to
+Opus). Monday weekly deep sweep also still due.
