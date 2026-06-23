@@ -535,7 +535,52 @@ contract. No new findings.
 ### Verify (VERIFY A–F)
 - **A** n/a (no code change). **B** **pytest 15/15 PASS** + py_compile OK. **C/D/E** n/a. **F** recorded.
 
+## PY2 / PY3 / PY4 — WS-PY (parallel agents + coordinator source-verify) — DONE; **WS-PY COMPLETE**
+
+Dispatched parallel review agents (one per disjoint file) + **coordinator source-verified every
+finding against `origin/main`** — which caught two stale-branch false positives the agents
+reproduced (see lesson). No code changes; the two candidate fixes were correctly **not** applied.
+
+- **PY2 `server_options.py`** — VERIFIED CLEAN (offline `:3003` sidecar, not in the Vercel path).
+  CORS `allow_origins=*` + `credentials=False` (acceptable, matches prior review); options math
+  delegated to guarded analyzer helpers. Minor LOW nit (not escalated): raw exception text in an
+  `HTTPException` detail (offline).
+- **PY3 `alpha_miner.py`** — AST evaluator **escape-proof CONFIRMED on `origin/main`** (agent probed
+  12 vectors — attribute / `__class__` / `__subclasses__` / `__import__` / `9**9**9` / `open` /
+  subscript / lambda / comprehension / kwarg — all rejected by the default-deny allow-list; no
+  `eval()`; `ast.Pow` absent). **Escalated PY3-2 (LOW):** two candidates call `safe_div(...)` but
+  `FUNCTION_SET` registers only `"div"`; my empirical probe shows `safe_eval_formula` raises "not a
+  callable" for **both** `safe_div` and `div`, so the call-resolution flow isn't the naive registry
+  model — escalate for proper tracing, **not** a speculative one-line patch. Offline.
+- **PY4 `multi_agent_factor_mining/`** — **F-PY-04** (pipeline no-op → 0 factors selected) +
+  **F-PY-05** (server can't boot: relative-import + latent `os` NameError) CONFIRMED → **escalated**
+  (DENY feature/packaging scope — owner complete-or-retire). **F-PY-06 = STALE FALSE POSITIVE**
+  (`ast.Pow` in `agents.py` was the old apikey-leak branch; `origin/main` is already Pow-free).
+  **F-PY-16 refuted** (disk-mirrored dedup, not unbounded).
+
+### ⚠️ LESSON — the main-repo-root is checked out on a STALE branch
+`git -C <repo-root> branch` = `fix/trading-agents-apikey-leak-2026-06-14`, **not main**. Reading
+source from the repo-root path returns stale bytes (old `ast.Pow`), which both an agent and an early
+coordinator read reproduced as false "Pow present" findings. **`origin/main` (this worktree) is
+authoritative** — always source-verify findings against the worktree/`origin/main` ref, never the
+repo-root checkout. Coordinator verification caught this and prevented two bad fixes. See
+`[[team_rectification_2026_06]]` (the "trust durable artifacts on the right ref" rule).
+
+### Verify (VERIFY A–F)
+- **A** n/a (no code change). **B** agent pytest (alpha_miner 21/21, options analyzers green) +
+  coordinator empirical probes on `origin/main`. **C/D/E** n/a. **F** recorded (queue/run-log/ledger
+  PY3-2+F-PY-04+F-PY-05/this report/MEMORY_LOG/SESSION_STATE).
+
+---
+
+## ✅ WS-PY COMPLETE (PY1–PY4)
+
+PY1 trading-agents hardening confirmed (pytest 15/15); PY2 options sidecar clean; PY3 alpha_miner
+escape-proof; PY4 factor-mining no-op/boot escalated. **Method: parallel review agents +
+mandatory coordinator source-verification** — which paid off by catching 2 stale-branch FPs.
+
 ## Next cell
-**PY2** (WS-PY) — `server_options.py` (CORS, bridge, options math). Owner-gated backlog unchanged
-(F-4, F-9, F-2, F-8, F-11, F-3, Q05-1, Q09-1, Q13-1, Q14-1, Q15-1, Q23-1, Q25-1, + scheduled-task
-model re-point to Opus). Monday weekly deep sweep also still due.
+**A1** (WS-A) — `app/api/backtest/*` + `lib/api/rateLimit.ts` (in-flight lock; cache headers; V-1
+done). WS-A is the API/security workstream (A1–A6) — good fit for parallel agents. Owner-gated
+backlog unchanged (F-4, F-9, F-2, F-8, F-11, F-3, Q05-1, Q09-1, Q13-1, Q14-1, Q15-1, Q23-1, Q25-1,
+PY3-2, F-PY-04, F-PY-05, + scheduled-task model re-point to Opus). Monday weekly deep sweep still due.
