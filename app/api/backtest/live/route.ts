@@ -18,6 +18,10 @@ import { normalizeTicker as strictNormalizeTicker } from '@/lib/api/sanitize'
 
 let cache: { data: unknown; timestamp: number } | null = null
 const CACHE_TTL_MS = 60 * 1000 // 60 seconds
+// A1/F-A1-2: cap the `tickers` filter so a huge param can't amplify the
+// per-instrument `.includes()` membership check. Mirrors MAX_FILTER_TICKERS
+// in the sibling /api/backtest route.
+const MAX_FILTER_TICKERS = 100
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -62,6 +66,7 @@ export async function GET(request: NextRequest) {
   const specificTickers = tickersParam
     ? tickersParam
         .split(',')
+        .slice(0, MAX_FILTER_TICKERS)
         .map((t) => strictNormalizeTicker(t))
         .filter((t): t is string => t !== null)
     : null
