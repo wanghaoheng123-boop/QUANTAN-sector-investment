@@ -579,8 +579,39 @@ PY1 trading-agents hardening confirmed (pytest 15/15); PY2 options sidecar clean
 escape-proof; PY4 factor-mining no-op/boot escalated. **Method: parallel review agents +
 mandatory coordinator source-verification** — which paid off by catching 2 stale-branch FPs.
 
+## A1 / A2 / A3 — WS-A API/security (parallel agents + coordinator source-verify)
+
+Method: one review agent per cell, each instructed to read **`origin/main`** (not the stale
+repo-root), write a durable report under `reviews/wsa-2026-06-23/`, and report findings; the
+coordinator source-verified the key claims and did all gating/records.
+
+- **A1 `app/api/backtest/*` + `rateLimit.ts`** — `rateLimit.ts` SOUND (atomic `SET key 1 EX <w>
+  NX`; fail-open **to memory**; bounded fallback). Backtest route PASS (rate-limit/cache/in-flight
+  lock/normalizeTicker/sanitizeError/CSRF-on-POST). **SAFE fix shipped — F-A1-2**: the `live`
+  route's `tickers` param was uncapped → `O(instruments × N)` `.includes` amplification; added
+  `.slice(0, 100)` mirroring the sibling. **PR #71 → `3462b8b`, CI green incl. benchmark, prod ✓.**
+  Escalated F-A1-3 (rate-limit `EXPIRE…NX` self-heal swallows failure, LOW); F-A1-1 INFO (live
+  try/catch — Next.js masks the 500); F-A1-4 = the existing Q01 profitFactor contract escalation.
+- **A2 `analytics|sector-rotation|regime|conditional-vol`** — PASS. All four: `sanitizeError`
+  (prod→undefined, CWE-209 closed), `applyRateLimit`, `normalizeTicker`+`^`-reject (SSRF),
+  Cache-Control. `analytics` is the reference finite-boundary impl. Escalated 2 LOW (→ WSA-FG).
+- **A3 `stream|prices|chart|darkpool|liquidations`** — PASS. **Liquidations CWE-209 P0 CONFIRMED
+  FIXED on `origin/main`** (both error paths sanitized + spread-guarded, `route.ts:60`+`:150`).
+  `stream` SSE is abort-safe (abort→`close()` clears 4 timers, idempotent). Escalated 3 LOW
+  (→ WSA-FG + A3-L3).
+
+Net: **1 SAFE prod fix (F-A1-2)**; A2 + A3 clean (incl. the liquidations P0 re-confirmed fixed);
+remaining items are LOW defense-in-depth → ledger (`F-A1-3`, consolidated `WSA-FG`, `A3-L3`). The
+parallel-agent + coordinator-verify method held; no stale-branch FPs this wave (the explicit
+"read origin/main" instruction worked).
+
+### Verify (VERIFY A–F)
+- **A** tsc clean (A1 fix). **B** CI test/coverage green (#71). **C** benchmark pass (neutral).
+  **D** Vercel prod deploy READY (`3462b8b`). **E** prod smoke (incl `/api/backtest/live?tickers=`).
+  **F** recorded (queue/run-log/ledger F-A1-3+WSA-FG+A3-L3/this report/MEMORY_LOG/SESSION_STATE).
+
 ## Next cell
-**A1** (WS-A) — `app/api/backtest/*` + `lib/api/rateLimit.ts` (in-flight lock; cache headers; V-1
-done). WS-A is the API/security workstream (A1–A6) — good fit for parallel agents. Owner-gated
-backlog unchanged (F-4, F-9, F-2, F-8, F-11, F-3, Q05-1, Q09-1, Q13-1, Q14-1, Q15-1, Q23-1, Q25-1,
-PY3-2, F-PY-04, F-PY-05, + scheduled-task model re-point to Opus). Monday weekly deep sweep still due.
+**A4** (WS-A) — `app/api/[trading-agents|ml|briefs|news|fundamentals|options]/*` (B-1 briefs id
+collision; B-2 unbounded TA params; allSettled). Owner-gated backlog unchanged (F-4, F-9, F-2,
+F-8, F-11, F-3, Q05-1, Q09-1, Q13-1, Q14-1, Q15-1, Q23-1, Q25-1, PY3-2, F-PY-04, F-PY-05, F-A1-3,
+WSA-FG, A3-L3, + scheduled-task model re-point to Opus). Monday weekly deep sweep still due.
