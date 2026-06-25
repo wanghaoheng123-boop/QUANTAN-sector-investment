@@ -13,6 +13,7 @@ import YahooFinance from 'yahoo-finance2'
 import { applyRateLimit } from '@/lib/api/rateLimit'
 import { sanitizeError } from '@/lib/api/sanitize'
 import { isSafeHttpUrl } from '@/lib/security/urlValidation'
+import { newsBriefId } from '@/lib/api/briefId'
 
 const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] })
 
@@ -93,7 +94,8 @@ async function fetchNewsForTicker(ticker: string): Promise<NewsBrief[]> {
         : []
 
       results.push({
-        id: Buffer.from(link).toString('base64').slice(0, 16),
+        // B-1: full-link base64url id (collision-free); see lib/api/briefId.ts.
+        id: newsBriefId(link),
         title,
         summary: snippet,
         sector: '',
