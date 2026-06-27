@@ -2,8 +2,8 @@
   "schema_version": "1.1",
   "project": "QUANTAN-sector-investment",
   "created": "2026-04-28T09:40:00Z",
-  "last_updated": "2026-06-27T00:10:00.000Z",
-  "active_agent": "claude opus-4.8 (program WS-Q + WS-PY COMPLETE; WS-A A1-A5 done, next A6 (last WS-A); manual run 2026-06-27)",
+  "last_updated": "2026-06-27T15:50:00.000Z",
+  "active_agent": "claude opus-4.8 (program WS-Q + WS-PY COMPLETE; WS-A A1-A5 done incl. owner-directed provider-layer deletion PR #73; next A6 = last WS-A; manual run 2026-06-27)",
   "program_doc": "workspace/QUANTAN_EXPERT_TEAM_COMMERCIALIZATION.md",
   "coordination_doc": "workspace/coordination/PROGRESS_COORDINATION_2026-06-03.md",
   "last_program_run": {
@@ -11,14 +11,14 @@
     "cells_this_session": ["A5 (WS-A)"],
     "cell": "A5",
     "workstream_status": "WS-Q + WS-PY COMPLETE; WS-A A1-A5 done, next A6 (last WS-A cell); then WS-P + WS-F",
-    "result": "A5 (lib/data/providers/* alphavantage|polygon|fred|yahoo) — VERIFIED CLEAN, no code change. Timeouts ✓ (8s everywhere), polygon ns/ms ✓ (year-plausibility guard), AV finite skip-bar intact. HEADLINE A5-DORMANCY: the whole provider/dispatcher/fallback layer has ZERO prod callers (retire-or-wire owner decision). Escalated 3 LOW dormant: A5-1 (OHLC guards inconsistent across all 3 — unify finite+positive, NOT a Polygon-only fix), A5-2 (AV raw-OHL+adjusted-close mismatch, per docs), A5-3 (FRED parseFloat NaN nit)",
-    "pr": "none (no code change — tracking-only)",
-    "git_main_head": "aaf1bc1 + this record commit",
-    "prod_smoke": "N/A (no deploy — docs/tracking only)",
+    "result": "A5 (lib/data/providers/*) — VERIFIED CLEAN review then OWNER-DIRECTED DELETION. Review: timeouts ✓ (8s everywhere), polygon ns/ms ✓ (year-plausibility guard), AV finite skip-bar intact; headline A5-DORMANCY = whole provider/dispatcher/fallback layer has ZERO prod callers. Owner said 'identify and fix the issues' → I confirmed the retire/wire/harden fork with one AskUserQuestion → owner chose DELETE. Removed yahoo/polygon/alphavantage/fred/dispatcher/index.ts + the 2 tests; kept types.ts (trimmed to DailyBar/QuoteSnapshot for warehouse); cleaned stale coverage excludes. −716 LOC. A5-DORMANCY RESOLVED; A5-1/2/3 MOOT. tsc clean (importer gate) + all 6 CI gates green + prod smoke PASS.",
+    "pr": "73 (delete dead provider layer) merged b1dcb9d; prior A5 verify-clean record af4b6df",
+    "git_main_head": "b1dcb9d + this record commit",
+    "prod_smoke": "PASS (/ 200 QUANTAN dashboard, /api/sector-rotation 200 11-sectors, /api/analytics/AAPL 200 winRate 53.2%)",
     "next_cell": "A6 (middleware.ts + lib/api/csrf.ts + sanitize.ts + auth.ts — CSRF/CSP/headers; TICKER_REGEX; auth name regex) — LAST WS-A cell",
-    "lesson": "A5: dormant code → escalate, don't ship. A Polygon-only finite-guard would make it STRICTER than its siblings (Yahoo lets NaN through; AV lets literal 0 through) = trading one asymmetry for another in dead code + burning a CI cycle for zero live benefit. Frame B-3 as ONE unify-the-guards finding across all 3 providers. Live bug → ship (A4/B-1); dormant gap → escalate (A5). Also: a claim resting on API docs (untyped Record response) must be labelled per-docs, NOT verified-against-types (the A4 lesson applied to my own certainty).",
-    "open_owner_gated": ["A5-DORMANCY: lib/data/providers/* + dispatcher + fallback chain has ZERO prod callers — retire-or-wire decision", "F-4 gross->net WR re-baseline", "F-9 entry-slippage double-count", "F-2 alpha mismatched windows (live engine.ts; latent on uniform data)", "F-11 maxHoldDays union-calendar (dormant)", "F-3 close-based trailing peak (dormant/methodology)", "Q05-1 regime slope-null FALLING_KNIFE", "Q09-1 live sectorGates parity (dormant enhanced path)", "Q25-1 BTC sqrt(252) conditional vol", "A4-1 sector-brief volume field names (LOW, display-only)", "A5-1/A5-2/A5-3 provider OHLC guards (LOW, dormant — only if providers are wired)", "scheduled-task model re-point to Opus (root cause of the 06-16+ stall)", "Monday weekly deep sweep still due"],
-    "note": "Manual Opus-4.8 session advanced cell A5 (verified clean, no code change — provider layer is dormant). Prior session shipped A4/B-1 to prod (PR #72, main 6ea4293). Scheduled 09:00 fires still 400-fail on the disabled Fable 5 model; owner must re-point the schedule/default model to Opus 4.8 to resume autonomous runs (no file to edit). WS-A has one cell left (A6)."
+    "lesson": "When 'fix the issues' lands on files you've already flagged as an open retire-or-wire decision, AIM the directive with one AskUserQuestion before writing code — the dormancy call gates whether any in-place fix is worth doing (fix-then-delete is pure waste). Owner directive cleanly overrode the earlier escalate-don't-ship default (that default was explicitly conditional on ABSENT an owner directive). Gate every deletion: grep all of app/lib/scripts/components/hooks/__tests__ for the symbol AND the module path, then tsc (the tickerNormalize lesson). A4: live bug → ship; A5: owner chose delete the dormant layer.",
+    "open_owner_gated": ["F-4 gross->net WR re-baseline", "F-9 entry-slippage double-count", "F-2 alpha mismatched windows (live engine.ts; latent on uniform data)", "F-11 maxHoldDays union-calendar (dormant)", "F-3 close-based trailing peak (dormant/methodology)", "Q05-1 regime slope-null FALLING_KNIFE", "Q09-1 live sectorGates parity (dormant enhanced path)", "Q25-1 BTC sqrt(252) conditional vol", "A4-1 sector-brief volume field names (LOW, display-only)", "scheduled-task model re-point to Opus (root cause of the 06-16+ stall)", "Monday weekly deep sweep still due"],
+    "note": "Manual Opus-4.8 session: A5 reviewed (verified-clean) then owner-directed DELETE of the dormant provider layer (PR #73 → main b1dcb9d, prod smoke PASS); A5-DORMANCY resolved, A5-1/2/3 moot. Prior session shipped A4/B-1 to prod (PR #72, main 6ea4293). Scheduled 09:00 fires still 400-fail on the disabled Fable 5 model; owner must re-point the schedule/default model to Opus 4.8 to resume autonomous runs (no file to edit). WS-A has one cell left (A6)."
   },
   "last_inspection": {
     "timestamp": "2026-06-03T02:35:00.000Z",

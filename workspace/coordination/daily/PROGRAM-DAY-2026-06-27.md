@@ -69,6 +69,37 @@ MEMORY_LOG; SESSION_STATE. F — no NaN/leak introduced (read-only). **No PR —
 
 ---
 
+## A5 follow-up — owner directed "identify and fix the issues" → DELETE the layer
+
+After the verify-clean pass above, the owner instructed "identify and fix the issues."
+Because I had myself flagged **A5-DORMANCY** as the headline open question (retire / wire /
+harden), and "fix" maps to *opposite* actions on the same files, I confirmed the aim with a
+single `AskUserQuestion` rather than assuming "harden-in-place." **Owner chose: delete the
+layer.**
+
+**Done (PR #73 → main `b1dcb9d`):**
+- Removed `lib/data/providers/{yahoo,polygon,alphavantage,fred,dispatcher,index}.ts` +
+  `__tests__/data/{providers,dispatcher}.test.ts`. Kept `types.ts`, trimmed to the two
+  interfaces `warehouse.ts` imports (`DailyBar`, `QuoteSnapshot`); dropped the orphaned
+  `DataProvider`/`MacroDataProvider`/`MacroSeries`. Cleaned the now-stale vitest coverage
+  excludes. **−716 LOC net.**
+- **A5-1 / A5-2 / A5-3 are now MOOT** — the dead code carrying them is gone (this is why
+  confirming the fork first mattered: hardening or writing adjusted-basis math into the
+  layer would have been wasted work on a tombstone).
+- **Verification:** grep-verified zero non-test callers (every provider symbol + barrel +
+  subpath across app/lib/scripts/components/hooks/__tests__); **`tsc --noEmit` clean** (the
+  importer gate, per the `tickerNormalize` lesson); all 6 CI gates green incl. **coverage**
+  (the deleted excluded files were coverage-neutral; fred/dispatcher were counted but
+  below-average → removal nudged the global up). **Prod smoke PASS:** `/` 200 (QUANTAN
+  dashboard), `/api/sector-rotation` 200 (11 sectors), `/api/analytics/AAPL` 200
+  (winRate 53.2%, β 0.88). Benchmark-neutral (layer never in the signal path).
+
+**Lesson:** when "fix the issues" lands on files you've already flagged as an open
+retire-or-wire decision, *aim* the directive with one question before writing code — the
+dormancy call gates whether any in-place fix is worth doing at all. Owner directive overrode
+the earlier escalate-don't-ship default cleanly (that default was explicitly conditional on
+*absent* an owner directive).
+
 ## Program status
 
 - **WS-Q COMPLETE** (Q01–Q27), **WS-PY COMPLETE** (PY1–PY4), **WS-A** A1–A5 done — **next A6**
