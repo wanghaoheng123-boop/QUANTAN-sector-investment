@@ -60,13 +60,11 @@ export default defineConfig({
         // native binding is unavailable (which it is in default CI image)
         'lib/data/warehouse.ts',
         'lib/data/bloomberg/**',
-        // HTTP providers — Polygon has a 13s rate-limit that's painful to
-        // mock around; AlphaVantage/Yahoo have similar shapes. Phase 16 work.
-        'lib/data/providers/yahoo.ts',
-        'lib/data/providers/polygon.ts',
-        'lib/data/providers/alphavantage.ts',
-        'lib/data/providers/index.ts',
-        'lib/data/providers/types.ts',
+        // (2026-06-27) The lib/data/providers HTTP layer (yahoo/polygon/
+        // alphavantage/fred + dispatcher + index) was deleted as dead code
+        // (zero prod callers), so its coverage excludes are gone with it. Only
+        // lib/data/providers/types.ts remains — pure interfaces, 0 executable
+        // lines, so it needs no exclude.
         // ML sidecar client — needs HTTP fixture suite
         'lib/ml/**',
         // Grid search — long-running optimization; tested via end-to-end
