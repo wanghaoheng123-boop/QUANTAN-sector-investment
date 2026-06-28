@@ -253,6 +253,27 @@ describe('KLineChart render smoke (KL-10)', () => {
     expect(ema20!.setData).not.toHaveBeenCalled()  // hidden → gated (KL-6)
   })
 
+  it('KL-4: surfaces an accessible fallback when async chart init fails', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    // Force createChart to throw on this mount so the async init() rejects —
+    // simulating a dynamic-import chunk-load failure or a createChart throw.
+    lwc.createChart.mockImplementationOnce(() => {
+      throw new Error('chunk load failed')
+    })
+
+    const utils = render(
+      <KLineChart candles={CANDLES} color="#3b82f6" ticker="TEST" showRSI={false} indicators={flags()} />,
+    )
+
+    // The hook's init().catch sets initError → the component renders an alert
+    // fallback and an aria-label that announces the failure (instead of a
+    // perpetual "loading" chart and an unhandled promise rejection).
+    await waitFor(() => expect(utils.getByRole('alert')).toBeInTheDocument())
+    expect(utils.getByRole('img', { name: /failed to load/i })).toBeInTheDocument()
+    expect(errSpy).toHaveBeenCalled() // failure is logged for operators
+    errSpy.mockRestore()
+  })
+
   it('KL-3: VWAP and Bollinger toggles drive series visibility', async () => {
     const { chart } = await mountChart(flags({ vwap: true, bollingerBands: true }))
 

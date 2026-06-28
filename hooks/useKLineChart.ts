@@ -169,6 +169,13 @@ export interface UseKLineChartParams {
 
 export interface UseKLineChartResult {
   chartReadyGen: number
+  /**
+   * KL-4 (WS-F F1): true when async chart init failed (e.g. the
+   * `import('lightweight-charts')` chunk fails to load, or createChart throws).
+   * The component renders a text/aria fallback instead of a perpetual "loading"
+   * chart that never appears.
+   */
+  initError: boolean
   crosshairData: CrosshairData | null
   setCrosshairData: React.Dispatch<React.SetStateAction<CrosshairData | null>>
   // Series refs — returned so the component can call applyOptions for visibility toggling
@@ -235,6 +242,7 @@ export function useKLineChart({
   const [chartReadyGen, setChartReadyGen] = useState(0)
 
   const [crosshairData, setCrosshairData] = useState<CrosshairData | null>(null)
+  const [initError, setInitError] = useState(false)
 
   // ── Fibonacci retracement render ───────────────────────────────────────────
   // Draws horizontal price lines on the candle series at the standard Fib
@@ -565,7 +573,16 @@ export function useKLineChart({
       if (mounted) setChartReadyGen((g) => g + 1)
     }
 
-    init()
+    // KL-4 (WS-F F1): init() is async (dynamic import + createChart). Without a
+    // .catch, a chunk-load failure or a createChart throw becomes an UNHANDLED
+    // promise rejection — error boundaries don't catch async effect rejections,
+    // so the chart silently stays blank forever and chartReadyGen never fires.
+    // Surface the failure as state so the component can render an accessible
+    // fallback instead of a perpetual "loading" chart.
+    init().catch((err) => {
+      if (mounted) setInitError(true)
+      console.error('[useKLineChart] chart init failed', err)
+    })
 
     return () => {
       mounted = false
@@ -824,6 +841,7 @@ export function useKLineChart({
 
   return {
     chartReadyGen,
+    initError,
     crosshairData,
     setCrosshairData,
     emaLineRefs,

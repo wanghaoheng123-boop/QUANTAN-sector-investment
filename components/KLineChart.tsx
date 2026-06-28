@@ -209,6 +209,7 @@ export default function KLineChart({
   // ── Chart lifecycle hook ───────────────────────────────────────
   const {
     chartReadyGen,
+    initError,
     crosshairData,
     emaLineRefs,
     vwapRef,
@@ -397,7 +398,11 @@ export default function KLineChart({
         ref={containerRef}
         role="img"
         aria-label={
-          sortedCandlesPreview.length > 0 && latestCandle
+          // KL-4 (WS-F F1): on async-init failure, tell AT users the chart
+          // failed rather than leaving a perpetual "loading" label.
+          initError
+            ? `Price chart for ${ticker} failed to load. Try refreshing the page.`
+            : sortedCandlesPreview.length > 0 && latestCandle
             ? `Price chart for ${ticker}: ${sortedCandlesPreview.length} candles. ` +
               `Latest close ${latestCandle.close?.toFixed(2) ?? 'N/A'}, ` +
               `range ${Math.min(...sortedCandlesPreview.map(c => c.low ?? Infinity)).toFixed(2)}–` +
@@ -406,6 +411,19 @@ export default function KLineChart({
         }
         className="w-full rounded-t-lg overflow-hidden min-h-[200px]"
       />
+
+      {/* KL-4 (WS-F F1): visible fallback when the chart canvas fails to
+          initialise (e.g. a dynamic-import chunk-load error). Rendered as a
+          SIBLING — never a child of the lightweight-charts-managed container —
+          to avoid React reconciling against the imperatively-appended canvas. */}
+      {initError && (
+        <div
+          role="alert"
+          className="flex w-full items-center justify-center px-4 py-6 text-center text-xs text-slate-400"
+        >
+          Chart failed to load. Try refreshing the page.
+        </div>
+      )}
 
       {showRSI && (
         <>
