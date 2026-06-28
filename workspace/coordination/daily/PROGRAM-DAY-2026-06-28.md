@@ -110,6 +110,35 @@ contributor to break the WR for nothing (the *opposite* of A6-1, which was a rea
 Next: **P2** — per-tick EMA recompute on the live WebSocket (KL-6), which is frontend and off
 the WR path → genuinely higher-value and lower-stakes than P1.
 
+## P2 (WS-P) — per-tick EMA recompute (KL-6) — SAFE FIX SHIPPED (PR #74, `47275f1`, prod ✓)
+
+The advisor flagged P2 as the genuine WS-P win over P1 (frontend, lower-stakes, measurably
+wasteful) — confirmed.
+
+**The waste:** `useKLineChart`'s data effect has `candles` in its deps, so it re-runs on
+**every live WebSocket tick**, and its EMA loop unconditionally did `calcEMA` + `setData` for
+**all ~20 EMA periods** (`lib/chartEma.ts`). The default is 4 visible (9/20/50/200), so **~16
+hidden series** got a full per-tick recompute + lightweight-charts series reprocess for lines
+the user can't see. (Unlike volSma/vwap/bollingerBands, the EMA loop had no visibility gate.)
+
+**The fix:** gate the EMA loop with `isEmaLineVisible(indicatorsProp, p)` — the **same
+predicate** used at series creation (`:421`) and by the component's visibility sync
+(`KLineChart.tsx:237`), exactly mirroring the existing volSma/vwap/bb gating.
+**Behavior-preserving:** a visible EMA always gets data (the effect re-runs on tick via
+`candles` *and* on toggle via `indicatorsProp`/`visSerialised`); a hidden EMA is skipped, and
+nothing reads its data (the crosshair tooltip is candle-only); toggling a series ON re-runs the
+effect so it gets its data then.
+
+- **Verify:** `tsc --noEmit` clean; `KLineChart.test.tsx` **9/9** (+1 new KL-6 test: a hidden
+  EMA skips `setData`, a visible one pushes data; the existing KL-3 visibility tests still pass
+  → behavior preserved). The jsdom test ran locally (warm cache, 1.5s) *and* in CI. Off the WR
+  path → benchmark-neutral; `useKLineChart.ts` is coverage-excluded.
+- **Ship:** PR #74 → main `47275f1`, all 6 CI gates green, **prod smoke PASS** (analytics/AAPL
+  200, deploy healthy). SAFE behavior-preserving perf optimization with an output-parity test
+  (§4a/§6.5) → auto-merged. ledger `KL-6` → FIXED.
+
+Next: **P3** (chart render — series churn / visibility gating in `useKLineChart`).
+
 ## Program status — WS-A COMPLETE
 
 - **WS-Q COMPLETE** (Q01–Q27), **WS-PY COMPLETE** (PY1–PY4), **WS-A COMPLETE** (A1–A6).
