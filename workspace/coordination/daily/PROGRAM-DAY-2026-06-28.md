@@ -139,6 +139,31 @@ effect so it gets its data then.
 
 Next: **P3** (chart render — series churn / visibility gating in `useKLineChart`).
 
+## P3 + P4 (WS-P) — PROFILED → defer → WS-P pass COMPLETE (no code change)
+
+**P3 (chart render):** confirmed **no per-tick series churn** — all `add*Series` live in the
+init effect (its deps exclude `candles`; the `.remove()` calls are in its unmount cleanup), so
+series are created once and persist; the per-tick data effect only `setData`s. Visibility
+gating is now **complete** (volSma/vwap/bb/rsi/macd/atr were already gated; EMA fixed in P2).
+The one remaining lever is incremental `series.update(lastPoint)` vs full `setData(lineData)`
+per tick for *visible* indicators — parity-safe in principle for causal indicators, but a
+larger refactor across every indicator render path with a subtler parity surface (update-bar
+vs new-bar) and only a marginal gain now that P2 removed the ~16 hidden series. **Deferred**
+(non-WR-path → not a landmine; documented for a future focused PR, not force-escalated).
+
+**P4 (bundle):** the dominant code-split is **already in place** — `lightweight-charts` (the
+heaviest dep) is loaded via `await import('lightweight-charts')` (`useKLineChart.ts:318`); its
+only static import is `import type {…}` (`:14-26`, erased at build), so the runtime chart code
+is not in the initial bundle. Chart-heavy routes use `next/dynamic`; PWA/workbox is configured
+(`@ducanh2912/next-pwa` + runtimeCaching). A deeper bundle-size pass needs `@next/bundle-analyzer`
+(not installed) + a production `next build` — build tooling, heavy/FUSE-risky — with no obvious
+quick safe win. **Deferred.**
+
+**WS-P pass complete:** P1 no-action (not hot) · **P2 KL-6 shipped** · P3 defer · P4 defer.
+The one shippable, measurable, behavior-preserving win in the whole workstream was P2 — which
+is the correct shape for a perf pass (measure first; "no change needed" is the modal result).
+Next workstream: **WS-F** (frontend/UX & a11y).
+
 ## Program status — WS-A COMPLETE
 
 - **WS-Q COMPLETE** (Q01–Q27), **WS-PY COMPLETE** (PY1–PY4), **WS-A COMPLETE** (A1–A6).
