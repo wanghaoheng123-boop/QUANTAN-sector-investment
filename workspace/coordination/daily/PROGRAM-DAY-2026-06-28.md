@@ -164,6 +164,30 @@ The one shippable, measurable, behavior-preserving win in the whole workstream w
 is the correct shape for a perf pass (measure first; "no change needed" is the modal result).
 Next workstream: **WS-F** (frontend/UX & a11y).
 
+## F1 (WS-F) — chart components — KL-4 FIXED + shipped (partial cell) (PR #75, `88a8d49`, prod ✓)
+
+First WS-F cell. **KL-4 (MEDIUM, live on every chart):** `useKLineChart`'s mount effect calls
+an async `init()` (dynamic `import('lightweight-charts')` + `createChart`) **fire-and-forget
+with no `.catch`**. A chunk-load failure (common with stale deploys / flaky networks) or a
+`createChart` throw became an **unhandled promise rejection** — React error boundaries don't
+catch async effect rejections — so the chart silently stayed blank forever, the `role="img"`
+aria-label was stuck on "(loading)", and `chartReadyGen` never fired (so the data effect never
+ran either).
+
+**Fix:** `init().catch` → `initError` state (+`console.error` for operators), surfaced from the
+hook. The component announces the failure in the existing aria-label ("…failed to load. Try
+refreshing the page.") and renders a visible `role="alert"` fallback **as a sibling** of the
+chart container — never a child, since lightweight-charts owns that container's DOM imperatively
+and a React child there could reconcile against the appended canvas (the partial-failure case).
+
+- **Verify:** `tsc` clean; `KLineChart.test.tsx` **10/10** (+1 KL-4 test: `createChart` forced
+  to throw → asserts the alert + failed aria-label appear and the error is logged; the 9
+  existing tests still pass → success path unchanged). Off the WR path → benchmark-neutral.
+- **Ship:** PR #75 → main `88a8d49`, all 6 CI gates green, **prod smoke PASS** (sector-rotation
+  200, deploy healthy). SAFE bug fix + regression test (§4a) → auto-merged. ledger `KL-4` → FIXED.
+- **Deferred to F1-continuation:** KL-5 (runtime `showRSI` — not yet investigated) + the
+  chart-controls aria/keyboard sweep (overlaps the WS-F F4 axe pass).
+
 ## Program status — WS-A COMPLETE
 
 - **WS-Q COMPLETE** (Q01–Q27), **WS-PY COMPLETE** (PY1–PY4), **WS-A COMPLETE** (A1–A6).
