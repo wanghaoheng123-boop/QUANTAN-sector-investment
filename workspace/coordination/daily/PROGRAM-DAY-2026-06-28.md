@@ -76,6 +76,40 @@ F — read-only, no NaN/leak. **No PR — tracking-only.**
 
 ---
 
+## P1 (WS-P) — backtest engine + data-load hot path — PROFILED → NOT HOT → NO ACTION
+
+First WS-P cell. Profiled the backtest hot path with a measurement-first discipline.
+
+**The O(n²) patterns are real:**
+- `core.ts` `backtestInstrument` loop does **3× `.slice(0, i+1)` per bar** (`lookbackCloses`,
+  `lookbackBars`, `lookbackOhlcv`) — growing-prefix copies, O(n²) total. `lookbackOhlcv` is
+  even **dead in the production path** (the live, enhanced-OFF `resolveBacktestSignal` never
+  reads `ohlcvBars`; only the dormant `enhancedCombinedSignal` does).
+- The live `resolveBacktestSignal` recomputes `rsi(closes)` (full array, only `.at(-1)` used),
+  `regimeSignal` (sma200 over `closes`), and `detectRegime(closes, bars)` over the full slice
+  **every bar** — O(n²), where ATR already shows the correct precompute-once pattern.
+
+**But the measurement settles it:** the **entire 56-instrument benchmark runs in 26s wall /
+5.24s user CPU** (~90 ms/instrument). At 1255 bars the O(n²) is immaterial and nobody waits on
+this path. The only O(n)→ win would require refactoring the **published-WR SSOT**
+(`signals.ts`/`regimeSignal.ts`/`regimeDetection.ts`) — and the risk of a subtle parity break
+changing the WR (a §4b DENY) is wildly out of proportion to an unmeasurable gain.
+
+**Outcome: NO ACTION — not shipped, and deliberately NOT escalated.** Escalating a
+low-value/high-risk optimization of the WR path would plant a landmine inviting a future
+contributor to break the WR for nothing (the *opposite* of A6-1, which was a real break on a
+*planned* action). The dead `lookbackOhlcv` slice is noted here, not acted on — it feeds a
+5-second benchmark.
+
+- **Baseline recorded** (for any future parity gate, should history length ever grow
+  materially): **gross WR 56.54% / net 55.53%** (floor 53.29), benchmark `26s / 5.24s CPU`.
+  The `scripts/benchmark-results.json` the run regenerated was reverted (CI regenerates it).
+- **Lesson:** in a perf workstream, **"no change needed" is the modal-correct result**; measure
+  before optimizing; "do not stop" means move through cells, not manufacture diffs for motion.
+
+Next: **P2** — per-tick EMA recompute on the live WebSocket (KL-6), which is frontend and off
+the WR path → genuinely higher-value and lower-stakes than P1.
+
 ## Program status — WS-A COMPLETE
 
 - **WS-Q COMPLETE** (Q01–Q27), **WS-PY COMPLETE** (PY1–PY4), **WS-A COMPLETE** (A1–A6).
