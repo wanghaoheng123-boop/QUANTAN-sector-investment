@@ -240,6 +240,19 @@ describe('KLineChart render smoke (KL-10)', () => {
     expect(effectiveVisible(lineByColor(chart, CHART_EMA_COLORS[20]))).toBe(false)
   })
 
+  it('KL-6: hidden EMA series skip setData (per-tick perf); visible ones push data', async () => {
+    // ema9 visible, ema20 hidden (default-off). The data effect must push data
+    // only to the visible series — hidden EMAs are display-toggled off and
+    // nothing reads their data, so skipping their per-tick setData is the perf
+    // win (and behaviour-preserving). Mirrors the Vol-SMA gating above.
+    const { chart } = await mountChart(flags({ ema9: true, ema20: false }))
+    const ema9 = lineByColor(chart, CHART_EMA_COLORS[9])
+    const ema20 = lineByColor(chart, CHART_EMA_COLORS[20])
+
+    expect(ema9!.setData).toHaveBeenCalled()       // visible → data pushed
+    expect(ema20!.setData).not.toHaveBeenCalled()  // hidden → gated (KL-6)
+  })
+
   it('KL-3: VWAP and Bollinger toggles drive series visibility', async () => {
     const { chart } = await mountChart(flags({ vwap: true, bollingerBands: true }))
 

@@ -704,9 +704,22 @@ export function useKLineChart({
     fibVisibleRef.current = indicatorsProp.fibonacci === true
     renderFib()
 
+    // KL-6 (perf, WS-P P2): only (re)compute + push EMA data for series that
+    // are actually visible. There are ~20 EMA periods but the default is 4 on
+    // (9/20/50/200), so the old unconditional loop did ~16 wasted full setData
+    // + calcEMA passes on EVERY render — and this effect re-runs on every
+    // `candles` change, i.e. every live WebSocket tick. Hidden series are
+    // display-toggled off via applyOptions and nothing reads their data (the
+    // crosshair tooltip is candle-only), so skipping their data is
+    // behaviour-preserving. Toggling a series ON re-runs this effect
+    // (indicatorsProp / visSerialised are deps), so the newly-visible series
+    // gets its data then. Same predicate as series creation (L421) and the
+    // component's visibility sync — mirrors the volSma / vwap / bollingerBands
+    // gating already used below.
     for (const p of CHART_EMA_PERIODS) {
       const series = emaLineRefs.current[p]
       if (!series) continue
+      if (!isEmaLineVisible(indicatorsProp, p)) continue
       series.setData(lineData(calcEMA(closes, p)))
     }
 
