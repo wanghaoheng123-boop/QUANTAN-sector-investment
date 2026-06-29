@@ -188,6 +188,31 @@ and a React child there could reconcile against the appended canvas (the partial
 - **Deferred to F1-continuation:** KL-5 (runtime `showRSI` — not yet investigated) + the
   chart-controls aria/keyboard sweep (overlaps the WS-F F4 axe pass).
 
+## F1-continuation + F2 (WS-F) — KL-5 latent, F2 boundary gap fixed (spans into 2026-06-29)
+
+**F1-continuation → F1 COMPLETE (no code):** **KL-5 confirmed LATENT.** `showRSI` is consumed
+only inside the mount/init effect (`[]` deps, `useKLineChart.ts:622`) — it sizes the chart and
+creates the RSI/MACD/ATR sub-charts — so a *runtime* `showRSI` change wouldn't re-create them.
+But all three callers pass a **static** `showRSI` (sector/stock/BtcChartPanel; the main pages
+also `hideTimeframeSelector`), so there's no runtime-toggle path → no live bug; making it
+reactive is a non-trivial refactor for zero current benefit (ledger `KL-5`). Chart-controls
+a11y reviewed: the container is solid (role=img + data/loading/KL-4-failed aria-label); the
+timeframe row uses real `<button>`s (keyboard-accessible) but lacks `aria-pressed` for the
+selected state — LOW, hidden on the main pages → folded into the **F4** axe sweep.
+
+**F2 → SAFE fix shipped (F2-1, PR #76 `df10657`, prod ✓):** mapped error-boundary coverage —
+the root `app/error.tsx` + `global-error.tsx` are the backstop for every route, and the chart
+components have **granular** component-level boundaries (`ChartErrorBoundary` wraps KLineChart
+*and* each options panel on stock/sector; `CryptoChartBoundary` wraps BtcQuantLab). **One gap:**
+`/crypto/btc` rendered `<BtcChartPanel>` (the default "chart" tab) **unwrapped** while the
+Quant-Lab tab was wrapped — so a render crash in the main BTC chart blanked the **whole page**
+(root boundary) instead of a chart-specific fallback. **Fixed:** wrapped `BtcChartPanel` in the
+existing `<CryptoChartBoundary title="BTC chart crashed">` (transparent on success). `tsc` clean;
+6 CI gates green (the benchmark re-ran on a weekly backtestData refresh that landed on main
+during the run — still green); prod smoke PASS. ledger `F2-1`.
+
+Next: **F3** (data tables/panels — abort-race / nested re-render) → **F4** (a11y axe sweep).
+
 ## Program status — WS-A COMPLETE
 
 - **WS-Q COMPLETE** (Q01–Q27), **WS-PY COMPLETE** (PY1–PY4), **WS-A COMPLETE** (A1–A6).
