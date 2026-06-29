@@ -94,19 +94,26 @@ export default function BtcPage() {
         />
 
         {activeTab === 'chart' ? (
-          <BtcChartPanel
-            candles={candles}
-            loading={loading}
-            fetchError={fetchError}
-            restFallbackNote={restFallbackNote}
-            wsConnected={wsConnected}
-            activeRange={activeRange}
-            indicatorConfig={indicatorConfig}
-            activeIndicator={activeIndicator}
-            onIndicatorPresetChange={setActiveIndicator}
-            vis={vis}
-            onVisToggle={handleVisToggle}
-          />
+          // F2 (WS-F): wrap the main BTC chart in a boundary too, mirroring the
+          // BtcQuantLab tab below + the stock/sector ChartErrorBoundary pattern.
+          // Previously BtcChartPanel was unwrapped, so a render crash here blanked
+          // the WHOLE /crypto/btc page (caught only by the root app/error.tsx)
+          // instead of degrading to a chart-specific fallback.
+          <CryptoChartBoundary title="BTC chart crashed">
+            <BtcChartPanel
+              candles={candles}
+              loading={loading}
+              fetchError={fetchError}
+              restFallbackNote={restFallbackNote}
+              wsConnected={wsConnected}
+              activeRange={activeRange}
+              indicatorConfig={indicatorConfig}
+              activeIndicator={activeIndicator}
+              onIndicatorPresetChange={setActiveIndicator}
+              vis={vis}
+              onVisToggle={handleVisToggle}
+            />
+          </CryptoChartBoundary>
         ) : (
           <CryptoChartBoundary title="BTC Quant Lab crashed">
             <BtcQuantLab candles={candles} />
