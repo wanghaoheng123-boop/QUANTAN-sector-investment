@@ -142,15 +142,18 @@ Implemented as the Claude Code scheduled task **`quantan-autonomous-program`**
 
 ## 8. Milestones / exit criteria
 
-| M | Criteria |
-|---|----------|
-| **M1** | WS-Q cells all `done` (backtest/optimize/quant/quant_framework verified + perf-profiled) |
-| **M2** | WS-PY + WS-A `done`; all 30 API routes ops-verified; provider resilience confirmed |
-| **M3** | WS-P pass complete: documented perf deltas on every identified hot path |
-| **M4** | WS-F `done`; a11y axe clean; chart/render paths covered |
-| **M5** | Full coverage ledger green; mutation score baseline; zero open auto-program blockers |
+| M | Criteria | Status |
+|---|----------|--------|
+| **M1** | WS-Q cells all `done` (backtest/optimize/quant/quant_framework verified + perf-profiled) | ✅ **DONE** (Q01–Q27, 2026-06-22) |
+| **M2** | WS-PY + WS-A `done`; all 30 API routes ops-verified; provider resilience confirmed | ✅ **DONE** (PY1–4 + A1–6, 2026-06-23/30; provider layer deleted as dead PR #73) |
+| **M3** | WS-P pass complete: documented perf deltas on every identified hot path | ✅ **DONE** (P1–4, 2026-06-28; P2/KL-6 shipped, P1/P3/P4 measured no-action/defer) |
+| **M4** | WS-F `done`; a11y axe clean; chart/render paths covered | ✅ **DONE** (F1–4, 2026-06-30; F4-1/F4-2 a11y shipped; automated axe-CI = F4-3, owner-gated infra) |
+| **M5** | Full coverage ledger green; mutation score baseline; zero open auto-program blockers | ⏳ partial — CI coverage/typecheck/test/benchmark green throughout; **zero auto-program code blockers**; remaining = owner-gated backlog (A6-1 CSP, scheduled-task→Opus, published-number re-baselines, F4-3 axe-CI) + the recurring weekly deep-sweep |
 
-Each weekly deep-sweep day updates the milestone table + a one-line program status here.
+**Program status (2026-06-30): PRIMARY CELL PASS COMPLETE.** All WS-Q/PY/A/P/F cells `done`.
+The 06-28→30 "do not stop" session shipped 7 prod PRs (#72–#78), all CI-green + prod-smoked.
+Ongoing program activity is now the **recurring weekly deep-sweep (§7)** + the **owner-gated
+backlog** (M5). Each weekly deep-sweep day updates this table + a one-line program status here.
 
 ## 9. Tracking artifacts
 
