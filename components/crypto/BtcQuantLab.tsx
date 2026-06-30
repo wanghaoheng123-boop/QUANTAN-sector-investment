@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   BtcCandle,
   calcRSI,
@@ -98,11 +98,25 @@ export default function BtcQuantLab({ candles }: Props) {
   const [metricsFetchedAt, setMetricsFetchedAt] = useState<string | null>(null)
   const [liqFetchedAt, setLiqFetchedAt] = useState<string | null>(null)
 
+  // F3 (WS-F): guard against setState-after-unmount. The 30s/60s pollers below
+  // clearInterval on cleanup (no NEW fetches after unmount), but an in-flight
+  // fetch can still resolve post-unmount and call setState. mountedRef gates the
+  // post-await updates (the pre-await setLoading(true) is synchronous, so safe).
+  const mountedRef = useRef(true)
+  useEffect(() => {
+    // Set in the body (not just useRef(true)) so React StrictMode's dev
+    // mount→unmount→mount double-invoke re-arms the flag instead of leaving it
+    // permanently false after the throwaway first cleanup.
+    mountedRef.current = true
+    return () => { mountedRef.current = false }
+  }, [])
+
   const fetchMetrics = useCallback(async () => {
     setMetricsLoading(true)
     setDerivativesError((prev) => prev && !prev.includes('metrics') ? prev : null)
     try {
       const mr = await fetchJsonSafe('/api/crypto/btc/metrics')
+      if (!mountedRef.current) return
       if (mr.ok) {
         setMetrics(mr.data as MetricsData)
         setMetricsFetchedAt(new Date().toLocaleTimeString())
@@ -115,7 +129,7 @@ export default function BtcQuantLab({ candles }: Props) {
     } catch (e) {
       console.error('[BtcQuantLab] metrics', e)
     } finally {
-      setMetricsLoading(false)
+      if (mountedRef.current) setMetricsLoading(false)
     }
   }, [])
 
@@ -123,6 +137,7 @@ export default function BtcQuantLab({ candles }: Props) {
     setLiqLoading(true)
     try {
       const lr = await fetchJsonSafe('/api/crypto/btc/liquidations')
+      if (!mountedRef.current) return
       if (lr.ok) {
         setLiq(lr.data as LiqData)
         setLiqFetchedAt(new Date().toLocaleTimeString())
@@ -135,7 +150,7 @@ export default function BtcQuantLab({ candles }: Props) {
     } catch (e) {
       console.error('[BtcQuantLab] liq', e)
     } finally {
-      setLiqLoading(false)
+      if (mountedRef.current) setLiqLoading(false)
     }
   }, [])
 

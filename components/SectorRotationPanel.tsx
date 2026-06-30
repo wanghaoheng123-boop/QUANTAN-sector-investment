@@ -46,13 +46,18 @@ export default function SectorRotationPanel() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    // F3 (WS-F): guard against setState-after-unmount (abort-race). Mirrors the
+    // cancelled-flag pattern already used in NewsFeed/LiveBriefClient — a stale
+    // response must not update an unmounted component.
+    let cancelled = false
     fetch('/api/sector-rotation')
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`)
         return r.json()
       })
-      .then((d) => { setData(d); setLoading(false) })
-      .catch((e) => { setError(String(e)); setLoading(false) })
+      .then((d) => { if (cancelled) return; setData(d); setLoading(false) })
+      .catch((e) => { if (cancelled) return; setError(String(e)); setLoading(false) })
+    return () => { cancelled = true }
   }, [])
 
   if (loading) {
