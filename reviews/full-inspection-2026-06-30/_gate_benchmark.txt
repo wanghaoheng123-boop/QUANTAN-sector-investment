@@ -1,0 +1,16 @@
+Loading data (SSOT: resolveBacktestSignal, production path)...
+Loaded 56 instruments
+
+=== BENCHMARK RESULTS (SSOT) ===
+Instruments: 56
+Instruments with trades: 55
+Total BUY signals: 3444
+Wins: 1960 | Losses: 1484
+Aggregate Win Rate (gross label): 56.91%
+Aggregate Win Rate (net after costs): 55.89%
+Avg 20d return (gross): 1.8269%
+Avg 20d return (net): 1.6069%
+Expectancy gross/net: 1.8269% / 1.6069%
+
+Saved to: /Users/haohengwang/Library/CloudStorage/GoogleDrive-wanghaoheng123@gmail.com/My Drive/QUANTAN-sector-investment/.claude/worktrees/busy-merkle-dc3e9a/scripts/benchmark-results.json
+EXIT=0
