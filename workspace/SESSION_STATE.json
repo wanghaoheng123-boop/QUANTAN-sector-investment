@@ -11,6 +11,7 @@
     "type": "owner-directed full supervised inspection (= the due Monday §7 weekly deep-sweep)",
     "mode": "READ-ONLY (no source modified); prep-then-authorize",
     "report": "reviews/full-inspection-2026-06-30/MASTER-INSPECTION-2026-06-30.md",
+    "pr": "79 (docs-only; base main; OPEN — owner merge to surface on main). Commits ac7d59a (report) + 9693742 (ledger reconcile) on branch claude/busy-merkle-dc3e9a",
     "structure": "3 parallel read-only agents (Quant/API-Security/Frontend) + coordinator inline (Python/data, testing cluster, gates); coordinator=supervisor source-verifies every elevated finding",
     "gates": "tsc clean; benchmark WR net 55.89%/gross 56.91% (floor 53.29 PASS, +1.55pp vs 54.34 on data refresh); OOS gap 6.19pp no-collapse PASS; pytest 127p/1s; npm audit 14 (5 high, 0 critical) owner-deferred",
     "integrity": "look-ahead CLEAN (coordinator source-verified core.ts close[i]->open[i+1], atrVals[i-1]); gross/net computation honest; security posture intact all 27 routes; no P0/P1 regression",
