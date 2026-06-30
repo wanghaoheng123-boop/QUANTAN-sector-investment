@@ -313,7 +313,12 @@ export default function KLineChart({
         {TIMEFRAMES.map((tf) => (
           <button
             key={tf}
+            type="button"
             onClick={() => handleTimeframeChange(tf)}
+            // F4 (WS-F a11y): convey the selected timeframe as a toggle-button
+            // state to assistive tech (WCAG 4.1.2) — selection was visual-only.
+            aria-pressed={selectedTimeframe === tf}
+            aria-label={`Timeframe ${tf}`}
             className={`px-2.5 py-1 rounded text-[11px] font-mono font-medium transition-all ${
               selectedTimeframe === tf
                 ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40'

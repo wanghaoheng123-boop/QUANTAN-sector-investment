@@ -94,12 +94,17 @@ export default function InstrumentTable({ results, sectorColors }: Props) {
                   aria-sort={sortKey === col.key ? (sortDir === 'desc' ? 'descending' : 'ascending') : 'none'}
                   className={`px-3 py-2.5 ${col.align ?? 'text-right'} text-slate-500 uppercase tracking-wider font-medium select-none`}
                 >
-                  <span
+                  {/* F4 (WS-F a11y): the sort control was a clickable <span> —
+                      not focusable or keyboard-operable (WCAG 2.1.1 / 4.1.2). A
+                      real <button> is natively focusable + Enter/Space-activated.
+                      Sort state is exposed via aria-sort on the parent <th>. */}
+                  <button
+                    type="button"
                     onClick={() => toggleSort(col.key)}
-                    className="cursor-pointer hover:text-slate-300 inline-flex items-center"
+                    className="cursor-pointer hover:text-slate-300 inline-flex items-center bg-transparent border-0 p-0 uppercase tracking-wider"
                   >
                     {col.label}<SortIcon k={col.key} sortKey={sortKey} sortDir={sortDir} />
-                  </span>
+                  </button>
                   {col.metricKey && <MetricTooltip metricKey={col.metricKey} compact />}
                 </th>
               ))}
