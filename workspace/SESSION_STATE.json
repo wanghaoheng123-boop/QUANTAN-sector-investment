@@ -2,8 +2,19 @@
   "schema_version": "1.1",
   "project": "QUANTAN-sector-investment",
   "created": "2026-04-28T09:40:00Z",
-  "last_updated": "2026-06-30T14:30:00.000Z",
-  "active_agent": "claude opus-4.8 (SUPERVISED FULL INSPECTION 2026-06-30 — read-only; 3 review agents + coordinator; gates green; ledger accuracy corrections)",
+  "last_updated": "2026-07-01T09:25:00.000Z",
+  "active_agent": "claude opus-4.8 (2026-07-01: shipped inspection follow-through — merged #79 + #80 to prod; survivorship disclosure; a11y/display polish; prod smoke PASS)",
+  "post_inspection_remediation_2026_07_01": {
+    "summary": "Owner: 'follow your recommendation and complete the tasks, after review/checks merge to github and vercel.' Completed the safe, non-owner-gated follow-through from the 2026-06-30 inspection and promoted to production.",
+    "merged_to_main": {
+      "PR_79": "inspection report + ledger truth-corrections + survivorship disclosure (NEW-Q-1 -> SIGNAL_SSOT.md); main 9476d71; 5 CI gates + Vercel green",
+      "PR_80": "a11y/display polish: NEW-C-1 (backtest tab roles), NEW-C-2 (BtcChartPanel aria-pressed), A4-1 (briefs volume field names); main e0f722e; 5 CI gates + Vercel green"
+    },
+    "prod_smoke": "PASS on quantan.vercel.app (deploy dpl_BL2M… READY, target=production): /api/analytics/AAPL=200 (winRate252d 53.17%, beta 0.87), /api/sector-rotation=200 (11 sectors); security headers (HSTS/X-Frame DENY/nosniff/CSP-RO) + CSRF cookie live. Briefs A4-1 route not tool-smokable (Vercel share-URL quirk on the force-dynamic multi-Yahoo route) but tsc+CI-verified + type-checked.",
+    "ledger": "NEW-C-1/NEW-C-2/A4-1 -> FIXED; NEW-Q-1 -> partial (internal doc done; user-facing UI disclosure deferred to owner)",
+    "held_per_owner": "F-A1-3 rate-limit self-heal = NO ACTION (hot-path KV round-trip for a millisecond-window rare conjunction — not worth it). Published-number re-baselines (F-4 net WR label, Q25-1 BTC vol 365) = owner sign-off required (change displayed numbers). CSP nonce completion (#7) = available on request.",
+    "owner_actions_still_open": "(1) RE-POINT scheduled/default model to Opus 4.8 — root cause of the daily autonomous-program stall since ~2026-06-16 (UI setting, no file); (2) do NOT flip QUANTAN_CSP_ENFORCE=1 (A6-1 landmine); (3) F-4/Q25-1 published-number re-baselines await sign-off."
+  },
   "program_doc": "workspace/QUANTAN_EXPERT_TEAM_COMMERCIALIZATION.md",
   "coordination_doc": "workspace/coordination/PROGRESS_COORDINATION_2026-06-03.md",
   "last_weekly_deep_sweep": {
