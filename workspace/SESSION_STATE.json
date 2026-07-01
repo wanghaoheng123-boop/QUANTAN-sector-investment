@@ -2,8 +2,12 @@
   "schema_version": "1.1",
   "project": "QUANTAN-sector-investment",
   "created": "2026-04-28T09:40:00Z",
-  "last_updated": "2026-07-01T09:25:00.000Z",
-  "active_agent": "claude opus-4.8 (2026-07-01: shipped inspection follow-through — merged #79 + #80 to prod; survivorship disclosure; a11y/display polish; prod smoke PASS)",
+  "last_updated": "2026-07-01T15:45:00.000Z",
+  "active_agent": "claude opus-4.8 (2026-07-01: inspection follow-through + prod bug hunt — merged #79/#80/#81; found+fixed B-2 news-search validation via Vercel runtime-errors → #82 LIVE-verified)",
+  "prod_bug_fix_2026_07_01": {
+    "B-2": "News fetch broken by yahoo-finance2 SearchResult schema drift (yf.search validation threw → news silently dropped + 66 prod errors on /api/briefs since 2026-04-03). FOUND via Vercel get_runtime_errors. FIXED with validateResult:false on the 4 news-search callers (mirrors options/chain.ts precedent) → PR #82 → main 2e6137c. LIVE-VERIFIED: /api/briefs now 200 with full news feed (was empty); 0 SearchResult validation logs on new deploy dpl_D29j.",
+    "method_note": "Empirical bug-finding via Vercel runtime-errors/logs is high-signal — surfaced a real 3-month-old LIVE issue the static inspection didn't (it was a caught-and-logged error, invisible to tsc/tests/benchmark). Consider a runtime-errors sweep as a standing step."
+  },
   "post_inspection_remediation_2026_07_01": {
     "summary": "Owner: 'follow your recommendation and complete the tasks, after review/checks merge to github and vercel.' Completed the safe, non-owner-gated follow-through from the 2026-06-30 inspection and promoted to production.",
     "merged_to_main": {
