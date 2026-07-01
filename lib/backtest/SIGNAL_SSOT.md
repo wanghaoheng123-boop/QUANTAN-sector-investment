@@ -31,6 +31,18 @@ All production paths must call this function (directly or via thin adapters). Do
 
 20-day forward return win/loss uses `lib/backtest/benchmarkLabel.ts` + `lib/backtest/executionModel.ts` for **net** returns after round-trip costs. This is a **label** metric, not full `engine.ts` simulation.
 
+## Backtest universe & survivorship (NEW-Q-1, inspection 2026-06-30)
+
+Backtest/benchmark universe: **55 currently-listed large-cap names** (sector-ETF top holdings, see
+`lib/sectors.ts`) plus **BTC** = **56 instruments total**, as of the latest data snapshot
+(`scripts/backtestData/*.json`; the 4 macro series TLT/UUP/TNX/IRX are filtered out of the WR).
+
+Because the set contains only names that survive today, it is subject to **survivorship bias** —
+delisted, merged, or failed tickers are excluded — which tends to **overstate** historical win rates
+and returns versus a true point-in-time universe. Published figures (e.g. the ~55.9% net benchmark
+win rate) are **research backtest estimates, not a realized track record**. A survivorship-free
+evaluation would require point-in-time index constituents (a separate data project).
+
 ## Tests
 
 `__tests__/backtest/signalParity.test.ts` — same bars → same `action` from benchmark helper, resolver, and live adapter.
