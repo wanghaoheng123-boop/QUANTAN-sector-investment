@@ -1,0 +1,25 @@
+{
+  "timestamp": "2026-06-30T13:54:41.102Z",
+  "signalPath": "resolveBacktestSignal (regime-only)",
+  "sampleSize": 12,
+  "isWinRate": 68.11,
+  "oosWinRate": 61.92,
+  "isOosGapPp": 6.19,
+  "collapseOver10pp": false,
+  "instruments": [
+    "AAPL",
+    "ABBV",
+    "AEP",
+    "AMD",
+    "AMT",
+    "AMZN",
+    "APD",
+    "AVGO",
+    "BAC",
+    "BRK.B",
+    "BTC",
+    "CAT"
+  ]
+}
+Wrote /Users/haohengwang/Library/CloudStorage/GoogleDrive-wanghaoheng123@gmail.com/My Drive/QUANTAN-sector-investment/.claude/worktrees/busy-merkle-dc3e9a/workspace/optimization-runs/oos-validation.json
+EXIT=0

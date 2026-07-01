@@ -1,0 +1,16 @@
+.............................................................s.......... [ 56%]
+........................................................                 [100%]
+=============================== warnings summary ===============================
+tests/test_alpha_miner.py::TestSafeOperators::test_safe_div_by_zero
+  /Users/haohengwang/Library/CloudStorage/GoogleDrive-wanghaoheng123@gmail.com/My Drive/QUANTAN-sector-investment/.claude/worktrees/busy-merkle-dc3e9a/alpha_miner.py:40: RuntimeWarning: divide by zero encountered in divide
+    result = a / denom
+
+tests/test_multi_agent_factor_mining.py::TestAgents::test_evaluator
+tests/test_multi_agent_factor_mining.py::TestAgents::test_portfolio_composer
+tests/test_multi_agent_factor_mining.py::TestPipeline::test_pipeline_runs
+  /Users/haohengwang/Library/CloudStorage/GoogleDrive-wanghaoheng123@gmail.com/My Drive/QUANTAN-sector-investment/.claude/worktrees/busy-merkle-dc3e9a/multi_agent_factor_mining/agents.py:413: ConstantInputWarning: An input array is constant; the correlation coefficient is not defined.
+    ic, _ = spearmanr(fv[mask], fwd_returns[mask])
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+127 passed, 1 skipped, 4 warnings in 8.14s
+pytest-exit=
