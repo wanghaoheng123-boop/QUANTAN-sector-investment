@@ -52,9 +52,11 @@ async function fetchNewsForTickers(tickers: string[], sector: string): Promise<N
   for (const ticker of tickers.slice(0, 5)) {
     if (results.length >= 10) break
     try {
+      // validateResult:false — tolerate Yahoo's drifted SearchResult schema
+      // (see /api/briefs/[sector]); news is display-only + null-guarded below.
       const result = await yahooFinance.search(ticker, {
         newsCount: 4,
-      })
+      }, { validateResult: false }) as { news?: unknown[] }  // untyped (validateResult:false); guarded below
       if (!result?.news || !Array.isArray(result.news)) continue
 
       for (const item of result.news as Record<string, unknown>[]) {

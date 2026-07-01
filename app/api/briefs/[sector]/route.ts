@@ -163,7 +163,11 @@ export async function GET(
       `summary:${etf}`,
     ),
     fetchWithFallback(
-      yf.search(etf, { newsCount: 8 }),
+      // validateResult:false — Yahoo's SearchResult response has drifted from
+      // yahoo-finance2 v3's schema, so validation throws (news silently dropped +
+      // log spam). News is display-only and each field is null-guarded downstream,
+      // so accept Yahoo's raw result instead of failing the whole news fetch.
+      yf.search(etf, { newsCount: 8 }, { validateResult: false }),
       null,
       `news:${etf}`,
     ),
