@@ -75,10 +75,12 @@ async function fetchNewsForTicker(ticker: string): Promise<NewsBrief[]> {
   const results: NewsBrief[] = []
   try {
     const searchResult = await withTimeout(
-      yahooFinance.search(ticker, { newsCount: 5 }),
+      // validateResult:false — tolerate Yahoo's drifted SearchResult schema (see
+      // /api/briefs/[sector]); news is display-only + null-guarded downstream.
+      yahooFinance.search(ticker, { newsCount: 5 }, { validateResult: false }),
       NEWS_FETCH_TIMEOUT_MS,
       `briefs.search(${ticker})`,
-    )
+    ) as { news?: unknown[] }  // untyped result (validateResult:false); news is guarded below
     if (!searchResult?.news || !Array.isArray(searchResult.news)) return results
 
     for (const item of searchResult.news as Record<string, unknown>[]) {

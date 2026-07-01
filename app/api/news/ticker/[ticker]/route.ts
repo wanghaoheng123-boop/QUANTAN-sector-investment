@@ -48,9 +48,11 @@ export async function GET(
   }
 
   try {
+    // validateResult:false — tolerate Yahoo's drifted SearchResult schema
+    // (see /api/briefs/[sector]); news is display-only + null-guarded below.
     const result = await yahooFinance.search(ticker, {
       newsCount: 15,
-    })
+    }, { validateResult: false })
 
     const news: NewsItem[] = (
       ((result as Record<string, unknown>)?.news as Array<Record<string, unknown>> | undefined) ?? []
