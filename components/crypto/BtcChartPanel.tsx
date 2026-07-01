@@ -121,6 +121,7 @@ function BtcChartPanel({
               key={val}
               type="button"
               onClick={() => onIndicatorPresetChange(val)}
+              aria-pressed={activeIndicator === val}
               className={`px-2.5 py-1 text-[11px] rounded-md transition-all ${
                 activeIndicator === val ? 'bg-slate-600 text-white' : 'text-slate-500 hover:text-slate-300'
               }`}

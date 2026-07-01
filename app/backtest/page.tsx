@@ -257,9 +257,9 @@ export default function BacktestPage() {
         )}
 
         {/* ── Tabs ── */}
-        <div className="flex flex-wrap gap-1 bg-slate-900 rounded-lg p-1 border border-slate-800 w-fit">
+        <div role="tablist" className="flex flex-wrap gap-1 bg-slate-900 rounded-lg p-1 border border-slate-800 w-fit">
           {(['overview', 'instruments', 'trades', 'signals', 'analysis'] as const).map(tab => (
-            <button key={tab} onClick={() => setActiveTab(tab)}
+            <button key={tab} type="button" role="tab" aria-selected={activeTab === tab} onClick={() => setActiveTab(tab)}
               className={`px-4 py-1.5 text-xs rounded-md transition-all capitalize ${
                 activeTab === tab ? 'bg-slate-700 text-white' : 'text-slate-500 hover:text-slate-300'
               }`}>

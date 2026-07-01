@@ -177,8 +177,11 @@ export async function GET(
   const rawChangePct = safeNum((q as Record<string, unknown>)?.regularMarketChangePercent as number)
   const changePct = rawChangePct ?? (price > 0 && change !== 0 ? (100 * change) / price : 0)
   const quoteTime = parseQuoteTime(q?.regularMarketTime)
-  const volume = safeNum(q?.regularVolume)
-  const avgVolume = safeNum((q as Record<string, unknown>)?.averageDailyVolume as number)
+  // A4-1: yahoo-finance2 Quote exposes regularMarketVolume (quote.d.ts:234) and
+  // averageDailyVolume3Month (:275) — the prior `regularVolume`/`averageDailyVolume`
+  // keys don't exist on the type, so both were always null.
+  const volume = safeNum(q?.regularMarketVolume)
+  const avgVolume = safeNum((q as Record<string, unknown>)?.averageDailyVolume3Month as number)
   const marketCapRaw = safeNum(q?.marketCap)
   const marketCap = marketCapRaw ? formatLargeNum(marketCapRaw) : null
   const high52w = safeNum(q?.fiftyTwoWeekHigh)
