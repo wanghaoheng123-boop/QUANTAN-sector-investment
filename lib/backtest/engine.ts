@@ -5,7 +5,7 @@
 
 import { sortinoRatio } from '@/lib/quant/indicators'
 import { getRiskFreeRateSync } from '@/lib/quant/riskFreeRate'
-import { tradingDaysPerYear } from './core'
+import { tradingDaysPerYear, TX_COST_PCT_PER_SIDE } from './core'
 
 export {
   TX_COST_BPS_PER_SIDE,
@@ -76,7 +76,10 @@ export function aggregatePortfolio(results: BacktestResult[], initialCapital: nu
     .map(r => r.ticker)
 
   const allTrades = combinable.flatMap(r => r.closedTrades)
-  const winningTrades = allTrades.filter(t => (t.pnlPct ?? 0) > 0)
+  // F-4 (2026-07-06): a "win" clears the round-trip transaction cost
+  // (2 × 11 bps/side), matching core.ts closePosition and the page copy
+  // ("net-profitable after those costs").
+  const winningTrades = allTrades.filter(t => (t.pnlPct ?? 0) > 2 * TX_COST_PCT_PER_SIDE)
   const winRate = allTrades.length > 0 ? winningTrades.length / allTrades.length : 0
   const grossProfit = winningTrades.reduce((s, t) => s + (t.pnlPct ?? 0), 0)
   const grossLoss = Math.abs(allTrades.filter(t => (t.pnlPct ?? 0) < 0).reduce((s, t) => s + (t.pnlPct ?? 0), 0))

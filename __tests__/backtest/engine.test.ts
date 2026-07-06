@@ -360,3 +360,36 @@ describe('F-9 / F-2 regression (2026-07-06)', () => {
     expect(portfolio.alpha).toBeCloseTo(portfolio.totalReturn - expected, 10)
   })
 })
+
+// ─── F-4 (2026-07-06): Win Rate is NET of round-trip costs ───────────────────
+describe('F-4: net-of-cost win classification', () => {
+  const trade = (pnlPct: number) => ({
+    date: '2025-01-02', ticker: 'FAKE', sector: 'Technology', action: 'BUY' as const,
+    entryPrice: 100, exitPrice: 100 * (1 + pnlPct), shares: 10, value: 1000,
+    regime: 'FIRST_DIP', dipSignal: 'STRONG_DIP', confidence: 80, pnlPct, reason: 'test',
+  })
+  const fakeResult = (trades: ReturnType<typeof trade>[]) => ({
+    ticker: 'FAKE', sector: 'Technology', initialPrice: 100, finalPrice: 100,
+    totalReturn: 0, annualizedReturn: 0, sharpeRatio: null, sortinoRatio: null,
+    maxDrawdown: 0, winRate: 0, profitFactor: 0, avgTradeReturn: 0,
+    totalTrades: trades.length, closedTrades: trades, openTrade: null,
+    dailyReturns: [], equityCurve: new Array(40).fill(100_000),
+    days: 300, confidenceAvg: 80, stopLossPct: 0.08, bnhReturn: 0, excessReturn: 0,
+  })
+
+  it('a positive price move inside the 22 bps round-trip cost is NOT a win', () => {
+    const roundTrip = 2 * TX_COST_PCT_PER_SIDE // 22 bps
+    const portfolio = aggregatePortfolio([fakeResult([
+      trade(roundTrip * 0.5),  // +11 bps price move — loses money net → loss
+      trade(0.05),             // +5% — clears costs → win
+      trade(-0.01),            // -1% — loss
+    ])], 100_000)
+    expect(portfolio.winRate).toBeCloseTo(1 / 3, 10)
+  })
+
+  it('a move just above the round-trip cost IS a win', () => {
+    const roundTrip = 2 * TX_COST_PCT_PER_SIDE
+    const portfolio = aggregatePortfolio([fakeResult([trade(roundTrip * 1.01)])], 100_000)
+    expect(portfolio.winRate).toBe(1)
+  })
+})
