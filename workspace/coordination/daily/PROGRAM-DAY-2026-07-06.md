@@ -108,3 +108,13 @@ merged (#89–#95, all CI-green)** + the Fable-5 policy change.
 ## Gates through the wave
 tsc clean on every PR · pytest 131p/1s · published label WR byte-identical throughout
 (net 56.33 / gross 57.35) · Vercel runtime errors 0 across all deploys · 6 CI gates green ×7 PRs.
+
+## Post-deploy live verification (wave 2)
+- **CSP**: strict nonce'd policy serving Report-Only on prod ✓. **Verified nuance:** pages are
+  statically prerendered (`x-nextjs-prerender: 1`) → inline scripts carry no nonce, so the RO
+  window will (correctly) report violations. That is the point: the OLD RO tested a loose
+  `unsafe-inline` policy that could never flag what enforce would break — a "clean RO window"
+  was measuring the wrong policy. Now RO ≡ enforce policy, so the flip procedure is sound and
+  self-gating. A clean window requires dynamic rendering or hash-based CSP (owner decision).
+- **A3-L3**: `cdn-cache-control` present on cached chart hits ✓.
+- Runtime errors after all 12 deploys: **0**.
