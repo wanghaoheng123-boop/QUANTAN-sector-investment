@@ -51,6 +51,12 @@ export type ExitReason =
 export interface OpenPosition {
   ticker: string
   sector: string
+  /**
+   * Row index of the entry FILL bar in the INSTRUMENT'S OWN series (F-11).
+   * `checkExitConditions` receives the instrument's own row index as
+   * `currentIdx`, so `currentIdx - entryIdx` counts the instrument's own
+   * trading days — never union-calendar steps.
+   */
   entryIdx: number
   entryPrice: number
   entryDate: string
