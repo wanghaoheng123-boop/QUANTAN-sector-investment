@@ -2,8 +2,8 @@
   "schema_version": "1.1",
   "project": "QUANTAN-sector-investment",
   "created": "2026-04-28T09:40:00Z",
-  "last_updated": "2026-07-06T09:30:00.000Z",
-  "active_agent": "claude fable-5 (2026-07-06: Monday deep-sweep gates + owner-directed FIX WAVE — merged #84 F-9/F-2/Q05-1, #85 Q25-1 BTC vol, #86 F1.5 dividends pipeline, #87 NEW-Q-1 UI disclosure)",
+  "last_updated": "2026-07-06T15:30:00.000Z",
+  "active_agent": "claude fable-5 (2026-07-06: sweep + TWO fix waves — #84-#95 all merged; ledger reconciled; CSP landmine defused; factor-mining revived; Fable-5 unlimited policy live)",
   "prod_bug_fix_2026_07_01": {
     "B-2": "News fetch broken by yahoo-finance2 SearchResult schema drift (yf.search validation threw → news silently dropped + 66 prod errors on /api/briefs since 2026-04-03). FOUND via Vercel get_runtime_errors. FIXED with validateResult:false on the 4 news-search callers (mirrors options/chain.ts precedent) → PR #82 → main 2e6137c. LIVE-VERIFIED: /api/briefs now 200 with full news feed (was empty); 0 SearchResult validation logs on new deploy dpl_D29j.",
     "method_note": "Empirical bug-finding via Vercel runtime-errors/logs is high-signal — surfaced a real 3-month-old LIVE issue the static inspection didn't (it was a caught-and-logged error, invisible to tsc/tests/benchmark). Consider a runtime-errors sweep as a standing step."
@@ -227,7 +227,14 @@
       "PR_87": "NEW-Q-1 user-facing survivorship Universe note on backtest page + KeyMetricsStrip \"B&H avg (matched window)\" label."
     },
     "env_lesson": "jsdom component tests freeze locally on FUSE mount AND on local-disk worktree with FUSE node_modules (2x 5-min timeouts) — CI-only for jsdom; targeted pure-node vitest files fine (~3s). BacktestPage snapshots pin loading/error only (Q-058-NEW) so data-state copy changes are snapshot-neutral.",
-    "ledger": "F-9/F-2/Q05-1/Q25-1 -> FIXED; F1.5 -> FIXED-PENDING-DATA; NEW-Q-1 -> FIXED"
+    "ledger": "F-9/F-2/Q05-1/Q25-1 -> FIXED; F1.5 -> FIXED-PENDING-DATA; NEW-Q-1 -> FIXED",
+    "wave2": {
+      "directive": "owner: 'Continue and finish the project... review and resolve the issues'",
+      "merged": "PR #89 Fable-5 policy; #90 F-PY-04/05 factor-mining (0-selected no-op + boot crash); #91 F-11 union-calendar hold days (+F-9 sibling); #92 A6-1 CSP nonce path DEFUSED; #93 F-4 net-of-cost win classification (row added retroactively); #94 F4-3 axe CI complete; #95 NEW-C-4/A3-L3/F6.8",
+      "verified_stale_closed": "F1.22, F7.5 (both already fixed in code; effects confirmed)",
+      "decisions": "F-3 NO-ACTION-DELIBERATE; Q09-1 stays owner-gated (retire-or-invest)",
+      "remaining_owner_gated": "QUANTAN_CSP_ENFORCE flip (now SAFE after a clean RO window); Q09-1; published-number research items Q-064..Q-068; npm-audit build chain"
+    }
   },
   "model_policy_2026_07_06": "Owner: use Fable 5, NO usage limits. Fable 5 is enabled (this session ran on it) -> the June scheduled-run 400-stall is RESOLVED; no UI re-point needed. Scheduled task quantan-autonomous-program prompt updated (Fable 5 + no self-throttling + standing runtime-errors sweep + post-primary-pass day plan); next fire 2026-07-07 09:08 local — verify it produces a PROGRAM-DAY report."
 }
