@@ -196,6 +196,26 @@ describe('loadStockHistory', () => {
     expect(mockedFs.existsSync).not.toHaveBeenCalled()
   })
 
+  it('preserves the optional per-bar dividend through the JSON path (F1.5)', () => {
+    mockedWh.isWarehouseAvailable.mockReturnValue(false)
+    mockedFs.existsSync.mockReturnValue(true)
+    mockedFs.readFileSync.mockReturnValue(
+      JSON.stringify({
+        ticker: 'AAPL',
+        sector: 'X',
+        fetchedAt: '',
+        candles: [
+          { time: 1700000000, open: 1, high: 2, low: 0.5, close: 1.5, volume: 100 },
+          { time: 1700086400, open: 1.5, high: 2, low: 1, close: 1.8, volume: 100, dividend: 0.25 },
+        ],
+      })
+    )
+    const rows = loadStockHistory('AAPL')
+    expect(rows).toHaveLength(2)
+    expect(rows[0].dividend).toBeUndefined()
+    expect(rows[1].dividend).toBe(0.25)
+  })
+
   it('falls back to JSON when warehouse returns empty', () => {
     mockedWh.isWarehouseAvailable.mockReturnValue(true)
     mockedWh.getCandles.mockReturnValue([])

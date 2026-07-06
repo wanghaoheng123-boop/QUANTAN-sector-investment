@@ -145,18 +145,34 @@ async function fetchYahoo(ticker, sector) {
   });
 
   const rawRows = result.quotes || [];
-  const candles = rawRows.filter(isFiniteRow).map((q) => ({
-    time: Math.floor(new Date(q.date).getTime() / 1000),
-    open:   q.open,
-    high:   q.high,
-    low:    q.low,
-    close:  q.close,
-    volume: Number.isFinite(q.volume) ? q.volume : 0,
-  }));
+  // F1.5: chart() returns dividend events by default (events: 'div|split|earn').
+  // Attach the cash dividend to its ex-date bar so the dividend-aware
+  // total-return B&H in lib/backtest/core.ts (computeBuyAndHoldReturn) has
+  // data to work with — without this field the fix is inert.
+  const divByDay = new Map();
+  for (const d of result.events?.dividends ?? []) {
+    const day = new Date(d.date).toISOString().slice(0, 10);
+    const amount = Number(d.amount);
+    if (Number.isFinite(amount) && amount > 0) {
+      divByDay.set(day, (divByDay.get(day) ?? 0) + amount);
+    }
+  }
+  const candles = rawRows.filter(isFiniteRow).map((q) => {
+    const dividend = divByDay.get(new Date(q.date).toISOString().slice(0, 10));
+    return {
+      time: Math.floor(new Date(q.date).getTime() / 1000),
+      open:   q.open,
+      high:   q.high,
+      low:    q.low,
+      close:  q.close,
+      volume: Number.isFinite(q.volume) ? q.volume : 0,
+      ...(dividend ? { dividend } : {}),
+    };
+  });
 
   saveResult(ticker, sector, candles);
   const dropped = rawRows.length - candles.length;
-  console.log(`[${ticker}] Saved ${candles.length} candles${dropped > 0 ? ` (dropped ${dropped} non-finite rows)` : ''}`);
+  console.log(`[${ticker}] Saved ${candles.length} candles${dropped > 0 ? ` (dropped ${dropped} non-finite rows)` : ''}${divByDay.size > 0 ? ` (+${divByDay.size} dividend bars)` : ''}`);
 }
 
 async function fetchBTC(sector = 'Crypto') {
