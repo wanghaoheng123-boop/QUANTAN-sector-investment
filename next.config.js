@@ -36,23 +36,11 @@ const SECURITY_HEADERS = [
     key: 'Permissions-Policy',
     value: 'camera=(), microphone=(), geolocation=(), interest-cohort=()',
   },
-  // CSP report-only (advisory). Tighten + flip to enforcing in S3 once
-  // surveyed. Allows: self for everything; Google Fonts CSS; eval'd JS in
-  // dev only; data: img URLs (used for some embed previews); HTTPS images.
-  {
-    key: 'Content-Security-Policy-Report-Only',
-    value: [
-      "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
-      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-      "font-src 'self' https://fonts.gstatic.com data:",
-      "img-src 'self' data: https:",
-      "connect-src 'self' https:",
-      "frame-ancestors 'none'",
-      "base-uri 'self'",
-      "form-action 'self'",
-    ].join('; '),
-  },
+  // CSP moved to middleware.ts (A6-1, 2026-07-06): the policy needs the
+  // per-request nonce, and Next only stamps the nonce onto its inline scripts
+  // when the CSP arrives via the request headers — a static header here can
+  // never carry a nonce. middleware.ts serves the strict nonce'd policy as
+  // Report-Only by default and enforcing under QUANTAN_CSP_ENFORCE=1.
 ]
 
 const nextConfig = {
