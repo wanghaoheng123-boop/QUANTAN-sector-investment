@@ -178,7 +178,14 @@ function closePosition(state: PortfolioState, fillPrice: number): boolean {
   const pnlPct = open.action === 'BUY'
     ? (fillPrice - open.entryPrice) / open.entryPrice
     : (open.entryPrice - fillPrice) / open.entryPrice
-  if (pnlPct > 0) { state.tradeWins++; state.grossProfit += pnlPct }
+  // F-4 (2026-07-06, owner-directed): win/loss classification is NET of the
+  // round-trip transaction cost (2 × 11 bps/side ≈ 22 bps of entry notional),
+  // so the backtest page's "net-profitable after those costs" Win Rate copy is
+  // literally true. Previously a trade with 0 < pnl ≤ 22 bps counted as a win
+  // even though it lost money after costs. `pnlPct` itself stays the raw price
+  // move (it feeds profitFactor / avgTradeReturn and the trade log).
+  const netPnlPct = pnlPct - 2 * TX_COST_PCT_PER_SIDE
+  if (netPnlPct > 0) { state.tradeWins++; state.grossProfit += pnlPct }
   else { state.tradeLosses++; state.grossLoss += Math.abs(pnlPct) }
   state.capital += netProceeds
   open.exitPrice = fillPrice
