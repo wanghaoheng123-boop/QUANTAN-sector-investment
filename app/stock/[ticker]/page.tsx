@@ -135,20 +135,27 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
   //   SSE stream is connecting (typical first-event latency: ~1-2 s).
   //   The 15-second setInterval below is REPLACED by `useLiveQuote` SSE
   //   subscription further down (lines 175-189). REST is now boot-only.
-  const fetchQuote = useCallback(() => {
-    fetch(`/api/prices?tickers=${encodeURIComponent(ticker)}`)
+  // NEW-C-4 (2026-07-06): accepts an AbortSignal so the boot effect can cancel
+  // an in-flight fetch on unmount — matches every sibling fetch on this page
+  // (the F3 abort-guard pattern). AbortError is expected on teardown.
+  const fetchQuote = useCallback((signal?: AbortSignal) => {
+    fetch(`/api/prices?tickers=${encodeURIComponent(ticker)}`, { signal })
       .then((r) => {
         if (!r.ok) return Promise.reject(new Error(`HTTP ${r.status}`))
         return r.json()
       })
       .then((data) => {
+        if (signal?.aborted) return
         const q = data.quotes?.find((q: { ticker: string }) => q.ticker === ticker)
         if (q) {
           setQuote(q)
           setQuoteError(null)
         }
       })
-      .catch((e) => setQuoteError(e instanceof Error ? e.message : 'Quote unavailable'))
+      .catch((e) => {
+        if (signal?.aborted || (e instanceof DOMException && e.name === 'AbortError')) return
+        setQuoteError(e instanceof Error ? e.message : 'Quote unavailable')
+      })
   }, [ticker])
 
   // Chart data: fetch on mount and whenever timeframe changes
@@ -186,7 +193,9 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
   // REST fetchQuote() for the initial paint (line 156 calls it once on
   // mount); thereafter the SSE updates take over.
   useEffect(() => {
-    fetchQuote()  // Boot-only — populates the UI before SSE first event.
+    const controller = new AbortController()
+    fetchQuote(controller.signal)  // Boot-only — populates the UI before SSE first event.
+    return () => controller.abort()
   }, [fetchQuote])
 
   // Subscribe to the SSE stream. State propagates to the existing `quote`
@@ -430,7 +439,10 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
                           ● REFRESHES EVERY {CHART_POLL_MS(activeRange) / 1000}s
                         </span>
                       )}
-                      {quoteError && <span className="text-amber-400/70">QUOTE DEGRADED</span>}
+                      {/* F6.8: announce quote degradation to screen readers.
+                          Deliberately NOT applied to the live price itself —
+                          announcing every SSE tick is an aria-live anti-pattern. */}
+                      {quoteError && <span role="status" aria-live="polite" className="text-amber-400/70">QUOTE DEGRADED</span>}
                       <span>{activeRange === '1D' || activeRange === '1W' || activeRange === '5m' || activeRange === '15m' || activeRange === '1H' || activeRange === '4H' ? 'INTRADAY' : 'DAILY+'} BARS</span>
                     </div>
                   </div>

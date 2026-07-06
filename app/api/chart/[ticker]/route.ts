@@ -61,7 +61,15 @@ export async function GET(
         interval: cached.interval,
         _cached: true,
       },
-      { headers: { 'Cache-Control': 'public, max-age=30, stale-while-revalidate=60' } }
+      {
+        // A3-L3 (2026-07-06): mirror the fresh-response branch's CDN directive —
+        // cached hits previously dropped CDN-Cache-Control, losing the intended
+        // edge-cache behavior for exactly the responses that are cheapest to cache.
+        headers: {
+          'Cache-Control': 'public, max-age=30, stale-while-revalidate=60',
+          'CDN-Cache-Control': 'public, max-age=30, stale-while-revalidate=60',
+        },
+      }
     )
   }
 
