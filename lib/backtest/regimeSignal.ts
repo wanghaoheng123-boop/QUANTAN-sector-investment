@@ -150,6 +150,16 @@ export function regimeSignal(price: number, closes: number[], rsi14?: number): R
     return { zone: 'FIRST_DIP', dipSignal: 'WATCH_DIP', deviationPct: dev, slopePct: slope, slopePositive: slopePos, action: 'HOLD', confidence: 35, label: 'FIRST_DIP' }
   }
 
+  // Q05-1 fail-closed: at 200–220 bars sma200Slope() returns null (needs ≥ 221),
+  // so slopePositive is UNKNOWN — not negative. The zones below treated unknown
+  // like negative and emitted a confident FALLING_KNIFE SELL (82–95%) from
+  // missing-slope data, contradicting the dev==null fail-closed rule above.
+  // Unknown trend in a deep-dip zone → low-confidence HOLD, never a SELL.
+  if (slopePos == null) {
+    const zone = dev >= -20 ? 'DEEP_DIP' : dev >= -30 ? 'BEAR_ALERT' : 'CRASH_ZONE'
+    return { zone, dipSignal: 'WATCH_DIP', deviationPct: dev, slopePct: slope, slopePositive: null, action: 'HOLD', confidence: 20, label: zone }
+  }
+
   // DEEP_DIP: -20% to -10% — meaningful correction, high-conviction buy zone
   if (dev >= -20) {
     if (canBuyDip) {
