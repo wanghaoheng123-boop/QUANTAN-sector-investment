@@ -71,8 +71,40 @@ NEW-Q-1 → **FIXED**. Rows updated in `reviews/findings-ledger.csv` (this PR).
 - Runtime-errors sweep (the B-2 method) came back clean — the actionable bugs this pass were all
   code-verified ledger items unblocked by the owner directive.
 
-## 5. Remaining owner-gated backlog (unchanged)
-A6-1 CSP-flip LANDMINE (do NOT set `QUANTAN_CSP_ENFORCE=1`); scheduled-task → Opus 4.8 re-point
-(daily-program stall root cause); F-4 gross→net WR label decision; F-11 union-calendar maxHoldDays
-(dormant); F-3 close-based trailing peak (deliberate-conservative candidate); Q09-1 (dormant
-enhanced path); F4-3 axe-CI infra. Next Monday: full §7 sweep incl. portfolio:backtest + stryker.
+## 5. Remaining owner-gated backlog — as of wave 1 (SUPERSEDED by WAVE 2 below)
+~~A6-1 CSP-flip landmine; scheduled-task → Opus re-point; F-4 label decision; F-11; F-3; F4-3~~ —
+**all resolved or decided in wave 2 (see below).** Still owner-gated after wave 2: the
+`QUANTAN_CSP_ENFORCE=1` flip itself (now SAFE after a clean report-only window), Q09-1
+retire-or-invest, npm-audit build chain. Next Monday: full §7 sweep incl. portfolio:backtest +
+stryker (+ review the first axe-CI baseline).
+
+---
+
+# WAVE 2 (same day) — owner: "Continue and finish the project… review and resolve the issues"
+
+Second find-and-fix pass over the full open ledger (35 open-ish rows triaged). **6 more prod PRs
+merged (#89–#95, all CI-green)** + the Fable-5 policy change.
+
+## Shipped
+| PR | What |
+|---|---|
+| **#89** | docs: Fable 5 authorized, usage limits removed (§5 rewritten; stale "re-point to Opus" owner-action cleared; scheduled-task prompt updated in place — Fable 5 + no self-throttle + standing runtime-errors sweep) |
+| **#90** | F-PY-04 factor-mining pipeline no-op (factor_values dropped → 0 selected, always; now 16 evaluated → 5 selected live) + F-PY-05 server boot crash (dual-path imports, `import os`, Procfile → `-m`). pytest 131p/1s (4 new tests) |
+| **#91** | F-11 hold-days in union-calendar steps (BTC's 7-day union forced equity time-exits at ~14 sessions instead of 20; **time_exit 67%→35% of trades, avg ret/trade 0.697%→1.368%**) + the F-9-sibling 2 bps entry markup in portfolioBacktest |
+| **#92** | A6-1 CSP-nonce landmine DEFUSED: strict nonce'd policy on request headers (Next stamps inline scripts) + Report-Only response by default; enforce flip owner-gated but now safe. next.config's loose static CSP-RO removed. 5 new middleware tests |
+| **#93** | F-4 (row added retroactively): win/loss classification now NET of 22 bps round-trip, matching the page copy. Real-universe trade WR **unchanged** (34.6154% — boundary guarantee) |
+| **#94** | F4-3 axe a11y CI completed (build+boot+crawl / and /backtest; advisory; weekly Mon + dispatch; first run dispatched) |
+| **#95** | NEW-C-4 boot-fetch abort guard; A3-L3 cached-hit CDN-Cache-Control; F6.8 scoped (QUOTE DEGRADED announced; per-tick announcements deliberately avoided) |
+
+## Verified-stale rows closed (code already fixed; effect confirmed)
+- **F1.22** — atrAdaptiveStop excludes the forming bar (tagged fix + AT-F1.22 test + live caller confirmed).
+- **F7.5** — timing-safe secret comparison implemented in BOTH bridgeClient (length-check + timingSafeEqual) and lib/auth/apiKey.ts (fixed-width SHA-256 → timingSafeEqual, fail-closed).
+
+## Decisions recorded
+- **F-3** → NO-ACTION-DELIBERATE (close-based trail peak = conservative resting-order convention).
+- **Q09-1** → stays owner-gated (dormant enhanced path; retire-or-invest is a product decision).
+- Remaining open backlog is enhancement-grade (Q-064…Q-074 research/docs/tests infra) + downgraded LOWs.
+
+## Gates through the wave
+tsc clean on every PR · pytest 131p/1s · published label WR byte-identical throughout
+(net 56.33 / gross 57.35) · Vercel runtime errors 0 across all deploys · 6 CI gates green ×7 PRs.
