@@ -1,8 +1,18 @@
-# axe-core smoke on priority routes (Phase 16 S4). Requires built app — manual dispatch only until Playwright harness lands.
+# axe-core smoke on priority routes (F4-3, completed 2026-07-06).
+#
+# Builds and boots the real app in CI, then crawls the priority pages with
+# @axe-core/cli against the GitHub runner's matched Chrome/chromedriver pair
+# ($CHROMEWEBDRIVER). ADVISORY for now (continue-on-error) — violations show
+# as a red step without blocking merges; tighten to a hard gate once the
+# baseline is clean. No new package.json dependency: the CLI runs via
+# `npx --yes` (pinned major), so the npm lockfile is untouched.
 name: A11y axe smoke
 
 on:
   workflow_dispatch:
+  schedule:
+    # Mondays 01:00 UTC — feeds the Monday deep-sweep's a11y line.
+    - cron: '0 1 * * 1'
 
 jobs:
   axe:
@@ -16,4 +26,18 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - run: npm run build
-      - run: npx --yes @axe-core/cli --help
+      - name: Start app
+        run: |
+          npm run start &
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3000 -o /dev/null; then echo "app up"; break; fi
+            sleep 2
+          done
+          curl -sf http://localhost:3000 -o /dev/null || { echo "app failed to start"; exit 1; }
+      - name: Run axe on priority routes
+        run: |
+          npx --yes @axe-core/cli@4 \
+            http://localhost:3000/ \
+            http://localhost:3000/backtest \
+            --chromedriver-path "$CHROMEWEBDRIVER/chromedriver" \
+            --exit
