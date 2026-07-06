@@ -3,12 +3,16 @@
  *
  * Two responsibilities:
  *
- *   1. CSP nonce (Q-040-NEW partial): per-request nonce for future strict
- *      script-src. Currently emitted on requests for downstream components
- *      that need it via `headers().get('x-nonce')`. Enforcing CSP header is
- *      added only when QUANTAN_CSP_ENFORCE=1; next.config.js keeps the
- *      Report-Only header in place by default so observability is unchanged
- *      until a 7-day clean-Report window has been verified.
+ *   1. CSP nonce (Q-040-NEW, completed by A6-1 2026-07-06): a per-request
+ *      nonce'd strict CSP. The policy is set on the REQUEST headers so
+ *      Next.js App Router reads the nonce and stamps it onto its own inline
+ *      bootstrap/hydration <script> tags during SSR (the documented Next CSP
+ *      pattern). Previously only `x-nonce` was set — nothing consumed it, so
+ *      flipping enforcement would have blocked every framework script (the
+ *      A6-1 landmine). The RESPONSE header is Report-Only by default;
+ *      QUANTAN_CSP_ENFORCE=1 switches it to enforcing — flip only after a
+ *      clean report-only window (violations appear in the browser console;
+ *      no report-uri collector is wired yet).
  *
  *   2. CSRF cookie issuance (Q-055-NEW, 2026-05-24): the double-submit
  *      cookie pattern in `lib/api/csrf.ts` requires both a cookie AND a
@@ -46,28 +50,42 @@ function generateCsrfTokenEdge(): string {
 
 export function middleware(request: NextRequest) {
   const nonce = Buffer.from(crypto.randomUUID()).toString('base64')
+
+  // ── CSP (Q-040-NEW / A6-1) ──────────────────────────────────────────────
+  // One strict nonce'd policy, used in BOTH modes. 'strict-dynamic' lets the
+  // nonce'd Next bootstrap scripts load their chunk children. Dev needs
+  // 'unsafe-eval' (react-refresh); it is never emitted in production.
+  const csp = [
+    "default-src 'self'",
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'` +
+      (process.env.NODE_ENV !== 'production' ? " 'unsafe-eval'" : ''),
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com data:",
+    "img-src 'self' data: https:",
+    "connect-src 'self' https: wss:",
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+  ].join('; ')
+
   const requestHeaders = new Headers(request.headers)
   requestHeaders.set('x-nonce', nonce)
+  // A6-1: Next.js reads the nonce from the REQUEST CSP header during SSR and
+  // stamps it onto its inline scripts. The request header never reaches the
+  // browser, so this is observation-safe regardless of the response mode.
+  requestHeaders.set('Content-Security-Policy', csp)
 
   const response = NextResponse.next({ request: { headers: requestHeaders } })
 
-  // ── CSP (Q-040-NEW) — only when explicitly opted in ────────────────────
-  if (process.env.QUANTAN_CSP_ENFORCE === '1') {
-    response.headers.set(
-      'Content-Security-Policy',
-      [
-        "default-src 'self'",
-        `script-src 'self' 'nonce-${nonce}'`,
-        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-        "font-src 'self' https://fonts.gstatic.com data:",
-        "img-src 'self' data: https:",
-        "connect-src 'self' https: wss:",
-        "frame-ancestors 'none'",
-        "base-uri 'self'",
-        "form-action 'self'",
-      ].join('; '),
-    )
-  }
+  // Report-Only by default; enforcing only on explicit owner opt-in AFTER a
+  // clean report-only window. (next.config.js no longer sets a CSP header —
+  // this middleware is the single source of truth for CSP.)
+  response.headers.set(
+    process.env.QUANTAN_CSP_ENFORCE === '1'
+      ? 'Content-Security-Policy'
+      : 'Content-Security-Policy-Report-Only',
+    csp,
+  )
 
   // ── CSRF cookie issuance (Q-055-NEW) ───────────────────────────────────
   // Only set the cookie if it's missing — re-issuing on every request would
