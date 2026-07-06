@@ -72,6 +72,13 @@ export interface BacktestResult {
   openTrade: Trade | null
   dailyReturns: number[]
   equityCurve: number[]
+  /**
+   * Buy-and-hold value curve (dividends reinvested, scale-free) pushed at the
+   * SAME cadence as equityCurve — bnhCurve[k] and equityCurve[k] mark the same
+   * bar. Lets the portfolio aggregator compare strategy vs B&H over the SAME
+   * end-aligned common window (F-2). Absent on < 252-bar stubs.
+   */
+  bnhCurve?: number[]
   days: number
   confidenceAvg: number
   stopLossPct: number
@@ -232,10 +239,31 @@ export function backtestInstrument(
   // This eliminates the same-day look-ahead bias where signal and execution
   // used the same day's close price (physically impossible in live trading).
   // Institutional standard: signal end-of-day, execute at next-day open.
-  // We also add realistic open-price slippage of 2 bps for execution friction.
-  const ENTRY_SLIPPAGE_BPS = 2  // 2 bps added to entry price (realistic friction)
+  // Execution friction (spread + slippage + commission) is carried SOLELY by
+  // `txCost` = TX_COST_PCT_PER_SIDE (executionModel SSOT, 11 bps/side incl. a
+  // 2 bps slippage component). F-9 fix (2026-07-06): the former 2 bps
+  // ENTRY_SLIPPAGE_BPS price markup double-counted that slippage at entry
+  // (~13 bps vs the 11 bps/side SSOT) and broke entry/exit symmetry — exits
+  // fill at raw next-open with the same 11 bps/side cost.
+
+  // F-2: B&H curve index-aligned with equityHistory. equityHistory gets exactly
+  // one push per loop iteration (every branch, incl. the `continue` paths, pushes
+  // once) after its [initialCapital] seed — so pushing the B&H mark once at the
+  // top of each iteration keeps bnhCurve[k] ↔ equityHistory[k] by construction.
+  // Dividends from the 200-bar warmup are accumulated into the starting shares.
+  let bnhShares = 1
+  for (let k = 1; k <= 200; k++) {
+    const div = rows[k].dividend ?? 0
+    if (div > 0 && rows[k].close > 0) bnhShares += div / rows[k].close
+  }
+  const bnhCurve: number[] = [bnhShares * rows[200].close]
 
   for (let i = 200; i < rows.length - 1; i++) {
+    if (i > 200) {
+      const div = rows[i].dividend ?? 0
+      if (div > 0 && rows[i].close > 0) bnhShares += div / rows[i].close
+    }
+    bnhCurve.push(bnhShares * rows[i].close)
     const signalDate = new Date(rows[i].time * 1000).toISOString().split('T')[0]
     // Use today's close for signal generation (data available at close)
     const signalPrice = rows[i].close
@@ -340,8 +368,8 @@ export function backtestInstrument(
     if (signal.action === 'BUY' && !state.openTrade) {
       const kellyFrac = Math.min(signal.KellyFraction, 0.50)
       const allocation = state.capital * kellyFrac
-      // Long entries: pay slightly above the open (adverse selection / friction).
-      const entryPrice = nextOpen * (1 + ENTRY_SLIPPAGE_BPS / 10000)
+      // Long entries fill at the raw next-open; friction is in txCost below (F-9).
+      const entryPrice = nextOpen
       // Guard a corrupt next-open (0 / NaN / Infinity): sizing on it makes `shares`
       // Infinity or NaN — and the `shares <= 0` check below misses BOTH — which then
       // poisons `capital` and the entire equity curve / totalReturn with NaN. A bar
@@ -356,14 +384,11 @@ export function backtestInstrument(
         continue
       }
       const costBasis = shares * entryPrice
-      // F-9 (findings-ledger, owner-gated): `entryPrice` already embeds the 2 bps
-      // ENTRY_SLIPPAGE_BPS, AND `txCost` = 11 bps/side already includes a 2 bps
-      // slippage component (executionModel `slippageBpsPerSide`). So the 2 bps of
-      // open friction is counted TWICE at entry (~13 bps vs the 11 bps/side SSOT;
-      // round-trip ~24 vs 22). Correcting it changes net returns / the published WR
-      // → needs an owner re-baseline, so it is intentionally left as-is here.
+      // F-9 FIXED (2026-07-06, owner-directed re-baseline): entry fills at raw
+      // next-open; `txCost` = 11 bps/side (executionModel SSOT, incl. slippage)
+      // is the single source of friction — symmetric with the exit side.
       const txCost = costBasis * TX_COST_PCT_PER_SIDE
-      state.capital -= (costBasis + txCost)  // buy at next-open + slippage + transaction cost
+      state.capital -= (costBasis + txCost)  // buy at next-open + transaction cost
       state.position += shares
       state.avgCost = entryPrice
       state.openTrade = {
@@ -391,10 +416,9 @@ export function backtestInstrument(
       // look-ahead: signal and fill shared the same close, a price you cannot
       // trade at once it has printed. Entries already filled at next-open; this
       // removes the entry/exit asymmetry and re-baselines WR — see
-      // invariants-baseline.md §1b. ENTRY_SLIPPAGE_BPS is intentionally NOT
-      // mirrored onto the exit price: the 11 bps/side cost in closePosition
-      // already carries a slippage component (executionModel.ts); a separate
-      // exit-side price bump is a distinct methodology question left for later.
+      // invariants-baseline.md §1b. Both sides now fill at the raw next-open;
+      // the 11 bps/side cost in closePosition / at entry carries the slippage
+      // component (executionModel.ts) — no price-level bump on either side (F-9).
       // Phase 14 wave 35: bookkeeping via the shared closePosition primitive.
       closePosition(state, nextOpen)
 
@@ -409,6 +433,10 @@ export function backtestInstrument(
   const finalPrice = rows[rows.length - 1].close
   if (state.openTrade) {
     closePosition(state, finalPrice)
+    // Mirror closePosition's equityHistory push so bnhCurve stays index-aligned.
+    const div = rows[rows.length - 1].dividend ?? 0
+    if (div > 0 && finalPrice > 0) bnhShares += div / finalPrice
+    bnhCurve.push(bnhShares * finalPrice)
   }
 
   const finalEquity = state.capital
@@ -474,6 +502,7 @@ export function backtestInstrument(
     openTrade: null,
     dailyReturns,
     equityCurve: state.equityHistory,
+    bnhCurve,
     days, confidenceAvg: state.confidenceCount > 0 ? state.confidenceSum / state.confidenceCount : 0,
     stopLossPct: cfg.stopLossPct,
     bnhReturn, excessReturn: totalReturn - bnhReturn,

@@ -314,3 +314,49 @@ describe('Walk-Forward Analysis', () => {
     }
   })
 })
+
+// ─── F-9 + F-2 (2026-07-06): friction SSOT + window-matched alpha ────────────
+describe('F-9 / F-2 regression (2026-07-06)', () => {
+  it('F-9: BUY entries fill at the raw next-open (no 2 bps price markup)', () => {
+    // Friction must live solely in TX_COST_PCT_PER_SIDE (11 bps/side SSOT).
+    // Before the fix entryPrice = open × 1.0002, which is never an exact row open.
+    let rows: OhlcvRow[] = []
+    let result: ReturnType<typeof backtestInstrument> | null = null
+    for (let attempt = 0; attempt < 10 && (result?.closedTrades.length ?? 0) === 0; attempt++) {
+      rows = generateRows(600, 100, 0.0004, 0.03)
+      result = backtestInstrument('TEST', 'Technology', rows)
+    }
+    expect(result!.closedTrades.length, 'synthetic series produced no trades in 10 attempts').toBeGreaterThan(0)
+    const openSet = new Set(rows.map(r => r.open))
+    for (const t of result!.closedTrades) {
+      if (t.action === 'BUY') {
+        expect(openSet.has(t.entryPrice), `entryPrice ${t.entryPrice} must be an exact row open`).toBe(true)
+      }
+    }
+  })
+
+  it('bnhCurve is index-aligned with equityCurve (same length, same cadence)', () => {
+    for (const [count, drift] of [[500, 0.0005], [420, -0.0002], [600, 0.001]] as const) {
+      const result = backtestInstrument('TEST', 'Technology', generateRows(count, 100, drift, 0.02))
+      expect(result.bnhCurve).toBeDefined()
+      expect(result.bnhCurve).toHaveLength(result.equityCurve.length)
+    }
+  })
+
+  it('F-2: portfolio bnhAvg is measured over the SAME end-aligned common window', () => {
+    // Unequal histories: the combine window is the SHORTER curve; B&H must be
+    // measured over that window too, not each instrument's full history.
+    const r1 = backtestInstrument('AAPL', 'Technology', generateRows(600, 100, 0.0008, 0.02))
+    const r2 = backtestInstrument('MSFT', 'Technology', generateRows(420, 80, 0.0004, 0.02))
+    const portfolio = aggregatePortfolio([r1, r2], 100_000)
+
+    const minLen = Math.min(r1.equityCurve.length, r2.equityCurve.length)
+    const tailReturn = (curve: number[]) => {
+      const start = curve[curve.length - minLen]
+      return (curve[curve.length - 1] - start) / start
+    }
+    const expected = (tailReturn(r1.bnhCurve as number[]) + tailReturn(r2.bnhCurve as number[])) / 2
+    expect(portfolio.bnhAvg).toBeCloseTo(expected, 10)
+    expect(portfolio.alpha).toBeCloseTo(portfolio.totalReturn - expected, 10)
+  })
+})

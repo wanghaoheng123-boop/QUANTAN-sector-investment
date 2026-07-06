@@ -185,7 +185,28 @@ export function aggregatePortfolio(results: BacktestResult[], initialCapital: nu
     ? portfolioMaxDdFromCurve
     : Math.max(...combinable.map(r => r.maxDrawdown), 0)
 
-  const bnhAvg = combinable.reduce((s, r) => s + r.bnhReturn, 0) / Math.max(combinable.length, 1)
+  // F-2: measure B&H over the SAME end-aligned common window as the combine
+  // above. The old full-history per-instrument bnhReturn average compared
+  // MISMATCHED windows (each instrument's entire history — warmup included —
+  // vs the portfolio's common min-length window), skewing alpha whenever
+  // histories have unequal lengths. Falls back to the legacy full-history
+  // average when aligned curves are unavailable (synthetic fixtures / stubs)
+  // or the combine didn't run.
+  let bnhAvgAligned: number | null = null
+  if (minLen > MIN_COMBINE_LEN && combinable.length > 0 &&
+      combinable.every(r => r.bnhCurve != null && r.bnhCurve.length === r.equityCurve.length)) {
+    let sum = 0
+    let ok = true
+    for (const r of combinable) {
+      const curve = r.bnhCurve as number[]
+      const start = curve[curve.length - minLen]
+      const end = curve[curve.length - 1]
+      if (!(start > 0) || !Number.isFinite(end)) { ok = false; break }
+      sum += (end - start) / start
+    }
+    if (ok) bnhAvgAligned = sum / combinable.length
+  }
+  const bnhAvg = bnhAvgAligned ?? (combinable.reduce((s, r) => s + r.bnhReturn, 0) / Math.max(combinable.length, 1))
   const alpha = truePortfolioReturn - bnhAvg
   const finalCapital = combinedFinalEquity
 

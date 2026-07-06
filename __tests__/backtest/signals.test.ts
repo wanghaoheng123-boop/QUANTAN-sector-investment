@@ -402,3 +402,32 @@ describe('enhancedCombinedSignal — TEAM AUDIT: per-indicator score bounds', ()
     expect(baseSum).toBeLessThanOrEqual(1)
   })
 })
+
+// ─── Q05-1 (2026-07-06): unknown 200SMA slope must fail closed, not SELL ─────
+describe('Regime Signal — Q05-1 null-slope fail-closed', () => {
+  it('unknown slope (200-220 bars) in a dip zone → HOLD, never FALLING_KNIFE SELL', () => {
+    // 210 bars: sma200Slope() needs ≥ 221, so the slope is UNKNOWN here.
+    const stable = Array.from({ length: 205 }, () => 100)
+    const drop = [85, 83, 81, 79, 77]
+    const closes = [...stable, ...drop] // length 210
+    const price = closes[closes.length - 1] // ≈ -22.6% vs SMA200 → BEAR_ALERT zone
+    const result = regimeSignal(price, closes)
+    expect(result.slopePositive).toBeNull()
+    expect(result.deviationPct).toBeLessThan(-10)
+    expect(result.action).toBe('HOLD')
+    expect(result.dipSignal).toBe('WATCH_DIP')
+    expect(result.confidence).toBeLessThanOrEqual(20)
+  })
+
+  it('with ≥ 221 bars the same falling-knife shape still SELLs (behavior preserved)', () => {
+    const stable = Array.from({ length: 230 }, () => 100)
+    const drop = Array.from({ length: 25 }, (_, i) => 95 - i) // 95 → 71
+    const closes = [...stable, ...drop] // length 255 — slope computable (negative)
+    const price = closes[closes.length - 1]
+    const result = regimeSignal(price, closes)
+    expect(result.slopePositive).toBe(false) // known-negative, NOT null
+    expect(result.deviationPct).toBeLessThan(-10)
+    expect(result.action).toBe('SELL')
+    expect(result.dipSignal).toBe('FALLING_KNIFE')
+  })
+})
