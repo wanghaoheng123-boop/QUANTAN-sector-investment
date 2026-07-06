@@ -2,7 +2,7 @@
   "schema_version": "1.1",
   "project": "QUANTAN-sector-investment",
   "created": "2026-04-28T09:40:00Z",
-  "last_updated": "2026-07-06T08:40:00.000Z",
+  "last_updated": "2026-07-06T09:30:00.000Z",
   "active_agent": "claude fable-5 (2026-07-06: Monday deep-sweep gates + owner-directed FIX WAVE — merged #84 F-9/F-2/Q05-1, #85 Q25-1 BTC vol, #86 F1.5 dividends pipeline, #87 NEW-Q-1 UI disclosure)",
   "prod_bug_fix_2026_07_01": {
     "B-2": "News fetch broken by yahoo-finance2 SearchResult schema drift (yf.search validation threw → news silently dropped + 66 prod errors on /api/briefs since 2026-04-03). FOUND via Vercel get_runtime_errors. FIXED with validateResult:false on the 4 news-search callers (mirrors options/chain.ts precedent) → PR #82 → main 2e6137c. LIVE-VERIFIED: /api/briefs now 200 with full news feed (was empty); 0 SearchResult validation logs on new deploy dpl_D29j.",
@@ -17,7 +17,7 @@
     "prod_smoke": "PASS on quantan.vercel.app (deploy dpl_BL2M… READY, target=production): /api/analytics/AAPL=200 (winRate252d 53.17%, beta 0.87), /api/sector-rotation=200 (11 sectors); security headers (HSTS/X-Frame DENY/nosniff/CSP-RO) + CSRF cookie live. Briefs A4-1 route not tool-smokable (Vercel share-URL quirk on the force-dynamic multi-Yahoo route) but tsc+CI-verified + type-checked.",
     "ledger": "NEW-C-1/NEW-C-2/A4-1 -> FIXED; NEW-Q-1 -> partial (internal doc done; user-facing UI disclosure deferred to owner)",
     "held_per_owner": "F-A1-3 rate-limit self-heal = NO ACTION (hot-path KV round-trip for a millisecond-window rare conjunction — not worth it). Published-number re-baselines (F-4 net WR label, Q25-1 BTC vol 365) = owner sign-off required (change displayed numbers). CSP nonce completion (#7) = available on request.",
-    "owner_actions_still_open": "(1) RE-POINT scheduled/default model to Opus 4.8 — root cause of the daily autonomous-program stall since ~2026-06-16 (UI setting, no file); (2) do NOT flip QUANTAN_CSP_ENFORCE=1 (A6-1 landmine); (3) F-4/Q25-1 published-number re-baselines await sign-off."
+    "owner_actions_still_open": "(1) RESOLVED 2026-07-06: model re-point no longer needed — Fable 5 enabled + owner-authorized unlimited (see model_policy_2026_07_06); (2) do NOT flip QUANTAN_CSP_ENFORCE=1 (A6-1 landmine); (3) F-4 gross->net WR label decision still open (F-9/Q25-1 re-baselines were completed 2026-07-06 under owner directive)."
   },
   "program_doc": "workspace/QUANTAN_EXPERT_TEAM_COMMERCIALIZATION.md",
   "coordination_doc": "workspace/coordination/PROGRESS_COORDINATION_2026-06-03.md",
@@ -45,7 +45,7 @@
     "pr": "84, 85, 86, 87 merged; records PR follows",
     "git_main_head": "bcf74a5 + this record commit",
     "prod_smoke": "PASS (F4: /api/analytics/AAPL 200, deploy healthy; KLineChart.test 10/10 in CI)",
-    "next_cell": "NONE — recurring §7 weekly deep-sweep (next Monday 2026-07-13, incl. the skipped portfolio:backtest + stryker) + remaining owner-gated backlog (A6-1 CSP landmine, scheduled-task->Opus, F-4 label decision, F-11, F-3, Q09-1, F4-3 axe-CI).",
+    "next_cell": "NONE — recurring §7 weekly deep-sweep (next Monday 2026-07-13, incl. the skipped portfolio:backtest + stryker) + remaining owner-gated backlog (A6-1 CSP landmine, F-4 label decision, F-11, F-3, Q09-1, F4-3 axe-CI).",
     "lesson": "WS-P perf: MEASURE before optimizing — the P1 backtest O(n²) is real in Big-O but 5.24s CPU for the whole benchmark = immaterial; the modal-correct perf result is 'no change needed'. There's a THIRD branch beyond live→ship / dormant→escalate: live-but-not-worth-changing → NO ACTION (don't ship, don't escalate). Escalating a low-value/high-risk optimization of the published-WR SSOT is itself a landmine (invites a future contributor to break the WR for nothing) — only escalate a perf item if it's both measurably hot AND lower-risk than the WR path. 'Do not stop' = move through cells, NOT manufacture diffs to show motion. The benchmark runs locally via tsx in ~26s (parity gate IS available when a real perf fix is warranted).",
     "open_owner_gated": [
       "A6-1 CSP-flip LANDMINE: do NOT flip QUANTAN_CSP_ENFORCE=1 until the nonce path is completed + preview-validated (would block Next inline scripts)",
@@ -56,9 +56,6 @@
       "F-3 close-based trailing peak (dormant/methodology)",
       "Q05-1 regime slope-null FALLING_KNIFE",
       "Q09-1 live sectorGates parity (dormant enhanced path)",
-      "Q25-1 BTC sqrt(252) conditional vol",
-      "A4-1 sector-brief volume field names (LOW, display-only)",
-      "scheduled-task model re-point to Opus (root cause of the 06-16+ stall)",
       "Monday weekly deep sweep still due"
     ],
     "note": "Manual Opus-4.8 session advanced cell A6 (verified-clean, no code change) → WS-A COMPLETE (A1-A6). The 3 API workstreams shipped 2 prod fixes (A4/B-1 briefs id PR #72; A5 provider-layer deletion PR #73) and verified the rest clean; live security posture (CSRF/OWASP-headers/SSRF-ticker-whitelist/CWE-209-sanitize/auth-bounds) sound. Next workstream WS-P. Scheduled 09:00 fires still 400-fail on the disabled Fable 5 model; owner must re-point the schedule/default model to Opus 4.8 (no file to edit)."
@@ -231,5 +228,6 @@
     },
     "env_lesson": "jsdom component tests freeze locally on FUSE mount AND on local-disk worktree with FUSE node_modules (2x 5-min timeouts) — CI-only for jsdom; targeted pure-node vitest files fine (~3s). BacktestPage snapshots pin loading/error only (Q-058-NEW) so data-state copy changes are snapshot-neutral.",
     "ledger": "F-9/F-2/Q05-1/Q25-1 -> FIXED; F1.5 -> FIXED-PENDING-DATA; NEW-Q-1 -> FIXED"
-  }
+  },
+  "model_policy_2026_07_06": "Owner: use Fable 5, NO usage limits. Fable 5 is enabled (this session ran on it) -> the June scheduled-run 400-stall is RESOLVED; no UI re-point needed. Scheduled task quantan-autonomous-program prompt updated (Fable 5 + no self-throttling + standing runtime-errors sweep + post-primary-pass day plan); next fire 2026-07-07 09:08 local — verify it produces a PROGRAM-DAY report."
 }

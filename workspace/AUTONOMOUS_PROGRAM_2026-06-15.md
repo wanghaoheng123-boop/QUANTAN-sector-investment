@@ -87,16 +87,20 @@ output-parity test); added tests/docs; dependency **patch** bumps that pass full
 - CI red it can't fix in-run → leave PR open, escalate.
 - Repeated tool/mount failure → checkpoint and stop (don't burn budget).
 
-## 5. $20 Pro-plan budget discipline
+## 5. Usage policy (owner directive 2026-07-06: NO usage limits)
 
-The Pro plan has rolling 5-hour + weekly usage limits. To "make full use" without
-stalling the program:
-- **One bounded cell per daily run** (not the whole codebase) → steady, predictable burn.
+**The owner has removed usage caps** ("make use of Fable 5, do not set any limit to the
+usage of model"). The routine runs on **Fable 5** (the app default; enabled and
+owner-authorized) and must NOT self-throttle for budget reasons — no one-cell cap; do as
+much verified, gated work per run as the queue demands. What REMAINS in force (these are
+robustness practices, not budget limits):
 - **Durable incremental state**: update the queue ledger + a CHECKPOINT after each
-  sub-step, so a mid-run limit/timeout loses ≤ one sub-step and the next run resumes.
+  sub-step, so an unexpected timeout loses ≤ one sub-step and the next run resumes.
 - **Never re-derive context**: each run boots from the state files, not from scratch.
-- **No speculative re-runs**: rely on CI as the gate; don't loop the full vitest suite
-  locally on the FUSE mount (it freezes — see MEMORY_LOG env lessons; pytest is fine).
+- **No speculative re-runs**: rely on CI as the gate; the full vitest suite AND jsdom
+  component tests freeze locally (even from a local-disk worktree — MEMORY_LOG env
+  lessons); targeted pure-node vitest files + pytest are fine.
+- **Never manufacture diffs to show motion** — a verified all-clear is a valid result.
 - If a run hits the usage cap mid-cell → checkpoint and exit cleanly; the cron picks
   up next cycle. Cadence is tunable in §7 if there's headroom or if caps are hit.
 
@@ -136,9 +140,10 @@ Implemented as the Claude Code scheduled task **`quantan-autonomous-program`**
   prompt checks day-of-week): full `npm run benchmark` + `benchmark:oos` +
   `portfolio:backtest` + `stryker` + `npm audit --omit=dev` + cross-cutting perf profile
   + reconcile `findings-ledger.csv` + milestone update in this doc. No single cell.
-- Time/cadence adjustable via the **Scheduled** sidebar or `update_scheduled_task`. Raise
-  to twice-daily if Pro-plan headroom allows; drop to weekdays-only if usage caps are hit
-  (the routine logs usage outcomes in the daily report to tune this).
+- Time/cadence adjustable via the **Scheduled** sidebar or `update_scheduled_task`.
+  Model: the app default — **Fable 5** (enabled + owner-authorized unlimited,
+  2026-07-06; the June 400-stall on the then-disabled Fable 5 is RESOLVED). Raise
+  cadence freely if useful; usage caps no longer constrain it (§5).
 
 ## 8. Milestones / exit criteria
 
