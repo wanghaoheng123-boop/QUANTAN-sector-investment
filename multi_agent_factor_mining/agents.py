@@ -430,6 +430,11 @@ class EvaluatorAgent:
                 "rank_ic": ic,
                 "sharpe": float(sharpe) if np.isfinite(sharpe) else float("nan"),
                 "source": c.get("source", "template"),
+                # F-PY-04: carry the factor series forward — the composer's
+                # correlation-aware selection reads factor_values; dropping it
+                # here made every factor fail the len(fv) < 30 guard, so the
+                # pipeline always selected 0 factors (confirmed no-op).
+                "factor_values": c.get("factor_values", []),
             })
 
         # Sort by absolute IC
