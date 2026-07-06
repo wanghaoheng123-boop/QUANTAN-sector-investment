@@ -92,7 +92,17 @@ export function loadStockHistory(ticker: string): OhlcvRow[] {
       Number.isFinite(c.low) &&
       Number.isFinite(c.close)
     ) {
-      out.push({ time: c.time, open: c.open, high: c.high, low: c.low, close: c.close, volume: Number.isFinite(c.volume) ? c.volume : 0 })
+      out.push({
+        time: c.time, open: c.open, high: c.high, low: c.low, close: c.close,
+        volume: Number.isFinite(c.volume) ? c.volume : 0,
+        // F1.5: preserve the optional per-bar cash dividend. This rebuild
+        // previously dropped the field, which kept the dividend-aware B&H in
+        // core.ts inert even once the fetch script saved dividends. (The
+        // warehouse path above has no dividend column — local-dev only.)
+        ...(typeof c.dividend === 'number' && Number.isFinite(c.dividend) && c.dividend > 0
+          ? { dividend: c.dividend }
+          : {}),
+      })
     }
   }
   return out
