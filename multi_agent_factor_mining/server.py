@@ -7,6 +7,7 @@ Runs on port 3002. Provides API for automated alpha factor discovery.
 from __future__ import annotations
 
 import logging
+import os
 import uuid
 from datetime import datetime
 from typing import Optional
@@ -15,9 +16,22 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from .agents import FactorMiningPipeline
-from .config import ApiKeyGuard, get_config
-from .factor_library import FactorLibrary
+# F-PY-05: the Procfile launches this file as a SCRIPT
+# (`python multi_agent_factor_mining/server.py`), where relative imports have
+# no parent package and crash at boot. Resolve the package imports both ways:
+# as a module (`python -m multi_agent_factor_mining.server`) and as a script.
+if __package__ in (None, ""):
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from multi_agent_factor_mining.agents import FactorMiningPipeline
+    from multi_agent_factor_mining.config import ApiKeyGuard, get_config
+    from multi_agent_factor_mining.factor_library import FactorLibrary
+else:
+    from .agents import FactorMiningPipeline
+    from .config import ApiKeyGuard, get_config
+    from .factor_library import FactorLibrary
 
 logger = logging.getLogger(__name__)
 

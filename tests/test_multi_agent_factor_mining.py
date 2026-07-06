@@ -185,3 +185,74 @@ class TestPipeline:
         assert state["status"] == "completed"
         assert state["iteration"] >= 1
         assert len(state["messages"]) > 0
+
+
+class TestFPY04PipelineNoOpRegression:
+    """F-PY-04 (2026-07-06): evaluate() must carry factor_values through to the
+    composer — dropping it made every factor fail the len<30 guard and the
+    pipeline always selected 0 factors."""
+
+    def _state_with_candidates(self, tmp_path):
+        from multi_agent_factor_mining.config import AgentConfig
+        from multi_agent_factor_mining.factor_library import FactorLibrary
+
+        rng = np.random.default_rng(42)
+        n = 200
+        fwd = rng.normal(0, 0.01, n)
+        # Two candidates: one strongly IC-correlated, one pure noise.
+        strong = fwd + rng.normal(0, 0.002, n)
+        noise = rng.normal(0, 1, n)
+        cfg = AgentConfig(library_path=str(tmp_path / "lib.json"))
+        state = {
+            "forward_returns": fwd,
+            "candidate_factors": [
+                {"name": "strong", "formula": "f1", "category": "momentum",
+                 "factor_values": strong.tolist()},
+                {"name": "noise", "formula": "f2", "category": "volume",
+                 "factor_values": noise.tolist()},
+            ],
+            "evaluated_factors": [],
+            "selected_factors": [],
+            "library": FactorLibrary(cfg.library_path),
+            "messages": [],
+            "config": cfg,
+        }
+        return cfg, state
+
+    def test_evaluate_carries_factor_values(self, tmp_path):
+        from multi_agent_factor_mining.agents import EvaluatorAgent
+
+        cfg, state = self._state_with_candidates(tmp_path)
+        state = EvaluatorAgent(cfg).evaluate(state)
+        assert state["evaluated_factors"], "strong candidate must pass IC threshold"
+        for f in state["evaluated_factors"]:
+            assert len(f.get("factor_values", [])) >= 30, "factor_values must survive evaluation"
+
+    def test_composer_selects_factors_end_to_end(self, tmp_path):
+        from multi_agent_factor_mining.agents import EvaluatorAgent, PortfolioComposerAgent
+
+        cfg, state = self._state_with_candidates(tmp_path)
+        state = EvaluatorAgent(cfg).evaluate(state)
+        state = PortfolioComposerAgent(cfg).compose(state)
+        assert len(state["selected_factors"]) >= 1, (
+            "composer must select at least the strong factor (was 0 pre-fix)"
+        )
+
+
+class TestFPY05ServerBoot:
+    """F-PY-05 (2026-07-06): the server must boot under BOTH launch paths —
+    module (-m, new Procfile form) and direct script (old Procfile form)."""
+
+    @pytest.mark.parametrize("argv", [
+        ["python3", "-m", "multi_agent_factor_mining.server", "--help"],
+        ["python3", "multi_agent_factor_mining/server.py", "--help"],
+    ])
+    def test_server_help_exits_zero(self, argv):
+        import subprocess
+        import pathlib
+
+        pytest.importorskip("fastapi")
+        pytest.importorskip("uvicorn")
+        repo = pathlib.Path(__file__).resolve().parent.parent
+        proc = subprocess.run(argv, cwd=repo, capture_output=True, text=True, timeout=60)
+        assert proc.returncode == 0, f"boot failed: {proc.stderr[-500:]}"
