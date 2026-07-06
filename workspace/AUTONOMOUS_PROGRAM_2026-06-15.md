@@ -155,6 +155,13 @@ The 06-28→30 "do not stop" session shipped 7 prod PRs (#72–#78), all CI-gree
 Ongoing program activity is now the **recurring weekly deep-sweep (§7)** + the **owner-gated
 backlog** (M5). Each weekly deep-sweep day updates this table + a one-line program status here.
 
+**Program status (2026-07-06): weekly sweep gates GREEN (benchmark net 56.33 +0.44pp WoW; OOS
+6.49pp; runtime-errors 0; audit unchanged) → owner-directed FIX WAVE shipped 4 prod PRs:**
+#84 F-9/F-2/Q05-1 (friction SSOT, window-matched alpha, fail-closed regime), #85 Q25-1 (BTC vol
+√365), #86 F1.5 (dividends pipeline, activates next refresh), #87 NEW-Q-1 (user-facing
+survivorship disclosure). Owner-gated backlog shrinks accordingly; portfolio:backtest + stryker
+deferred to the 2026-07-13 sweep (owner redirect).
+
 ## 9. Tracking artifacts
 
 - **Queue/coverage ledger:** `workspace/coordination/PROGRAM_QUEUE_2026-06-15.md` (SSOT for cell status)
