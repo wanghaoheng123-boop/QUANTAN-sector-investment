@@ -92,3 +92,45 @@ describe('fetchGarchForecast', () => {
     expect(result.source).toBe('ewma-fallback')
   })
 })
+
+// ─── Q25-1 (2026-07-06): crypto annualization + 7-day forecast calendar ──────
+describe('Q25-1: crypto-aware annualization', () => {
+  const closes = Array.from({ length: 100 }, (_, i) => 100 + Math.sin(i / 5) * 5)
+
+  it('annualizes with √365 when periodsPerYear=365 (√(365/252) ≈ 1.2034× equity vol)', () => {
+    const equity = ewmaVolForecast(closes, 1)[0].conditionalVol
+    const crypto = ewmaVolForecast(closes, 1, 0.94, { periodsPerYear: 365 })[0].conditionalVol
+    expect(crypto / equity).toBeCloseTo(Math.sqrt(365 / 252), 10)
+  })
+
+  it('includeWeekends emits 7-day consecutive calendar dates', () => {
+    const fc = ewmaVolForecast(closes, 10, 0.94, { periodsPerYear: 365, includeWeekends: true })
+    expect(fc).toHaveLength(10)
+    const days = fc.map(p => new Date(`${p.date}T00:00:00Z`).getUTCDay())
+    expect(days.some(d => d === 0 || d === 6)).toBe(true) // a weekend appears in any 10-day span
+    for (let i = 1; i < fc.length; i++) {
+      const prev = new Date(`${fc[i - 1].date}T00:00:00Z`).getTime()
+      const cur = new Date(`${fc[i].date}T00:00:00Z`).getTime()
+      expect(cur - prev).toBe(86_400_000) // strictly consecutive calendar days
+    }
+  })
+
+  it('default (equity) behavior is unchanged: 252 annualization, Mon–Fri only', () => {
+    const fc = ewmaVolForecast(closes, 10)
+    for (const p of fc) {
+      const day = new Date(`${p.date}T00:00:00Z`).getUTCDay()
+      expect(day).toBeGreaterThanOrEqual(1)
+      expect(day).toBeLessThanOrEqual(5)
+    }
+  })
+
+  it('fetchGarchForecast fallback uses 365/weekends for BTC, 252/weekdays for AAPL', async () => {
+    delete process.env.QUANT_FRAMEWORK_URL
+    const btc = await fetchGarchForecast('BTC', closes)
+    const aapl = await fetchGarchForecast('AAPL', closes)
+    expect(btc.forecast[0].conditionalVol / aapl.forecast[0].conditionalVol)
+      .toBeCloseTo(Math.sqrt(365 / 252), 10)
+    const btcDays = btc.forecast.map(p => new Date(`${p.date}T00:00:00Z`).getUTCDay())
+    expect(btcDays.some(d => d === 0 || d === 6)).toBe(true)
+  })
+})
