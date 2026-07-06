@@ -230,13 +230,19 @@ export default function BacktestPage() {
 
         {/* Q-063-NEW: honest WR / cost disclosure. These metrics come from the
             cost-aware engine simulation (lib/backtest/engine.ts) — see invariants
-            §1c. No hardcoded WR (it drifts with each rebaseline). */}
+            §1c. No hardcoded WR (it drifts with each rebaseline).
+            NEW-Q-1 (2026-07-06): user-facing survivorship-scope disclosure —
+            mirrors lib/backtest/SIGNAL_SSOT.md. */}
         <p className="text-[11px] leading-relaxed text-slate-500">
           <span className="font-medium text-slate-400">How these are measured:</span>{' '}
           metrics come from a cost-aware simulation — trades fill at the next
           session&apos;s open (T+1) and include round-trip transaction costs of
           ≈22&nbsp;bps (11&nbsp;bps/side). <span className="text-slate-400">Win&nbsp;Rate</span>{' '}
-          is the share of closed trades that ended net-profitable after those costs.
+          is the share of closed trades that ended net-profitable after those costs.{' '}
+          <span className="font-medium text-slate-400">Universe note:</span>{' '}
+          results are computed over 56 currently-listed S&amp;P large-caps plus BTC — a
+          survivor set with no delisted names, which flatters absolute win-rate and
+          return levels versus a point-in-time universe.
         </p>
 
         {/* F-1/F-1a: disclose any instrument dropped from the portfolio summary

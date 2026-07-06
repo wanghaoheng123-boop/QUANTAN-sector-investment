@@ -54,7 +54,9 @@ export function KeyMetricsStrip({ portfolio, instrumentCount }: KeyMetricsStripP
       <BacktestMetricCard
         label="Alpha vs B&H"
         value={fmtPct(portfolio.alpha)}
-        sub={`B&H avg: ${fmtPct(portfolio.bnhAvg)}`}
+        // F-2 (2026-07-06): B&H is measured over the SAME end-aligned common
+        // window as the portfolio return — say so, since the number moved.
+        sub={`B&H avg (matched window): ${fmtPct(portfolio.bnhAvg)}`}
         color={portfolio.alpha > 0 ? 'text-cyan-400' : 'text-orange-400'}
       />
       <BacktestMetricCard
