@@ -28,8 +28,10 @@ import { SECTOR_PROFILES } from '@/lib/optimize/sectorProfiles'
 import { perSideCostPct } from '@/lib/backtest/executionModel'
 import { tradingDaysPerYear } from '@/lib/backtest/core'
 
-/** T+1 entry friction (matches engine.ts FIX-C2). */
-const ENTRY_SLIPPAGE_BPS = 2
+// F-9 (2026-07-06, matches core.ts #84): entries fill at the RAW next-open —
+// friction lives solely in perSideCostPct() (executionModel SSOT, 11 bps/side
+// incl. slippage). The former 2 bps ENTRY_SLIPPAGE_BPS price markup here
+// double-counted that slippage, mirroring the core.ts bug fixed in #84.
 
 /**
  * End-of-day exit reasons: signal is computed from today's close, so the fill
@@ -312,8 +314,10 @@ export function runPortfolioBacktest(
       // Check exit conditions — F1.3 (Phase 13 S2): pass the full bar so
       // stop-loss and profit-target evaluation uses bar.low / bar.high
       // (intraday breach), not just bar.close.
+      // F-11: pass the instrument's OWN row index (matches entryIdx semantics)
+      // so the time-based exit counts the instrument's own trading days.
       const exitCheck = checkExitConditions(
-        pos, di, price, currentDate, currentATRPct, signalAction, cfg.exit,
+        pos, idx, price, currentDate, currentATRPct, signalAction, cfg.exit,
         { open: row.open, high: row.high, low: row.low, close: row.close },
       )
 
@@ -449,7 +453,7 @@ export function runPortfolioBacktest(
         // Defensive guard: never spend more than we have.
         const cashCap = Math.max(0, capital * 0.99)  // small buffer for tx cost
         const allowed = Math.min(maxAllocation, cashCap)
-        const entryPrice = nextOpen * (1 + ENTRY_SLIPPAGE_BPS / 10000)
+        const entryPrice = nextOpen
         if (allowed < entryPrice) continue
 
         const atrResult = atrAdaptiveStop(signalPrice, bars, cfg.exit.atrStopMultiplier)
@@ -461,7 +465,12 @@ export function runPortfolioBacktest(
         openPositions.set(ticker, {
           ticker,
           sector: sectorMap[ticker] ?? 'Unknown',
-          entryIdx: di,
+          // F-11 (2026-07-06): the instrument's OWN row index of the FILL bar
+          // (idx+1 = next-open fill), not the union-calendar index `di`. With
+          // union indices, an instrument that skips union dates (an equity in a
+          // BTC-bearing 7-day union) hit maxHoldDays in union steps — forced
+          // time-exits after ~14 equity sessions instead of 20.
+          entryIdx: idx + 1,
           entryPrice,
           entryDate: currentDate,
           entryATRPct: atrResult.atrPct,
