@@ -2,8 +2,8 @@
   "schema_version": "1.1",
   "project": "QUANTAN-sector-investment",
   "created": "2026-04-28T09:40:00Z",
-  "last_updated": "2026-07-06T15:30:00.000Z",
-  "active_agent": "claude fable-5 (2026-07-06: sweep + TWO fix waves — #84-#95 all merged; ledger reconciled; CSP landmine defused; factor-mining revived; Fable-5 unlimited policy live)",
+  "last_updated": "2026-07-07T16:00:00.000Z",
+  "active_agent": "claude fable-5 (2026-07-07: scheduled-run stall diagnosed+fixed (stale root branch + permission-prompt stall); daily duties run manually; wave-3 Q-065/Q-066/Q-069/Q-070 shipped PR #97)",
   "prod_bug_fix_2026_07_01": {
     "B-2": "News fetch broken by yahoo-finance2 SearchResult schema drift (yf.search validation threw → news silently dropped + 66 prod errors on /api/briefs since 2026-04-03). FOUND via Vercel get_runtime_errors. FIXED with validateResult:false on the 4 news-search callers (mirrors options/chain.ts precedent) → PR #82 → main 2e6137c. LIVE-VERIFIED: /api/briefs now 200 with full news feed (was empty); 0 SearchResult validation logs on new deploy dpl_D29j.",
     "method_note": "Empirical bug-finding via Vercel runtime-errors/logs is high-signal — surfaced a real 3-month-old LIVE issue the static inspection didn't (it was a caught-and-logged error, invisible to tsc/tests/benchmark). Consider a runtime-errors sweep as a standing step."
@@ -30,35 +30,10 @@
     "result": "GO — live path sound; fix wave shipped 4 prod PRs (#84-#87)"
   },
   "last_program_run": {
-    "date": "2026-07-06",
-    "cells_this_session": [
-      "A6 (WS-A)",
-      "P1-P4 (WS-P)",
-      "F1 + F1-cont (WS-F)",
-      "F2 (WS-F)",
-      "F3 (WS-F)",
-      "F4 (WS-F)"
-    ],
-    "cell": "WEEKLY-SWEEP + FIX-WAVE",
-    "workstream_status": "PROGRAM PRIMARY PASS COMPLETE — WS-Q (Q01-27) · WS-PY (PY1-4) · WS-A (A1-6) · WS-P (P1-4) · WS-F (F1-4) ALL done. Remaining = recurring weekly deep-sweep (§7) + owner-gated backlog.",
-    "result": "Sweep gates green (see last_weekly_deep_sweep); owner-directed fix wave merged #84 (F-9/F-2/Q05-1), #85 (Q25-1), #86 (F1.5 pipeline), #87 (NEW-Q-1 UI). Published label WR unchanged 56.33/57.35; displayed alpha now window-matched -89.24%; BTC vol +20.3% correct annualization.",
-    "pr": "84, 85, 86, 87 merged; records PR follows",
-    "git_main_head": "bcf74a5 + this record commit",
-    "prod_smoke": "PASS (F4: /api/analytics/AAPL 200, deploy healthy; KLineChart.test 10/10 in CI)",
-    "next_cell": "NONE — recurring §7 weekly deep-sweep (next Monday 2026-07-13, incl. the skipped portfolio:backtest + stryker) + remaining owner-gated backlog (A6-1 CSP landmine, F-4 label decision, F-11, F-3, Q09-1, F4-3 axe-CI).",
-    "lesson": "WS-P perf: MEASURE before optimizing — the P1 backtest O(n²) is real in Big-O but 5.24s CPU for the whole benchmark = immaterial; the modal-correct perf result is 'no change needed'. There's a THIRD branch beyond live→ship / dormant→escalate: live-but-not-worth-changing → NO ACTION (don't ship, don't escalate). Escalating a low-value/high-risk optimization of the published-WR SSOT is itself a landmine (invites a future contributor to break the WR for nothing) — only escalate a perf item if it's both measurably hot AND lower-risk than the WR path. 'Do not stop' = move through cells, NOT manufacture diffs to show motion. The benchmark runs locally via tsx in ~26s (parity gate IS available when a real perf fix is warranted).",
-    "open_owner_gated": [
-      "A6-1 CSP-flip LANDMINE: do NOT flip QUANTAN_CSP_ENFORCE=1 until the nonce path is completed + preview-validated (would block Next inline scripts)",
-      "F-4 gross->net WR re-baseline",
-      "F-9 entry-slippage double-count",
-      "F-2 alpha mismatched windows (live engine.ts; latent on uniform data)",
-      "F-11 maxHoldDays union-calendar (dormant)",
-      "F-3 close-based trailing peak (dormant/methodology)",
-      "Q05-1 regime slope-null FALLING_KNIFE",
-      "Q09-1 live sectorGates parity (dormant enhanced path)",
-      "Monday weekly deep sweep still due"
-    ],
-    "note": "Manual Opus-4.8 session advanced cell A6 (verified-clean, no code change) → WS-A COMPLETE (A1-A6). The 3 API workstreams shipped 2 prod fixes (A4/B-1 briefs id PR #72; A5 provider-layer deletion PR #73) and verified the rest clean; live security posture (CSRF/OWASP-headers/SSRF-ticker-whitelist/CWE-209-sanitize/auth-bounds) sound. Next workstream WS-P. Scheduled 09:00 fires still 400-fail on the disabled Fable 5 model; owner must re-point the schedule/default model to Opus 4.8 (no file to edit)."
+    "date": "2026-07-07",
+    "cell": "DAILY (manual stand-in) + WAVE-3 backlog",
+    "result": "Scheduled 09:12 run produced nothing — root repo was on a June-14 branch (fixed: main @ 8add5bc; prompt now syncs BEFORE reading state) and the new Vercel-MCP sweep likely stalled on an unapproved-tool prompt (prompt now has a no-stall TOOLS rule). OWNER: click Run-now once + approve tools. Daily duties manual: runtime errors 24h = 0; no open auto/* PRs. Wave 3: Q-065 PSR/DSR + Q-066 regime buckets (additive; WR byte-identical; NEW-Q-2 research lead: BEAR_ALERT buys negative edge n=27) + Q-069/Q-070 docs -> PR #97.",
+    "next_cell": "Daily program resumes tomorrow 09:08 (verify it writes PROGRAM-DAY-2026-07-08). Remaining backlog: Q-064/Q-067/Q-068/Q-071/Q-072/Q-074 + owner-gated (CSP flip, Q09-1, npm audit)."
   },
   "last_inspection": {
     "timestamp": "2026-06-03T02:35:00.000Z",
@@ -192,6 +167,11 @@
       "id": "BLOCKER-OWNER-ENV",
       "summary": "Vercel KV, CSP enforce, FRED prewarm not set in production",
       "resolution": "Owner provisions env per workspace/VERCEL_OPERATIONS.md"
+    },
+    {
+      "id": "BLOCKER-TASK-TOOL-APPROVAL",
+      "summary": "Scheduled task quantan-autonomous-program needs one interactive Run-now to pre-approve Vercel MCP tools (runtime-errors sweep); until then the sweep step self-skips per the no-stall rule",
+      "resolution": "Owner clicks Run now on the task and approves the tool prompts once"
     }
   ],
   "checkpoint": null,
