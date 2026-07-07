@@ -22,6 +22,8 @@ export interface LabelSignalOutcome {
   action: 'BUY' | 'HOLD' | 'SELL'
   grossReturn: number | null
   netReturn: number | null
+  /** Regime zone at the signal bar (Q-066); null for non-BUY outcomes. */
+  regimeZone: string | null
 }
 
 function sectorGatesForTicker(ticker: string) {
@@ -51,7 +53,7 @@ export function signalAtBarIndex(
   options: LabelBenchmarkOptions = {},
 ): LabelSignalOutcome {
   if (i < WARMUP_BARS || i >= rows.length - LABEL_HOLD_DAYS - 1) {
-    return { action: 'HOLD', grossReturn: null, netReturn: null }
+    return { action: 'HOLD', grossReturn: null, netReturn: null, regimeZone: null }
   }
 
   const slice = rows.slice(0, i + 1)
@@ -65,6 +67,7 @@ export function signalAtBarIndex(
   }
 
   let action: 'BUY' | 'HOLD' | 'SELL' = 'HOLD'
+  let regimeZone: string | null = null
   try {
     const sig = resolveBacktestSignal(
       ticker,
@@ -77,6 +80,7 @@ export function signalAtBarIndex(
       sectorGatesForTicker(ticker),
     )
     action = sig.action
+    regimeZone = sig.regime?.zone ?? null
   } finally {
     if (options.productionPath) {
       if (prevEnhanced === undefined) delete process.env.QUANTAN_USE_ENHANCED_SIGNAL
@@ -85,7 +89,7 @@ export function signalAtBarIndex(
   }
 
   if (action !== 'BUY') {
-    return { action, grossReturn: null, netReturn: null }
+    return { action, grossReturn: null, netReturn: null, regimeZone: null }
   }
 
   const entryPrice = rows[i + 1].close
@@ -98,7 +102,7 @@ export function signalAtBarIndex(
   // 56 backtestData files / 70,796 rows); guards only a latent corrupt-bar case.
   if (!Number.isFinite(entryPrice) || entryPrice <= 0 ||
       !Number.isFinite(exitPrice) || exitPrice <= 0) {
-    return { action, grossReturn: null, netReturn: null }
+    return { action, grossReturn: null, netReturn: null, regimeZone: null }
   }
   const grossReturn = (exitPrice - entryPrice) / entryPrice
   const costs = options.costs ?? DEFAULT_EXECUTION_COSTS
@@ -106,6 +110,7 @@ export function signalAtBarIndex(
     action,
     grossReturn,
     netReturn: netReturnAfterCosts(grossReturn, costs),
+    regimeZone,
   }
 }
 
@@ -121,6 +126,13 @@ export interface InstrumentLabelStats {
   avgReturn20d: number | null
   avgNetReturn20d: number | null
   bnhReturn: number
+  /**
+   * Per-BUY trade detail (Q-065/Q-066 additive): net/gross 20d label return +
+   * the regime zone at the signal bar. Length === buySignals. Lets the
+   * aggregate report compute PSR/DSR and regime-bucketed WR without changing
+   * any existing field.
+   */
+  trades: { zone: string; grossReturn: number; netReturn: number }[]
 }
 
 export function runInstrumentLabelBenchmark(
@@ -138,6 +150,7 @@ export function runInstrumentLabelBenchmark(
   let buyCount = 0
   const returns20d: number[] = []
   const netReturns20d: number[] = []
+  const trades: { zone: string; grossReturn: number; netReturn: number }[] = []
 
   for (let i = WARMUP_BARS; i < rows.length - LABEL_HOLD_DAYS - 1; i++) {
     const out = signalAtBarIndex(rows, i, ticker, options)
@@ -145,6 +158,7 @@ export function runInstrumentLabelBenchmark(
     buyCount++
     returns20d.push(out.grossReturn)
     netReturns20d.push(out.netReturn)
+    trades.push({ zone: out.regimeZone ?? 'UNKNOWN', grossReturn: out.grossReturn, netReturn: out.netReturn })
     if (out.grossReturn > 0) wins++
     else losses++
     if (out.netReturn > 0) netWins++
@@ -166,6 +180,7 @@ export function runInstrumentLabelBenchmark(
     avgReturn20d: returns20d.length > 0 ? returns20d.reduce((a, b) => a + b, 0) / returns20d.length : null,
     avgNetReturn20d: netReturns20d.length > 0 ? netReturns20d.reduce((a, b) => a + b, 0) / netReturns20d.length : null,
     bnhReturn,
+    trades,
   }
 }
 
