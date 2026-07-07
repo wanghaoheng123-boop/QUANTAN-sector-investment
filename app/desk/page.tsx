@@ -1,5 +1,10 @@
 'use client'
 
+// Q-069 (routing expectation, UI audit F-01): there is NO /monitor route — by
+// design, not by omission. /desk IS the monitoring surface (live prices,
+// watchlist, sector/commodity boards). Anyone reaching for a "/monitor" page
+// should land here; do not add a redirect stub or a duplicate page.
+
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { DESK_TICKERS } from '@/lib/deskTickers'

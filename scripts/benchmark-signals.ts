@@ -18,6 +18,7 @@ import {
   LABEL_HOLD_DAYS,
 } from '../lib/backtest/benchmarkLabel'
 import { DEFAULT_EXECUTION_COSTS } from '../lib/backtest/executionModel'
+import { probabilisticSharpe, deflatedSharpe, sampleStd } from '../lib/quant/deflatedSharpe'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -88,6 +89,39 @@ const avgNetReturn =
 const expectancyGross = avgReturn
 const expectancyNet = avgNetReturn
 
+// ── Q-065: PSR / Deflated Sharpe on pooled per-trade NET returns ─────────────
+// CAVEAT (printed + persisted): label trades OVERLAP (daily signals, 20d holds),
+// so the effective sample is smaller than nTrades and PSR/DSR are OPTIMISTIC
+// upper bounds. DSR shown as a sensitivity band (N=10 / N=100 assumed trials)
+// rather than a single invented trials count.
+const allTrades = results.flatMap((r) => r.trades)
+const netRets = allTrades.map((t) => t.netReturn)
+const perTradeSharpe =
+  netRets.length > 1 && sampleStd(netRets) > 0
+    ? netRets.reduce((a, b) => a + b, 0) / netRets.length / sampleStd(netRets)
+    : null
+const psr = probabilisticSharpe(netRets, 0)
+const dsr10 = deflatedSharpe(netRets, 10)
+const dsr100 = deflatedSharpe(netRets, 100)
+
+// ── Q-066: regime-bucketed WR (zone at the signal bar) ───────────────────────
+const bucketMap = new Map<string, { n: number; netWins: number; sumNet: number }>()
+for (const t of allTrades) {
+  const b = bucketMap.get(t.zone) ?? { n: 0, netWins: 0, sumNet: 0 }
+  b.n++
+  if (t.netReturn > 0) b.netWins++
+  b.sumNet += t.netReturn
+  bucketMap.set(t.zone, b)
+}
+const regimeBuckets = Array.from(bucketMap.entries())
+  .map(([zone, b]) => ({
+    zone,
+    trades: b.n,
+    netWinRate: Number(((b.netWins / b.n) * 100).toFixed(2)),
+    avgNetReturn20d: Number(((b.sumNet / b.n) * 100).toFixed(4)),
+  }))
+  .sort((a, b) => b.trades - a.trades)
+
 const benchmark = {
   timestamp: new Date().toISOString(),
   version: 'v2.0-ssot-regime-production',
@@ -112,7 +146,22 @@ const benchmark = {
     expectancyNetPct: Number((expectancyNet * 100).toFixed(4)),
     avgHoldDays: LABEL_HOLD_DAYS,
   },
-  byInstrument: results.sort((a, b) => (b.winRate ?? 0) - (a.winRate ?? 0)),
+  // Q-065 (additive): per-trade Sharpe + PSR/DSR on pooled net label returns.
+  tradeStats: {
+    nTrades: netRets.length,
+    perTradeSharpe: perTradeSharpe == null ? null : Number(perTradeSharpe.toFixed(4)),
+    psrGtZero: psr == null ? null : Number(psr.toFixed(4)),
+    deflatedSharpeN10: dsr10 == null ? null : Number(dsr10.toFixed(4)),
+    deflatedSharpeN100: dsr100 == null ? null : Number(dsr100.toFixed(4)),
+    note:
+      'Bailey-Lopez de Prado PSR/DSR on pooled per-trade 20d NET returns. Trades overlap (daily signals, 20d holds) so these are OPTIMISTIC upper bounds; DSR shown as an N=10/N=100 assumed-trials sensitivity band.',
+  },
+  // Q-066 (additive): WR bucketed by the regime zone at the signal bar.
+  regimeBuckets,
+  // byInstrument keeps its EXACT pre-Q-065 shape: strip the per-trade detail.
+  byInstrument: results
+    .sort((a, b) => (b.winRate ?? 0) - (a.winRate ?? 0))
+    .map(({ trades: _trades, ...rest }) => rest),
 }
 
 const outPath = join(__dirname, 'benchmark-results.json')
@@ -128,6 +177,13 @@ console.log(`Aggregate Win Rate (net after costs): ${benchmark.aggregate.aggrega
 console.log(`Avg 20d return (gross): ${benchmark.aggregate.avgReturn20d}%`)
 console.log(`Avg 20d return (net): ${benchmark.aggregate.avgNetReturn20d}%`)
 console.log(`Expectancy gross/net: ${benchmark.aggregate.expectancyGrossPct}% / ${benchmark.aggregate.expectancyNetPct}%`)
+console.log(
+  `Per-trade Sharpe (net): ${benchmark.tradeStats.perTradeSharpe} | PSR(>0): ${benchmark.tradeStats.psrGtZero} | DSR N=10/N=100: ${benchmark.tradeStats.deflatedSharpeN10} / ${benchmark.tradeStats.deflatedSharpeN100} (overlapping trades — optimistic bounds)`,
+)
+console.log('Regime buckets (net WR / avg net 20d):')
+for (const b of benchmark.regimeBuckets) {
+  console.log(`  ${b.zone.padEnd(14)} n=${String(b.trades).padStart(4)}  WR ${b.netWinRate}%  avg ${b.avgNetReturn20d}%`)
+}
 console.log(`\nSaved to: ${outPath}`)
 
 /** Frozen 2026-05-26 SSOT re-baseline (50 bps tolerance). See reviews/invariants-baseline.md §1b. */
