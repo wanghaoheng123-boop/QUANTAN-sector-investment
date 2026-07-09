@@ -67,7 +67,10 @@ function SignalCard({ signal, color, compact = false }: SignalCardProps) {
         role="region"
         className={`rounded-xl p-4 border ${config.bg} ${config.border} hover:brightness-110 transition-all animate-card-enter`}
         style={{ boxShadow: `0 0 20px ${color}10` }}
-        aria-label={directionAriaLabel(signal.direction, session)}
+        // landmark-unique (axe, 2026-07-09): region landmarks must have unique
+        // labels — a page of identical "session up" regions is unnavigable by
+        // screen reader. Prefix with the instrument so each card is distinct.
+        aria-label={`${signal.etf} ${signal.sector}: ${directionAriaLabel(signal.direction, session)}`}
       >
         <div className="flex items-center justify-between mb-2">
           <span className={`text-xs font-bold ${config.text} tracking-widest inline-flex items-center gap-1`}>
@@ -104,7 +107,8 @@ function SignalCard({ signal, color, compact = false }: SignalCardProps) {
       role="region"
       className={`rounded-2xl p-5 border ${config.bg} ${config.border} animate-card-enter`}
       style={{ boxShadow: `0 0 40px ${color}15, 0 4px 20px rgba(0,0,0,0.3)` }}
-      aria-label={directionAriaLabel(signal.direction, session)}
+      // landmark-unique (axe, 2026-07-09): see compact variant above.
+      aria-label={`${signal.etf} ${signal.sector}: ${directionAriaLabel(signal.direction, session)}`}
     >
       {/* Header — F6.3: icon + text so direction is clear without color */}
       <div className="flex items-center justify-between mb-4">
