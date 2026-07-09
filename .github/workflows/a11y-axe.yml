@@ -35,9 +35,15 @@ jobs:
           done
           curl -sf http://localhost:3000 -o /dev/null || { echo "app failed to start"; exit 1; }
       - name: Run axe on priority routes
+        # --load-delay 25s: /backtest loads 56 instruments (~20s) before its
+        # data DOM exists; without the delay the crawl audited a spinner and
+        # the renderer timed out mid-run (seen 2026-07-06: TimeoutError after
+        # the first page). --timeout raises axe's own per-page budget.
         run: |
           npx --yes @axe-core/cli@4 \
             http://localhost:3000/ \
             http://localhost:3000/backtest \
             --chromedriver-path "$CHROMEWEBDRIVER/chromedriver" \
+            --load-delay 25000 \
+            --timeout 180 \
             --exit

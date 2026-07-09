@@ -238,11 +238,14 @@ describe('Portfolio Aggregation', () => {
 })
 
 describe('Walk-Forward Analysis', () => {
+  // 30s timeout: under Stryker's INSTRUMENTED dry run this test exceeded the
+  // 5s vitest default and killed every weekly mutation run at startup (failed
+  // silently since 2026-06-07 behind the workflow's continue-on-error).
   it('returns windows for sufficient data', () => {
     const rows = generateRows(800, 100, 0.0003)
     const windows = walkForwardAnalysis('TEST', 'Technology', rows, 252, 63)
     expect(windows.length).toBeGreaterThan(0)
-  })
+  }, 30_000)
 
   it('each window has valid structure', () => {
     const rows = generateRows(800, 100, 0.0003)
