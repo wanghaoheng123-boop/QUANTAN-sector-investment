@@ -11,6 +11,12 @@ export default defineConfig({
     // `environmentMatchGlobs`; the pragma is the supported replacement.)
     environment: 'node',
     globals: true,
+    // 30s global timeout (2026-07-10): Stryker's INSTRUMENTED dry run is
+    // ~5-10× slower than a bare run, and the 5s default killed the weekly
+    // mutation job at startup for five straight weeks (one walk-forward test
+    // after another tripping it). Passing tests are unaffected; only the
+    // failure budget grows.
+    testTimeout: 30_000,
     include: ['__tests__/**/*.test.ts', '__tests__/**/*.test.tsx'],
     // Q-027 / Phase 16: jest-dom matchers (toBeInTheDocument, toHaveAttribute,
     // etc.) registered globally for component specs.
