@@ -13,7 +13,9 @@ export const viewport: Viewport = {
   themeColor: '#0a0a0f',
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
+  // maximumScale removed (2026-07-10): capping zoom at 1 blocks pinch-zoom for
+  // low-vision users — WCAG 1.4.4 Resize Text; flagged by the axe crawl
+  // ("meta-viewport"). iOS input auto-zoom is acceptable collateral.
 }
 
 export const metadata: Metadata = {
