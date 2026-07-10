@@ -138,6 +138,25 @@ function isFiniteRow(q) {
   );
 }
 
+// 2026-07-11 (data-integrity, Patterson lens): the LAST bar of a fetch can be
+// a still-forming intraday bar whose running close drifts outside the recorded
+// high/low (seen live: BTC 2026-07-05 close 63682 > high 63632). Downstream
+// intrabar logic (evaluateStopHit) relies on low ≤ open,close ≤ high, so an
+// inconsistent partial bar can imply impossible fills. Clamp ONLY the final
+// bar — a historical bar violating the invariant should fail loudly instead
+// (scripts/verify-data-integrity.mjs).
+function clampPartialFinalBar(candles, ticker) {
+  if (candles.length === 0) return candles;
+  const last = candles[candles.length - 1];
+  const high = Math.max(last.high, last.open, last.close);
+  const low = Math.min(last.low, last.open, last.close);
+  if (high !== last.high || low !== last.low) {
+    console.warn(`[${ticker}] clamped partial final bar: high ${last.high}→${high}, low ${last.low}→${low}`);
+    candles[candles.length - 1] = { ...last, high, low };
+  }
+  return candles;
+}
+
 async function fetchYahoo(ticker, sector) {
   const result = await yf.chart(ticker, {
     period1: new Date(Date.now() - PERIOD_DAYS * 86400000),
@@ -170,7 +189,7 @@ async function fetchYahoo(ticker, sector) {
     };
   });
 
-  saveResult(ticker, sector, candles);
+  saveResult(ticker, sector, clampPartialFinalBar(candles, ticker));
   const dropped = rawRows.length - candles.length;
   console.log(`[${ticker}] Saved ${candles.length} candles${dropped > 0 ? ` (dropped ${dropped} non-finite rows)` : ''}${divByDay.size > 0 ? ` (+${divByDay.size} dividend bars)` : ''}`);
 }
@@ -192,7 +211,7 @@ async function fetchBTC(sector = 'Crypto') {
     volume: Number.isFinite(q.volume) ? q.volume : 0,
   }));
 
-  saveResult('BTC', sector, candles);
+  saveResult('BTC', sector, clampPartialFinalBar(candles, 'BTC'));
   const dropped = rawRows.length - candles.length;
   console.log(`[BTC] Saved ${candles.length} candles${dropped > 0 ? ` (dropped ${dropped} non-finite rows)` : ''}`);
 }

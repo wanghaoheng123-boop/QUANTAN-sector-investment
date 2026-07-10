@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-07-07T15:10:28.858Z",
+  "timestamp": "2026-07-10T20:04:57.449Z",
   "version": "v2.0-ssot-regime-production",
   "strategy": "resolveBacktestSignal (regime-only, QUANTAN_USE_ENHANCED_SIGNAL=0)",
   "metricNote": "Label win rate: 20d forward return after BUY; entry next close; gross and net after round-trip costs",
@@ -32,6 +32,13 @@
     "deflatedSharpeN100": 1,
     "note": "Bailey-Lopez de Prado PSR/DSR on pooled per-trade 20d NET returns. Trades overlap (daily signals, 20d holds) so these are OPTIMISTIC upper bounds; DSR shown as an N=10/N=100 assumed-trials sensitivity band."
   },
+  "alwaysBuyBaseline": {
+    "nBars": 58420,
+    "netWinRatePct": 54.02,
+    "avgNetReturn20dPct": 1.0657,
+    "note": "Unconditional long exposure on this survivor universe/bull window. The strategy KPI is EDGE OVER THIS BASE RATE; note the CI net-WR floor (53.29) sits BELOW it — floor re-baseline is an owner decision tracked in the 2026-07-11 rethink."
+  },
+  "edgeOverBaseRatePp": 2.31,
   "regimeBuckets": [
     {
       "zone": "FIRST_DIP",

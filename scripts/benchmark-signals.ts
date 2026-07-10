@@ -16,8 +16,9 @@ import {
   runInstrumentLabelBenchmark,
   roundTripCostPct,
   LABEL_HOLD_DAYS,
+  WARMUP_BARS,
 } from '../lib/backtest/benchmarkLabel'
-import { DEFAULT_EXECUTION_COSTS } from '../lib/backtest/executionModel'
+import { DEFAULT_EXECUTION_COSTS, netReturnAfterCosts } from '../lib/backtest/executionModel'
 import { probabilisticSharpe, deflatedSharpe, sampleStd } from '../lib/quant/deflatedSharpe'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -104,6 +105,30 @@ const psr = probabilisticSharpe(netRets, 0)
 const dsr10 = deflatedSharpe(netRets, 10)
 const dsr100 = deflatedSharpe(netRets, 100)
 
+// ── Base rate (2026-07-11 rethink): the honest context for the headline WR ──
+// Net-label outcome of "BUY every eligible bar" on the SAME universe/window/
+// costs. On a survivor universe in a bull window this sits well above 50%
+// (54.02% at introduction), so the KPI that matters is EDGE OVER BASE RATE,
+// not distance from a coin flip. (Medallion's famous 50.75% is a short-horizon
+// long/short figure with a ~50% base rate — not comparable to long-only 20d.)
+let baseBuys = 0
+let baseNetWins = 0
+let baseSumNet = 0
+for (const { rows } of allData) {
+  for (let i = WARMUP_BARS; i < rows.length - LABEL_HOLD_DAYS - 1; i++) {
+    const entry = rows[i + 1].close
+    const exit = rows[Math.min(i + 1 + LABEL_HOLD_DAYS, rows.length - 1)].close
+    if (!(entry > 0) || !(exit > 0)) continue
+    const gross = (exit - entry) / entry
+    const net = netReturnAfterCosts(gross, DEFAULT_EXECUTION_COSTS)
+    baseBuys++
+    baseSumNet += net
+    if (net > 0) baseNetWins++
+  }
+}
+const baseRateNetWR = baseBuys > 0 ? (baseNetWins / baseBuys) * 100 : 0
+const baseRateAvgNet = baseBuys > 0 ? (baseSumNet / baseBuys) * 100 : 0
+
 // ── Q-066: regime-bucketed WR (zone at the signal bar) ───────────────────────
 const bucketMap = new Map<string, { n: number; netWins: number; sumNet: number }>()
 for (const t of allTrades) {
@@ -156,6 +181,16 @@ const benchmark = {
     note:
       'Bailey-Lopez de Prado PSR/DSR on pooled per-trade 20d NET returns. Trades overlap (daily signals, 20d holds) so these are OPTIMISTIC upper bounds; DSR shown as an N=10/N=100 assumed-trials sensitivity band.',
   },
+  // 2026-07-11 rethink (additive): "BUY every bar" base rate on the same
+  // universe/window/costs — the honest yardstick for the headline WR.
+  alwaysBuyBaseline: {
+    nBars: baseBuys,
+    netWinRatePct: Number(baseRateNetWR.toFixed(2)),
+    avgNetReturn20dPct: Number(baseRateAvgNet.toFixed(4)),
+    note:
+      'Unconditional long exposure on this survivor universe/bull window. The strategy KPI is EDGE OVER THIS BASE RATE; note the CI net-WR floor (53.29) sits BELOW it — floor re-baseline is an owner decision tracked in the 2026-07-11 rethink.',
+  },
+  edgeOverBaseRatePp: Number((Number((aggNetWinRate * 100).toFixed(2)) - Number(baseRateNetWR.toFixed(2))).toFixed(2)),
   // Q-066 (additive): WR bucketed by the regime zone at the signal bar.
   regimeBuckets,
   // byInstrument keeps its EXACT pre-Q-065 shape: strip the per-trade detail.
@@ -179,6 +214,9 @@ console.log(`Avg 20d return (net): ${benchmark.aggregate.avgNetReturn20d}%`)
 console.log(`Expectancy gross/net: ${benchmark.aggregate.expectancyGrossPct}% / ${benchmark.aggregate.expectancyNetPct}%`)
 console.log(
   `Per-trade Sharpe (net): ${benchmark.tradeStats.perTradeSharpe} | PSR(>0): ${benchmark.tradeStats.psrGtZero} | DSR N=10/N=100: ${benchmark.tradeStats.deflatedSharpeN10} / ${benchmark.tradeStats.deflatedSharpeN100} (overlapping trades — optimistic bounds)`,
+)
+console.log(
+  `Always-buy base rate (net): ${benchmark.alwaysBuyBaseline.netWinRatePct}% over ${benchmark.alwaysBuyBaseline.nBars} bars | strategy edge over base: ${benchmark.edgeOverBaseRatePp}pp`,
 )
 console.log('Regime buckets (net WR / avg net 20d):')
 for (const b of benchmark.regimeBuckets) {

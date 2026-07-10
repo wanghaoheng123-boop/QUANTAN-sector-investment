@@ -1,4 +1,10 @@
-# Weekly mutation testing (Phase 16 S4). allowed-to-fail until baseline ≥70%.
+# Weekly mutation testing. Sharded 2026-07-11: a single run of all 7,617
+# mutants hit GitHub's 6-hour job limit at 79% (cancelled 2026-07-09 with an
+# interim score ≈72% — 1,971 survived of 7,181 tested). Three parallel shards
+# keep each job comfortably inside the limit and give per-domain scores.
+# Still allowed-to-fail (continue-on-error) until the ≥70% baseline holds on
+# every shard — but check the JOB conclusions, not the workflow badge (the
+# badge stayed green through 5 weeks of dead runs; lesson recorded 2026-07-10).
 name: Stryker Weekly
 
 on:
@@ -10,6 +16,17 @@ jobs:
   stryker:
     runs-on: ubuntu-latest
     continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        shard:
+          - name: quant
+            mutate: 'lib/quant/**/*.ts'
+          - name: backtest
+            mutate: 'lib/backtest/**/*.ts'
+          - name: options
+            mutate: 'lib/options/**/*.ts'
+    name: stryker (${{ matrix.shard.name }})
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -17,4 +34,4 @@ jobs:
           node-version: '20'
           cache: 'npm'
       - run: npm ci
-      - run: npm run stryker
+      - run: npx stryker run --mutate "${{ matrix.shard.mutate }}"
