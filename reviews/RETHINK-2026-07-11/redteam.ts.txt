@@ -1,0 +1,410 @@
+/**
+ * RED TEAM analysis script — read-only over scripts/backtestData.
+ * Sections:
+ *  P: parity check (fast regime reimplementation vs imported regimeSignal + benchmark aggregate)
+ *  A: rule ablation at H=20 (SSOT vs base rate vs generic pullback variants)
+ *  B: horizon sensitivity H in {5,10,20,40}
+ *  C: non-overlapping WR + Wilson CI
+ *  D: year-by-year WR (signal vs base)
+ *  E: engine layer ablation (time-exit only -> +ATR stop -> +trailing -> engine exits -> full engine)
+ */
+process.env.QUANTAN_USE_ENHANCED_SIGNAL = '0'
+
+import { readFileSync, readdirSync } from 'fs'
+import { join } from 'path'
+import { regimeSignal } from '../lib/backtest/regimeSignal'
+import { atrArray } from '@/lib/quant/indicators'
+import { backtestInstrument, type OhlcvRow } from '../lib/backtest/core'
+
+const RT = 0.0022 // round-trip cost
+const dataDir = join(process.cwd(), 'scripts', 'backtestData')
+
+interface Inst {
+  ticker: string
+  sector: string
+  rows: OhlcvRow[]
+  closes: number[]
+  dev: Float64Array
+  slope: Float64Array // NaN when undefined
+  near: Uint8Array
+  action: Int8Array // -1 SELL, 0 HOLD, 1 BUY (from bar 200)
+  zone: string[]
+  atr: number[]
+}
+
+function load(): Inst[] {
+  return readdirSync(dataDir)
+    .filter((f) => f.endsWith('.json'))
+    .map((f) => {
+      const data = JSON.parse(readFileSync(join(dataDir, f), 'utf-8')) as {
+        sector?: string
+        candles?: OhlcvRow[]
+      }
+      const ticker = f.replace('.json', '').replace(/-/g, '.')
+      const rows = (data.candles ?? []).filter(
+        (c) =>
+          Number.isFinite(c.time) &&
+          Number.isFinite(c.open) &&
+          Number.isFinite(c.high) &&
+          Number.isFinite(c.low) &&
+          Number.isFinite(c.close),
+      )
+      return { ticker, sector: data.sector ?? 'Unknown', rows }
+    })
+    .filter((d) => d.rows.length >= 252)
+    .map(({ ticker, sector, rows }) => {
+      const n = rows.length
+      const closes = rows.map((r) => r.close)
+      const P = new Float64Array(n + 1)
+      for (let i = 0; i < n; i++) P[i + 1] = P[i] + closes[i]
+      const sma = new Float64Array(n).fill(NaN)
+      const dev = new Float64Array(n).fill(NaN)
+      for (let i = 199; i < n; i++) {
+        sma[i] = (P[i + 1] - P[i - 199]) / 200
+        dev[i] = ((closes[i] - sma[i]) / sma[i]) * 100
+      }
+      const slope = new Float64Array(n).fill(NaN)
+      for (let i = 220; i < n; i++) slope[i] = (sma[i] - sma[i - 20]) / sma[i - 20]
+      const near = new Uint8Array(n)
+      for (let i = 219; i < n; i++) {
+        let ok = 0
+        for (let j = i - 19; j <= i; j++) {
+          if (j >= 199 && dev[j] >= -5) { ok = 1; break }
+        }
+        near[i] = ok
+      }
+      const action = new Int8Array(n)
+      const zone: string[] = new Array(n).fill('')
+      for (let i = 200; i < n; i++) {
+        const d = dev[i]
+        if (!Number.isFinite(d)) { zone[i] = 'INSUF'; continue }
+        if (d > 20) { zone[i] = 'EXTREME_BULL'; continue }
+        if (d > 10) { zone[i] = 'EXTENDED_BULL'; continue }
+        if (d >= 0) { zone[i] = 'HEALTHY_BULL'; continue }
+        const sl = slope[i]
+        const sp = Number.isFinite(sl) ? sl > 0.005 : null
+        const canBuy = sp === true && near[i] === 1
+        if (d >= -10) { zone[i] = 'FIRST_DIP'; action[i] = canBuy ? 1 : 0; continue }
+        const z = d >= -20 ? 'DEEP_DIP' : d >= -30 ? 'BEAR_ALERT' : 'CRASH_ZONE'
+        zone[i] = z
+        if (sp == null) { action[i] = 0; continue }
+        action[i] = canBuy ? 1 : -1
+      }
+      const bars = rows.map(({ open, high, low, close }) => ({ open, high, low, close }))
+      const atr = atrArray(bars, 14)
+      return { ticker, sector, rows, closes, dev, slope, near, action, zone, atr }
+    })
+}
+
+const insts = load()
+console.log(`Loaded ${insts.length} instruments`)
+
+// ── P: parity vs imported regimeSignal on 3 tickers ──────────────────────────
+{
+  let mismatch = 0
+  let checked = 0
+  for (const t of ['AAPL', 'BTC', 'NVDA']) {
+    const inst = insts.find((x) => x.ticker === t)!
+    const n = inst.closes.length
+    for (let i = 200; i < n - 21; i += 3) {
+      const ref = regimeSignal(inst.closes[i], inst.closes.slice(0, i + 1))
+      const mine = inst.action[i] === 1 ? 'BUY' : inst.action[i] === -1 ? 'SELL' : 'HOLD'
+      checked++
+      if (ref.action !== mine || ref.zone !== inst.zone[i]) {
+        mismatch++
+        if (mismatch < 5) console.log(`MISMATCH ${t} i=${i} ref=${ref.action}/${ref.zone} mine=${mine}/${inst.zone[i]}`)
+      }
+    }
+  }
+  console.log(`Parity: checked ${checked} bars, mismatches ${mismatch}`)
+}
+
+// helper: net H-day label return of signal at bar i (entry close i+1, exit close i+1+H)
+function labelNet(inst: Inst, i: number, H: number): number | null {
+  const n = inst.closes.length
+  if (i < 200 || i >= n - H - 1) return null
+  const e = inst.closes[i + 1]
+  const x = inst.closes[i + 1 + H]
+  if (!(e > 0) || !Number.isFinite(x)) return null
+  return (x - e) / e - RT
+}
+
+interface Acc { n: number; w: number; sum: number; rets: number[] }
+const acc = (): Acc => ({ n: 0, w: 0, sum: 0, rets: [] })
+function push(a: Acc, r: number) { a.n++; if (r > 0) a.w++; a.sum += r; a.rets.push(r) }
+function fmt(a: Acc, name: string, H = 20) {
+  const wr = a.n ? (100 * a.w) / a.n : NaN
+  const avg = a.n ? (100 * a.sum) / a.n : NaN
+  console.log(
+    `${name.padEnd(34)} n=${String(a.n).padStart(6)}  netWR=${wr.toFixed(2)}%  avgNet=${avg.toFixed(3)}%  perDay=${(avg / H).toFixed(4)}%`,
+  )
+}
+function wilson(p: number, n: number): [number, number] {
+  const z = 1.96
+  const d = 1 + (z * z) / n
+  const c = (p + (z * z) / (2 * n)) / d
+  const h = (z * Math.sqrt((p * (1 - p)) / n + (z * z) / (4 * n * n))) / d
+  return [c - h, c + h]
+}
+
+// ── A: rule ablation at H=20 ─────────────────────────────────────────────────
+{
+  console.log('\n=== A. RULE ABLATION (H=20, net of 22bps) ===')
+  const variants: Record<string, Acc> = {
+    'SSOT BUY (dev<0 & slope>.005 & near)': acc(),
+    'no-nearSma (dev<0 & slope>.005)': acc(),
+    'any dip (dev<0)': acc(),
+    'BASE RATE (every bar)': acc(),
+    'above SMA (dev>=0)': acc(),
+    'trend (dev>=0 & slope>.005)': acc(),
+    'SSOT SELL bars (falling knife)': acc(),
+  }
+  const zones: Record<string, Acc> = {}
+  for (const inst of insts) {
+    const n = inst.closes.length
+    for (let i = 200; i < n - 21; i++) {
+      const r = labelNet(inst, i, 20)
+      if (r == null) continue
+      const d = inst.dev[i]
+      const sl = inst.slope[i]
+      const sp = Number.isFinite(sl) && sl > 0.005
+      push(variants['BASE RATE (every bar)'], r)
+      if (inst.action[i] === 1) {
+        push(variants['SSOT BUY (dev<0 & slope>.005 & near)'], r)
+        const z = inst.zone[i]
+        if (!zones[z]) zones[z] = acc()
+        push(zones[z], r)
+      }
+      if (inst.action[i] === -1) push(variants['SSOT SELL bars (falling knife)'], r)
+      if (Number.isFinite(d) && d < 0) {
+        push(variants['any dip (dev<0)'], r)
+        if (sp) push(variants['no-nearSma (dev<0 & slope>.005)'], r)
+      }
+      if (Number.isFinite(d) && d >= 0) {
+        push(variants['above SMA (dev>=0)'], r)
+        if (sp) push(variants['trend (dev>=0 & slope>.005)'], r)
+      }
+    }
+  }
+  for (const [k, v] of Object.entries(variants)) fmt(v, k)
+  console.log('-- SSOT BUY by zone --')
+  for (const [k, v] of Object.entries(zones)) fmt(v, k)
+}
+
+// ── B: horizon sensitivity ───────────────────────────────────────────────────
+{
+  console.log('\n=== B. HORIZON SENSITIVITY (SSOT BUY vs base rate) ===')
+  for (const H of [5, 10, 20, 40]) {
+    const sig = acc()
+    const base = acc()
+    for (const inst of insts) {
+      const n = inst.closes.length
+      for (let i = 200; i < n - H - 1; i++) {
+        const r = labelNet(inst, i, H)
+        if (r == null) continue
+        push(base, r)
+        if (inst.action[i] === 1) push(sig, r)
+      }
+    }
+    fmt(sig, `H=${H} SSOT BUY`, H)
+    fmt(base, `H=${H} base rate`, H)
+    const d = (100 * sig.w) / sig.n - (100 * base.w) / base.n
+    console.log(`  -> WR edge over base: ${d.toFixed(2)}pp`)
+  }
+}
+
+// ── C: non-overlapping WR + CI ───────────────────────────────────────────────
+{
+  console.log('\n=== C. NON-OVERLAPPING (H=20, spacing 21 bars, greedy per ticker) ===')
+  for (const rule of ['SSOT', 'BASE'] as const) {
+    const a = acc()
+    for (const inst of insts) {
+      const n = inst.closes.length
+      let last = -1000
+      for (let i = 200; i < n - 21; i++) {
+        if (rule === 'SSOT' && inst.action[i] !== 1) continue
+        if (i - last < 21) continue
+        const r = labelNet(inst, i, 20)
+        if (r == null) continue
+        push(a, r)
+        last = i
+      }
+    }
+    fmt(a, `${rule} non-overlap`)
+    const p = a.w / a.n
+    const [lo, hi] = wilson(p, a.n)
+    console.log(`  Wilson 95% CI: [${(100 * lo).toFixed(2)}%, ${(100 * hi).toFixed(2)}%]`)
+  }
+}
+
+// ── D: year-by-year ──────────────────────────────────────────────────────────
+{
+  console.log('\n=== D. YEAR-BY-YEAR (H=20 net) ===')
+  const sigY: Record<string, Acc> = {}
+  const baseY: Record<string, Acc> = {}
+  for (const inst of insts) {
+    const n = inst.closes.length
+    for (let i = 200; i < n - 21; i++) {
+      const r = labelNet(inst, i, 20)
+      if (r == null) continue
+      const y = new Date(inst.rows[i].time * 1000).getUTCFullYear().toString()
+      if (!baseY[y]) baseY[y] = acc()
+      push(baseY[y], r)
+      if (inst.action[i] === 1) {
+        if (!sigY[y]) sigY[y] = acc()
+        push(sigY[y], r)
+      }
+    }
+  }
+  for (const y of Object.keys(baseY).sort()) {
+    const s = sigY[y] ?? acc()
+    const b = baseY[y]
+    const swr = s.n ? ((100 * s.w) / s.n).toFixed(1) : ' n/a'
+    const savg = s.n ? ((100 * s.sum) / s.n).toFixed(2) : ' n/a'
+    console.log(
+      `${y}: signal n=${String(s.n).padStart(5)} WR=${swr}% avg=${savg}%   | base n=${String(b.n).padStart(6)} WR=${((100 * b.w) / b.n).toFixed(1)}% avg=${((100 * b.sum) / b.n).toFixed(2)}%`,
+    )
+  }
+}
+
+// ── E: engine layer ablation ─────────────────────────────────────────────────
+interface SimCfg { atrStop: boolean; trailing: boolean; sellExit: boolean; timeExitH: number | null }
+interface SimTrade { pnl: number; hold: number; reason: string }
+function simulate(inst: Inst, cfg: SimCfg): { trades: SimTrade[]; totalReturn: number; barsInMkt: number; barsTotal: number } {
+  const { rows, closes, action, atr } = inst
+  const n = rows.length
+  let cash = 1
+  let shares = 0
+  let entry = 0
+  let entryBar = -1
+  let atrPctAtEntry = 1
+  let stopPct = 0.03
+  const trades: SimTrade[] = []
+  let barsInMkt = 0
+
+  const exitAt = (px: number, i: number, reason: string) => {
+    const proceeds = shares * px * (1 - 0.0011)
+    const pnl = (px - entry) / entry - RT
+    trades.push({ pnl, hold: i - entryBar, reason })
+    cash += proceeds
+    shares = 0
+  }
+
+  for (let i = 200; i < n - 1; i++) {
+    const bar = rows[i]
+    if (shares > 0) barsInMkt++
+    if (shares > 0) {
+      const atrDollar = (atrPctAtEntry / 100) * entry
+      const profit = (closes[i] - entry) / entry
+      if (cfg.trailing) {
+        if (profit >= (2 * atrDollar) / entry) {
+          const lvl = entry * 1.005
+          if (bar.low <= lvl) { exitAt(bar.open <= lvl ? bar.open : lvl, i, 'trail_BE'); continue }
+        }
+        if (profit >= (4 * atrDollar) / entry) {
+          const lvl = entry + atrDollar
+          if (bar.low <= lvl) { exitAt(bar.open <= lvl ? bar.open : lvl, i, 'trail_lock'); continue }
+        }
+      }
+      if (cfg.atrStop) {
+        const lvl = entry * (1 - stopPct)
+        if (bar.low <= lvl) { exitAt(bar.open <= lvl ? bar.open : lvl, i, 'atr_stop'); continue }
+      }
+      if (cfg.timeExitH != null && i + 1 - entryBar >= cfg.timeExitH) {
+        exitAt(rows[i + 1].open, i + 1, 'time'); continue
+      }
+    }
+    if (action[i] === 1 && shares === 0) {
+      const px = rows[i + 1].open
+      if (!(px > 0)) continue
+      entry = px
+      entryBar = i + 1
+      shares = cash / (px * (1 + 0.0011))
+      cash = 0
+      const a = atr[Math.max(0, i - 1)]
+      atrPctAtEntry = Number.isFinite(a) ? (a / closes[i]) * 100 : 1.0
+      stopPct = Math.max(0.03, Math.min(0.15, (1.5 * atrPctAtEntry) / 100))
+    } else if (action[i] === -1 && shares > 0 && cfg.sellExit) {
+      exitAt(rows[i + 1].open, i + 1, 'signal_SELL')
+    }
+  }
+  if (shares > 0) exitAt(closes[n - 1], n - 1, 'eod')
+  return { trades, totalReturn: cash - 1, barsInMkt, barsTotal: n - 1 - 200 }
+}
+
+{
+  console.log('\n=== E. ENGINE LAYER ABLATION (T+1 open fills, 11bps/side, 100% sizing) ===')
+  const cfgs: Record<string, SimCfg> = {
+    'E1 time-exit-20d only (tradeable label)': { atrStop: false, trailing: false, sellExit: false, timeExitH: 20 },
+    'E2 = E1 + ATR stop': { atrStop: true, trailing: false, sellExit: false, timeExitH: 20 },
+    'E3 = E2 + trailing/BE stops': { atrStop: true, trailing: true, sellExit: false, timeExitH: 20 },
+    'E4 engine exits (stops+trail+SELL, no time)': { atrStop: true, trailing: true, sellExit: true, timeExitH: null },
+    'E4b SELL-signal exit only': { atrStop: false, trailing: false, sellExit: true, timeExitH: null },
+  }
+  for (const [name, cfg] of Object.entries(cfgs)) {
+    let trades: SimTrade[] = []
+    let rets: number[] = []
+    let bnh: number[] = []
+    let inMkt = 0
+    let total = 0
+    for (const inst of insts) {
+      const r = simulate(inst, cfg)
+      trades = trades.concat(r.trades)
+      rets.push(r.totalReturn)
+      inMkt += r.barsInMkt
+      total += r.barsTotal
+      bnh.push((inst.closes[inst.closes.length - 1] - inst.closes[200]) / inst.closes[200])
+    }
+    const w = trades.filter((t) => t.pnl > 0).length
+    const avgRet = (100 * rets.reduce((a, b) => a + b, 0)) / rets.length
+    const avgBnh = (100 * bnh.reduce((a, b) => a + b, 0)) / bnh.length
+    const holdMed = trades.map((t) => t.hold).sort((a, b) => a - b)[Math.floor(trades.length / 2)] ?? 0
+    console.log(`\n${name}`)
+    console.log(
+      `  trades=${trades.length}  netWR=${((100 * w) / trades.length).toFixed(1)}%  medianHold=${holdMed}d  timeInMkt=${((100 * inMkt) / total).toFixed(1)}%`,
+    )
+    console.log(`  equal-weight strat return (bar200->end)=${avgRet.toFixed(1)}%  vs B&H=${avgBnh.toFixed(1)}%`)
+    const byReason: Record<string, { n: number; sum: number }> = {}
+    for (const t of trades) {
+      byReason[t.reason] = byReason[t.reason] ?? { n: 0, sum: 0 }
+      byReason[t.reason].n++
+      byReason[t.reason].sum += t.pnl
+    }
+    for (const [k, v] of Object.entries(byReason))
+      console.log(`    exit ${k.padEnd(12)} n=${String(v.n).padStart(5)} avgNetPnl=${((100 * v.sum) / v.n).toFixed(2)}%`)
+  }
+
+  console.log('\nE5 FULL ENGINE (imported backtestInstrument: 15% sizing + DD breaker)...')
+  let allPnl: number[] = []
+  let totTrades = 0
+  let rets: number[] = []
+  let excess: number[] = []
+  for (const inst of insts) {
+    const r = backtestInstrument(inst.ticker, inst.sector, inst.rows)
+    totTrades += r.totalTrades
+    allPnl = allPnl.concat(r.closedTrades.map((t) => t.pnlPct ?? 0))
+    rets.push(r.totalReturn)
+    excess.push(r.excessReturn)
+  }
+  const w = allPnl.filter((p) => p > RT).length
+  console.log(
+    `  trades=${totTrades}  netWR=${((100 * w) / Math.max(1, allPnl.length)).toFixed(1)}%  avgInstrTotalReturn=${((100 * rets.reduce((a, b) => a + b, 0)) / rets.length).toFixed(2)}%  avgExcessVsBnH=${((100 * excess.reduce((a, b) => a + b, 0)) / excess.length).toFixed(1)}pp`,
+  )
+}
+
+// signal frequency + dev distribution at BUY
+{
+  let buyBars = 0
+  let allBars = 0
+  const devs: number[] = []
+  for (const inst of insts) {
+    for (let i = 200; i < inst.closes.length - 21; i++) {
+      allBars++
+      if (inst.action[i] === 1) { buyBars++; devs.push(inst.dev[i]) }
+    }
+  }
+  devs.sort((a, b) => a - b)
+  const q = (p: number) => devs[Math.floor(p * devs.length)]
+  console.log(`\nBUY frequency: ${buyBars}/${allBars} = ${((100 * buyBars) / allBars).toFixed(2)}% of instrument-days`)
+  console.log(`dev at BUY: p10=${q(0.1).toFixed(1)} p50=${q(0.5).toFixed(1)} p90=${q(0.9).toFixed(1)}`)
+}

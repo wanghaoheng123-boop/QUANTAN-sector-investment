@@ -127,12 +127,13 @@ export interface InstrumentLabelStats {
   avgNetReturn20d: number | null
   bnhReturn: number
   /**
-   * Per-BUY trade detail (Q-065/Q-066 additive): net/gross 20d label return +
-   * the regime zone at the signal bar. Length === buySignals. Lets the
-   * aggregate report compute PSR/DSR and regime-bucketed WR without changing
-   * any existing field.
+   * Per-BUY trade detail (Q-065/Q-066 additive; barIndex/date added by the
+   * 2026-07-11 rethink): net/gross 20d label return + the regime zone, plus
+   * the SIGNAL bar's index and ISO date — needed for non-overlapping
+   * (effective-n) statistics and per-year edge tables. Ascending barIndex;
+   * length === buySignals.
    */
-  trades: { zone: string; grossReturn: number; netReturn: number }[]
+  trades: { zone: string; grossReturn: number; netReturn: number; barIndex: number; date: string }[]
 }
 
 export function runInstrumentLabelBenchmark(
@@ -150,7 +151,7 @@ export function runInstrumentLabelBenchmark(
   let buyCount = 0
   const returns20d: number[] = []
   const netReturns20d: number[] = []
-  const trades: { zone: string; grossReturn: number; netReturn: number }[] = []
+  const trades: { zone: string; grossReturn: number; netReturn: number; barIndex: number; date: string }[] = []
 
   for (let i = WARMUP_BARS; i < rows.length - LABEL_HOLD_DAYS - 1; i++) {
     const out = signalAtBarIndex(rows, i, ticker, options)
@@ -158,7 +159,13 @@ export function runInstrumentLabelBenchmark(
     buyCount++
     returns20d.push(out.grossReturn)
     netReturns20d.push(out.netReturn)
-    trades.push({ zone: out.regimeZone ?? 'UNKNOWN', grossReturn: out.grossReturn, netReturn: out.netReturn })
+    trades.push({
+      zone: out.regimeZone ?? 'UNKNOWN',
+      grossReturn: out.grossReturn,
+      netReturn: out.netReturn,
+      barIndex: i,
+      date: new Date(rows[i].time * 1000).toISOString().slice(0, 10),
+    })
     if (out.grossReturn > 0) wins++
     else losses++
     if (out.netReturn > 0) netWins++

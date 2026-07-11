@@ -1,0 +1,189 @@
+/**
+ * RED TEAM follow-up: (1) E1 tradeable-label at H=40, (2) cross-sectional
+ * top-K rotation portfolio on the 55 equities (shared calendar), vs equal-weight B&H.
+ */
+process.env.QUANTAN_USE_ENHANCED_SIGNAL = '0'
+
+import { readFileSync, readdirSync } from 'fs'
+import { join } from 'path'
+
+const RT = 0.0022
+const SIDE = 0.0011
+const dataDir = join(process.cwd(), 'scripts', 'backtestData')
+
+interface Row { time: number; open: number; high: number; low: number; close: number }
+interface Inst {
+  ticker: string
+  rows: Row[]
+  closes: number[]
+  dev: Float64Array
+  action: Int8Array
+}
+
+function build(ticker: string, rows: Row[]): Inst {
+  const n = rows.length
+  const closes = rows.map((r) => r.close)
+  const P = new Float64Array(n + 1)
+  for (let i = 0; i < n; i++) P[i + 1] = P[i] + closes[i]
+  const sma = new Float64Array(n).fill(NaN)
+  const dev = new Float64Array(n).fill(NaN)
+  for (let i = 199; i < n; i++) {
+    sma[i] = (P[i + 1] - P[i - 199]) / 200
+    dev[i] = ((closes[i] - sma[i]) / sma[i]) * 100
+  }
+  const slope = new Float64Array(n).fill(NaN)
+  for (let i = 220; i < n; i++) slope[i] = (sma[i] - sma[i - 20]) / sma[i - 20]
+  const near = new Uint8Array(n)
+  for (let i = 219; i < n; i++) {
+    for (let j = i - 19; j <= i; j++) if (j >= 199 && dev[j] >= -5) { near[i] = 1; break }
+  }
+  const action = new Int8Array(n)
+  for (let i = 200; i < n; i++) {
+    const d = dev[i]
+    if (!Number.isFinite(d) || d >= 0) continue
+    const sl = slope[i]
+    const sp = Number.isFinite(sl) ? sl > 0.005 : null
+    const canBuy = sp === true && near[i] === 1
+    if (d >= -10) { action[i] = canBuy ? 1 : 0; continue }
+    if (sp == null) continue
+    action[i] = canBuy ? 1 : -1
+  }
+  return { ticker, rows, closes, dev, action }
+}
+
+const insts: Inst[] = readdirSync(dataDir)
+  .filter((f) => f.endsWith('.json'))
+  .map((f) => {
+    const data = JSON.parse(readFileSync(join(dataDir, f), 'utf-8')) as { candles?: Row[] }
+    const ticker = f.replace('.json', '').replace(/-/g, '.')
+    const rows = (data.candles ?? []).filter(
+      (c) => Number.isFinite(c.time) && Number.isFinite(c.open) && Number.isFinite(c.close),
+    )
+    return build(ticker, rows)
+  })
+  .filter((x) => x.rows.length >= 252)
+
+// ── (1) E1 tradeable-label at H in {20, 40} ─────────────────────────────────
+for (const H of [20, 40]) {
+  let rets: number[] = []
+  let bnh: number[] = []
+  let trades = 0
+  let wins = 0
+  let inMkt = 0
+  let total = 0
+  for (const inst of insts) {
+    const n = inst.rows.length
+    let cash = 1
+    let shares = 0
+    let entry = 0
+    let entryBar = -1
+    for (let i = 200; i < n - 1; i++) {
+      if (shares > 0) {
+        inMkt++
+        if (i + 1 - entryBar >= H) {
+          const px = inst.rows[i + 1].open
+          cash = shares * px * (1 - SIDE)
+          trades++
+          if ((px - entry) / entry - RT > 0) wins++
+          shares = 0
+        }
+      }
+      if (inst.action[i] === 1 && shares === 0) {
+        const px = inst.rows[i + 1].open
+        if (px > 0) { entry = px; entryBar = i + 1; shares = cash / (px * (1 + SIDE)); cash = 0 }
+      }
+      total++
+    }
+    if (shares > 0) { cash = shares * inst.closes[n - 1] * (1 - SIDE); trades++; if ((inst.closes[n - 1] - entry) / entry - RT > 0) wins++ }
+    rets.push(cash - 1)
+    bnh.push((inst.closes[n - 1] - inst.closes[200]) / inst.closes[200])
+  }
+  console.log(
+    `E1 H=${H}: trades=${trades} netWR=${((100 * wins) / trades).toFixed(1)}% timeInMkt=${((100 * inMkt) / total).toFixed(1)}% eqWeightReturn=${((100 * rets.reduce((a, b) => a + b, 0)) / rets.length).toFixed(1)}% vs B&H=${((100 * bnh.reduce((a, b) => a + b, 0)) / bnh.length).toFixed(1)}%`,
+  )
+}
+
+// ── (2) Cross-sectional top-K rotation on equities (exclude BTC) ────────────
+const eq = insts.filter((x) => x.ticker !== 'BTC')
+const lens = new Set(eq.map((x) => x.rows.length))
+console.log(`\nequities=${eq.length}, distinct lengths=${[...lens].join(',')}`)
+// verify shared calendar via first/last timestamps
+const t0 = new Set(eq.map((x) => x.rows[0].time))
+const t1 = new Set(eq.map((x) => x.rows[x.rows.length - 1].time))
+console.log(`distinct first ts=${t0.size}, last ts=${t1.size}`)
+
+if (lens.size === 1) {
+  const n = eq[0].rows.length
+  for (const K of [5, 10]) {
+    for (const H of [20, 40]) {
+      let equity = 1
+      let cash = 1
+      interface Pos { k: number; entry: number; entryBar: number; alloc: number }
+      let open: Pos[] = []
+      let trades = 0
+      let wins = 0
+      let sumExposure = 0
+      const curve: number[] = []
+      for (let t = 201; t < n; t++) {
+        // exits at open[t] for positions held H bars
+        const still: Pos[] = []
+        for (const p of open) {
+          if (t - p.entryBar >= H) {
+            const px = eq[p.k].rows[t].open
+            const gross = px / p.entry
+            cash += p.alloc * gross * (1 - SIDE)
+            trades++
+            if (gross - 1 - RT > 0) wins++
+          } else still.push(p)
+        }
+        open = still
+        // entries: signals from close t-1, fill open t, rank deepest dip first
+        const cands: { k: number; d: number }[] = []
+        for (let k = 0; k < eq.length; k++) {
+          if (eq[k].action[t - 1] === 1 && !open.some((p) => p.k === k)) {
+            cands.push({ k, d: eq[k].dev[t - 1] })
+          }
+        }
+        cands.sort((a, b) => a.d - b.d)
+        // mark-to-market equity
+        let mtm = cash
+        for (const p of open) mtm += p.alloc * (eq[p.k].rows[t].close / p.entry)
+        for (const c of cands) {
+          if (open.length >= K || cash <= 0) break
+          const px = eq[c.k].rows[t].open
+          if (!(px > 0)) continue
+          const alloc = Math.min(cash, mtm / K)
+          cash -= alloc
+          open.push({ k: c.k, entry: px * (1 + SIDE), entryBar: t, alloc })
+        }
+        sumExposure += (mtm - cash) / mtm
+        equity = mtm
+        curve.push(mtm)
+      }
+      // close residual at last close
+      let finalEq = cash
+      for (const p of open) {
+        const gross = eq[p.k].closes[n - 1] / p.entry
+        finalEq += p.alloc * gross * (1 - SIDE)
+        trades++
+        if (gross - 1 - RT > 0) wins++
+      }
+      const bnh = eq.reduce((s, x) => s + (x.closes[n - 1] - x.closes[201]) / x.closes[201], 0) / eq.length
+      const maxDd = (c: number[]) => {
+        let pk = c[0], dd = 0
+        for (const v of c) { if (v > pk) pk = v; dd = Math.max(dd, (pk - v) / pk) }
+        return dd
+      }
+      // equal-weight B&H daily curve
+      const bnhCurve: number[] = []
+      for (let t = 201; t < n; t++) {
+        let s = 0
+        for (const x of eq) s += x.closes[t] / x.closes[201]
+        bnhCurve.push(s / eq.length)
+      }
+      console.log(
+        `topK rotation K=${K} H=${H}: trades=${trades} netWR=${((100 * wins) / trades).toFixed(1)}% avgExposure=${((100 * sumExposure) / (n - 201)).toFixed(1)}% totalReturn=${((finalEq - 1) * 100).toFixed(1)}% maxDD=${(100 * maxDd(curve)).toFixed(1)}% vs eqB&H=${(100 * bnh).toFixed(1)}% (maxDD=${(100 * maxDd(bnhCurve)).toFixed(1)}%)`,
+      )
+    }
+  }
+}
