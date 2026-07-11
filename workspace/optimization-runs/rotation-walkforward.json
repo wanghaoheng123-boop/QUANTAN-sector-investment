@@ -1,0 +1,262 @@
+{
+  "timestamp": "2026-07-11T08:40:44.345Z",
+  "experiment": "D3/R2 K-slot rotation walk-forward (2026-07-11 rethink). EXPERIMENT ONLY — no published-number change.",
+  "universe": {
+    "equities": 55,
+    "btcExcluded": true,
+    "sharedCalendarBars": 1254
+  },
+  "costsPerSide": 0.0011,
+  "parityCheck": {
+    "instruments": [
+      "AAPL",
+      "LIN",
+      "XOM"
+    ],
+    "mismatches": 0
+  },
+  "grid": {
+    "K": [
+      5,
+      10,
+      15
+    ],
+    "H": [
+      20,
+      40,
+      60
+    ],
+    "rank": [
+      "deepest",
+      "shallowest"
+    ]
+  },
+  "selectionMetric": "IS Sharpe (daily, annualized), expanding window, residuals force-closed at IS end",
+  "acceptance": "R2: rotation beats equal-weight B&H on Sharpe OR MAR in ≥3 of 4 OOS segments (2023, 2024, 2025, 2026H1-locked-holdout)",
+  "folds": [
+    {
+      "year": "2023",
+      "selectedConfig": "K=10/H=60/deepest",
+      "isSharpe": 1.676,
+      "isTop3": [
+        {
+          "config": "K=10/H=60/deepest",
+          "sharpe": 1.676,
+          "mar": 2.876
+        },
+        {
+          "config": "K=10/H=60/shallowest",
+          "sharpe": 1.674,
+          "mar": 2.794
+        },
+        {
+          "config": "K=5/H=60/deepest",
+          "sharpe": 1.616,
+          "mar": 3.24
+        }
+      ],
+      "rotation": {
+        "bars": 251,
+        "totalReturnPct": 20.12,
+        "annualizedReturnPct": 20.29,
+        "sharpe": 1.492,
+        "maxDrawdownPct": 8.57,
+        "mar": 2.368
+      },
+      "rotationTradesClosed": 40,
+      "rotationAvgExposurePct": 83.5,
+      "bnh": {
+        "bars": 251,
+        "totalReturnPct": 21.35,
+        "annualizedReturnPct": 21.54,
+        "sharpe": 1.668,
+        "maxDrawdownPct": 8.5,
+        "mar": 2.534
+      },
+      "beatsSharpe": false,
+      "beatsMar": false,
+      "beats": false
+    },
+    {
+      "year": "2024",
+      "selectedConfig": "K=10/H=60/deepest",
+      "isSharpe": 1.564,
+      "isTop3": [
+        {
+          "config": "K=10/H=60/deepest",
+          "sharpe": 1.564,
+          "mar": 2.192
+        },
+        {
+          "config": "K=5/H=60/deepest",
+          "sharpe": 1.445,
+          "mar": 2.385
+        },
+        {
+          "config": "K=10/H=60/shallowest",
+          "sharpe": 1.441,
+          "mar": 1.921
+        }
+      ],
+      "rotation": {
+        "bars": 253,
+        "totalReturnPct": 11.1,
+        "annualizedReturnPct": 11.1,
+        "sharpe": 0.996,
+        "maxDrawdownPct": 7.48,
+        "mar": 1.485
+      },
+      "rotationTradesClosed": 48,
+      "rotationAvgExposurePct": 83.6,
+      "bnh": {
+        "bars": 253,
+        "totalReturnPct": 26.99,
+        "annualizedReturnPct": 26.99,
+        "sharpe": 2.04,
+        "maxDrawdownPct": 6.96,
+        "mar": 3.875
+      },
+      "beatsSharpe": false,
+      "beatsMar": false,
+      "beats": false
+    },
+    {
+      "year": "2025",
+      "selectedConfig": "K=10/H=60/deepest",
+      "isSharpe": 1.381,
+      "isTop3": [
+        {
+          "config": "K=10/H=60/deepest",
+          "sharpe": 1.381,
+          "mar": 1.715
+        },
+        {
+          "config": "K=15/H=60/deepest",
+          "sharpe": 1.243,
+          "mar": 1.479
+        },
+        {
+          "config": "K=10/H=60/shallowest",
+          "sharpe": 1.152,
+          "mar": 1.346
+        }
+      ],
+      "rotation": {
+        "bars": 251,
+        "totalReturnPct": 25.7,
+        "annualizedReturnPct": 25.93,
+        "sharpe": 1.363,
+        "maxDrawdownPct": 11.03,
+        "mar": 2.351
+      },
+      "rotationTradesClosed": 47,
+      "rotationAvgExposurePct": 93.4,
+      "bnh": {
+        "bars": 251,
+        "totalReturnPct": 20.32,
+        "annualizedReturnPct": 20.5,
+        "sharpe": 1.148,
+        "maxDrawdownPct": 17.45,
+        "mar": 1.175
+      },
+      "beatsSharpe": true,
+      "beatsMar": true,
+      "beats": true
+    },
+    {
+      "year": "2026",
+      "locked": true,
+      "selectedConfig": "K=10/H=60/deepest",
+      "isSharpe": 1.368,
+      "isTop3": [
+        {
+          "config": "K=10/H=60/deepest",
+          "sharpe": 1.368,
+          "mar": 1.85
+        },
+        {
+          "config": "K=10/H=60/shallowest",
+          "sharpe": 1.224,
+          "mar": 1.498
+        },
+        {
+          "config": "K=15/H=60/deepest",
+          "sharpe": 1.196,
+          "mar": 1.205
+        }
+      ],
+      "rotation": {
+        "bars": 126,
+        "totalReturnPct": 10.98,
+        "annualizedReturnPct": 23.37,
+        "sharpe": 1.501,
+        "maxDrawdownPct": 10.78,
+        "mar": 2.168
+      },
+      "rotationTradesClosed": 31,
+      "rotationAvgExposurePct": 92.9,
+      "bnh": {
+        "bars": 126,
+        "totalReturnPct": 12.09,
+        "annualizedReturnPct": 25.86,
+        "sharpe": 1.831,
+        "maxDrawdownPct": 7.09,
+        "mar": 3.65
+      },
+      "beatsSharpe": false,
+      "beatsMar": false,
+      "beats": false
+    }
+  ],
+  "oosSegmentsBeatingBnh": 1,
+  "verdict": "REJECTED",
+  "selectionSensitivity": {
+    "metric": "MAR",
+    "folds": [
+      {
+        "year": "2023",
+        "selectedConfig": "K=5/H=60/deepest",
+        "beats": false
+      },
+      {
+        "year": "2024",
+        "selectedConfig": "K=5/H=60/deepest",
+        "beats": false
+      },
+      {
+        "year": "2025",
+        "selectedConfig": "K=10/H=60/deepest",
+        "beats": true
+      },
+      {
+        "year": "2026",
+        "selectedConfig": "K=10/H=60/deepest",
+        "beats": false
+      }
+    ],
+    "oosSegmentsBeatingBnh": 1,
+    "verdict": "REJECTED"
+  },
+  "fullPeriodReference": {
+    "config": "K=10/H=40/deepest",
+    "rotation": {
+      "bars": 1053,
+      "totalReturnPct": 70.96,
+      "annualizedReturnPct": 13.71,
+      "sharpe": 0.903,
+      "maxDrawdownPct": 13.8,
+      "mar": 0.994
+    },
+    "trades": 202,
+    "netWinRatePct": 56.9,
+    "bnh": {
+      "bars": 1053,
+      "totalReturnPct": 93.8,
+      "annualizedReturnPct": 17.18,
+      "sharpe": 1.07,
+      "maxDrawdownPct": 18.41,
+      "mar": 0.933
+    },
+    "note": "Prototype config on the full window — context only, NOT walk-forward-honest."
+  }
+}
