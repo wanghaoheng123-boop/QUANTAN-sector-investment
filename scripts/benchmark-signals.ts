@@ -114,6 +114,7 @@ const dsr100 = deflatedSharpe(netRets, 100)
 let baseBuys = 0
 let baseNetWins = 0
 let baseSumNet = 0
+const baseByYear = new Map<string, { n: number; wins: number }>()
 for (const { rows } of allData) {
   for (let i = WARMUP_BARS; i < rows.length - LABEL_HOLD_DAYS - 1; i++) {
     const entry = rows[i + 1].close
@@ -124,10 +125,68 @@ for (const { rows } of allData) {
     baseBuys++
     baseSumNet += net
     if (net > 0) baseNetWins++
+    const year = new Date(rows[i].time * 1000).toISOString().slice(0, 4)
+    const by = baseByYear.get(year) ?? { n: 0, wins: 0 }
+    by.n++
+    if (net > 0) by.wins++
+    baseByYear.set(year, by)
   }
 }
 const baseRateNetWR = baseBuys > 0 ? (baseNetWins / baseBuys) * 100 : 0
 const baseRateAvgNet = baseBuys > 0 ? (baseSumNet / baseBuys) * 100 : 0
+
+// ── Non-overlapping WR + Wilson CI (2026-07-11 red team, C2) ─────────────────
+// Daily signals with 20d holds OVERLAP ~10×, inflating n from ~350 to 3,435.
+// Greedy per-instrument sampling (next trade only after the prior label window
+// closes) gives the honest effective sample; the Wilson interval on it is the
+// error bar the pooled WR does not have. Gate-worthy form: CI lower bound vs
+// the base rate — a raw-WR floor below the base rate certifies nothing.
+function wilson95(k: number, n: number): [number, number] {
+  if (n === 0) return [0, 0]
+  const z = 1.959963984540054
+  const p = k / n
+  const denom = 1 + (z * z) / n
+  const centre = (p + (z * z) / (2 * n)) / denom
+  const half = (z * Math.sqrt((p * (1 - p)) / n + (z * z) / (4 * n * n))) / denom
+  return [Math.max(0, centre - half), Math.min(1, centre + half)]
+}
+let noN = 0
+let noWins = 0
+for (const r of results) {
+  let lastTaken = -Infinity
+  for (const t of r.trades) {
+    if (t.barIndex - lastTaken <= LABEL_HOLD_DAYS) continue
+    lastTaken = t.barIndex
+    noN++
+    if (t.netReturn > 0) noWins++
+  }
+}
+const [noLo, noHi] = wilson95(noWins, noN)
+
+// ── Per-year edge over base rate (red team C4: pooled WR hides decay) ───────
+const signalByYear = new Map<string, { n: number; wins: number }>()
+for (const t of results.flatMap((r) => r.trades)) {
+  const year = t.date.slice(0, 4)
+  const sy = signalByYear.get(year) ?? { n: 0, wins: 0 }
+  sy.n++
+  if (t.netReturn > 0) sy.wins++
+  signalByYear.set(year, sy)
+}
+const perYearEdge = Array.from(baseByYear.keys())
+  .sort()
+  .map((year) => {
+    const base = baseByYear.get(year)!
+    const sig = signalByYear.get(year) ?? { n: 0, wins: 0 }
+    const sigWR = sig.n > 0 ? (sig.wins / sig.n) * 100 : null
+    const baseWR = base.n > 0 ? (base.wins / base.n) * 100 : null
+    return {
+      year,
+      signalTrades: sig.n,
+      signalNetWR: sigWR == null ? null : Number(sigWR.toFixed(2)),
+      baseNetWR: baseWR == null ? null : Number(baseWR.toFixed(2)),
+      edgePp: sigWR == null || baseWR == null ? null : Number((sigWR - baseWR).toFixed(2)),
+    }
+  })
 
 // ── Q-066: regime-bucketed WR (zone at the signal bar) ───────────────────────
 const bucketMap = new Map<string, { n: number; netWins: number; sumNet: number }>()
@@ -191,6 +250,18 @@ const benchmark = {
       'Unconditional long exposure on this survivor universe/bull window. The strategy KPI is EDGE OVER THIS BASE RATE; note the CI net-WR floor (53.29) sits BELOW it — floor re-baseline is an owner decision tracked in the 2026-07-11 rethink.',
   },
   edgeOverBaseRatePp: Number((Number((aggNetWinRate * 100).toFixed(2)) - Number(baseRateNetWR.toFixed(2))).toFixed(2)),
+  // 2026-07-11 rethink wave 2 (red team C2/C4): the honest effective sample +
+  // decay visibility. nonOverlapStats is the number the pooled WR pretends to
+  // be; perYearEdge shows whether the edge persists (pooled aggregates hide
+  // multi-year decay).
+  nonOverlapStats: {
+    nTrades: noN,
+    netWinRatePct: noN > 0 ? Number(((noWins / noN) * 100).toFixed(2)) : null,
+    wilson95Pct: [Number((noLo * 100).toFixed(2)), Number((noHi * 100).toFixed(2))],
+    note:
+      'Greedy per-instrument non-overlapping sample (one trade per closed 20d window). This is the honest effective n behind the pooled WR; compare the Wilson CI to the always-buy base rate, not to 50%.',
+  },
+  perYearEdge,
   // Q-066 (additive): WR bucketed by the regime zone at the signal bar.
   regimeBuckets,
   // byInstrument keeps its EXACT pre-Q-065 shape: strip the per-trade detail.
@@ -218,6 +289,14 @@ console.log(
 console.log(
   `Always-buy base rate (net): ${benchmark.alwaysBuyBaseline.netWinRatePct}% over ${benchmark.alwaysBuyBaseline.nBars} bars | strategy edge over base: ${benchmark.edgeOverBaseRatePp}pp`,
 )
+console.log(
+  `Non-overlapping (effective n): ${benchmark.nonOverlapStats.nTrades} trades, net WR ${benchmark.nonOverlapStats.netWinRatePct}% (Wilson 95% [${benchmark.nonOverlapStats.wilson95Pct[0]}, ${benchmark.nonOverlapStats.wilson95Pct[1]}])`,
+)
+console.log('Per-year edge over base (net WR pp):')
+for (const y of benchmark.perYearEdge) {
+  console.log(`  ${y.year}  signal ${String(y.signalNetWR).padStart(6)}% (n=${String(y.signalTrades).padStart(4)})  base ${String(y.baseNetWR).padStart(6)}%  edge ${y.edgePp == null ? '—' : (y.edgePp >= 0 ? '+' : '') + y.edgePp}pp`,
+  )
+}
 console.log('Regime buckets (net WR / avg net 20d):')
 for (const b of benchmark.regimeBuckets) {
   console.log(`  ${b.zone.padEnd(14)} n=${String(b.trades).padStart(4)}  WR ${b.netWinRate}%  avg ${b.avgNetReturn20d}%`)

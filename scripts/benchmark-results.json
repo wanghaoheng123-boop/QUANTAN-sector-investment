@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-07-10T20:04:57.449Z",
+  "timestamp": "2026-07-11T05:47:08.879Z",
   "version": "v2.0-ssot-regime-production",
   "strategy": "resolveBacktestSignal (regime-only, QUANTAN_USE_ENHANCED_SIGNAL=0)",
   "metricNote": "Label win rate: 20d forward return after BUY; entry next close; gross and net after round-trip costs",
@@ -39,6 +39,52 @@
     "note": "Unconditional long exposure on this survivor universe/bull window. The strategy KPI is EDGE OVER THIS BASE RATE; note the CI net-WR floor (53.29) sits BELOW it — floor re-baseline is an owner decision tracked in the 2026-07-11 rethink."
   },
   "edgeOverBaseRatePp": 2.31,
+  "nonOverlapStats": {
+    "nTrades": 351,
+    "netWinRatePct": 54.99,
+    "wilson95Pct": [
+      49.76,
+      60.11
+    ],
+    "note": "Greedy per-instrument non-overlapping sample (one trade per closed 20d window). This is the honest effective n behind the pooled WR; compare the Wilson CI to the always-buy base rate, not to 50%."
+  },
+  "perYearEdge": [
+    {
+      "year": "2022",
+      "signalTrades": 475,
+      "signalNetWR": 59.58,
+      "baseNetWR": 49.87,
+      "edgePp": 9.71
+    },
+    {
+      "year": "2023",
+      "signalTrades": 764,
+      "signalNetWR": 63.22,
+      "baseNetWR": 54.72,
+      "edgePp": 8.5
+    },
+    {
+      "year": "2024",
+      "signalTrades": 777,
+      "signalNetWR": 53.8,
+      "baseNetWR": 57.11,
+      "edgePp": -3.31
+    },
+    {
+      "year": "2025",
+      "signalTrades": 968,
+      "signalNetWR": 51.34,
+      "baseNetWR": 54.5,
+      "edgePp": -3.16
+    },
+    {
+      "year": "2026",
+      "signalTrades": 451,
+      "signalNetWR": 56.32,
+      "baseNetWR": 50.82,
+      "edgePp": 5.5
+    }
+  ],
   "regimeBuckets": [
     {
       "zone": "FIRST_DIP",
