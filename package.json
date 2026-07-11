@@ -27,6 +27,8 @@
     "test:coverage": "vitest run --coverage",
     "benchmark": "npx tsx --tsconfig tsconfig.json scripts/benchmark-signals.ts",
     "benchmark:oos": "npx tsx --tsconfig tsconfig.json scripts/oos-validation.ts",
+    "benchmark:oos:wf": "npx tsx --tsconfig tsconfig.json scripts/oos-walkforward.ts",
+    "experiment:rotation": "npx tsx --tsconfig tsconfig.json scripts/experiments/rotation-walkforward.ts",
     "benchmark:enhanced": "npx tsx --tsconfig tsconfig.json scripts/benchmark-enhanced.ts",
     "optimize:grid": "npx tsx --tsconfig tsconfig.json scripts/optimize-grid.ts",
     "portfolio:backtest": "npx tsx --tsconfig tsconfig.json scripts/portfolio-backtest.ts",

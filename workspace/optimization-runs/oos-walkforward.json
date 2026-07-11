@@ -1,0 +1,122 @@
+{
+  "timestamp": "2026-07-11T08:36:14.620Z",
+  "design": "D5 walk-forward OOS (2026-07-11 rethink): all instruments, yearly folds, 20d purge + 5-bar embargo, net WR, edge over always-buy base rate per fold. Supersedes the 12-instrument alphabetical 70/30 gross split for sweep purposes (interim to Q-064 CPCV).",
+  "signalPath": "resolveBacktestSignal (regime-only, production path)",
+  "instruments": 56,
+  "labelHoldDays": 20,
+  "embargoBars": 5,
+  "folds": [
+    {
+      "year": "2022",
+      "isTrades": 0,
+      "isNetWR": null,
+      "oosTrades": 475,
+      "oosNetWR": 59.58,
+      "oosBaseBars": 10079,
+      "oosBaseNetWR": 49.87,
+      "oosEdgePp": 9.71,
+      "isOosGapPp": null,
+      "nonOverlap": {
+        "n": 59,
+        "netWR": 54.24,
+        "wilson95Pct": [
+          41.66,
+          66.3
+        ]
+      }
+    },
+    {
+      "year": "2023",
+      "isTrades": 462,
+      "isNetWR": 61.04,
+      "oosTrades": 755,
+      "oosNetWR": 63.97,
+      "oosBaseBars": 13835,
+      "oosBaseNetWR": 54.72,
+      "oosEdgePp": 9.26,
+      "isOosGapPp": -2.93,
+      "nonOverlap": {
+        "n": 77,
+        "netWR": 61.04,
+        "wilson95Pct": [
+          49.87,
+          71.16
+        ]
+      }
+    },
+    {
+      "year": "2024",
+      "isTrades": 1205,
+      "isNetWR": 61.08,
+      "oosTrades": 774,
+      "oosNetWR": 54.01,
+      "oosBaseBars": 13946,
+      "oosBaseNetWR": 57.14,
+      "oosEdgePp": -3.14,
+      "isOosGapPp": 7.07,
+      "nonOverlap": {
+        "n": 80,
+        "netWR": 50,
+        "wilson95Pct": [
+          39.3,
+          60.7
+        ]
+      }
+    },
+    {
+      "year": "2025",
+      "isTrades": 1862,
+      "isNetWR": 59.4,
+      "oosTrades": 942,
+      "oosNetWR": 50.96,
+      "oosBaseBars": 13835,
+      "oosBaseNetWR": 54.2,
+      "oosEdgePp": -3.24,
+      "isOosGapPp": 8.44,
+      "nonOverlap": {
+        "n": 95,
+        "netWR": 55.79,
+        "wilson95Pct": [
+          45.77,
+          65.36
+        ]
+      }
+    },
+    {
+      "year": "2026",
+      "isTrades": 2961,
+      "isNetWR": 56.37,
+      "oosTrades": 446,
+      "oosNetWR": 56.73,
+      "oosBaseBars": 5605,
+      "oosBaseNetWR": 49.9,
+      "oosEdgePp": 6.82,
+      "isOosGapPp": -0.36,
+      "nonOverlap": {
+        "n": 43,
+        "netWR": 58.14,
+        "wilson95Pct": [
+          43.33,
+          71.62
+        ]
+      }
+    }
+  ],
+  "pooledOos": {
+    "trades": 3392,
+    "netWinRatePct": 56.52,
+    "baseBars": 57300,
+    "baseNetWinRatePct": 53.86,
+    "edgeOverBasePp": 2.66,
+    "nonOverlap": {
+      "n": 354,
+      "netWinRatePct": 55.65,
+      "wilson95Pct": [
+        50.44,
+        60.74
+      ]
+    }
+  },
+  "verdict": "PASS",
+  "verdictNote": "PASS = pooled OOS edge over base > 0 AND ≥ half of folds non-negative. Informational only — the CI gate remains the frozen net-WR floor until owner decision D1 re-founds it."
+}
