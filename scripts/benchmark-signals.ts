@@ -307,14 +307,44 @@ console.log(`\nSaved to: ${outPath}`)
 const FLOOR_GROSS_WR = 54.27
 const FLOOR_NET_WR = 53.29
 
+/**
+ * D1 gate re-founding (2026-07-11 rethink, MASTER §4 D1 — see
+ * reviews/invariants-baseline.md §1b amendment). The raw net-WR floor (53.29)
+ * sits BELOW the always-buy base rate (54.02 at freeze), so passing it
+ * certifies nothing about selection skill. The PRIMARY gate is now the EDGE
+ * OVER THE BASE RATE, frozen 2026-07-11 at +2.31pp with the established
+ * 50 bps tolerance convention → hard floor +1.81pp. The raw WR floors are
+ * retained as SECONDARY regression guards (they still catch code breakage
+ * independent of base-rate drift). Significance (non-overlap Wilson lower
+ * bound vs the base rate) is reported as WARN, not FAIL — it is EXPECTED to
+ * warn until the edge becomes significant at honest sample sizes; hardening
+ * it into a failure is a future owner decision.
+ */
+const FLOOR_EDGE_PP = 1.81
+
+if (benchmark.edgeOverBaseRatePp < FLOOR_EDGE_PP) {
+  console.error(
+    `\nREGRESSION (primary gate): edge over base rate ${benchmark.edgeOverBaseRatePp}pp below floor ${FLOOR_EDGE_PP}pp ` +
+      `(net WR ${benchmark.aggregate.aggregateNetWinRate}% vs base ${benchmark.alwaysBuyBaseline.netWinRatePct}%)`,
+  )
+  process.exit(1)
+}
 if (benchmark.aggregate.aggregateNetWinRate < FLOOR_NET_WR) {
   console.error(
-    `\nREGRESSION: net aggregate WR ${benchmark.aggregate.aggregateNetWinRate}% below floor ${FLOOR_NET_WR}%`,
+    `\nREGRESSION (secondary guard): net aggregate WR ${benchmark.aggregate.aggregateNetWinRate}% below floor ${FLOOR_NET_WR}%`,
   )
   process.exit(1)
 }
 if (benchmark.aggregate.aggregateWinRate < FLOOR_GROSS_WR) {
   console.warn(
     `WARN: gross aggregate WR ${benchmark.aggregate.aggregateWinRate}% below gross floor ${FLOOR_GROSS_WR}%`,
+  )
+}
+const wilsonLowPct = benchmark.nonOverlapStats.wilson95Pct[0]
+if (wilsonLowPct != null && wilsonLowPct < benchmark.alwaysBuyBaseline.netWinRatePct) {
+  console.warn(
+    `WARN (expected until significance): non-overlap Wilson 95% lower bound ${wilsonLowPct}% is below the ` +
+      `always-buy base rate ${benchmark.alwaysBuyBaseline.netWinRatePct}% — the selection edge is not yet ` +
+      `statistically significant at effective n=${benchmark.nonOverlapStats.nTrades}.`,
   )
 }

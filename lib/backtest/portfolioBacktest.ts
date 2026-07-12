@@ -21,7 +21,7 @@ import { maxCorrelationVsPeers, correlationAdjustedKelly } from '@/lib/quant/cor
 import { getRiskFreeRateSync } from '@/lib/quant/riskFreeRate'
 import {
   checkExitConditions, updatePosition, atrAdaptiveStop,
-  DEFAULT_EXIT_CONFIG,
+  LABEL_MATCHED_EXIT_CONFIG,
 } from '@/lib/backtest/exitRules'
 import type { OpenPosition, ExitConfig, ExitReason } from '@/lib/backtest/exitRules'
 import { SECTOR_PROFILES } from '@/lib/optimize/sectorProfiles'
@@ -86,7 +86,11 @@ export const DEFAULT_PORTFOLIO_CONFIG: PortfolioConfig = {
   maxSinglePositionPct: 0.20,
   monthlyRebalance: false,
   correlationGate: 0.20,
-  exit: DEFAULT_EXIT_CONFIG,
+  // D2/D4 (2026-07-11): label-matched exits (time-only, 20 bars) are the
+  // default — ATR/trailing/panic stops and the falling-knife SELL exit are
+  // retired per the acceptance experiments (see exitRules.ts doc). The legacy
+  // stop-based policy remains available by passing `exit: DEFAULT_EXIT_CONFIG`.
+  exit: LABEL_MATCHED_EXIT_CONFIG,
 }
 
 export interface PortfolioTrade {
@@ -457,6 +461,11 @@ export function runPortfolioBacktest(
         if (allowed < entryPrice) continue
 
         const atrResult = atrAdaptiveStop(signalPrice, bars, cfg.exit.atrStopMultiplier)
+        // D2: atrStopMultiplier <= 0 means NO initial stop — atrAdaptiveStop's
+        // 5% floor would otherwise still arm one. stopLossPrice 0 is inert
+        // (evaluateStopHit returns null for level <= 0). entryATRPct is kept
+        // regardless: the panic rule that reads it carries its own guard.
+        const stopArmed = cfg.exit.atrStopMultiplier > 0
         const shares = Math.floor(allowed / entryPrice)
         if (shares <= 0) continue
 
@@ -474,7 +483,7 @@ export function runPortfolioBacktest(
           entryPrice,
           entryDate: currentDate,
           entryATRPct: atrResult.atrPct,
-          stopLossPrice: atrResult.stopLossPrice,
+          stopLossPrice: stopArmed ? atrResult.stopLossPrice : 0,
           initialShares: shares,
           currentShares: shares,
           highestPrice: entryPrice,

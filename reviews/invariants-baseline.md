@@ -45,6 +45,16 @@ Round-trip cost: 22 bps (lib/backtest/executionModel.ts)
 
 **Why re-baselined:** Prior §1 measured a **different** inline `generateSimpleSignal()` (~57%). SSOT now gates `resolveBacktestSignal()` (regime-only) + net costs — honest production path. **No metric gaming** to restore 55%+ without real signal improvement.
 
+> **§1b amendment — D1 gate re-founding (2026-07-11 rethink):** the 2026-07-11 red team
+> established the always-buy BASE RATE on this universe/window = **54.02% net** — ABOVE the
+> 53.29 floor, so the raw floor alone certifies nothing about selection skill. The **primary CI
+> gate is now EDGE OVER BASE RATE**: frozen 2026-07-11 at **+2.31pp**, hard floor **+1.81pp**
+> (same 50 bps tolerance convention). The raw net/gross WR floors above are retained as
+> **secondary regression guards** (they catch code breakage independent of base-rate drift).
+> A WARN (not FAIL) prints while the non-overlap Wilson 95% lower bound sits below the base
+> rate — expected until the edge becomes statistically significant at effective n; hardening
+> that into a failure is a future owner decision. See `reviews/RETHINK-2026-07-11/`.
+
 ## 1c. Engine exit timing — T+1 symmetry (2026-05-29)
 
 The walk-forward **engine** (`lib/backtest/engine.ts`, `backtestInstrument`) now
@@ -80,6 +90,36 @@ fixture that fires the SELL before the stop is therefore impractical — which i
 why this change ships without a behavioral pin. The SELL branch may be near-dead
 under the current stop floor; worth a separate review (the fix is correct
 regardless, and the dd-breaker shares the same exit-fill path).
+
+## 1d. D2/D4 engine exit-policy re-baseline — LABEL-MATCHED exits (2026-07-11)
+
+Both engines' default exit policy is now **time-only at 20 bars** (T+1 open
+fill), matching the horizon the published label WR is measured on
+(`LABEL_MATCHED_EXIT_CONFIG`, exitRules.ts). The ATR-adaptive stop, the
+trailing/break-even stops, the panic exit, the profit-take, and the
+falling-knife **SELL exit are retired**; the portfolio-level max-drawdown
+circuit breaker and end-of-data close remain. Evidence:
+`reviews/RETHINK-2026-07-11/` — R1 acceptance (`experiment:stop-removal`:
+per-trade net WR 24.0% → 54.13% without stops), C6 CONFIRMED (SSOT SELL bars
+beat the base-rate forward WR in every sample year), R4 no-regression. The
+§1c "SELL branch near-dead" observation is now moot (branch removed); the
+legacy policy stays available via `exit: DEFAULT_EXIT_CONFIG`.
+
+**Measured on the 56-instrument fixtures (07-05 refresh), before → after:**
+- Portfolio engine (`runPortfolioBacktest` defaults): 607 → 312 trades,
+  net WR 57.00% → **54.17%**, total return +6.90% → **+8.52%**, maxDD 9.88%.
+  (Freed capital redeploys across slots — return AND honesty both improve.)
+- Per-instrument engine (`backtestInstrument`, feeds /api/backtest +
+  walk-forward): 250 → 339 trades, net WR 24.00% → **54.28%** (the page's
+  "net-profitable after costs" copy is finally representative), eq-weight
+  total return +2.63% → **+1.23%**. The drop is the flat-0.15-Kelly sizing
+  truncating the old wrapper's accidental multi-month trend rides —
+  per-deployed-dollar efficiency is unchanged; sizing is the D6 decision
+  (calibrated score → real Kelly), deliberately NOT bundled here.
+
+**§1b label floors are unaffected** (label pipeline never calls the engines):
+verified `npm run benchmark` byte-identical (57.35 gross / 56.33 net,
+edge +2.31pp) after the change.
 
 ## 2. Portfolio backtest — captured 2026-05-23 (Q-002 closed)
 

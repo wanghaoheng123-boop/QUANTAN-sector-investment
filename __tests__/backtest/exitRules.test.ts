@@ -6,6 +6,7 @@ import {
   computeExitStats,
   evaluateStopHit,
   DEFAULT_EXIT_CONFIG,
+  LABEL_MATCHED_EXIT_CONFIG,
   type OpenPosition,
   type ExitConfig,
 } from '@/lib/backtest/exitRules'
@@ -295,6 +296,59 @@ describe('checkExitConditions — priority ordering', () => {
     const pos = makePosition({ entryPrice: 100, entryATRPct: 0.02 })
     const result = checkExitConditions(pos, 5, 108, '2026-01-06', 0.07, 'HOLD', cfg)
     expect(result!.reason).toBe('panic_exit')
+  })
+})
+
+// ─── D2/D4 (2026-07-11): LABEL_MATCHED_EXIT_CONFIG behavior pins ────────────
+// Time exit is the ONLY rule that may fire; every zero-valued rule is OFF.
+describe('checkExitConditions — LABEL_MATCHED_EXIT_CONFIG (D2/D4)', () => {
+  const lm = LABEL_MATCHED_EXIT_CONFIG
+
+  it('is time-only: 20-bar hold, everything else disabled', () => {
+    expect(lm.maxHoldDays).toBe(20)
+    expect(lm.profitTakePct).toBe(0)
+    expect(lm.trailingStopPct).toBe(0)
+    expect(lm.panicExitAtrMultiple).toBe(0)
+    expect(lm.signalBasedExit).toBe(false)
+    expect(lm.atrStopMultiplier).toBe(0)
+  })
+
+  it('disarmed stop (stopLossPrice 0) never exits on a deep intraday dip', () => {
+    const pos = makePosition({ stopLossPrice: 0 })
+    const result = checkExitConditions(pos, 5, 72, '2026-01-06', 0.02, 'HOLD', lm, {
+      open: 95, high: 96, low: 70, close: 72,
+    })
+    expect(result).toBeNull()
+  })
+
+  it('profitTakePct 0 does NOT fire a bogus target at the entry price', () => {
+    // Without the D2 disable guard, target = entry × (1+0) = entry and any
+    // bar whose high touches entry produces an immediate partial exit.
+    const pos = makePosition({ stopLossPrice: 0, entryPrice: 100 })
+    const result = checkExitConditions(pos, 5, 101, '2026-01-06', 0.02, 'HOLD', lm, {
+      open: 100, high: 102, low: 99, close: 101,
+    })
+    expect(result).toBeNull()
+  })
+
+  it('ignores the falling-knife SELL (D4)', () => {
+    const pos = makePosition({ stopLossPrice: 0 })
+    const result = checkExitConditions(pos, 5, 100, '2026-01-06', 0.02, 'SELL', lm)
+    expect(result).toBeNull()
+  })
+
+  it('does not panic-exit on an ATR spike', () => {
+    const pos = makePosition({ stopLossPrice: 0, entryATRPct: 0.02 })
+    const result = checkExitConditions(pos, 5, 100, '2026-01-06', 0.99, 'HOLD', lm)
+    expect(result).toBeNull()
+  })
+
+  it('time exit still fires at 20 bars', () => {
+    const pos = makePosition({ stopLossPrice: 0, entryIdx: 0 })
+    const result = checkExitConditions(pos, 20, 100, '2026-01-21', 0.02, 'SELL', lm)
+    expect(result).not.toBeNull()
+    expect(result!.reason).toBe('time_exit')
+    expect(result!.isPartial).toBe(false)
   })
 })
 

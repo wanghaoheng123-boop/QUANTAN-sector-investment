@@ -3,6 +3,7 @@ import {
   runPortfolioBacktest,
   DEFAULT_PORTFOLIO_CONFIG,
 } from '@/lib/backtest/portfolioBacktest'
+import { DEFAULT_EXIT_CONFIG } from '@/lib/backtest/exitRules'
 import type { OhlcvRow } from '@/lib/backtest/dataLoader'
 
 // ─── Synthetic OHLCV fixture builders ───────────────────────────────────────
@@ -203,5 +204,40 @@ describe('runPortfolioBacktest — D2-1 T+1 entry (WS2)', () => {
         expect(t.pnlPct).toBeLessThanOrEqual(gross + 1e-9)
       }
     }
+  })
+})
+
+// ─── D2/D4 (2026-07-11): default exit policy is LABEL-MATCHED (time-only) ───
+describe('runPortfolioBacktest — D2/D4 label-matched default exits', () => {
+  /**
+   * Strong exponential uptrend (0.4%/bar, 300 bars) then a one-bar crash to
+   * ~7% BELOW the 200SMA, held flat. The crash bar's dev enters (−10, 0) with
+   * a still-rising SMA slope and a nearSma history → the production regime
+   * path emits BUY (FIRST_DIP), so trades deterministically exist. Under the
+   * label-matched default the ONLY position-level exits are time_exit
+   * (20 bars) and end_of_data / max_drawdown.
+   */
+  function dipSeries(): OhlcvRow[] {
+    const p299 = 100 * Math.pow(1.004, 299)
+    return makeOhlcv(380, (i) => (i < 300 ? 100 * Math.pow(1.004, i) : p299 * 0.64), 0.2)
+  }
+
+  it('trades exist and exit ONLY via time_exit / end_of_data (no stops, SELLs, or targets)', () => {
+    const res = runPortfolioBacktest({ A: dipSeries() }, { A: 'Technology' })
+    expect(res.totalTrades).toBeGreaterThan(0)
+    const br = res.exitReasonBreakdown
+    expect(br.stop_loss).toBe(0)
+    expect(br.profit_target).toBe(0)
+    expect(br.signal).toBe(0)
+    expect(br.panic_exit).toBe(0)
+    expect(br.time_exit).toBeGreaterThan(0)
+    expect(br.time_exit + br.end_of_data + br.max_drawdown).toBe(res.totalTrades)
+  })
+
+  it('legacy stop-based policy remains available via exit: DEFAULT_EXIT_CONFIG', () => {
+    const res = runPortfolioBacktest({ A: dipSeries() }, { A: 'Technology' }, {
+      exit: DEFAULT_EXIT_CONFIG,
+    })
+    expect(res.totalTrades).toBeGreaterThan(0)
   })
 })
