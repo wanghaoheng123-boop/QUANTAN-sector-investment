@@ -2,8 +2,8 @@
   "schema_version": "1.1",
   "project": "QUANTAN-sector-investment",
   "created": "2026-04-28T09:40:00Z",
-  "last_updated": "2026-07-11T22:00:00.000Z",
-  "active_agent": "claude fable-5 (2026-07-11: rethink #101/#102; follow-throughs #103/#104 (D5 shipped, D3 REJECTED, C3 closed, C6 CONFIRMED, D2/D4 experiments); then owner delegated decisions -> D1 gate re-founding + D2/D4 label-matched exits SHIPPED (portfolio +6.90->+8.52%, per-instr WR 24->54.28%))",
+  "last_updated": "2026-07-13T02:00:00.000Z",
+  "active_agent": "claude fable-5 (2026-07-13 Mon sweep: #105 merged + prod live-verified (engine WR 54.28% live); all gates PASS incl. first D1-gate benchmark + WF OOS; Stryker per-domain scores landed (backtest 31.22 -> Q-075) + quant re-sharded; Q-076 filed)",
   "prod_bug_fix_2026_07_01": {
     "B-2": "News fetch broken by yahoo-finance2 SearchResult schema drift (yf.search validation threw → news silently dropped + 66 prod errors on /api/briefs since 2026-04-03). FOUND via Vercel get_runtime_errors. FIXED with validateResult:false on the 4 news-search callers (mirrors options/chain.ts precedent) → PR #82 → main 2e6137c. LIVE-VERIFIED: /api/briefs now 200 with full news feed (was empty); 0 SearchResult validation logs on new deploy dpl_D29j.",
     "method_note": "Empirical bug-finding via Vercel runtime-errors/logs is high-signal — surfaced a real 3-month-old LIVE issue the static inspection didn't (it was a caught-and-logged error, invisible to tsc/tests/benchmark). Consider a runtime-errors sweep as a standing step."
@@ -22,12 +22,13 @@
   "program_doc": "workspace/QUANTAN_EXPERT_TEAM_COMMERCIALIZATION.md",
   "coordination_doc": "workspace/coordination/PROGRESS_COORDINATION_2026-06-03.md",
   "last_weekly_deep_sweep": {
-    "date": "2026-07-06",
-    "type": "Monday §7 sweep — gate phase completed, then owner redirected to the fix wave",
-    "gates": "tsc clean; pytest 127p/1s; benchmark net 56.33/gross 57.35 (floor 53.29 PASS, +0.44pp WoW on 07-05 data refresh); OOS gap 6.49pp no-collapse PASS; Vercel runtime errors 7d = 0 (B-2 holding); npm audit 14 (5 high, 0 critical) unchanged owner-deferred",
-    "skipped": "portfolio:backtest + stryker (owner redirect mid-sweep) — run next Monday",
-    "report": "workspace/coordination/daily/PROGRAM-DAY-2026-07-06.md",
-    "result": "GO — live path sound; fix wave shipped 4 prod PRs (#84-#87)"
+    "date": "2026-07-13",
+    "type": "Monday §7 sweep — first under the D1 edge-over-base gate and the D2/D4 label-matched exits",
+    "gates": "tsc clean; targeted vitest 738/738; pytest 131p/1s; verify:integrity 0 hard fails; benchmark edge +2.31pp >= +1.81 floor PASS (significance WARN by design); WF OOS pooled edge +2.66pp PASS; prod endpoints 200; /api/backtest LIVE serves D2/D4 engine (WR 54.28%, 339 trades)",
+    "stryker": "first complete per-domain scores: backtest 31.22 (Q-075 P1), options 62.25; quant 6h-cancelled at 97% (interim ~68) -> re-sharded quant-indicators/quant-rest this sweep, validates next Sunday",
+    "portfolio_backtest": "legacy stop-family grid ALL negative Sharpe (best -0.825) vs shipped label-matched default +8.52%/maxDD 9.88% -> Q-076 grid refresh (D6-adjacent)",
+    "report": "workspace/coordination/daily/PROGRAM-DAY-2026-07-13.md",
+    "result": "GO — live path sound; D2/D4 live-verified in production; data refresh lands tonight (F1.5 dividends activate)"
   },
   "last_program_run": {
     "date": "2026-07-11",

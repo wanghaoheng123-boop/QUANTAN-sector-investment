@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-07-11T08:36:14.620Z",
+  "timestamp": "2026-07-12T17:17:27.028Z",
   "design": "D5 walk-forward OOS (2026-07-11 rethink): all instruments, yearly folds, 20d purge + 5-bar embargo, net WR, edge over always-buy base rate per fold. Supersedes the 12-instrument alphabetical 70/30 gross split for sweep purposes (interim to Q-064 CPCV).",
   "signalPath": "resolveBacktestSignal (regime-only, production path)",
   "instruments": 56,

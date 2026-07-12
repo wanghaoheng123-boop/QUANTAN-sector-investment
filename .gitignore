@@ -68,3 +68,4 @@ __pycache__/
 # Stryker (mutation testing) outputs
 /reports/mutation/
 /.stryker-tmp/
+multi_agent_factor_mining/factor_library.json
