@@ -1,0 +1,228 @@
+{
+  "timestamp": "2026-07-12T06:56:40.704Z",
+  "experiment": "D2/R1 stop-removal + D4/R4 SELL-retirement acceptance experiment (2026-07-11 rethink). EXPERIMENT ONLY.",
+  "conventions": "Single-slot per instrument, signal at close → T+1 open fill, 11 bps/side; entries label-window-guarded (none in final 21 bars); win = net of 22 bps round trip.",
+  "anchors": {
+    "labelNetWRPct": 56.33,
+    "labelN": 3435,
+    "committedEngine": {
+      "harness": "backtestInstrument(defaults) summed over universe (this run)",
+      "trades": 250,
+      "winRatePct": 24,
+      "eqWeightReturnPct": 2.63
+    },
+    "bnhEqWeightPct": 89.77
+  },
+  "acceptance": {
+    "r1": "net trade WR within 2pp of label net WR AND eq-weight return ≥ 3× committed engine",
+    "r4": "retiring SELL exit (A/B) does not regress vs keeping it (C) by >1pp avg-net-per-trade in any year"
+  },
+  "variants": [
+    {
+      "variant": "A_timeOnly",
+      "trades": 351,
+      "netWinRatePct": 54.13,
+      "avgNetPerTradePct": 1.3283,
+      "eqWeightReturnPct": 8.68,
+      "timeInMarketPct": 12.4,
+      "wrVsLabelPp": -2.2,
+      "returnMultipleVsEngine": 3.3,
+      "r1WrPass": false,
+      "r1ReturnPass": true,
+      "perYear": [
+        {
+          "year": "2022",
+          "trades": 56,
+          "netWR": 50,
+          "avgNetPct": 1.2564
+        },
+        {
+          "year": "2023",
+          "trades": 77,
+          "netWR": 58.44,
+          "avgNetPct": 2.0321
+        },
+        {
+          "year": "2024",
+          "trades": 67,
+          "netWR": 58.21,
+          "avgNetPct": 1.1546
+        },
+        {
+          "year": "2025",
+          "trades": 105,
+          "netWR": 51.43,
+          "avgNetPct": 0.8005
+        },
+        {
+          "year": "2026",
+          "trades": 46,
+          "netWR": 52.17,
+          "avgNetPct": 1.6953
+        }
+      ]
+    },
+    {
+      "variant": "B_timeRepair",
+      "trades": 534,
+      "netWinRatePct": 70.41,
+      "avgNetPerTradePct": 0.5795,
+      "eqWeightReturnPct": 5.9,
+      "timeInMarketPct": 7.9,
+      "wrVsLabelPp": 14.08,
+      "returnMultipleVsEngine": 2.24,
+      "r1WrPass": false,
+      "r1ReturnPass": false,
+      "perYear": [
+        {
+          "year": "2022",
+          "trades": 76,
+          "netWR": 61.84,
+          "avgNetPct": -0.7319
+        },
+        {
+          "year": "2023",
+          "trades": 115,
+          "netWR": 70.43,
+          "avgNetPct": 0.7402
+        },
+        {
+          "year": "2024",
+          "trades": 107,
+          "netWR": 74.77,
+          "avgNetPct": 0.8227
+        },
+        {
+          "year": "2025",
+          "trades": 171,
+          "netWR": 73.1,
+          "avgNetPct": 0.8486
+        },
+        {
+          "year": "2026",
+          "trades": 65,
+          "netWR": 66.15,
+          "avgNetPct": 0.7204
+        }
+      ]
+    },
+    {
+      "variant": "C_timeSellExit",
+      "trades": 351,
+      "netWinRatePct": 53.28,
+      "avgNetPerTradePct": 1.3241,
+      "eqWeightReturnPct": 8.42,
+      "timeInMarketPct": 11.4,
+      "wrVsLabelPp": -3.06,
+      "returnMultipleVsEngine": 3.2,
+      "r1WrPass": false,
+      "r1ReturnPass": true,
+      "perYear": [
+        {
+          "year": "2022",
+          "trades": 56,
+          "netWR": 50,
+          "avgNetPct": 1.7705
+        },
+        {
+          "year": "2023",
+          "trades": 77,
+          "netWR": 57.14,
+          "avgNetPct": 1.9309
+        },
+        {
+          "year": "2024",
+          "trades": 70,
+          "netWR": 57.14,
+          "avgNetPct": 0.8375
+        },
+        {
+          "year": "2025",
+          "trades": 102,
+          "netWR": 50.98,
+          "avgNetPct": 0.7136
+        },
+        {
+          "year": "2026",
+          "trades": 46,
+          "netWR": 50,
+          "avgNetPct": 1.8592
+        }
+      ]
+    }
+  ],
+  "r1Verdicts": [
+    {
+      "variant": "A_timeOnly",
+      "wrPass": false,
+      "returnPass": true,
+      "pass": false
+    },
+    {
+      "variant": "B_timeRepair",
+      "wrPass": false,
+      "returnPass": false,
+      "pass": false
+    },
+    {
+      "variant": "C_timeSellExit",
+      "wrPass": false,
+      "returnPass": true,
+      "pass": false
+    }
+  ],
+  "r4Verdicts": [
+    {
+      "variant": "A_timeOnly",
+      "vsC_perYearDeltaAvgNetPp": [
+        {
+          "year": "2022",
+          "deltaAvgNetPp": -0.5141
+        },
+        {
+          "year": "2023",
+          "deltaAvgNetPp": 0.1012
+        },
+        {
+          "year": "2024",
+          "deltaAvgNetPp": 0.3171
+        },
+        {
+          "year": "2025",
+          "deltaAvgNetPp": 0.0869
+        },
+        {
+          "year": "2026",
+          "deltaAvgNetPp": -0.1639
+        }
+      ],
+      "noRegression": true
+    },
+    {
+      "variant": "B_timeRepair",
+      "vsC_perYearDeltaAvgNetPp": [
+        {
+          "year": "2022",
+          "deltaAvgNetPp": -2.5024
+        },
+        {
+          "year": "2023",
+          "deltaAvgNetPp": -1.1907
+        },
+        {
+          "year": "2024",
+          "deltaAvgNetPp": -0.0148
+        },
+        {
+          "year": "2025",
+          "deltaAvgNetPp": 0.135
+        },
+        {
+          "year": "2026",
+          "deltaAvgNetPp": -1.1388
+        }
+      ],
+      "noRegression": false
+    }
+  ]
+}

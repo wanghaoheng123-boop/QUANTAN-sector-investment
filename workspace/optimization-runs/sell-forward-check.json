@@ -1,0 +1,122 @@
+{
+  "timestamp": "2026-07-12T06:54:41.009Z",
+  "purpose": "C6 verification (2026-07-11 rethink): forward 20d NET outcomes of bars where the production SSOT emits SELL, vs BUY bars and the all-bars base rate.",
+  "method": "signalAtBarIndex (production path) on every eligible bar of all instruments; forward label entry next close, exit close+20, net of round-trip costs — identical math to the benchmark.",
+  "claim": "Red team C6: SELL bars forward 20d net WR 60.12%, avg +2.67%, n=7,280",
+  "pooled": {
+    "sell": {
+      "n": 7280,
+      "netWinRatePct": 60.12,
+      "avgNetPct": 2.6656
+    },
+    "buy": {
+      "n": 3435,
+      "netWinRatePct": 56.33,
+      "avgNetPct": 1.7035
+    },
+    "base": {
+      "n": 58420,
+      "netWinRatePct": 54.02,
+      "avgNetPct": 1.0657
+    }
+  },
+  "perYear": [
+    {
+      "year": "2022",
+      "sell": {
+        "n": 3280,
+        "netWinRatePct": 57.13,
+        "avgNetPct": 2.0561
+      },
+      "buy": {
+        "n": 475,
+        "netWinRatePct": 59.58,
+        "avgNetPct": 1.6727
+      },
+      "base": {
+        "n": 10079,
+        "netWinRatePct": 49.87,
+        "avgNetPct": 0.1901
+      },
+      "sellMinusBasePp": 7.26
+    },
+    {
+      "year": "2023",
+      "sell": {
+        "n": 1106,
+        "netWinRatePct": 69.44,
+        "avgNetPct": 5.2863
+      },
+      "buy": {
+        "n": 764,
+        "netWinRatePct": 63.22,
+        "avgNetPct": 2.6463
+      },
+      "base": {
+        "n": 14115,
+        "netWinRatePct": 54.72,
+        "avgNetPct": 1.2446
+      },
+      "sellMinusBasePp": 14.72
+    },
+    {
+      "year": "2024",
+      "sell": {
+        "n": 671,
+        "netWinRatePct": 59.61,
+        "avgNetPct": 2.494
+      },
+      "buy": {
+        "n": 777,
+        "netWinRatePct": 53.8,
+        "avgNetPct": 1.0142
+      },
+      "base": {
+        "n": 14226,
+        "netWinRatePct": 57.11,
+        "avgNetPct": 1.4477
+      },
+      "sellMinusBasePp": 2.5
+    },
+    {
+      "year": "2025",
+      "sell": {
+        "n": 1695,
+        "netWinRatePct": 61.42,
+        "avgNetPct": 2.5009
+      },
+      "buy": {
+        "n": 968,
+        "netWinRatePct": 51.34,
+        "avgNetPct": 1.1714
+      },
+      "base": {
+        "n": 14115,
+        "netWinRatePct": 54.5,
+        "avgNetPct": 1.0765
+      },
+      "sellMinusBasePp": 6.92
+    },
+    {
+      "year": "2026",
+      "sell": {
+        "n": 528,
+        "netWinRatePct": 55.68,
+        "avgNetPct": 1.7092
+      },
+      "buy": {
+        "n": 451,
+        "netWinRatePct": 56.32,
+        "avgNetPct": 2.4686
+      },
+      "base": {
+        "n": 5885,
+        "netWinRatePct": 50.82,
+        "avgNetPct": 1.1866
+      },
+      "sellMinusBasePp": 4.86
+    }
+  ],
+  "verdict": "CONFIRMED",
+  "caveat": "Survivor universe, predominantly bull window (red-team caveat carried forward). Per-year table shows whether SELL anti-predictiveness holds outside 2022–23."
+}
