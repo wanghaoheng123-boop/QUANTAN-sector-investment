@@ -2,8 +2,8 @@
   "schema_version": "1.1",
   "project": "QUANTAN-sector-investment",
   "created": "2026-04-28T09:40:00Z",
-  "last_updated": "2026-07-11T18:00:00.000Z",
-  "active_agent": "claude fable-5 (2026-07-11: red-team rethink #101/#102 + follow-through: D5 walk-forward OOS shipped, D3 rotation experiment REJECTED 1/4, C3 flag closed)",
+  "last_updated": "2026-07-11T20:00:00.000Z",
+  "active_agent": "claude fable-5 (2026-07-11: rethink #101/#102 + follow-through #103 (D5 shipped, D3 REJECTED, C3 closed) + follow-through 2 (C6 CONFIRMED, D2 3.3x direction confirmed, D4 no-regression PASS) — all runnable D-menu experiments done)",
   "prod_bug_fix_2026_07_01": {
     "B-2": "News fetch broken by yahoo-finance2 SearchResult schema drift (yf.search validation threw → news silently dropped + 66 prod errors on /api/briefs since 2026-04-03). FOUND via Vercel get_runtime_errors. FIXED with validateResult:false on the 4 news-search callers (mirrors options/chain.ts precedent) → PR #82 → main 2e6137c. LIVE-VERIFIED: /api/briefs now 200 with full news feed (was empty); 0 SearchResult validation logs on new deploy dpl_D29j.",
     "method_note": "Empirical bug-finding via Vercel runtime-errors/logs is high-signal — surfaced a real 3-month-old LIVE issue the static inspection didn't (it was a caught-and-logged error, invisible to tsc/tests/benchmark). Consider a runtime-errors sweep as a standing step."
@@ -33,7 +33,7 @@
     "date": "2026-07-11",
     "cell": "RETHINK follow-through (owner: 'continue with the tasks')",
     "result": "D5 SHIPPED: benchmark:oos:wf (scripts/oos-walkforward.ts) — all 56 instruments, yearly walk-forward folds, 20d purge + 5-bar embargo, net WR, per-fold edge-over-base + non-overlap Wilson CI; first run pooled OOS edge +2.66pp, per-fold +9.7/+9.3/-3.1/-3.2/+6.8pp (confirms C4 decay). D3 rotation experiment RUN and REJECTED: experiment:rotation (scripts/experiments/rotation-walkforward.ts), SSOT parity 0 mismatches, locked 2026H1 holdout — beats B&H in 1/4 OOS segments (needed >=3), robust to MAR selection; the prototype's +71% was not walk-forward-honest; C7 H=40 weakened (WF prefers H=60). C3 250-vs-52 flag CLOSED (250 = committed per-instrument engine, reproduced at 2 commits; 52 = unrecorded scratch; portfolio engine +6.90% vs B&H ~+94% confirms C3 on the real engine). No lib/ changes; published numbers untouched.",
-    "next_cell": "Monday 07-13 sweep: use benchmark:oos:wf, review first sharded Stryker score + axe baseline, verify C6 SELL-forward claim. Owner decisions now sharpest: D1 (re-found headline metric/gate) and D2+D4 (stop removal + SELL retirement experiment); D3 answered (rejected as prototyped); D6 prerequisite (D5 harness) met. Backlog: Q-064/Q-067/Q-071/Q-072/Q-074 + owner-gated (CSP flip, Q09-1, npm audit, scheduled-task Run-now)."
+    "next_cell": "Monday 07-13 sweep: use benchmark:oos:wf, review first sharded Stryker score + axe baseline. FOLLOW-THROUGH 2 (same day): C6 CONFIRMED to the digit (experiment:sell-check — SELL bars beat base rate EVERY year); D2/R1 direction confirmed (experiment:stop-removal — time-only exits: 351 trades, WR 54.13%, +8.68% = 3.3x engine; within 0.86pp of non-overlap anchor; repair-exit variant rejected); D4/R4 no-regression PASS (SELL exit costs nothing to drop). ALL runnable D-menu experiments now done — remaining D-menu items are pure owner decisions: D1 (headline gate re-found), D2/D4 (ship exit-policy change to lib/backtest, evidence in hand), D6 (build calibrated score on D5 harness), D7 (data-cost investigation). Backlog: Q-064/Q-067/Q-071/Q-072/Q-074 + owner-gated (CSP flip, Q09-1, npm audit, scheduled-task Run-now)."
   },
   "last_inspection": {
     "timestamp": "2026-06-03T02:35:00.000Z",
