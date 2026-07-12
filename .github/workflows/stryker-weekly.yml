@@ -1,10 +1,13 @@
-# Weekly mutation testing. Sharded 2026-07-11: a single run of all 7,617
-# mutants hit GitHub's 6-hour job limit at 79% (cancelled 2026-07-09 with an
-# interim score ≈72% — 1,971 survived of 7,181 tested). Three parallel shards
-# keep each job comfortably inside the limit and give per-domain scores.
-# Still allowed-to-fail (continue-on-error) until the ≥70% baseline holds on
-# every shard — but check the JOB conclusions, not the workflow badge (the
-# badge stayed green through 5 weeks of dead runs; lesson recorded 2026-07-10).
+# Weekly mutation testing. Sharded 2026-07-11; re-sharded 2026-07-13: the
+# single `lib/quant/**` shard STILL hit the 6-hour job limit on 2026-07-12 —
+# cancelled at 97% tested (4,124/4,154; 1,324 survived + 38 TO; interim score
+# ≈68%), nine minutes from the finish line. quant is now split into two
+# sub-shards (indicator family vs the rest), each well inside the limit.
+# First complete per-domain scores (2026-07-12 run): backtest 31.22 (real
+# coverage gap — Q-075), options 62.25. Shards are allowed-to-fail
+# (continue-on-error) until the ≥70% baseline holds on every shard — but
+# check the JOB conclusions, not the workflow badge (the badge stayed green
+# through 5 weeks of dead runs; lesson recorded 2026-07-10).
 name: Stryker Weekly
 
 on:
@@ -20,8 +23,10 @@ jobs:
       fail-fast: false
       matrix:
         shard:
-          - name: quant
-            mutate: 'lib/quant/**/*.ts'
+          - name: quant-indicators
+            mutate: 'lib/quant/indicators.ts,lib/quant/btc-indicators.ts,lib/quant/technicals.ts,lib/quant/multiTimeframe.ts'
+          - name: quant-rest
+            mutate: 'lib/quant/**/*.ts,!lib/quant/indicators.ts,!lib/quant/btc-indicators.ts,!lib/quant/technicals.ts,!lib/quant/multiTimeframe.ts'
           - name: backtest
             mutate: 'lib/backtest/**/*.ts'
           - name: options

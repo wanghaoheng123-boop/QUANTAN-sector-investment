@@ -276,7 +276,7 @@ const payload = {
   verdict,
   verdictNote:
     'PASS = pooled OOS edge over base > 0 AND ≥ half of folds non-negative. Informational only — ' +
-    'the CI gate remains the frozen net-WR floor until owner decision D1 re-founds it.',
+    'the CI gate is the benchmark\'s edge-over-base floor (D1, shipped 2026-07-11); this harness is the weekly-sweep OOS check.',
 }
 
 mkdirSync(outDir, { recursive: true })
