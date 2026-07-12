@@ -35,6 +35,18 @@ Context that stands: even variant A is ~10× below B&H (+89.77%) — sparsity (C
 is the binding constraint; D2/D4 stop the engine from destroying the edge, they don't create
 exposure. Shipping into `lib/backtest` remains owner decisions D2/D4 — evidence now in hand.
 
+## Session 4 — owner: "continue with the tasks and make your own logical decision" → D1 + D2/D4 SHIPPED
+Decision rationale: D1 and D2/D4 were the two D-menu items with ratified/measured evidence and
+shippable scope; D6 (multi-day ML build) and D7 (data procurement) are not session-shippable.
+
+| Ship | What changed | Measured |
+|---|---|---|
+| **D1** | Benchmark PRIMARY gate = edge-over-base ≥ **+1.81pp** (frozen +2.31 − 50 bps convention); raw net-WR floor 53.29 demoted to secondary guard; significance WARN (Wilson-lower vs base) prints until the edge is significant. invariants §1b amendment. | Gate passes; label byte-identical (56.33/57.35, edge +2.31pp) |
+| **D2/D4** | Default exit policy in BOTH engines = label-matched **time-only 20-bar exits, T+1 open** (`LABEL_MATCHED_EXIT_CONFIG`): ATR/trailing/BE stops, panic, profit-take, falling-knife SELL exit all retired; DD breaker + end-of-data kept; legacy via `exit: DEFAULT_EXIT_CONFIG`. Disable guards added to `checkExitConditions` (a 0 profit-take would otherwise fire at entry price). invariants §1d. | Portfolio: 607→312 trades, **+6.90% → +8.52%**, maxDD 9.88%, WR 54.17%. Per-instrument: WR **24.00% → 54.28%**, eq-weight 2.63% → 1.23% (flat-0.15 sizing truncates old accidental trend rides; per-dollar efficiency unchanged — sizing = D6). Label WR byte-identical. |
+
+Tests: +8 behavior pins (exitRules label-matched profile ×6, portfolio exit-reason profile ×2);
+targeted suites 636/636 pass locally (pure-node); tsc clean; verify:logic + verify:indicators pass.
+
 ## Owner attention (updated)
 - **D1** (re-found headline metric + gate on CI-lower-bound ≥ base rate) is now the highest-value
   open decision — D5's harness gives it a home; the current floor certifies nothing.

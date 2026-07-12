@@ -39,6 +39,31 @@ export const DEFAULT_EXIT_CONFIG: ExitConfig = {
   atrStopMultiplier: 1.5,
 }
 
+/**
+ * D2/D4 (2026-07-11 rethink): LABEL-MATCHED exit policy — time exit only,
+ * matching the 20d label the platform is benchmarked on. Rationale, measured
+ * on frozen data (reviews/RETHINK-2026-07-11/, `npm run experiment:stop-removal`):
+ *   - ATR/trailing stops contradict dip entries (buy weakness, then stop
+ *     exactly where pullback noise lives): removing them took the
+ *     per-instrument engine from 24.0% → 54.13% net trade WR and 1× → 3.3×
+ *     total return (R1 acceptance experiment).
+ *   - The falling-knife SELL is anti-predictive as a long-only exit: SSOT
+ *     SELL bars beat the base-rate forward 20d net WR in EVERY sample year
+ *     (C6 CONFIRMED); retiring it is no-regression (R4 PASS).
+ * A zero/non-positive value DISABLES the corresponding rule in
+ * `checkExitConditions`, and callers must not arm an initial stop when
+ * `atrStopMultiplier <= 0`. The portfolio-level max-drawdown circuit breaker
+ * is not part of this config and remains active.
+ */
+export const LABEL_MATCHED_EXIT_CONFIG: ExitConfig = {
+  maxHoldDays: 20,
+  profitTakePct: 0,
+  trailingStopPct: 0,
+  panicExitAtrMultiple: 0,
+  signalBasedExit: false,
+  atrStopMultiplier: 0,
+}
+
 export type ExitReason =
   | 'signal'          // enhancedCombinedSignal returned SELL
   | 'stop_loss'       // hit ATR-based stop loss
@@ -237,7 +262,10 @@ export function checkExitConditions(
   }
 
   // 4. Profit-taking (partial exit at target — checked intraday on bar.high).
-  if (!position.partialExitDone) {
+  // D2 disable guard: profitTakePct <= 0 turns the rule OFF. Without the
+  // guard, 0 would place the target AT the entry price and fire a bogus
+  // partial exit on the first bar whose high touches entry.
+  if (config.profitTakePct > 0 && !position.partialExitDone) {
     const target = position.entryPrice * (1 + config.profitTakePct)
     const targetFill = evaluateStopHit(bar, target, 'long', 'target')
     if (targetFill != null) {
@@ -246,7 +274,9 @@ export function checkExitConditions(
   }
 
   // 5. Trailing stop (after partial exit — checked intraday on bar.low).
-  if (position.partialExitDone) {
+  // D2 disable guard: trailingStopPct <= 0 turns the rule OFF (0 would trail
+  // at the running high and exit on any down-tick after a partial take).
+  if (config.trailingStopPct > 0 && position.partialExitDone) {
     const trailLevel = position.highestPrice * (1 - config.trailingStopPct)
     const trailFill = evaluateStopHit(bar, trailLevel, 'long', 'stop')
     if (trailFill != null) {
@@ -254,9 +284,10 @@ export function checkExitConditions(
     }
   }
 
-  // 6. Time-based exit (forced close — close-based).
+  // 6. Time-based exit (forced close — close-based). maxHoldDays <= 0 disables
+  // (a hold-forever config; not used in production).
   const holdDays = currentIdx - position.entryIdx
-  if (holdDays >= config.maxHoldDays) {
+  if (config.maxHoldDays > 0 && holdDays >= config.maxHoldDays) {
     return { shouldExit: true, reason: 'time_exit', exitPrice: currentPrice, isPartial: false, partialFraction: 1.0 }
   }
 

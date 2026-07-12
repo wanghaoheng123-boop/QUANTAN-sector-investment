@@ -7,7 +7,7 @@ import type { OhlcBar } from '@/lib/quant/indicators'
 import { resolveBacktestSignal, DEFAULT_CONFIG, type BacktestConfig } from './signals'
 import { sortinoRatio, atrArray as atr } from '@/lib/quant/indicators'
 import { getRiskFreeRateSync } from '@/lib/quant/riskFreeRate'
-import { evaluateStopHit } from './exitRules'
+import { LABEL_MATCHED_EXIT_CONFIG } from './exitRules'
 import { costBpsPerSide, DEFAULT_EXECUTION_COSTS } from './executionModel'
 
 // ─── Transaction cost model (SSOT: lib/backtest/executionModel.ts) ───────────
@@ -265,6 +265,11 @@ export function backtestInstrument(
   }
   const bnhCurve: number[] = [bnhShares * rows[200].close]
 
+  // D2 (2026-07-11): row index of the open position's entry FILL bar (i+1 at
+  // the signal bar), for the label-matched time exit below. −1 when flat.
+  // Mirrors the portfolio engine's OpenPosition.entryIdx convention (F-11).
+  let entryFillBar = -1
+
   for (let i = 200; i < rows.length - 1; i++) {
     if (i > 200) {
       const div = rows[i].dividend ?? 0
@@ -283,72 +288,24 @@ export function backtestInstrument(
     const lookbackCloses = closes.slice(0, i + 1)
     const lookbackBars = bars.slice(0, i + 1)
 
-    // ── ATR-adaptive stop-loss + trailing stop ──
-    if (state.openTrade) {
-      // ATR% at entry for adaptive stop (stored at entry, PERCENT scale: e.g. 1.5 = 1.5%).
-      // Q1-H-4 (Phase 14 S1): both reads now use the same fallback of 1.0 (1% ATR).
-      // The prior code had two inconsistent fallbacks: 0.10 and 10.
-      const atrAtEntryPct = state.openTrade.atrAtrPctAtEntry ?? 1.0
-      // Adaptive stop: 1.5x ATR%, capped at 15%.
-      // Q1-H-4 (Phase 14 S1 Critical fix): atrAtrPctAtEntry is stored as PERCENTAGE (0–100 scale,
-      // e.g. 1.5 for a 1.5% ATR) because line L321 multiplies by 100. The prior code computed
-      //   1.5 * atrAtEntry  (treating the value as a decimal fraction)
-      // which for a typical 1.5% ATR gave  1.5 × 1.5 = 2.25 → capped to 0.15 (15%) always.
-      // The stop was therefore ALWAYS 15%, never adaptive. Correct formula divides by 100:
-      //   1.5 × (atrPct / 100) → 0.0225 (2.25%) → above ETF floor (1.5%), below stock floor (3%) so
-      //   the floor controls for low-volatility ETFs and the 1.5×ATR value controls for stocks.
-      //
-      // Citation: Wilder (1978) "New Concepts in Technical Trading Systems" ch.3 — ATR-based
-      // stop placement at 1–3× ATR measured in price units (dollars), not percentage-of-percentage.
-      const ETF_STOP_FLOOR_TICKERS = ['XLK','XLE','XLV','XLF','XLI','XLU','XLB','XLP','XLY','XLRE','XLC','SPY','QQQ','TLT','UUP']
-      const atrFloor = ETF_STOP_FLOOR_TICKERS.includes(ticker) ? 0.015 : 0.03
-      const atrStopPct = Math.max(atrFloor, Math.min(0.15, 1.5 * atrAtEntryPct / 100))
-      const stopPx = state.openTrade.action === 'BUY'
-        ? state.openTrade.entryPrice * (1 - atrStopPct)
-        : state.openTrade.entryPrice * (1 + atrStopPct)
-
-      // Trailing stop: track highest price after BUY entry
-      if (state.openTrade.action === 'BUY') {
-        const peakPrice = state.openTrade.highestPriceAfterEntry ?? state.openTrade.entryPrice
-        state.openTrade.highestPriceAfterEntry = Math.max(peakPrice, signalPrice)
-        // Profit measured from entry
-        const profitFromEntry = (signalPrice - state.openTrade.entryPrice) / state.openTrade.entryPrice
-        // Convert stored ATR% (at entry) back to dollar ATR: ATR% / 100 * entryPrice
-        const atrAtEntryDollar = (atrAtEntryPct / 100) * state.openTrade.entryPrice
-        const twoAtrProfit = (2 * atrAtEntryDollar) / state.openTrade.entryPrice
-        const fourAtrProfit = (4 * atrAtEntryDollar) / state.openTrade.entryPrice
-        if (profitFromEntry >= twoAtrProfit) {
-          // Raise stop to break-even + 0.5% buffer.
-          // SSOT: F1.3 intraday-aware via evaluateStopHit primitive.
-          const trailStopPx = state.openTrade.entryPrice * (1 + 0.005)
-          const fillPrice = evaluateStopHit(rows[i], trailStopPx, 'long', 'stop')
-          if (fillPrice != null) {
-            closePosition(state, fillPrice)
-            continue
-          }
-        }
-        // 4x ATR profit → tighten to lock in 1x ATR gain from entry price.
-        // SSOT: F1.3 intraday-aware via evaluateStopHit primitive.
-        if (profitFromEntry >= fourAtrProfit) {
-          const lockStopPx = state.openTrade.entryPrice + atrAtEntryDollar  // lock 1x ATR from entry
-          const fillPrice = evaluateStopHit(rows[i], lockStopPx, 'long', 'stop')
-          if (fillPrice != null) {
-            closePosition(state, fillPrice)
-            continue
-          }
-        }
-      }
-
-      // Primary stop-loss check — SSOT: F1.3 intraday-aware via the shared
-      // evaluateStopHit primitive (single source of truth, also used by
-      // lib/backtest/exitRules.ts's checkExitConditions). Previously each
-      // path had its own copy of the bar.low/bar.high/gap-aware logic — a
-      // hazard that already caused the same close-only bug to live in
-      // two places. The primitive eliminates that future-regression risk.
-      const tradeSide: 'long' | 'short' = state.openTrade.action === 'BUY' ? 'long' : 'short'
-      const fillPrice = evaluateStopHit(rows[i], stopPx, tradeSide, 'stop')
-      if (fillPrice != null) {
-        closePosition(state, fillPrice)
+    // ── D2 (2026-07-11): label-matched TIME EXIT — the only position-level exit ──
+    // The former ATR-adaptive stop + trailing/break-even stops are RETIRED.
+    // Measured on frozen data they inverted the dip edge (buy weakness, then
+    // stop exactly where pullback noise lives): without them the engine's net
+    // trade WR went 24.0% → 54.13% and total return 1× → 3.3× (R1 acceptance
+    // experiment, reviews/RETHINK-2026-07-11/ + `npm run experiment:stop-removal`).
+    // Positions exit after LABEL_MATCHED_EXIT_CONFIG.maxHoldDays bars (20 —
+    // the horizon the published label WR is measured on): observed at today's
+    // close, FILLED at tomorrow's open (T+1 symmetry with entries, same
+    // convention as the portfolio engine's time_exit). The portfolio-level
+    // max-drawdown circuit breaker below remains active.
+    if (state.openTrade && entryFillBar >= 0 &&
+        i - entryFillBar >= LABEL_MATCHED_EXIT_CONFIG.maxHoldDays) {
+      // A corrupt next-open (0/NaN) cannot be traded: hold one more bar
+      // (mirrors the entry-side guard) instead of poisoning the curve.
+      if (Number.isFinite(nextOpen) && nextOpen > 0) {
+        closePosition(state, nextOpen)
+        entryFillBar = -1
         continue
       }
     }
@@ -363,8 +320,8 @@ export function backtestInstrument(
       // above uses signalPrice), but the exit FILL is at TOMORROW's open
       // (nextOpen) — exactly like BUY entries. A same-bar close fill would be
       // look-ahead: you cannot transact at a close you have only just observed.
-      // (Mirrors the SELL-signal correction below.)
       closePosition(state, nextOpen)
+      entryFillBar = -1
       continue
     }
 
@@ -413,24 +370,22 @@ export function backtestInstrument(
       }
       state.confidenceSum += signal.confidence
       state.confidenceCount++
+      // D2: fill bar for the label-matched time exit (entry fills at open i+1).
+      entryFillBar = i + 1
       // Q1-C-1: pass entryPrice — position just opened at this price (mark-to-market = cost basis).
       state.equityHistory.push(currentEquity(state, entryPrice))
 
-    } else if (signal.action === 'SELL' && state.openTrade) {
-      // T+1 exit symmetry: the SELL signal is computed from today's close, so the
-      // fill happens at TOMORROW's open (nextOpen) — exactly like BUY entries
-      // (L339). Previously this exited at signalPrice (today's close), which is
-      // look-ahead: signal and fill shared the same close, a price you cannot
-      // trade at once it has printed. Entries already filled at next-open; this
-      // removes the entry/exit asymmetry and re-baselines WR — see
-      // invariants-baseline.md §1b. Both sides now fill at the raw next-open;
-      // the 11 bps/side cost in closePosition / at entry carries the slippage
-      // component (executionModel.ts) — no price-level bump on either side (F-9).
-      // Phase 14 wave 35: bookkeeping via the shared closePosition primitive.
-      closePosition(state, nextOpen)
-
     } else {
-      // Q1-C-1: HOLD — pass signalPrice so equity reflects open-position mark-to-market.
+      // Q1-C-1: HOLD (and, since D4 2026-07-11, SELL) — pass signalPrice so
+      // equity reflects open-position mark-to-market.
+      //
+      // D4: the falling-knife SELL no longer exits positions. Verified on
+      // frozen data (C6, `npm run experiment:sell-check`): bars where the SSOT
+      // emits SELL have HIGHER forward 20d net WR than the always-buy base
+      // rate in EVERY sample year — as a long-only exit it systematically sold
+      // before rebounds; retiring it is no-regression (R4). The SELL signal
+      // remains published for display/alerting; it just no longer drives the
+      // engine's exits.
       state.equityHistory.push(currentEquity(state, signalPrice))
     }
   }
