@@ -31,6 +31,7 @@
     "experiment:rotation": "npx tsx --tsconfig tsconfig.json scripts/experiments/rotation-walkforward.ts",
     "experiment:sell-check": "npx tsx --tsconfig tsconfig.json scripts/experiments/sell-forward-check.ts",
     "experiment:stop-removal": "npx tsx --tsconfig tsconfig.json scripts/experiments/stop-removal-experiment.ts",
+    "experiment:calibrated-score": "npx tsx --tsconfig tsconfig.json scripts/experiments/calibrated-score-walkforward.ts",
     "benchmark:enhanced": "npx tsx --tsconfig tsconfig.json scripts/benchmark-enhanced.ts",
     "optimize:grid": "npx tsx --tsconfig tsconfig.json scripts/optimize-grid.ts",
     "portfolio:backtest": "npx tsx --tsconfig tsconfig.json scripts/portfolio-backtest.ts",

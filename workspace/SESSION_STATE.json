@@ -2,8 +2,8 @@
   "schema_version": "1.1",
   "project": "QUANTAN-sector-investment",
   "created": "2026-04-28T09:40:00Z",
-  "last_updated": "2026-07-13T02:00:00.000Z",
-  "active_agent": "claude fable-5 (2026-07-13 Mon sweep: #105 merged + prod live-verified (engine WR 54.28% live); all gates PASS incl. first D1-gate benchmark + WF OOS; Stryker per-domain scores landed (backtest 31.22 -> Q-075) + quant re-sharded; Q-076 filed)",
+  "last_updated": "2026-07-13T04:00:00.000Z",
+  "active_agent": "claude fable-5 (2026-07-13: Mon sweep done + owner PROCEED: scheduled-task heartbeat/fallback fix, D6 calibrated-score experiment (calibration REJECTED, discrimination BREAKTHROUGH -> Q-077), D7 memo (Sharadar ~$49/1mo recommendation))",
   "prod_bug_fix_2026_07_01": {
     "B-2": "News fetch broken by yahoo-finance2 SearchResult schema drift (yf.search validation threw → news silently dropped + 66 prod errors on /api/briefs since 2026-04-03). FOUND via Vercel get_runtime_errors. FIXED with validateResult:false on the 4 news-search callers (mirrors options/chain.ts precedent) → PR #82 → main 2e6137c. LIVE-VERIFIED: /api/briefs now 200 with full news feed (was empty); 0 SearchResult validation logs on new deploy dpl_D29j.",
     "method_note": "Empirical bug-finding via Vercel runtime-errors/logs is high-signal — surfaced a real 3-month-old LIVE issue the static inspection didn't (it was a caught-and-logged error, invisible to tsc/tests/benchmark). Consider a runtime-errors sweep as a standing step."
@@ -31,10 +31,10 @@
     "result": "GO — live path sound; D2/D4 live-verified in production; data refresh lands tonight (F1.5 dividends activate)"
   },
   "last_program_run": {
-    "date": "2026-07-11",
-    "cell": "RETHINK follow-through (owner: 'continue with the tasks')",
-    "result": "D5 SHIPPED: benchmark:oos:wf (scripts/oos-walkforward.ts) — all 56 instruments, yearly walk-forward folds, 20d purge + 5-bar embargo, net WR, per-fold edge-over-base + non-overlap Wilson CI; first run pooled OOS edge +2.66pp, per-fold +9.7/+9.3/-3.1/-3.2/+6.8pp (confirms C4 decay). D3 rotation experiment RUN and REJECTED: experiment:rotation (scripts/experiments/rotation-walkforward.ts), SSOT parity 0 mismatches, locked 2026H1 holdout — beats B&H in 1/4 OOS segments (needed >=3), robust to MAR selection; the prototype's +71% was not walk-forward-honest; C7 H=40 weakened (WF prefers H=60). C3 250-vs-52 flag CLOSED (250 = committed per-instrument engine, reproduced at 2 commits; 52 = unrecorded scratch; portfolio engine +6.90% vs B&H ~+94% confirms C3 on the real engine). No lib/ changes; published numbers untouched.",
-    "next_cell": "SESSION 4 (owner delegated decisions): D1 SHIPPED (primary gate = edge-over-base >= +1.81pp; raw floor secondary; significance WARN) + D2/D4 SHIPPED (both engines default LABEL_MATCHED_EXIT_CONFIG time-only 20-bar exits; stops/panic/profit-take/SELL-exit retired; portfolio +6.90->+8.52% maxDD 9.88%; per-instr WR 24->54.28%, eq-weight 2.63->1.23% — sizing lever = D6; label WR byte-identical; invariants §1b amendment + §1d). Monday 07-13 sweep: use benchmark:oos:wf, review first sharded Stryker score + axe baseline, confirm prod engine numbers after deploy. Remaining D-menu: D6 (calibrated score + real Kelly sizing on D5 harness — the sizing lever), D7 (point-in-time universe data cost). Backlog: Q-064/Q-067/Q-071/Q-072/Q-074 + owner-gated (CSP flip, Q09-1, npm audit, scheduled-task Run-now)."
+    "date": "2026-07-13",
+    "cell": "PROCEED (owner): scheduled-task fix + D6 + D7",
+    "result": "Scheduled-task prompt hardened (heartbeat + fallbacks + current facts + notify). D6 experiment REJECTED as specified: calibration fails (Brier -1.2% vs base; recency-isotonic worse pooled — base-rate regime shift binding) so real-Kelly sizing stays blocked; DISCRIMINATION PASSED: top-decile non-overlap WR 60.71 Wilson95 [56.12,65.13] — first honest CI lower bound above the base rate; positive edge all 4 OOS years; 17.8% SSOT-BUY overlap -> the score finds different bars. Q-077 filed (P1): score-ranked selection + label-matched exits. D7 memo shipped with costed options.",
+    "next_cell": "(1) Verify the next scheduled fire leaves a heartbeat + report; (2) Q-077 score-ranked selection experiment (agent-runnable); (3) owner decisions: D7 $49 data month, scheduled-task Run-now click; (4) next Sunday: validate the 4-shard Stryker run; (5) verify tonight data refresh activates F1.5 dividends."
   },
   "last_inspection": {
     "timestamp": "2026-06-03T02:35:00.000Z",
@@ -171,8 +171,13 @@
     },
     {
       "id": "BLOCKER-TASK-TOOL-APPROVAL",
-      "summary": "Scheduled task quantan-autonomous-program needs one interactive Run-now to pre-approve Vercel MCP tools (runtime-errors sweep); until then the sweep step self-skips per the no-stall rule",
-      "resolution": "Owner clicks Run now on the task and approves the tool prompts once"
+      "summary": "Scheduled task left NO trace on 07-08 and 07-12 (3rd occurrence). Task updated 07-13: first-action heartbeat (RUN-HEARTBEAT.log), gh/curl fallback for the Vercel sweep, refreshed facts, completion notifications. Heartbeat will localize the failure at the next fire (~09:07 local).",
+      "resolution": "Owner clicks Run now on quantan-autonomous-program once and approves the tool prompts (stored approvals apply to future runs)."
+    },
+    {
+      "id": "DECISION-D7-DATA",
+      "summary": "D7 recommendation: Sharadar Core US bundle ~$49 for ONE month to run the point-in-time re-benchmark (delisted-inclusive). See reviews/RETHINK-2026-07-11/D7-POINT-IN-TIME-UNIVERSE.md",
+      "resolution": "Owner approves/declines the one-month data purchase; fetch-adapter is ~1 session once credentials exist."
     }
   ],
   "checkpoint": null,

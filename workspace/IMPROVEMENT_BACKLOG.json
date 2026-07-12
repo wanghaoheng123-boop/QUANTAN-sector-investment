@@ -1659,5 +1659,24 @@
       "npm run portfolio:backtest"
     ],
     "notes_2026_07_13": "Post-D2/D4 the grid only explores retired stop-family exits; ALL members score negative Sharpe (best -0.825) while the shipped label-matched default measures +8.52%/maxDD 9.88% — grid is stale. Sizing exploration is D6-adjacent: coordinate with the calibrated-score work."
+  },
+  {
+    "id": "Q-077",
+    "title": "Score-ranked selection experiment: top-decile calibrated-score entries with label-matched exits",
+    "domain": "Quant",
+    "priority": "P1",
+    "status": "pending",
+    "files": [
+      "scripts/experiments/calibrated-score-walkforward.ts",
+      "scripts/experiments/"
+    ],
+    "acceptance_criteria": [
+      "Walk-forward portfolio sim: top-decile score entries + 20-bar time exits beats equal-weight B&H on Sharpe or MAR in >=3 of 4 OOS years (D3-style acceptance)",
+      "No calibration requirement — ranking only"
+    ],
+    "verify_commands": [
+      "npm run experiment:calibrated-score"
+    ],
+    "notes_2026_07_13": "D6 experiment: calibration REJECTED (Brier below base, recency-isotonic worse pooled — base-rate regime shift) so real-Kelly stays blocked; but discrimination PASSED: top-decile non-overlap WR 60.71 Wilson95 [56.12, 65.13] — first CI lower bound above the base rate (54.71); positive edge all 4 OOS years; only 17.8% overlap with SSOT BUYs. Build the selection experiment on the D5 harness + rotation-experiment portfolio machinery."
   }
 ]

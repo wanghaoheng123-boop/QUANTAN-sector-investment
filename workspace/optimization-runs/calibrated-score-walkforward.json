@@ -1,0 +1,281 @@
+{
+  "timestamp": "2026-07-12T19:08:51.423Z",
+  "experiment": "D6/R3 calibrated-score walk-forward (2026-07-11 rethink). EXPERIMENT ONLY — no signal/display/sizing change.",
+  "model": "L2 logistic regression (deterministic full-batch GD, 400 iters, lr 0.5, l2 1e-4), features standardized on IS only",
+  "features": [
+    "dev200",
+    "smaSlope20",
+    "ret5",
+    "ret20",
+    "atrPctPrior",
+    "volZ20",
+    "distFrom60dHigh"
+  ],
+  "design": "expanding-window yearly folds 2023/2024/2025/2026, 20d purge + 5-bar embargo (D5 conventions)",
+  "samples": 57356,
+  "instruments": 56,
+  "folds": [
+    {
+      "year": "2023",
+      "isSamples": 7839,
+      "oosSamples": 13835,
+      "isBaseRatePct": 50.27,
+      "oosBaseRatePct": 54.72,
+      "brierModel": 0.25581,
+      "brierBase": 0.24975,
+      "brierSkill": -0.0243,
+      "brierRecal": 0.26235,
+      "recalSkill": -0.0505,
+      "reliability": [
+        {
+          "bucket": "Q1",
+          "n": 2767,
+          "meanPredPct": 38.03,
+          "realizedPct": 52.55
+        },
+        {
+          "bucket": "Q2",
+          "n": 2767,
+          "meanPredPct": 41.55,
+          "realizedPct": 50.52
+        },
+        {
+          "bucket": "Q3",
+          "n": 2767,
+          "meanPredPct": 44.08,
+          "realizedPct": 55.84
+        },
+        {
+          "bucket": "Q4",
+          "n": 2767,
+          "meanPredPct": 47.69,
+          "realizedPct": 52.33
+        },
+        {
+          "bucket": "Q5",
+          "n": 2767,
+          "meanPredPct": 54.6,
+          "realizedPct": 62.34
+        }
+      ],
+      "topDecile": {
+        "n": 1384,
+        "winRatePct": 66.91,
+        "ssotBuyOverlapPct": 15.25,
+        "nonOverlap": {
+          "n": 137,
+          "winRatePct": 66.42,
+          "wilson95Pct": [
+            58.16,
+            73.79
+          ]
+        },
+        "edgeVsBasePp": 12.19
+      }
+    },
+    {
+      "year": "2024",
+      "isSamples": 21954,
+      "oosSamples": 13946,
+      "isBaseRatePct": 53.02,
+      "oosBaseRatePct": 57.14,
+      "brierModel": 0.2509,
+      "brierBase": 0.2466,
+      "brierSkill": -0.0174,
+      "brierRecal": 0.2519,
+      "recalSkill": -0.0215,
+      "reliability": [
+        {
+          "bucket": "Q1",
+          "n": 2789,
+          "meanPredPct": 46.06,
+          "realizedPct": 57.66
+        },
+        {
+          "bucket": "Q2",
+          "n": 2789,
+          "meanPredPct": 48.13,
+          "realizedPct": 56.19
+        },
+        {
+          "bucket": "Q3",
+          "n": 2789,
+          "meanPredPct": 50.01,
+          "realizedPct": 57.91
+        },
+        {
+          "bucket": "Q4",
+          "n": 2789,
+          "meanPredPct": 52.73,
+          "realizedPct": 56.54
+        },
+        {
+          "bucket": "Q5",
+          "n": 2790,
+          "meanPredPct": 59.7,
+          "realizedPct": 57.42
+        }
+      ],
+      "topDecile": {
+        "n": 1395,
+        "winRatePct": 57.2,
+        "ssotBuyOverlapPct": 18.42,
+        "nonOverlap": {
+          "n": 127,
+          "winRatePct": 57.48,
+          "wilson95Pct": [
+            48.79,
+            65.73
+          ]
+        },
+        "edgeVsBasePp": 0.06
+      }
+    },
+    {
+      "year": "2025",
+      "isSamples": 36180,
+      "oosSamples": 13835,
+      "isBaseRatePct": 55.19,
+      "oosBaseRatePct": 54.2,
+      "brierModel": 0.2479,
+      "brierBase": 0.24834,
+      "brierSkill": 0.0018,
+      "brierRecal": 0.24967,
+      "recalSkill": -0.0054,
+      "reliability": [
+        {
+          "bucket": "Q1",
+          "n": 2767,
+          "meanPredPct": 50.92,
+          "realizedPct": 50.7
+        },
+        {
+          "bucket": "Q2",
+          "n": 2767,
+          "meanPredPct": 52.84,
+          "realizedPct": 53.2
+        },
+        {
+          "bucket": "Q3",
+          "n": 2767,
+          "meanPredPct": 54.36,
+          "realizedPct": 54.57
+        },
+        {
+          "bucket": "Q4",
+          "n": 2767,
+          "meanPredPct": 56.47,
+          "realizedPct": 54.43
+        },
+        {
+          "bucket": "Q5",
+          "n": 2767,
+          "meanPredPct": 61.85,
+          "realizedPct": 58.08
+        }
+      ],
+      "topDecile": {
+        "n": 1384,
+        "winRatePct": 61.49,
+        "ssotBuyOverlapPct": 21.24,
+        "nonOverlap": {
+          "n": 132,
+          "winRatePct": 59.85,
+          "wilson95Pct": [
+            51.32,
+            67.82
+          ]
+        },
+        "edgeVsBasePp": 7.29
+      }
+    },
+    {
+      "year": "2026",
+      "isSamples": 50295,
+      "oosSamples": 5605,
+      "isBaseRatePct": 54.58,
+      "oosBaseRatePct": 49.9,
+      "brierModel": 0.25277,
+      "brierBase": 0.25219,
+      "brierSkill": -0.0023,
+      "brierRecal": 0.25154,
+      "recalSkill": 0.0026,
+      "reliability": [
+        {
+          "bucket": "Q1",
+          "n": 1121,
+          "meanPredPct": 51.02,
+          "realizedPct": 50.49
+        },
+        {
+          "bucket": "Q2",
+          "n": 1121,
+          "meanPredPct": 52.9,
+          "realizedPct": 52.01
+        },
+        {
+          "bucket": "Q3",
+          "n": 1121,
+          "meanPredPct": 54.5,
+          "realizedPct": 45.41
+        },
+        {
+          "bucket": "Q4",
+          "n": 1121,
+          "meanPredPct": 56.66,
+          "realizedPct": 44.6
+        },
+        {
+          "bucket": "Q5",
+          "n": 1121,
+          "meanPredPct": 61.26,
+          "realizedPct": 57
+        }
+      ],
+      "topDecile": {
+        "n": 561,
+        "winRatePct": 55.79,
+        "ssotBuyOverlapPct": 14.26,
+        "nonOverlap": {
+          "n": 52,
+          "winRatePct": 55.77,
+          "wilson95Pct": [
+            42.34,
+            68.4
+          ]
+        },
+        "edgeVsBasePp": 5.89
+      }
+    }
+  ],
+  "pooled": {
+    "oosSamples": 47221,
+    "oosBaseRatePct": 54.71,
+    "brierModel": 0.25168,
+    "brierBase": 0.2487,
+    "brierSkill": -0.012,
+    "brierRecal": 0.25427,
+    "recalSkill": -0.0224,
+    "topDecile": {
+      "n": 4724,
+      "winRatePct": 61.13,
+      "ssotBuyOverlapPct": 17.82,
+      "edgeVsBasePp": 6.43,
+      "nonOverlap": {
+        "n": 448,
+        "winRatePct": 60.71,
+        "wilson95Pct": [
+          56.12,
+          65.13
+        ]
+      }
+    }
+  },
+  "acceptance": {
+    "calibration": "pooled OOS Brier(RECALIBRATED: recency-window isotonic on last IS year) < Brier(IS-base-rate constant); raw logistic Brier reported alongside",
+    "discrimination": "pooled top-decile NON-OVERLAP Wilson95 lower bound > pooled OOS base rate",
+    "calibrationPass": false,
+    "discriminationPass": true
+  },
+  "verdict": "REJECTED"
+}
