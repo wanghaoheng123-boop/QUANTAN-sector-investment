@@ -314,19 +314,28 @@ describe('enhancedCombinedSignal — exact per-indicator score pins', () => {
     expect(s.totalWeightedScore).toBeCloseTo(sum, 10)
   })
 
-  it('exponential uptrend (EXTREME_BULL/OVERBOUGHT): exact pins', () => {
+  it('exponential uptrend (EXTREME_BULL/OVERBOUGHT): pure-math pins', () => {
     const rows = makeOhlcv(300, (i) => 100 * Math.pow(1.004, i), 0.2)
     const { closes, bars, ohlcv, price } = sigInputs(rows)
     const s = enhancedCombinedSignal('TST', '2026-01-01', price, closes, bars, ohlcv)
     expect(s.action).toBe('HOLD')
     expect(s.confidence).toBe(44)
-    expect(s.totalWeightedScore).toBeCloseTo(0.14851, 5)
     expect(s.regime.zone).toBe('EXTREME_BULL')
     expect(s.regime.dipSignal).toBe('OVERBOUGHT')
-    expect(s.multiTfScore).toBe(2)
+    // RSI/MACD/ATR/BB scores are pure closes/bars arithmetic — pin exactly.
+    // The Vol-POC zone score on THIS fixture sits on a volume-profile bin
+    // boundary (1-ulp Math.pow differences flip it across Node versions —
+    // observed 2026-07-16, Node 20 CI vs Node 25 local), so the zone-coupled
+    // components and the total are asserted structurally instead.
     const scores = s.weightedConfirms.map((c) => c.score)
-    const expected = [-1, 0.815495, 0.499981, -0.812534, -0.5, 0.666667, 0.5]
-    expected.forEach((e, i) => expect(scores[i]).toBeCloseTo(e, 5))
+    ;[-1, 0.815495, 0.499981, -0.812534].forEach((e, i) => expect(scores[i]).toBeCloseTo(e, 5))
+    scores.forEach((v) => expect(Math.abs(v)).toBeLessThanOrEqual(1))
+    // Ensemble identity always holds: total = Σ weightedScore (no gate bonuses)
+    const sum = s.weightedConfirms.reduce((a, c) => a + c.weightedScore, 0)
+    expect(s.totalWeightedScore).toBeCloseTo(sum, 10)
+    // Below the 0.25 BUY threshold on every runtime seen (0.119–0.149)
+    expect(s.totalWeightedScore).toBeGreaterThan(0)
+    expect(s.totalWeightedScore).toBeLessThan(0.25)
   })
 
   it('falling knife (CRASH_ZONE): SELL with Kelly 1.0 and exact pins', () => {
