@@ -485,8 +485,25 @@ export function stochRsiArray(
     stoch[i] = max - min > 0 ? ((rsi[i] - min) / (max - min)) * 100 : 50
   }
   const smoothFn = smoothing === 'sma' ? smaArray : emaFull
-  const k = smoothFn(stoch, kSmooth)
-  const d = smoothFn(k, dSmooth)
+  // NaN-prefix-safe smoothing. The stoch series is NaN through the RSI
+  // warmup, and emaFull seeds its EMA from the mean of the FIRST `period`
+  // values — NaN here — which propagated NaN through the ENTIRE k/d output:
+  // the default-EMA StochRSI returned all-NaN for every input (found
+  // 2026-07-16 via Q-074 direct tests; the prior test only asserted array
+  // lengths). k itself is NaN-padded by its own smoothing warmup, so d needs
+  // the same treatment. Smooth the finite tail only and re-pad. The SMA path
+  // is unchanged by this (its windows already cleared the NaN prefix at the
+  // same offset).
+  const smoothFinite = (values: number[], period: number): number[] => {
+    const out = new Array<number>(values.length).fill(NaN)
+    const first = values.findIndex(Number.isFinite)
+    if (first < 0) return out
+    const tail = smoothFn(values.slice(first), period)
+    for (let i = 0; i < tail.length; i++) out[first + i] = tail[i]
+    return out
+  }
+  const k = smoothFinite(stoch, kSmooth)
+  const d = smoothFinite(k, dSmooth)
   return { k, d }
 }
 

@@ -1612,7 +1612,7 @@
     "title": "Direct unit tests for 24 untested quant exports",
     "domain": "Testing",
     "priority": "P1",
-    "status": "pending",
+    "status": "done",
     "files": [
       "lib/quant/",
       "__tests__/quant/"
@@ -1623,7 +1623,8 @@
     "verify_commands": [
       "npm run test"
     ],
-    "notes_2026_06_03": "Quant audit 197b833e: 183 exports, 24 untested, 0 algorithm bugs."
+    "notes_2026_06_03": "Quant audit 197b833e: 183 exports, 24 untested, 0 algorithm bugs.",
+    "resolution_2026_07_16": "All 24 audit-flagged exports now have direct test references: 14 covered by __tests__/quant/untestedExports.q074.test.ts (this PR), 9 by __tests__/backtest/mutationHardening.golden.test.ts (Q-075 PR #109), CODEX_FRAMEWORKS already in frameworks.test.ts. BONUS FIX: the direct tests caught stochRsiArray returning ALL-NaN k/d for every input under the default EMA smoothing (emaFull seeded from the NaN warmup prefix; the prior test only checked array lengths). Fixed with NaN-prefix-safe smoothing at both k and d levels + regression test. No production consumers (dormant defect) \u2014 published numbers unaffected."
   },
   {
     "id": "Q-075",

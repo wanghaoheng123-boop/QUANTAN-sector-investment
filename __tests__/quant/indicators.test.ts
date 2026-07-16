@@ -403,6 +403,25 @@ describe('Stochastic RSI', () => {
     expect(k).toHaveLength(200)
     expect(d).toHaveLength(200)
   })
+
+  it('emits FINITE k/d after warmup under BOTH smoothings (2026-07-16 regression)', () => {
+    // Regression: emaFull seeded its EMA from the NaN warmup prefix, so the
+    // default-EMA StochRSI returned ALL-NaN k/d for every input — the length
+    // check above sailed right past it.
+    const longData = Array.from({ length: 200 }, (_, i) => 100 + Math.sin(i / 3) * 20)
+    for (const smoothing of ['ema', 'sma'] as const) {
+      const { k, d } = stochRsiArray(longData, 14, 3, 3, smoothing)
+      const finiteK = k.filter(Number.isFinite)
+      const finiteD = d.filter(Number.isFinite)
+      expect(finiteK.length).toBeGreaterThan(150)
+      expect(finiteD.length).toBeGreaterThan(150)
+      // StochRSI is bounded in [0, 100]
+      // FP epsilon: SMA/EMA round-off can land ~1e-15 outside [0, 100]
+      finiteK.forEach((v) => { expect(v).toBeGreaterThanOrEqual(-1e-9); expect(v).toBeLessThanOrEqual(100 + 1e-9) })
+      expect(Number.isFinite(k[k.length - 1])).toBe(true)
+      expect(Number.isFinite(d[d.length - 1])).toBe(true)
+    }
+  })
 })
 
 // ─── Wilder smoothing (Phase 13 S2 — F2.2) ──────────────────────────────────
