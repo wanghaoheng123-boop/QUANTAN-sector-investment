@@ -121,6 +121,35 @@ legacy policy stays available via `exit: DEFAULT_EXIT_CONFIG`.
 verified `npm run benchmark` byte-identical (57.35 gross / 56.33 net,
 edge +2.31pp) after the change.
 
+## 1e. H-DECISION engine hold-horizon re-baseline — 60 bars (2026-07-16)
+
+Both engines' default TIME exit moved **20 → 60 bars**
+(`DEFAULT_TIME_EXIT_CONFIG`, exitRules.ts) under a pre-registered D3-style
+acceptance test (`npm run experiment:hold-horizon`,
+`workspace/optimization-runs/hold-horizon-decision.json`, owner-delegated):
+H60 beat the H20 incumbent on **both Sharpe and MAR in 4/4** purged OOS
+segments (2023/2024/2025/2026H1), including 2024 — the regime year that
+rejected every prior candidate (H60 +3.34% vs H20 −5.61%). H=40
+underperformed both (not a monotonic-holding artifact). Corroboration: C7
+(rotation walk-forward preferred H=60) and the Q-076 purged grid (H60 = only
+positive IS Sharpe; OOS 2025→ +18.58%, WR 60.34%, maxDD 8.11%).
+
+**Measured on the 56-instrument fixtures (07-12 refresh), H20 → H60:**
+- Portfolio engine (defaults, full window): 307 → 153 trades, net WR
+  55.37% → **62.75%**, total return +8.31% → **+53.47%**, maxDD
+  9.87% → **6.87%**, Sharpe −0.634 → **+0.198**.
+- Per-instrument engine (feeds /api/backtest): 339 → 226 trades, net WR
+  54.28% → **64.60%**, eq-weight total return +1.23% → **+3.32%**.
+
+**The label pipeline keeps its own 20d horizon**: `LABEL_HOLD_DAYS` stays 20,
+the published label WR / base rate / D1 edge gate are structurally
+unreachable from the engines — verified `scripts/benchmark-results.json`
+byte-identical after the change. `LABEL_MATCHED_EXIT_CONFIG` (H=20) remains
+exported for research runs needing engine↔label horizon parity. Note the
+engine WR (64.60%) is now measured on a LONGER horizon than the published
+label WR (56.33%) — they are different quantities and must not be compared
+directly.
+
 ## 2. Portfolio backtest — captured 2026-05-23 (Q-002 closed)
 
 ```

@@ -7,7 +7,7 @@ import type { OhlcBar } from '@/lib/quant/indicators'
 import { resolveBacktestSignal, DEFAULT_CONFIG, type BacktestConfig } from './signals'
 import { sortinoRatio, atrArray as atr } from '@/lib/quant/indicators'
 import { getRiskFreeRateSync } from '@/lib/quant/riskFreeRate'
-import { LABEL_MATCHED_EXIT_CONFIG } from './exitRules'
+import { DEFAULT_TIME_EXIT_CONFIG } from './exitRules'
 import { costBpsPerSide, DEFAULT_EXECUTION_COSTS } from './executionModel'
 
 // ─── Transaction cost model (SSOT: lib/backtest/executionModel.ts) ───────────
@@ -288,19 +288,22 @@ export function backtestInstrument(
     const lookbackCloses = closes.slice(0, i + 1)
     const lookbackBars = bars.slice(0, i + 1)
 
-    // ── D2 (2026-07-11): label-matched TIME EXIT — the only position-level exit ──
+    // ── D2 (2026-07-11): TIME EXIT — the only position-level exit ──
     // The former ATR-adaptive stop + trailing/break-even stops are RETIRED.
     // Measured on frozen data they inverted the dip edge (buy weakness, then
     // stop exactly where pullback noise lives): without them the engine's net
     // trade WR went 24.0% → 54.13% and total return 1× → 3.3× (R1 acceptance
     // experiment, reviews/RETHINK-2026-07-11/ + `npm run experiment:stop-removal`).
-    // Positions exit after LABEL_MATCHED_EXIT_CONFIG.maxHoldDays bars (20 —
-    // the horizon the published label WR is measured on): observed at today's
-    // close, FILLED at tomorrow's open (T+1 symmetry with entries, same
-    // convention as the portfolio engine's time_exit). The portfolio-level
-    // max-drawdown circuit breaker below remains active.
+    // H-DECISION (2026-07-16): positions exit after
+    // DEFAULT_TIME_EXIT_CONFIG.maxHoldDays bars (60 — beat the 20-bar
+    // incumbent on Sharpe AND MAR in 4/4 OOS segments; see exitRules.ts doc +
+    // hold-horizon-decision.json; the published label WR keeps its own 20d
+    // horizon): observed at today's close, FILLED at tomorrow's open (T+1
+    // symmetry with entries, same convention as the portfolio engine's
+    // time_exit). The portfolio-level max-drawdown circuit breaker below
+    // remains active.
     if (state.openTrade && entryFillBar >= 0 &&
-        i - entryFillBar >= LABEL_MATCHED_EXIT_CONFIG.maxHoldDays) {
+        i - entryFillBar >= DEFAULT_TIME_EXIT_CONFIG.maxHoldDays) {
       // A corrupt next-open (0/NaN) cannot be traded: hold one more bar
       // (mirrors the entry-side guard) instead of poisoning the curve.
       if (Number.isFinite(nextOpen) && nextOpen > 0) {
