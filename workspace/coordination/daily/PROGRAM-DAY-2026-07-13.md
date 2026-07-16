@@ -40,11 +40,32 @@ Grid refresh filed as **Q-076 (P2, D6-adjacent)**.
 No new run since 07-09 (reviewed 07-10; NEW-C-5 contrast ×34 design-gated + NEW-C-6 standing).
 Weekly Monday schedule fires later today — review at next touch.
 
+## Session 2 — owner: "proceed" on scheduled-task + D6 + D7
+1. **Scheduled task**: 07-12 run left NO trace again (3rd occurrence). I cannot click Run-now
+   from a session — but the task is now updated with (a) a FIRST-ACTION HEARTBEAT write to
+   `workspace/coordination/daily/RUN-HEARTBEAT.log` (distinguishes "never started" from
+   "stalled mid-run"), (b) an approval-free FALLBACK for the runtime-errors sweep (gh + curl),
+   (c) refreshed post-rethink facts (D1 gate, D2/D4 exits, benchmark:oos:wf, Stryker shards,
+   current backlog), (d) completion notifications to this session. Next fire ~09:07 local —
+   the heartbeat will finally localize the failure. **Owner one-click still the clean fix.**
+2. **D6 EXPERIMENT — REJECTED as specified, with the program's best lead.**
+   `npm run experiment:calibrated-score` (129k samples, 47k OOS, D5 purge/embargo folds):
+   calibration FAILS (Brier −1.2% vs base; recency-isotonic recal WORSE pooled −2.2% — base-rate
+   regime shift is binding) → **real-Kelly sizing stays blocked**. Discrimination PASSES:
+   **top-decile non-overlap WR 60.71%, Wilson95 [56.12, 65.13] — first honest CI lower bound
+   above the base rate (54.71%)**; positive edge all 4 OOS years incl. 2024–25; only 17.8%
+   overlap with SSOT BUYs. → **Q-077 (P1)**: score-RANKED selection + label-matched exits as
+   the v2 entry-rule candidate (ranking needs no calibration).
+3. **D7 memo shipped**: `reviews/RETHINK-2026-07-11/D7-POINT-IN-TIME-UNIVERSE.md`. First-order
+   survivorship already neutralized by D1 reporting; second-order (edge on delisted losers)
+   needs delisted-inclusive data → recommend Sharadar ≈$49/mo for ONE month + PIT re-benchmark
+   on the D5 harness. **Subscribing = owner decision.**
+
 ## Owner attention
-- Scheduled-task one-click (Run now + approve Vercel tools) STILL pending — the autonomous
-  daily program remains manual-stand-in.
-- D6 (calibrated score + real Kelly sizing on the D5 harness) is the next return lever;
-  D7 (point-in-time universe) still open. CSP flip / Q09-1 / npm audit unchanged.
+- Scheduled-task one-click (Run now + approve Vercel tools) still the clean fix; heartbeat
+  diagnostic now armed, completion notification subscribed.
+- **Decisions now open: D7 data purchase (≈$49 one month, cancellable)**; Q-077 is the next
+  experiment (agent-runnable, no gate). CSP flip / Q09-1 / npm audit unchanged.
 
 ## Verify (A–F)
 A tests 738/738 targeted + CI · B tsc PASS · C benchmark PASS (D1 gate) + WF OOS PASS ·
