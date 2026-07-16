@@ -13,8 +13,11 @@
  * ⚠️ TWO STANDING CAVEATS (this is a RESEARCH tool — do not read its numbers as live perf):
  *   1. Loop 1 (2026-04-29 run): aggregate OOS WR ~25.7%, far below the production floor.
  *      Do NOT ship grid winners as production defaults until the enhanced path recovers.
- *   2. OOS metrics are SELECTION-BIASED (params chosen by max OOS Sharpe, then that same
- *      OOS Sharpe reported — needs a 3rd held-out test split). See gridSearch.ts header.
+ *   2. Legacy Loop 1/2 OOS metrics are SELECTION-BIASED (params chosen by max OOS Sharpe,
+ *      then that same OOS Sharpe reported). Q-068 (2026-07-16): the LOOP 1P section below
+ *      re-runs the same grid through gridSearchPurged — per-fold selection on IS ONLY,
+ *      purged boundaries, embargo — and its pooled OOS numbers are the HONEST ones.
+ *      Param ADOPTION (sector profiles) stays owner-gated either way.
  *
  * Usage: npm run optimize:grid
  */
@@ -23,8 +26,8 @@ import { readFileSync, readdirSync, writeFileSync, existsSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 
-import { gridSearch, aggregateGridResults } from '../lib/optimize/gridSearch'
-import type { GridSearchSummary, GridSearchResult } from '../lib/optimize/gridSearch'
+import { gridSearch, gridSearchPurged, aggregateGridResults } from '../lib/optimize/gridSearch'
+import type { GridSearchSummary, GridSearchResult, PurgedGridSummary } from '../lib/optimize/gridSearch'
 import type { OhlcvRow } from '../lib/backtest/dataLoader'
 import {
   LOOP1_GRID,
@@ -154,6 +157,30 @@ function runLoop1(
   }
 
   return summaries
+}
+
+// ─── Loop 1P (Q-068): purged walk-forward re-run of the Loop 1 grid ──────────
+
+function runLoop1Purged(
+  instruments: Array<{ ticker: string; sector: string; rows: OhlcvRow[] }>,
+): PurgedGridSummary[] {
+  console.log('\n══════════════════════════════════════════════════════')
+  console.log('  LOOP 1P — Purged Walk-Forward Grid (Q-068, honest OOS)')
+  console.log('  Per-fold selection on IS ONLY | purged boundaries | 5-bar embargo')
+  console.log('══════════════════════════════════════════════════════\n')
+
+  const out: PurgedGridSummary[] = []
+  for (const { ticker, sector, rows } of instruments) {
+    process.stdout.write(`  [${sector.padEnd(18)}] ${ticker.padEnd(8)} `)
+    const s = gridSearchPurged(rows, LOOP1_GRID, ticker, sector)
+    out.push(s)
+    console.log(
+      `folds: ${s.folds.length}  pooled OOS: WR ${s.meanOosWinRate != null ? (s.meanOosWinRate * 100).toFixed(1) + '%' : '  N/A'} ` +
+      `(n=${s.pooledOosTrades})  meanSharpe ${s.meanOosSharpe != null ? s.meanOosSharpe.toFixed(2) : 'N/A'}  ` +
+      `modal: ${Object.entries(s.modalParams).map(([k, v]) => `${k}=${v}`).join(' ') || '—'}`,
+    )
+  }
+  return out
 }
 
 // ─── Loop 2: Per-sector narrow grid search ────────────────────────────────────
@@ -340,6 +367,17 @@ else targetsMissed.push(`overfit gap ${(avgGap1 * 100).toFixed(1)}pp > 8pp cap`)
 if (targetsHit.length > 0) console.log(`\n  ✓ Targets hit:   ${targetsHit.join(' | ')}`)
 if (targetsMissed.length > 0) console.log(`  ✗ Targets missed: ${targetsMissed.join(' | ')}`)
 
+// ── Loop 1P (Q-068 purged honest re-run) ─────────────────────────────────────
+const loop1Purged = runLoop1Purged(allData)
+const purgedWithFolds = loop1Purged.filter(s => s.folds.length > 0 && s.pooledOosTrades > 0)
+const purgedPooledTrades = purgedWithFolds.reduce((s, r) => s + r.pooledOosTrades, 0)
+const purgedPooledWins = purgedWithFolds.reduce(
+  (s, r) => s + (r.meanOosWinRate ?? 0) * r.pooledOosTrades, 0)
+const purgedPooledWR = purgedPooledTrades > 0 ? purgedPooledWins / purgedPooledTrades : null
+console.log('\n  LOOP 1P AGGREGATE (honest, selection never saw OOS):')
+console.log(`  Instruments with evaluable folds: ${purgedWithFolds.length}/${loop1Purged.length}`)
+console.log(`  Pooled OOS trades: ${purgedPooledTrades}  Pooled OOS WR: ${purgedPooledWR != null ? (purgedPooledWR * 100).toFixed(2) + '%' : 'N/A'}`)
+
 // ── Loop 2 ────────────────────────────────────────────────────────────────────
 const loop2Results = runLoop2(allData, loop1Summaries)
 
@@ -403,6 +441,24 @@ const output = {
         overfitGap: Number((r.overfitGap * 100).toFixed(1)),
       })),
       robustParams: s.robustParams,
+    })),
+  },
+  loop1Purged: {
+    protocol:
+      'Q-068: gridSearchPurged per instrument — per-fold selection on IS only, purged boundaries, 5-bar embargo; pooled OOS is honest (selection never saw it)',
+    aggregate: {
+      instrumentsWithFolds: purgedWithFolds.length,
+      pooledOosTrades: purgedPooledTrades,
+      pooledOosWinRate: purgedPooledWR != null ? Number((purgedPooledWR * 100).toFixed(2)) : null,
+    },
+    byInstrument: loop1Purged.map(s => ({
+      ticker: s.ticker,
+      sector: s.sector,
+      folds: s.folds,
+      meanOosWinRate: s.meanOosWinRate != null ? Number((s.meanOosWinRate * 100).toFixed(1)) : null,
+      meanOosSharpe: s.meanOosSharpe != null ? Number(s.meanOosSharpe.toFixed(3)) : null,
+      pooledOosTrades: s.pooledOosTrades,
+      modalParams: s.modalParams,
     })),
   },
   loop2: {
