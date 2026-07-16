@@ -20,7 +20,7 @@
       "npm run benchmark",
       "npm run check:ci"
     ],
-    "notes_2026_05_23": "DONE. ci.yml expanded from typecheck-only to 4 parallel jobs: typecheck + test + benchmark (with inline WR floor check at 55.85% per invariants-baseline) + smoke. Validated YAML structure. Live verification still requires GitHub Actions run on a real PR — commit + push when user approves."
+    "notes_2026_05_23": "DONE. ci.yml expanded from typecheck-only to 4 parallel jobs: typecheck + test + benchmark (with inline WR floor check at 55.85% per invariants-baseline) + smoke. Validated YAML structure. Live verification still requires GitHub Actions run on a real PR \u2014 commit + push when user approves."
   },
   {
     "id": "Q-026",
@@ -48,7 +48,7 @@
       "npm run typecheck",
       "npm run test"
     ],
-    "notes_2026_05_23": "RESOLVED. All deleted files exist on the worktree+main: lib/portfolio/{tracker,var,riskParity,diversification,stressTest}.ts present; lib/data/providers/{alphavantage,fred,polygon,yahoo,types,index}.ts present; components/SectorRotationPanel.tsx present (143 LOC); AuthNav intentionally replaced by SafeAuth.tsx. PR #16 merged worktree → main on 2026-05-23."
+    "notes_2026_05_23": "RESOLVED. All deleted files exist on the worktree+main: lib/portfolio/{tracker,var,riskParity,diversification,stressTest}.ts present; lib/data/providers/{alphavantage,fred,polygon,yahoo,types,index}.ts present; components/SectorRotationPanel.tsx present (143 LOC); AuthNav intentionally replaced by SafeAuth.tsx. PR #16 merged worktree \u2192 main on 2026-05-23."
   },
   {
     "id": "Q-009",
@@ -73,7 +73,7 @@
     ],
     "notes_2026_05_23": "Current enhanced WR = 52.63%, vsBaseline.improvement = -3.72pp. Still well below 56.35% floor. C2 must feature-flag enhanced path off in production until improvement >= 0.",
     "completed_at": "2026-05-24",
-    "notes_2026_05_24": "Current enhanced WR = 52.63%, vsBaseline.improvement = -3.72pp. Still well below 56.35% floor. C2 must feature-flag enhanced path off in production until improvement >= 0. | 2026-05-24 Cursor Phase 15 completion batch — see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
+    "notes_2026_05_24": "Current enhanced WR = 52.63%, vsBaseline.improvement = -3.72pp. Still well below 56.35% floor. C2 must feature-flag enhanced path off in production until improvement >= 0. | 2026-05-24 Cursor Phase 15 completion batch \u2014 see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
   },
   {
     "id": "Q-003",
@@ -120,7 +120,7 @@
     ],
     "notes_2026_05_23": "Confirmed open. lib/api/rateLimit.ts:13 still uses per-process Map. Migrate to Vercel KV with Lua atomic update in S2.",
     "completed_at": "2026-05-24",
-    "notes_2026_05_24": "Confirmed open. lib/api/rateLimit.ts:13 still uses per-process Map. Migrate to Vercel KV with Lua atomic update in S2. | 2026-05-24 Cursor Phase 15 completion batch — see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md",
+    "notes_2026_05_24": "Confirmed open. lib/api/rateLimit.ts:13 still uses per-process Map. Migrate to Vercel KV with Lua atomic update in S2. | 2026-05-24 Cursor Phase 15 completion batch \u2014 see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md",
     "notes_2026_06_02_reconcile": "Reconciled 2026-06-02 handover: default remains per-process Map; KV path is opt-in via env (documented in lib/api/rateLimit.ts). Status flipped to partial until KV deployed in production.",
     "notes_2026_06_03": ".env.example documents Vercel KV setup; code path already in applyRateLimit()."
   },
@@ -145,7 +145,7 @@
       "npm run portfolio:backtest",
       "test -f scripts/portfolio-backtest-results.json"
     ],
-    "notes_2026_05_23": "DONE (Cursor subagent). Re-ran portfolio:backtest 2026-05-23 (124.9s, 56 instruments). Best hold25_pt10_trail6_panic4: WR 54.66%, maxDD 14.24%. invariants-baseline.md §2 updated with reader note (ranking[0].metrics)."
+    "notes_2026_05_23": "DONE (Cursor subagent). Re-ran portfolio:backtest 2026-05-23 (124.9s, 56 instruments). Best hold25_pt10_trail6_panic4: WR 54.66%, maxDD 14.24%. invariants-baseline.md \u00a72 updated with reader note (ranking[0].metrics)."
   },
   {
     "id": "Q-004",
@@ -171,11 +171,11 @@
       "npm run test",
       "npm run typecheck"
     ],
-    "notes_2026_05_23": "Open. FRED provider exists (lib/data/providers/fred.ts) but not wired to RFR consumers. Phase 15 S2 priority — triggers WR baseline re-freeze.",
+    "notes_2026_05_23": "Open. FRED provider exists (lib/data/providers/fred.ts) but not wired to RFR consumers. Phase 15 S2 priority \u2014 triggers WR baseline re-freeze.",
     "completed_at": "2026-06-02",
-    "notes_2026_05_24": "PARTIAL. lib/quant/riskFreeRate.ts exists with sync + async + FRED CSV. engine.ts:434/445/591/671 calls getRiskFreeRateSync. BUT (a) the cache is never hydrated (no module-init async warm-up), so sync calls return the static fallback BACKTEST_RFR_ANNUAL=0.045 verbatim — Q-004 is functionally inert for the benchmark; (b) lib/options/chain.ts:56 still imports the static OPTIONS_RFR_ANNUAL constant directly; (c) lib/backtest/portfolioBacktest.ts:529 still uses BACKTEST_RFR_ANNUAL directly. Continuation: Q-052-NEW. | 2026-05-24 Claude-Code review: Cursor's HANDOFF + PENDING_TASKS_AUDIT honestly described this as partial, but the JSON status field was set to 'done'. Flipped to 'partial' to match physical reality. See workspace/REVIEW_2026-05-24.md.",
+    "notes_2026_05_24": "PARTIAL. lib/quant/riskFreeRate.ts exists with sync + async + FRED CSV. engine.ts:434/445/591/671 calls getRiskFreeRateSync. BUT (a) the cache is never hydrated (no module-init async warm-up), so sync calls return the static fallback BACKTEST_RFR_ANNUAL=0.045 verbatim \u2014 Q-004 is functionally inert for the benchmark; (b) lib/options/chain.ts:56 still imports the static OPTIONS_RFR_ANNUAL constant directly; (c) lib/backtest/portfolioBacktest.ts:529 still uses BACKTEST_RFR_ANNUAL directly. Continuation: Q-052-NEW. | 2026-05-24 Claude-Code review: Cursor's HANDOFF + PENDING_TASKS_AUDIT honestly described this as partial, but the JSON status field was set to 'done'. Flipped to 'partial' to match physical reality. See workspace/REVIEW_2026-05-24.md.",
     "notes_2026_06_02": "PROD ACTIVE. Owner set QUANTAN_FRED_PREWARM=1 on quantan Production (deploy dpl_6huKCcxVyL11rkAJ8TzoQX7aCz5t). Code: lib/quant/riskFreeRate.ts module-init prewarm; chain.ts + portfolioBacktest.ts on getRiskFreeRateSync. Benchmark WR unchanged in CI (cold cache by design); prod Sharpe/Sortino/Greeks FRED-backed.",
-    "prior_closure_note": "Open. FRED provider exists (lib/data/providers/fred.ts) but not wired to RFR consumers. Phase 15 S2 priority — triggers WR baseline re-freeze. | 2026-05-24 Cursor Phase 15 completion batch — see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
+    "prior_closure_note": "Open. FRED provider exists (lib/data/providers/fred.ts) but not wired to RFR consumers. Phase 15 S2 priority \u2014 triggers WR baseline re-freeze. | 2026-05-24 Cursor Phase 15 completion batch \u2014 see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
   },
   {
     "id": "Q-006",
@@ -242,12 +242,12 @@
       "npm run typecheck",
       "npm run check:smoke:local"
     ],
-    "notes_2026_05_23": "Confirmed 1,684 LOC (grew from 1,653). Phase 15 S3 decomposes to ≤ 5 sub-tabs each ≤ 400 LOC.",
+    "notes_2026_05_23": "Confirmed 1,684 LOC (grew from 1,653). Phase 15 S3 decomposes to \u2264 5 sub-tabs each \u2264 400 LOC.",
     "completed_at": null,
     "notes_2026_05_24": "PARTIAL. components/stock/QuantLabMarketCards.tsx extracted, but components/stock/QuantLabPanel.tsx is still 1,684 LOC (no change from baseline). Continuation: Q-053-NEW. | 2026-05-24 Claude-Code review: Cursor's HANDOFF + PENDING_TASKS_AUDIT honestly described this as partial, but the JSON status field was set to 'done'. Flipped to 'partial' to match physical reality. See workspace/REVIEW_2026-05-24.md.",
-    "notes_2026_06_01": "CLOSED. Verified components/stock/QuantLabPanel.tsx is now 148 LOC (decomposed via Q-053-NEW; was 1,684). Meets the ≤600 LOC criterion. Evidence: inspection INSPECTION_PROGRAM_2026-05-30.md D3 (CONTRADICTS Q-008) + direct wc -l on main @ 8d56955.",
-    "partial": "Extracted submodule only; parent file still >600 LOC — Phase 16 full decompose",
-    "prior_closure_note": "Confirmed 1,684 LOC (grew from 1,653). Phase 15 S3 decomposes to ≤ 5 sub-tabs each ≤ 400 LOC. | 2026-05-24 Cursor Phase 15 completion batch — see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
+    "notes_2026_06_01": "CLOSED. Verified components/stock/QuantLabPanel.tsx is now 148 LOC (decomposed via Q-053-NEW; was 1,684). Meets the \u2264600 LOC criterion. Evidence: inspection INSPECTION_PROGRAM_2026-05-30.md D3 (CONTRADICTS Q-008) + direct wc -l on main @ 8d56955.",
+    "partial": "Extracted submodule only; parent file still >600 LOC \u2014 Phase 16 full decompose",
+    "prior_closure_note": "Confirmed 1,684 LOC (grew from 1,653). Phase 15 S3 decomposes to \u2264 5 sub-tabs each \u2264 400 LOC. | 2026-05-24 Cursor Phase 15 completion batch \u2014 see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
   },
   {
     "id": "Q-010",
@@ -269,7 +269,7 @@
       "npm run test",
       "npm run benchmark"
     ],
-    "notes_2026_05_23": "RESOLVED. Worktree commits merged via PR #16 (commit 7321b54) on 2026-05-23. Main now contains waves 35–41 (SSE real-time + options audit + Phase 14 S1 sweep)."
+    "notes_2026_05_23": "RESOLVED. Worktree commits merged via PR #16 (commit 7321b54) on 2026-05-23. Main now contains waves 35\u201341 (SSE real-time + options audit + Phase 14 S1 sweep)."
   },
   {
     "id": "Q-011",
@@ -297,7 +297,7 @@
     "depends_on": [
       "Q-026"
     ],
-    "notes_2026_05_23": "RESOLVED. All 5 portfolio modules present on disk. Portfolio dashboard page (Q-028) still missing — moved to S4."
+    "notes_2026_05_23": "RESOLVED. All 5 portfolio modules present on disk. Portfolio dashboard page (Q-028) still missing \u2014 moved to S4."
   },
   {
     "id": "Q-014",
@@ -317,7 +317,7 @@
     "verify_commands": [
       "npm run test"
     ],
-    "notes_2026_05_23": "DONE. invariants-baseline.md rewritten with Phase 15 amendment block: §3 test floor 279→798, files 21→48; §1 WR re-measured 57.05%; §4 LOC drift recorded; §7 security baseline NEW (incl. Q-029 closed + Q-039-NEW false-positive note). Historical Phase 13 values preserved at §H for audit continuity. Pending C2 sign-off — flag for PM."
+    "notes_2026_05_23": "DONE. invariants-baseline.md rewritten with Phase 15 amendment block: \u00a73 test floor 279\u2192798, files 21\u219248; \u00a71 WR re-measured 57.05%; \u00a74 LOC drift recorded; \u00a77 security baseline NEW (incl. Q-029 closed + Q-039-NEW false-positive note). Historical Phase 13 values preserved at \u00a7H for audit continuity. Pending C2 sign-off \u2014 flag for PM."
   },
   {
     "id": "Q-015",
@@ -384,12 +384,12 @@
       "npm run typecheck",
       "npm run check:smoke:local"
     ],
-    "notes_2026_05_23": "Confirmed 887 LOC. S3 target ≤ 200 (page) + presentational components.",
+    "notes_2026_05_23": "Confirmed 887 LOC. S3 target \u2264 200 (page) + presentational components.",
     "completed_at": null,
     "notes_2026_05_24": "PARTIAL. components/backtest/BacktestMetricsGrid.tsx extracted, but app/backtest/page.tsx is still 887 LOC (no change). Continuation: Q-054-NEW. | 2026-05-24 Claude-Code review: Cursor's HANDOFF + PENDING_TASKS_AUDIT honestly described this as partial, but the JSON status field was set to 'done'. Flipped to 'partial' to match physical reality. See workspace/REVIEW_2026-05-24.md.",
     "notes_2026_06_01": "CLOSED. Verified app/backtest/page.tsx is now 268 LOC (decomposed via Q-054-NEW; was 887). Meets the <400 LOC criterion. Evidence: inspection INSPECTION_PROGRAM_2026-05-30.md D3 (Q-019) + direct wc -l on main @ 8d56955.",
-    "partial": "Extracted submodule only; parent file still >600 LOC — Phase 16 full decompose",
-    "prior_closure_note": "Confirmed 887 LOC. S3 target ≤ 200 (page) + presentational components. | 2026-05-24 Cursor Phase 15 completion batch — see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
+    "partial": "Extracted submodule only; parent file still >600 LOC \u2014 Phase 16 full decompose",
+    "prior_closure_note": "Confirmed 887 LOC. S3 target \u2264 200 (page) + presentational components. | 2026-05-24 Cursor Phase 15 completion batch \u2014 see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
   },
   {
     "id": "Q-020",
@@ -410,7 +410,7 @@
     "verify_commands": [
       "npm run test -- __tests__/api/prices.test.ts"
     ],
-    "notes_2026_05_24": "DONE. __tests__/api/prices.test.ts — 400 invalid/too_many, 200 shape, 500 error envelope (mocked Yahoo)."
+    "notes_2026_05_24": "DONE. __tests__/api/prices.test.ts \u2014 400 invalid/too_many, 200 shape, 500 error envelope (mocked Yahoo)."
   },
   {
     "id": "Q-021",
@@ -432,7 +432,7 @@
     ],
     "notes_2026_05_23": "Open per ledger. Yahoo historical() includes dividends array; load and apply to B&H equity curve. Triggers WR baseline re-freeze.",
     "completed_at": "2026-05-24",
-    "notes_2026_05_24": "Open per ledger. Yahoo historical() includes dividends array; load and apply to B&H equity curve. Triggers WR baseline re-freeze. | 2026-05-24 Cursor Phase 15 completion batch — see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
+    "notes_2026_05_24": "Open per ledger. Yahoo historical() includes dividends array; load and apply to B&H equity curve. Triggers WR baseline re-freeze. | 2026-05-24 Cursor Phase 15 completion batch \u2014 see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
   },
   {
     "id": "Q-022",
@@ -457,7 +457,7 @@
     "depends_on": [
       "Q-001"
     ],
-    "notes_2026_05_23": "DONE. vitest.config.ts include[] expanded to lib/api, lib/data, lib/portfolio, lib/optimize, lib/ml, hooks. Expanded run measured 62.43% global (below 80% floor) → Q-051-NEW filed; coverage.exclude[] temporarily omits hooks, lib/ml, lib/optimize, lib/portfolio, lib/data/{providers,bloomberg}. With excludes: 82.25% stmts / 70.54% branches / 86.76% funcs / 84.08% lines — PASS. ci.yml coverage job added (Q-022)."
+    "notes_2026_05_23": "DONE. vitest.config.ts include[] expanded to lib/api, lib/data, lib/portfolio, lib/optimize, lib/ml, hooks. Expanded run measured 62.43% global (below 80% floor) \u2192 Q-051-NEW filed; coverage.exclude[] temporarily omits hooks, lib/ml, lib/optimize, lib/portfolio, lib/data/{providers,bloomberg}. With excludes: 82.25% stmts / 70.54% branches / 86.76% funcs / 84.08% lines \u2014 PASS. ci.yml coverage job added (Q-022)."
   },
   {
     "id": "Q-023",
@@ -481,7 +481,7 @@
       "npm run test -- __tests__/api/reliability.test.ts",
       "npm run typecheck"
     ],
-    "notes_2026_05_23": "DONE. (1) lib/api/reliability.ts: extracted buildErrorBody SSOT; spread-guard means undefined details no longer leaks as 'details: null' (per Phase 14 §S2.10 finding). (2) app/api/prices/route.ts: inline NODE_ENV sanitization replaced with sanitizeError() import from lib/api/sanitize. All 15 reliability tests pass; full suite 798/798 pass. Typecheck clean."
+    "notes_2026_05_23": "DONE. (1) lib/api/reliability.ts: extracted buildErrorBody SSOT; spread-guard means undefined details no longer leaks as 'details: null' (per Phase 14 \u00a7S2.10 finding). (2) app/api/prices/route.ts: inline NODE_ENV sanitization replaced with sanitizeError() import from lib/api/sanitize. All 15 reliability tests pass; full suite 798/798 pass. Typecheck clean."
   },
   {
     "id": "Q-024",
@@ -613,9 +613,9 @@
       "npm run test -- __tests__/backtest/signals.test.ts",
       "npm run benchmark"
     ],
-    "notes_2026_05_23": "Open per ledger. Wilder (1978) p65 piecewise: RSI<30 → +1.0; 30-70 linear; >70 → -1.0.",
+    "notes_2026_05_23": "Open per ledger. Wilder (1978) p65 piecewise: RSI<30 \u2192 +1.0; 30-70 linear; >70 \u2192 -1.0.",
     "completed_at": "2026-05-24",
-    "notes_2026_05_24": "Open per ledger. Wilder (1978) p65 piecewise: RSI<30 → +1.0; 30-70 linear; >70 → -1.0. | 2026-05-24 Cursor Phase 15 completion batch — see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
+    "notes_2026_05_24": "Open per ledger. Wilder (1978) p65 piecewise: RSI<30 \u2192 +1.0; 30-70 linear; >70 \u2192 -1.0. | 2026-05-24 Cursor Phase 15 completion batch \u2014 see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
   },
   {
     "id": "Q-027",
@@ -637,7 +637,7 @@
     ],
     "notes_2026_05_23": "Open. __tests__/components/ doesn't exist. S4 adds @testing-library/react + vitest jsdom env + 3 smoke tests.",
     "completed_at": "2026-05-24",
-    "notes_2026_05_24": "Open. __tests__/components/ doesn't exist. S4 adds @testing-library/react + vitest jsdom env + 3 smoke tests. | 2026-05-24 Cursor Phase 15 completion batch — see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
+    "notes_2026_05_24": "Open. __tests__/components/ doesn't exist. S4 adds @testing-library/react + vitest jsdom env + 3 smoke tests. | 2026-05-24 Cursor Phase 15 completion batch \u2014 see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
   },
   {
     "id": "Q-028",
@@ -663,7 +663,7 @@
     ],
     "notes_2026_05_23": "Open. No app/portfolio/page.tsx yet. S4 wires lib/portfolio + portfolio-backtest-results.json into a dashboard with portfolio Greeks (R9-H-2).",
     "completed_at": "2026-05-24",
-    "notes_2026_05_24": "Open. No app/portfolio/page.tsx yet. S4 wires lib/portfolio + portfolio-backtest-results.json into a dashboard with portfolio Greeks (R9-H-2). | 2026-05-24 Cursor Phase 15 completion batch — see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
+    "notes_2026_05_24": "Open. No app/portfolio/page.tsx yet. S4 wires lib/portfolio + portfolio-backtest-results.json into a dashboard with portfolio Greeks (R9-H-2). | 2026-05-24 Cursor Phase 15 completion batch \u2014 see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
   },
   {
     "id": "Q-029",
@@ -706,7 +706,7 @@
       "npm run test -- __tests__/ml/client.test.ts",
       "npm run check:smoke"
     ],
-    "notes_2026_05_24": "DONE. __tests__/ml/client.test.ts — happy path, non-OK, network error, abort, health up/down."
+    "notes_2026_05_24": "DONE. __tests__/ml/client.test.ts \u2014 happy path, non-OK, network error, abort, health up/down."
   },
   {
     "id": "Q-031",
@@ -800,7 +800,7 @@
       "test -f scripts/optimization-results-loop1.json",
       "npm run optimize:grid"
     ],
-    "notes_2026_05_24": "DONE. reviews/optimization-loop1.md + script header in optimize-grid.ts. Aggregate OOS WR 25.73% — not production-ready."
+    "notes_2026_05_24": "DONE. reviews/optimization-loop1.md + script header in optimize-grid.ts. Aggregate OOS WR 25.73% \u2014 not production-ready."
   },
   {
     "id": "Q-035",
@@ -820,11 +820,11 @@
     "verify_commands": [
       "npm run check:smoke:local"
     ],
-    "notes_2026_05_23": "Bundled into F5.6 / F6.5–F6.8 a11y sweep in S4.",
+    "notes_2026_05_23": "Bundled into F5.6 / F6.5\u2013F6.8 a11y sweep in S4.",
     "completed_at": "2026-06-03",
-    "notes_2026_05_24": "Bundled into F5.6 / F6.5–F6.8 a11y sweep in S4. | 2026-05-24 Cursor Phase 15 completion batch — see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md",
-    "notes_2026_06_01": "REOPENED as PARTIAL. 7 low-contrast text-gray-600/text-slate-600 sites survived the S4 close across 4 files (SectorRotationPanel, options/MaxPainGauge, options/FlowScanner, options/OptionsChainTable) — fail ~3.4:1 vs WCAG AA 4.5:1. Evidence: inspection INSPECTION_PROGRAM_2026-05-30.md D3-6 + grep on main @ 8d56955. FIX IN FLIGHT: PR #32 (a11y sweep) addresses these; OptionsChainTable is covered by PR #29. Mark done once #32+#29 merge.",
-    "notes_2026_06_03": "DONE. OptionsChainTable footer text-gray-600 → text-gray-400; grep clean in components/."
+    "notes_2026_05_24": "Bundled into F5.6 / F6.5\u2013F6.8 a11y sweep in S4. | 2026-05-24 Cursor Phase 15 completion batch \u2014 see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md",
+    "notes_2026_06_01": "REOPENED as PARTIAL. 7 low-contrast text-gray-600/text-slate-600 sites survived the S4 close across 4 files (SectorRotationPanel, options/MaxPainGauge, options/FlowScanner, options/OptionsChainTable) \u2014 fail ~3.4:1 vs WCAG AA 4.5:1. Evidence: inspection INSPECTION_PROGRAM_2026-05-30.md D3-6 + grep on main @ 8d56955. FIX IN FLIGHT: PR #32 (a11y sweep) addresses these; OptionsChainTable is covered by PR #29. Mark done once #32+#29 merge.",
+    "notes_2026_06_03": "DONE. OptionsChainTable footer text-gray-600 \u2192 text-gray-400; grep clean in components/."
   },
   {
     "id": "Q-036",
@@ -848,7 +848,7 @@
     "notes_2026_05_23": "Open per ledger. Double-submit cookie pattern; 1-day effort in S4.",
     "completed_at": "2026-05-24",
     "notes_2026_05_24": "CSRF guard closed via Q-055-NEW (cookie issuance + trading-agents POST validated). | 2026-05-24 superseded by the named continuation task. Closing here so the backlog tally reflects real outstanding work; the parent task's objectives live with its successor. (prior note: PARTIAL. lib/api/csrf.ts implemented and wired to app/api/backtest/route.ts:156 )",
-    "prior_closure_note": "Open per ledger. Double-submit cookie pattern; 1-day effort in S4. | 2026-05-24 Cursor Phase 15 completion batch — see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md",
+    "prior_closure_note": "Open per ledger. Double-submit cookie pattern; 1-day effort in S4. | 2026-05-24 Cursor Phase 15 completion batch \u2014 see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md",
     "superseded_by": "Q-055-NEW"
   },
   {
@@ -890,7 +890,7 @@
     ],
     "notes_2026_05_23": "Open per ledger. Documentation + UI tail-warning approach (avoids changing the metric).",
     "completed_at": "2026-05-24",
-    "notes_2026_05_24": "Open per ledger. Documentation + UI tail-warning approach (avoids changing the metric). | 2026-05-24 Cursor Phase 15 completion batch — see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
+    "notes_2026_05_24": "Open per ledger. Documentation + UI tail-warning approach (avoids changing the metric). | 2026-05-24 Cursor Phase 15 completion batch \u2014 see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
   },
   {
     "id": "Q-039-NEW",
@@ -911,7 +911,7 @@
     "verify_commands": [
       "od -c lib/auth.ts | grep test.trimmed"
     ],
-    "notes_2026_05_23": "FALSE POSITIVE — withdrawn. In-session execution discovered the file ALREADY contains /[\\x00-\\x1f\\x7f]/. Verified via od -c (bytes `[ \\0 - 037 177 ]`) and live JS eval ('John Smith' accepted; 'user\\x00name' rejected). The Read tool rendered NUL/US/DEL bytes as visual space/hyphen which made the line LOOK like /[ -]/ when displayed. Original Node REPL test re-typed the regex from Read output, not from file bytes — so it confirmed a phantom bug. F7.9 wrapper + predicate both correctly landed in Phase 13 S2. Lesson logged in PHASE-15-PLAN.md §1 and workspace/HANDOFF.md."
+    "notes_2026_05_23": "FALSE POSITIVE \u2014 withdrawn. In-session execution discovered the file ALREADY contains /[\\x00-\\x1f\\x7f]/. Verified via od -c (bytes `[ \\0 - 037 177 ]`) and live JS eval ('John Smith' accepted; 'user\\x00name' rejected). The Read tool rendered NUL/US/DEL bytes as visual space/hyphen which made the line LOOK like /[ -]/ when displayed. Original Node REPL test re-typed the regex from Read output, not from file bytes \u2014 so it confirmed a phantom bug. F7.9 wrapper + predicate both correctly landed in Phase 13 S2. Lesson logged in PHASE-15-PLAN.md \u00a71 and workspace/HANDOFF.md."
   },
   {
     "id": "Q-040-NEW",
@@ -933,10 +933,10 @@
       "npm run build",
       "curl -I https://quantan.app | grep Content-Security-Policy"
     ],
-    "notes_2026_05_23": "NEW Phase 15 P0. next.config.js:46 still 'Content-Security-Policy-Report-Only'. Phase 14 plan §S2.9 had this — never landed.",
+    "notes_2026_05_23": "NEW Phase 15 P0. next.config.js:46 still 'Content-Security-Policy-Report-Only'. Phase 14 plan \u00a7S2.9 had this \u2014 never landed.",
     "completed_at": "2026-05-24",
-    "notes_2026_05_24": "NEW Phase 15 P0. next.config.js:46 still 'Content-Security-Policy-Report-Only'. Phase 14 plan §S2.9 had this — never landed. | 2026-05-24 Cursor Phase 15 completion batch — see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md",
-    "partial": "CSP enforcing deferred — middleware nonce scaffold + Report-Only in next.config.js; set QUANTAN_CSP_ENFORCE=1 after audit"
+    "notes_2026_05_24": "NEW Phase 15 P0. next.config.js:46 still 'Content-Security-Policy-Report-Only'. Phase 14 plan \u00a7S2.9 had this \u2014 never landed. | 2026-05-24 Cursor Phase 15 completion batch \u2014 see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md",
+    "partial": "CSP enforcing deferred \u2014 middleware nonce scaffold + Report-Only in next.config.js; set QUANTAN_CSP_ENFORCE=1 after audit"
   },
   {
     "id": "Q-041-NEW",
@@ -960,9 +960,9 @@
       "python -m pytest quant_framework/",
       "curl /api/conditional-vol/SPY"
     ],
-    "notes_2026_05_23": "NEW Phase 15 — institutional analytics carry-over from R9-C-1. Engle (1982); Bollerslev (1986). 4 days.",
+    "notes_2026_05_23": "NEW Phase 15 \u2014 institutional analytics carry-over from R9-C-1. Engle (1982); Bollerslev (1986). 4 days.",
     "completed_at": "2026-05-24",
-    "notes_2026_05_24": "NEW Phase 15 — institutional analytics carry-over from R9-C-1. Engle (1982); Bollerslev (1986). 4 days. | 2026-05-24 Cursor Phase 15 completion batch — see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
+    "notes_2026_05_24": "NEW Phase 15 \u2014 institutional analytics carry-over from R9-C-1. Engle (1982); Bollerslev (1986). 4 days. | 2026-05-24 Cursor Phase 15 completion batch \u2014 see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
   },
   {
     "id": "Q-042-NEW",
@@ -985,9 +985,9 @@
       "python -m pytest quant_framework/",
       "npm run benchmark"
     ],
-    "notes_2026_05_23": "NEW Phase 15 — institutional analytics. Hamilton (1989); Guidolin & Timmermann (2007). 5 days.",
+    "notes_2026_05_23": "NEW Phase 15 \u2014 institutional analytics. Hamilton (1989); Guidolin & Timmermann (2007). 5 days.",
     "completed_at": "2026-05-24",
-    "notes_2026_05_24": "NEW Phase 15 — institutional analytics. Hamilton (1989); Guidolin & Timmermann (2007). 5 days. | 2026-05-24 Cursor Phase 15 completion batch — see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
+    "notes_2026_05_24": "NEW Phase 15 \u2014 institutional analytics. Hamilton (1989); Guidolin & Timmermann (2007). 5 days. | 2026-05-24 Cursor Phase 15 completion batch \u2014 see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
   },
   {
     "id": "Q-043-NEW",
@@ -1003,7 +1003,7 @@
     "acceptance_criteria": [
       "Re-prices portfolio under spot/vol/rate shocks",
       "6 canned scenarios: Fed +100bps, S&P -10%, VIX +50%, 2008-style, COVID, Flash Crash",
-      "Aggregates portfolio Greeks (Δ Γ ν θ ρ)"
+      "Aggregates portfolio Greeks (\u0394 \u0393 \u03bd \u03b8 \u03c1)"
     ],
     "verify_commands": [
       "npm run test -- __tests__/scenarios/",
@@ -1011,7 +1011,7 @@
     ],
     "notes_2026_05_23": "NEW Phase 15. Jorion (2006) ch.7. 6 days.",
     "completed_at": "2026-05-24",
-    "notes_2026_05_24": "NEW Phase 15. Jorion (2006) ch.7. 6 days. | 2026-05-24 Cursor Phase 15 completion batch — see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
+    "notes_2026_05_24": "NEW Phase 15. Jorion (2006) ch.7. 6 days. | 2026-05-24 Cursor Phase 15 completion batch \u2014 see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
   },
   {
     "id": "Q-044-NEW",
@@ -1035,7 +1035,7 @@
     ],
     "notes_2026_05_23": "NEW Phase 15. Carhart (1997); Fama-French (2015). 4 days.",
     "completed_at": "2026-05-24",
-    "notes_2026_05_24": "NEW Phase 15. Carhart (1997); Fama-French (2015). 4 days. | 2026-05-24 Cursor Phase 15 completion batch — see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
+    "notes_2026_05_24": "NEW Phase 15. Carhart (1997); Fama-French (2015). 4 days. | 2026-05-24 Cursor Phase 15 completion batch \u2014 see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
   },
   {
     "id": "Q-045-NEW",
@@ -1058,7 +1058,7 @@
     ],
     "notes_2026_05_23": "NEW Phase 15. Bhansali (2014). 3 days.",
     "completed_at": "2026-05-24",
-    "notes_2026_05_24": "NEW Phase 15. Bhansali (2014). 3 days. | 2026-05-24 Cursor Phase 15 completion batch — see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
+    "notes_2026_05_24": "NEW Phase 15. Bhansali (2014). 3 days. | 2026-05-24 Cursor Phase 15 completion batch \u2014 see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
   },
   {
     "id": "Q-046-NEW",
@@ -1079,7 +1079,7 @@
     ],
     "notes_2026_05_23": "NEW Phase 15. Krishnan (2017). 2 days. Feeds into Q-028.",
     "completed_at": "2026-05-24",
-    "notes_2026_05_24": "NEW Phase 15. Krishnan (2017). 2 days. Feeds into Q-028. | 2026-05-24 Cursor Phase 15 completion batch — see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
+    "notes_2026_05_24": "NEW Phase 15. Krishnan (2017). 2 days. Feeds into Q-028. | 2026-05-24 Cursor Phase 15 completion batch \u2014 see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
   },
   {
     "id": "Q-047-NEW",
@@ -1103,7 +1103,7 @@
     "completed_at": "2026-05-24",
     "notes_2026_05_24": "Stryker setup closed via Q-056-NEW (packages installed + dry-run verified). | 2026-05-24 superseded by the named continuation task. Closing here so the backlog tally reflects real outstanding work; the parent task's objectives live with its successor. (prior note: PARTIAL. stryker.conf.mjs exists; package.json has 'stryker' script. BUT @stryke)",
     "partial": "stryker.conf.mjs + npm run stryker; install @stryker-mutator/* before CI gate",
-    "prior_closure_note": "NEW Phase 15. Jia & Harman (2011); Petrovic & Ivankovic (2018). 2 days setup + iterative improvement. | 2026-05-24 Cursor Phase 15 completion batch — see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md",
+    "prior_closure_note": "NEW Phase 15. Jia & Harman (2011); Petrovic & Ivankovic (2018). 2 days setup + iterative improvement. | 2026-05-24 Cursor Phase 15 completion batch \u2014 see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md",
     "superseded_by": "Q-056-NEW"
   },
   {
@@ -1129,7 +1129,7 @@
     ],
     "notes_2026_05_23": "NEW Phase 15. Polygon provider class exists but not wired. 2 days code + 1 week external legal opinion.",
     "completed_at": "2026-05-24",
-    "notes_2026_05_24": "NEW Phase 15. Polygon provider class exists but not wired. 2 days code + 1 week external legal opinion. | 2026-05-24 Cursor Phase 15 completion batch — see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
+    "notes_2026_05_24": "NEW Phase 15. Polygon provider class exists but not wired. 2 days code + 1 week external legal opinion. | 2026-05-24 Cursor Phase 15 completion batch \u2014 see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
   },
   {
     "id": "Q-049-NEW",
@@ -1152,7 +1152,7 @@
     ],
     "notes_2026_05_23": "NEW Phase 15. Only parseLiveQuote pure validator tested; EventSource lifecycle untested. 1 day.",
     "completed_at": "2026-05-24",
-    "notes_2026_05_24": "NEW Phase 15. Only parseLiveQuote pure validator tested; EventSource lifecycle untested. 1 day. | 2026-05-24 Cursor Phase 15 completion batch — see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
+    "notes_2026_05_24": "NEW Phase 15. Only parseLiveQuote pure validator tested; EventSource lifecycle untested. 1 day. | 2026-05-24 Cursor Phase 15 completion batch \u2014 see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
   },
   {
     "id": "Q-050-NEW",
@@ -1173,7 +1173,7 @@
     ],
     "notes_2026_05_23": "NEW Phase 15. app/crypto/btc/page.tsx:555-556 still polls REST every 60s as primary. 1 day.",
     "completed_at": "2026-05-24",
-    "notes_2026_05_24": "NEW Phase 15. app/crypto/btc/page.tsx:555-556 still polls REST every 60s as primary. 1 day. | 2026-05-24 Cursor Phase 15 completion batch — see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
+    "notes_2026_05_24": "NEW Phase 15. app/crypto/btc/page.tsx:555-556 still polls REST every 60s as primary. 1 day. | 2026-05-24 Cursor Phase 15 completion batch \u2014 see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
   },
   {
     "id": "Q-051-NEW",
@@ -1201,11 +1201,11 @@
     "depends_on": [
       "Q-022"
     ],
-    "notes_2026_05_23": "Filed during Q-022. Full expanded include measured 62.43% stmts / 57.71% branches / 60.52% funcs / 64.27% lines. Worst gaps: hooks 5.58%, lib/ml 0%, lib/optimize 0.48%, lib/portfolio 51.28%, lib/data/providers 0%. Temporarily excluded via coverage.exclude[] — do NOT lower threshold percentages.",
+    "notes_2026_05_23": "Filed during Q-022. Full expanded include measured 62.43% stmts / 57.71% branches / 60.52% funcs / 64.27% lines. Worst gaps: hooks 5.58%, lib/ml 0%, lib/optimize 0.48%, lib/portfolio 51.28%, lib/data/providers 0%. Temporarily excluded via coverage.exclude[] \u2014 do NOT lower threshold percentages.",
     "completed_at": "2026-05-24",
-    "notes_2026_05_24": "Filed during Q-022. Full expanded include measured 62.43% stmts / 57.71% branches / 60.52% funcs / 64.27% lines. Worst gaps: hooks 5.58%, lib/ml 0%, lib/optimize 0.48%, lib/portfolio 51.28%, lib/data/providers 0%. Temporarily excluded via coverage.exclude[] — do NOT lower threshold percentages. | 2026-05-24 Cursor Phase 15 completion batch — see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md",
+    "notes_2026_05_24": "Filed during Q-022. Full expanded include measured 62.43% stmts / 57.71% branches / 60.52% funcs / 64.27% lines. Worst gaps: hooks 5.58%, lib/ml 0%, lib/optimize 0.48%, lib/portfolio 51.28%, lib/data/providers 0%. Temporarily excluded via coverage.exclude[] \u2014 do NOT lower threshold percentages. | 2026-05-24 Cursor Phase 15 completion batch \u2014 see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md",
     "blocker": "Global coverage 62% with full include; excludes remain until more unit tests",
-    "notes_2026_05_24_progress": "PROGRESS. +44 tests in 3 new files (878 total, 66 files). Closed: __tests__/portfolio/tracker.test.ts (17), __tests__/portfolio/riskParity.test.ts (16), __tests__/data/providers.test.ts (12). Still uncovered: hooks/ (useLivePrices, useDialogA11y, useWatchlist, useErrorToast), lib/ml/, lib/optimize/ (gridSearch, parameterSets, sectorProfiles), lib/data/bloomberg/toBloombergSecurity.ts, lib/data/providers/yahoo.ts + index.ts + types.ts. Vitest config still excludes these from coverage thresholds until backfill completes. Side-discovery during this batch: real convergence bug in lib/portfolio/riskParity.ts:ercWeights (linear update oscillated on asymmetric variances) — fixed via sqrt() damping per Maillard-Roncalli-Teiletche (2010) §4.2.",
+    "notes_2026_05_24_progress": "PROGRESS. +44 tests in 3 new files (878 total, 66 files). Closed: __tests__/portfolio/tracker.test.ts (17), __tests__/portfolio/riskParity.test.ts (16), __tests__/data/providers.test.ts (12). Still uncovered: hooks/ (useLivePrices, useDialogA11y, useWatchlist, useErrorToast), lib/ml/, lib/optimize/ (gridSearch, parameterSets, sectorProfiles), lib/data/bloomberg/toBloombergSecurity.ts, lib/data/providers/yahoo.ts + index.ts + types.ts. Vitest config still excludes these from coverage thresholds until backfill completes. Side-discovery during this batch: real convergence bug in lib/portfolio/riskParity.ts:ercWeights (linear update oscillated on asymmetric variances) \u2014 fixed via sqrt() damping per Maillard-Roncalli-Teiletche (2010) \u00a74.2.",
     "notes_2026_06_03": "Removed lib/quant/frameworks.ts from coverage.exclude[]; added __tests__/quant/frameworks.test.ts."
   },
   {
@@ -1232,9 +1232,9 @@
       "npm run benchmark",
       "npm run typecheck"
     ],
-    "notes_2026_05_24": "Filed by 2026-05-24 Claude-Code review of Cursor's Q-004 closure (see workspace/REVIEW_2026-05-24.md §Issue 5).",
+    "notes_2026_05_24": "Filed by 2026-05-24 Claude-Code review of Cursor's Q-004 closure (see workspace/REVIEW_2026-05-24.md \u00a7Issue 5).",
     "completed_at": "2026-05-24",
-    "notes_2026_05_24_close": "DONE. (1) lib/quant/riskFreeRate.ts rewritten — cache now keyed by FRED seriesId (not tenorDays) so multiple tenor lookups share a single fetch; added prewarmRiskFreeRates() + module-init opt-in via QUANTAN_FRED_PREWARM=1 (off in tests/CI/benchmark for reproducibility). (2) lib/options/chain.ts:56 imports getRiskFreeRateSync; enrichContract uses tenor-matched rate per contract (daysToExpiry routed to DGS3MO/DGS1/DGS2/DGS10). (3) lib/backtest/portfolioBacktest.ts:529 uses getRiskFreeRateSync(365). Verified: typecheck clean; 834 tests passed (was 808); benchmark 57.05% unchanged (cache cold in benchmark, returns static fallback as designed). New tests in __tests__/quant/riskFreeRate.test.ts cover tenor routing, cache hydration via stubbed fetch, and prewarm parallelism."
+    "notes_2026_05_24_close": "DONE. (1) lib/quant/riskFreeRate.ts rewritten \u2014 cache now keyed by FRED seriesId (not tenorDays) so multiple tenor lookups share a single fetch; added prewarmRiskFreeRates() + module-init opt-in via QUANTAN_FRED_PREWARM=1 (off in tests/CI/benchmark for reproducibility). (2) lib/options/chain.ts:56 imports getRiskFreeRateSync; enrichContract uses tenor-matched rate per contract (daysToExpiry routed to DGS3MO/DGS1/DGS2/DGS10). (3) lib/backtest/portfolioBacktest.ts:529 uses getRiskFreeRateSync(365). Verified: typecheck clean; 834 tests passed (was 808); benchmark 57.05% unchanged (cache cold in benchmark, returns static fallback as designed). New tests in __tests__/quant/riskFreeRate.test.ts cover tenor routing, cache hydration via stubbed fetch, and prewarm parallelism."
   },
   {
     "id": "Q-053-NEW",
@@ -1258,9 +1258,9 @@
       "npm run check:smoke:local",
       "wc -l components/stock/QuantLabPanel.tsx"
     ],
-    "notes_2026_05_24": "Filed by review: Cursor extracted QuantLabMarketCards.tsx but parent file unchanged at 1684 LOC. See workspace/REVIEW_2026-05-24.md §Issue 1.",
+    "notes_2026_05_24": "Filed by review: Cursor extracted QuantLabMarketCards.tsx but parent file unchanged at 1684 LOC. See workspace/REVIEW_2026-05-24.md \u00a7Issue 1.",
     "completed_at": "2026-06-02",
-    "notes_2026_06_02_close": "CLOSED — handover verification: QuantLabPanel.tsx is 148 LOC (tabs/hooks extracted post-Q-054). Acceptance <=500 LOC met; decomposition complete."
+    "notes_2026_06_02_close": "CLOSED \u2014 handover verification: QuantLabPanel.tsx is 148 LOC (tabs/hooks extracted post-Q-054). Acceptance <=500 LOC met; decomposition complete."
   },
   {
     "id": "Q-054-NEW",
@@ -1283,9 +1283,9 @@
       "npm run check:smoke:local",
       "wc -l app/backtest/page.tsx"
     ],
-    "notes_2026_05_24": "Filed by review: Cursor extracted BacktestMetricsGrid.tsx but page unchanged at 887 LOC. See workspace/REVIEW_2026-05-24.md §Issue 2.",
+    "notes_2026_05_24": "Filed by review: Cursor extracted BacktestMetricsGrid.tsx but page unchanged at 887 LOC. See workspace/REVIEW_2026-05-24.md \u00a7Issue 2.",
     "completed_at": "2026-05-26",
-    "notes_2026_05_26_close": "DONE. app/backtest/page.tsx 887 → 268 LOC (−69.8%). 6 new files under components/backtest/: BacktestMetricCard, AnalysisTab, WalkForwardPanel, LiveSignalsPanel, OverviewTab, KeyMetricsStrip. Pure mechanical extraction — no behavior change. PR #18 opened. PHASE-16-PLAN's ≤200 LOC target NOT hit (landed at 268); remaining is page-specific orchestration that doesn't generalize. Max-effort code review (5 angles + sweep) ran; 12 pre-existing findings surfaced for a follow-up `fix(backtest): live-signals null-guards` PR (NOT addressed in this PR — commit preserves behavior). 1 introduced finding: KeyMetricsStrip declares local PortfolioSummary subset (schema-drift hazard, not runtime bug)."
+    "notes_2026_05_26_close": "DONE. app/backtest/page.tsx 887 \u2192 268 LOC (\u221269.8%). 6 new files under components/backtest/: BacktestMetricCard, AnalysisTab, WalkForwardPanel, LiveSignalsPanel, OverviewTab, KeyMetricsStrip. Pure mechanical extraction \u2014 no behavior change. PR #18 opened. PHASE-16-PLAN's \u2264200 LOC target NOT hit (landed at 268); remaining is page-specific orchestration that doesn't generalize. Max-effort code review (5 angles + sweep) ran; 12 pre-existing findings surfaced for a follow-up `fix(backtest): live-signals null-guards` PR (NOT addressed in this PR \u2014 commit preserves behavior). 1 introduced finding: KeyMetricsStrip declares local PortfolioSummary subset (schema-drift hazard, not runtime bug)."
   },
   {
     "id": "Q-055-NEW",
@@ -1309,7 +1309,7 @@
       "npm run test -- __tests__/api/csrf.test.ts",
       "npm run typecheck"
     ],
-    "notes_2026_05_24": "Filed by review: backtest POST validates CSRF but no cookie issuance + trading-agents POST unprotected. See workspace/REVIEW_2026-05-24.md §Issue 4.",
+    "notes_2026_05_24": "Filed by review: backtest POST validates CSRF but no cookie issuance + trading-agents POST unprotected. See workspace/REVIEW_2026-05-24.md \u00a7Issue 4.",
     "completed_at": "2026-05-24",
     "notes_2026_05_24_close": "DONE. (1) middleware.ts now sets quantan_csrf cookie when absent (httpOnly:false for double-submit pattern, sameSite:strict, secure in production, 24h maxAge). (2) app/api/trading-agents/[ticker]/route.ts:155 POST validates CSRF; X-API-Key callers bypass (server-to-server out of scope). Verified: typecheck clean, CSRF tests 2/2 pass. Client-side helper pattern documented in middleware.ts JSDoc."
   },
@@ -1334,13 +1334,13 @@
       "npm install",
       "npx stryker run --dry-run"
     ],
-    "notes_2026_05_24": "Filed by review: stryker.conf.mjs + npm script exist but packages not installed. See workspace/REVIEW_2026-05-24.md §Observation 12.",
+    "notes_2026_05_24": "Filed by review: stryker.conf.mjs + npm script exist but packages not installed. See workspace/REVIEW_2026-05-24.md \u00a7Observation 12.",
     "completed_at": "2026-05-24",
-    "notes_2026_05_24_install": "DONE. Installed @stryker-mutator/core + @stryker-mutator/vitest-runner via npm. stryker.conf.mjs targets lib/quant + lib/backtest + lib/options at 70%/80% break/high thresholds. Verified by dry-run on lib/quant/riskFreeRate.ts: 62.35% mutation score (below 70% break — correctly exits 1; this is a per-file score, not a baseline). Reports written to /reports/mutation/ (gitignored). Full baseline run on the 3 targeted dirs takes 30+ minutes — deferred to CI cron or operator-triggered run (npm run stryker). .gitignore updated."
+    "notes_2026_05_24_install": "DONE. Installed @stryker-mutator/core + @stryker-mutator/vitest-runner via npm. stryker.conf.mjs targets lib/quant + lib/backtest + lib/options at 70%/80% break/high thresholds. Verified by dry-run on lib/quant/riskFreeRate.ts: 62.35% mutation score (below 70% break \u2014 correctly exits 1; this is a per-file score, not a baseline). Reports written to /reports/mutation/ (gitignored). Full baseline run on the 3 targeted dirs takes 30+ minutes \u2014 deferred to CI cron or operator-triggered run (npm run stryker). .gitignore updated."
   },
   {
     "id": "Q-057-NEW",
-    "title": "Next.js upgrade — 15.x (React 19) to close remaining CVEs",
+    "title": "Next.js upgrade \u2014 15.x (React 19) to close remaining CVEs",
     "domain": "Security",
     "priority": "P0",
     "status": "done",
@@ -1369,7 +1369,7 @@
       "npm run test",
       "npm run benchmark"
     ],
-    "notes_2026_05_25": "Filed by audit: reviews/npm-audit-2026-05-25.md. Critical is next itself (14.2.15) with 23 advisories incl. Authorization Bypass in Middleware, SSRF, multiple cache-poisoning, XSS in CSP nonces — directly intersects the Q-040-NEW/Q-055-NEW/Q-029 work that just landed. npm audit fix --force proposes next@16.2.6 (semver-major: React 19 + partial-prerendering + config migration). next@15.x is intermediate (React 19 required). Owner sign-off needed on target version before any package.json mutation. Coordinate with Q-040-NEW CSP completion.",
+    "notes_2026_05_25": "Filed by audit: reviews/npm-audit-2026-05-25.md. Critical is next itself (14.2.15) with 23 advisories incl. Authorization Bypass in Middleware, SSRF, multiple cache-poisoning, XSS in CSP nonces \u2014 directly intersects the Q-040-NEW/Q-055-NEW/Q-029 work that just landed. npm audit fix --force proposes next@16.2.6 (semver-major: React 19 + partial-prerendering + config migration). next@15.x is intermediate (React 19 required). Owner sign-off needed on target version before any package.json mutation. Coordinate with Q-040-NEW CSP completion.",
     "notes_2026_06_03": "DONE. next@15.5.19 + react@19; async params on 13 API routes + 3 pages; build/typecheck/test/dual-benchmark PASS.",
     "completed_at": "2026-06-03"
   },
@@ -1400,7 +1400,7 @@
     ],
     "notes_2026_05_25": "Filed per PHASE-16-PLAN.md S1.3. Preconditions for S2 god-component decomposition (Q-053-NEW, Q-054-NEW) AND for Q-057-NEW Next.js upgrade verification. Use BacktestMetricsGrid.test.tsx as the pattern reference. Mock strategy: vi.mock for next-auth, fetch, useSearchParams; jsdom env via per-file `// @vitest-environment jsdom` pragma.",
     "completed_at": "2026-05-25",
-    "notes_2026_05_25_close": "DONE in same session. Pattern: pin deterministic loading + error states (not data state — would couple to copy/style tweaks). 6 new tests across 2 files: (1) __tests__/components/stock/QuantLabPanel.test.tsx — 3 tests covering loading skeleton with all 6 tabs, error state with help text, ticker prop propagation. (2) __tests__/components/backtest/BacktestPage.test.tsx — 3 tests covering centered loading spinner, error fallback with Retry button, network rejection. Both files use vi.stubGlobal for fetch (pending promise = loading; resolved 500 / rejected = error). 2 new snapshot files (.snap) committed: QuantLabPanel.test.tsx.snap (242 lines) + BacktestPage.test.tsx.snap (51 lines). Verify: 958 passed + 17 skipped (975 total / 75 + 1 files), benchmark 57.05% WR (unchanged), typecheck clean. Q-053-NEW / Q-054-NEW / Q-057-NEW now have structural regression guards."
+    "notes_2026_05_25_close": "DONE in same session. Pattern: pin deterministic loading + error states (not data state \u2014 would couple to copy/style tweaks). 6 new tests across 2 files: (1) __tests__/components/stock/QuantLabPanel.test.tsx \u2014 3 tests covering loading skeleton with all 6 tabs, error state with help text, ticker prop propagation. (2) __tests__/components/backtest/BacktestPage.test.tsx \u2014 3 tests covering centered loading spinner, error fallback with Retry button, network rejection. Both files use vi.stubGlobal for fetch (pending promise = loading; resolved 500 / rejected = error). 2 new snapshot files (.snap) committed: QuantLabPanel.test.tsx.snap (242 lines) + BacktestPage.test.tsx.snap (51 lines). Verify: 958 passed + 17 skipped (975 total / 75 + 1 files), benchmark 57.05% WR (unchanged), typecheck clean. Q-053-NEW / Q-054-NEW / Q-057-NEW now have structural regression guards."
   },
   {
     "id": "Q-059-NEW",
@@ -1460,7 +1460,7 @@
   },
   {
     "id": "Q-062-NEW",
-    "title": "End-to-end signal parity test (live ≡ engine ≡ CI)",
+    "title": "End-to-end signal parity test (live \u2261 engine \u2261 CI)",
     "domain": "Testing",
     "priority": "P0",
     "status": "done",
@@ -1490,7 +1490,7 @@
       "Desk/backtest UI labels 20d label WR and cost assumptions"
     ],
     "notes_2026_06_02": "SIGNAL_SSOT.md documents paths; UI copy audit deferred to Wave 7 browser QA.",
-    "notes_2026_06_03": "DONE on canonical main via PR #41 (handover): app/backtest/page.tsx methodology note (T+1 next-open fills, ~22 bps round-trip); LiveSignalsPanel caveat (live table ≠ realized P&L). PRs #42/#43 merged on orphaned local lineage only — code present at de9a3d5."
+    "notes_2026_06_03": "DONE on canonical main via PR #41 (handover): app/backtest/page.tsx methodology note (T+1 next-open fills, ~22 bps round-trip); LiveSignalsPanel caveat (live table \u2260 realized P&L). PRs #42/#43 merged on orphaned local lineage only \u2014 code present at de9a3d5."
   },
   {
     "id": "Q-064-NEW",
@@ -1511,7 +1511,7 @@
     "files": [
       "scripts/benchmark-signals.ts"
     ],
-    "resolution": "done 2026-07-07 (PR #97 — deflatedSharpe lib + tradeStats in benchmark report; additive)"
+    "resolution": "done 2026-07-07 (PR #97 \u2014 deflatedSharpe lib + tradeStats in benchmark report; additive)"
   },
   {
     "id": "Q-066-NEW",
@@ -1523,7 +1523,7 @@
       "scripts/benchmark-signals.ts",
       "lib/quant/regimeDetection.ts"
     ],
-    "resolution": "done 2026-07-07 (PR #97 — regime-bucketed net WR; NEW-Q-2 lead: BEAR_ALERT negative edge n=27)"
+    "resolution": "done 2026-07-07 (PR #97 \u2014 regime-bucketed net WR; NEW-Q-2 lead: BEAR_ALERT negative edge n=27)"
   },
   {
     "id": "Q-067-NEW",
@@ -1548,7 +1548,7 @@
   },
   {
     "id": "Q-069",
-    "title": "Document /monitor → /desk redirect expectation (F-01)",
+    "title": "Document /monitor \u2192 /desk redirect expectation (F-01)",
     "domain": "Frontend/UX",
     "priority": "P3",
     "status": "done",
@@ -1557,7 +1557,7 @@
       "reviews/FUNCTION-AUDIT-UI-2026-06-03.md"
     ],
     "notes_2026_06_03": "UI audit F-01: /monitor 404 by design; desk is monitor substitute.",
-    "resolution": "done 2026-07-07 (PR #97 — routing expectation documented in app/desk/page.tsx)"
+    "resolution": "done 2026-07-07 (PR #97 \u2014 routing expectation documented in app/desk/page.tsx)"
   },
   {
     "id": "Q-070",
@@ -1569,7 +1569,7 @@
       "app/stock/[ticker]/page.tsx"
     ],
     "notes_2026_06_03": "UI audit F-02: standalone /quant-lab route does not exist.",
-    "resolution": "done 2026-07-07 (PR #97 — documented in app/stock/[ticker]/page.tsx)"
+    "resolution": "done 2026-07-07 (PR #97 \u2014 documented in app/stock/[ticker]/page.tsx)"
   },
   {
     "id": "Q-071",
@@ -1618,7 +1618,7 @@
       "__tests__/quant/"
     ],
     "acceptance_criteria": [
-      "All 24 exports in FUNCTION-AUDIT-QUANT-2026-06-03.md have ≥1 direct test reference"
+      "All 24 exports in FUNCTION-AUDIT-QUANT-2026-06-03.md have \u22651 direct test reference"
     ],
     "verify_commands": [
       "npm run test"
@@ -1636,12 +1636,12 @@
       "__tests__/backtest/"
     ],
     "acceptance_criteria": [
-      "backtest shard mutation score ≥ 70 (stryker-weekly)"
+      "backtest shard mutation score \u2265 70 (stryker-weekly)"
     ],
     "verify_commands": [
       "npx stryker run --mutate \"lib/backtest/**/*.ts\""
     ],
-    "notes_2026_07_13": "First complete per-domain scores (07-12 sharded run): backtest 31.22 (exitRules.ts itself 79.33 — the gap is core/portfolioBacktest/walkForward), options 62.25, quant interim ≈68 at 97% tested (6h-cancelled; shard split again 07-13)."
+    "notes_2026_07_13": "First complete per-domain scores (07-12 sharded run): backtest 31.22 (exitRules.ts itself 79.33 \u2014 the gap is core/portfolioBacktest/walkForward), options 62.25, quant interim \u224868 at 97% tested (6h-cancelled; shard split again 07-13)."
   },
   {
     "id": "Q-076",
@@ -1658,25 +1658,26 @@
     "verify_commands": [
       "npm run portfolio:backtest"
     ],
-    "notes_2026_07_13": "Post-D2/D4 the grid only explores retired stop-family exits; ALL members score negative Sharpe (best -0.825) while the shipped label-matched default measures +8.52%/maxDD 9.88% — grid is stale. Sizing exploration is D6-adjacent: coordinate with the calibrated-score work."
+    "notes_2026_07_13": "Post-D2/D4 the grid only explores retired stop-family exits; ALL members score negative Sharpe (best -0.825) while the shipped label-matched default measures +8.52%/maxDD 9.88% \u2014 grid is stale. Sizing exploration is D6-adjacent: coordinate with the calibrated-score work."
   },
   {
     "id": "Q-077",
     "title": "Score-ranked selection experiment: top-decile calibrated-score entries with label-matched exits",
     "domain": "Quant",
     "priority": "P1",
-    "status": "pending",
+    "status": "done",
     "files": [
-      "scripts/experiments/calibrated-score-walkforward.ts",
-      "scripts/experiments/"
+      "scripts/experiments/score-ranked-selection.ts",
+      "workspace/optimization-runs/score-ranked-selection-walkforward.json"
     ],
     "acceptance_criteria": [
       "Walk-forward portfolio sim: top-decile score entries + 20-bar time exits beats equal-weight B&H on Sharpe or MAR in >=3 of 4 OOS years (D3-style acceptance)",
-      "No calibration requirement — ranking only"
+      "No calibration requirement \u2014 ranking only"
     ],
     "verify_commands": [
-      "npm run experiment:calibrated-score"
+      "npm run experiment:score-select"
     ],
-    "notes_2026_07_13": "D6 experiment: calibration REJECTED (Brier below base, recency-isotonic worse pooled — base-rate regime shift) so real-Kelly stays blocked; but discrimination PASSED: top-decile non-overlap WR 60.71 Wilson95 [56.12, 65.13] — first CI lower bound above the base rate (54.71); positive edge all 4 OOS years; only 17.8% overlap with SSOT BUYs. Build the selection experiment on the D5 harness + rotation-experiment portfolio machinery."
+    "notes_2026_07_13": "D6 experiment: calibration REJECTED (Brier below base, recency-isotonic worse pooled \u2014 base-rate regime shift) so real-Kelly stays blocked; but discrimination PASSED: top-decile non-overlap WR 60.71 Wilson95 [56.12, 65.13] \u2014 first CI lower bound above the base rate (54.71); positive edge all 4 OOS years; only 17.8% overlap with SSOT BUYs. Build the selection experiment on the D5 harness + rotation-experiment portfolio machinery.",
+    "resolution_2026_07_16": "EXPERIMENT RUN -> REJECTED 2/4 OOS segments (needed >=3): 2023 YES (Sharpe 3.14 vs B&H 1.75), 2024 no (1.09 vs 2.09), 2025 no (0.58 vs 1.15), 2026H1 LOCKED HOLDOUT YES (2.26 vs 1.83; ret 30.2% vs 12.8%). Robust: MAR selection 2/4, q80 2/4, q95 2/4. Same 2024-25 decay as the per-year edge table (C4). Trade-level discrimination (D6) does not survive as a portfolio B&H-beater under D3 acceptance; score-ranked selection is answered: do not build as v2. Output: workspace/optimization-runs/score-ranked-selection-walkforward.json"
   }
 ]

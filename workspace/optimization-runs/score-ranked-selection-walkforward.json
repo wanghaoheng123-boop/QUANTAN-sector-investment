@@ -1,0 +1,273 @@
+{
+  "timestamp": "2026-07-16T05:36:12.280Z",
+  "experiment": "Q-077 score-RANKED selection walk-forward (D6 discrimination follow-through). EXPERIMENT ONLY — no signal/display/sizing change.",
+  "model": "D6 L2 logistic (deterministic full-batch GD, 400 iters, lr 0.5, l2 1e-4), 7 leak-free features, standardized on IS only, per-fold expanding IS with 20d purge",
+  "entryRule": "score(t-1) >= IS-90th-percentile threshold (causal top decile), ranked by score desc, up to K slots (K in {5,10,15} selected per fold on expanding IS Sharpe)",
+  "exitRule": "time-only after 20 bars at T+1 open (label-matched; stops/panic/profit-take retired)",
+  "costsPerSide": 0.0011,
+  "universe": {
+    "equities": 55,
+    "btcExcluded": true,
+    "sharedCalendarBars": 1254
+  },
+  "acceptance": "Q-077 (D3-style): strategy beats equal-weight B&H on Sharpe OR MAR in >=3 of 4 OOS segments (2023, 2024, 2025, 2026H1-locked-holdout)",
+  "folds": [
+    {
+      "year": "2023",
+      "selectedK": 10,
+      "isSharpe": 1.231,
+      "isGrid": [
+        {
+          "K": 5,
+          "sharpe": 1.06,
+          "mar": 2.154
+        },
+        {
+          "K": 10,
+          "sharpe": 1.231,
+          "mar": 2.142
+        },
+        {
+          "K": 15,
+          "sharpe": 0.845,
+          "mar": 1.121
+        }
+      ],
+      "strategy": {
+        "bars": 251,
+        "totalReturnPct": 18.69,
+        "annualizedReturnPct": 18.86,
+        "sharpe": 3.136,
+        "maxDrawdownPct": 1.76,
+        "mar": 10.697
+      },
+      "tradesClosed": 17,
+      "winRateClosedPct": 76.5,
+      "avgExposurePct": 12.4,
+      "bnh": {
+        "bars": 251,
+        "totalReturnPct": 23.01,
+        "annualizedReturnPct": 23.22,
+        "sharpe": 1.752,
+        "maxDrawdownPct": 8.79,
+        "mar": 2.64
+      },
+      "beatsSharpe": true,
+      "beatsMar": true,
+      "beats": true
+    },
+    {
+      "year": "2024",
+      "selectedK": 15,
+      "isSharpe": 1.619,
+      "isGrid": [
+        {
+          "K": 5,
+          "sharpe": 1.475,
+          "mar": 2.577
+        },
+        {
+          "K": 10,
+          "sharpe": 1.479,
+          "mar": 1.872
+        },
+        {
+          "K": 15,
+          "sharpe": 1.619,
+          "mar": 1.88
+        }
+      ],
+      "strategy": {
+        "bars": 253,
+        "totalReturnPct": 12.33,
+        "annualizedReturnPct": 12.33,
+        "sharpe": 1.085,
+        "maxDrawdownPct": 9.22,
+        "mar": 1.337
+      },
+      "tradesClosed": 75,
+      "winRateClosedPct": 57.3,
+      "avgExposurePct": 35,
+      "bnh": {
+        "bars": 253,
+        "totalReturnPct": 28.87,
+        "annualizedReturnPct": 28.87,
+        "sharpe": 2.094,
+        "maxDrawdownPct": 7.17,
+        "mar": 4.025
+      },
+      "beatsSharpe": false,
+      "beatsMar": false,
+      "beats": false
+    },
+    {
+      "year": "2025",
+      "selectedK": 10,
+      "isSharpe": 1.802,
+      "isGrid": [
+        {
+          "K": 5,
+          "sharpe": 1.49,
+          "mar": 2.299
+        },
+        {
+          "K": 10,
+          "sharpe": 1.802,
+          "mar": 2.454
+        },
+        {
+          "K": 15,
+          "sharpe": 1.773,
+          "mar": 1.953
+        }
+      ],
+      "strategy": {
+        "bars": 251,
+        "totalReturnPct": 12.79,
+        "annualizedReturnPct": 12.9,
+        "sharpe": 0.575,
+        "maxDrawdownPct": 23.15,
+        "mar": 0.557
+      },
+      "tradesClosed": 95,
+      "winRateClosedPct": 49.5,
+      "avgExposurePct": 69.8,
+      "bnh": {
+        "bars": 251,
+        "totalReturnPct": 20.79,
+        "annualizedReturnPct": 20.98,
+        "sharpe": 1.147,
+        "maxDrawdownPct": 17.93,
+        "mar": 1.17
+      },
+      "beatsSharpe": false,
+      "beatsMar": false,
+      "beats": false
+    },
+    {
+      "year": "2026",
+      "locked": true,
+      "selectedK": 10,
+      "isSharpe": 1.36,
+      "isGrid": [
+        {
+          "K": 5,
+          "sharpe": 1.022,
+          "mar": 1.037
+        },
+        {
+          "K": 10,
+          "sharpe": 1.36,
+          "mar": 1.481
+        },
+        {
+          "K": 15,
+          "sharpe": 1.252,
+          "mar": 1.278
+        }
+      ],
+      "strategy": {
+        "bars": 131,
+        "totalReturnPct": 30.2,
+        "annualizedReturnPct": 66.8,
+        "sharpe": 2.264,
+        "maxDrawdownPct": 9.23,
+        "mar": 7.233
+      },
+      "tradesClosed": 68,
+      "winRateClosedPct": 55.9,
+      "avgExposurePct": 93.9,
+      "bnh": {
+        "bars": 131,
+        "totalReturnPct": 12.79,
+        "annualizedReturnPct": 26.29,
+        "sharpe": 1.833,
+        "maxDrawdownPct": 7.46,
+        "mar": 3.522
+      },
+      "beatsSharpe": true,
+      "beatsMar": true,
+      "beats": true
+    }
+  ],
+  "oosSegmentsBeatingBnh": 2,
+  "verdict": "REJECTED",
+  "sensitivities": {
+    "marSelection": {
+      "folds": [
+        {
+          "year": "2023",
+          "selectedK": 5,
+          "beats": true
+        },
+        {
+          "year": "2024",
+          "selectedK": 5,
+          "beats": false
+        },
+        {
+          "year": "2025",
+          "selectedK": 10,
+          "beats": false
+        },
+        {
+          "year": "2026",
+          "selectedK": 10,
+          "beats": true
+        }
+      ],
+      "oosSegmentsBeatingBnh": 2,
+      "verdict": "REJECTED"
+    },
+    "thresholdQ80": {
+      "folds": [
+        {
+          "year": "2023",
+          "selectedK": 5,
+          "beats": true
+        },
+        {
+          "year": "2024",
+          "selectedK": 15,
+          "beats": false
+        },
+        {
+          "year": "2025",
+          "selectedK": 15,
+          "beats": true
+        },
+        {
+          "year": "2026",
+          "selectedK": 15,
+          "beats": false
+        }
+      ],
+      "oosSegmentsBeatingBnh": 2
+    },
+    "thresholdQ95": {
+      "folds": [
+        {
+          "year": "2023",
+          "selectedK": 5,
+          "beats": true
+        },
+        {
+          "year": "2024",
+          "selectedK": 5,
+          "beats": false
+        },
+        {
+          "year": "2025",
+          "selectedK": 5,
+          "beats": false
+        },
+        {
+          "year": "2026",
+          "selectedK": 10,
+          "beats": true
+        }
+      ],
+      "oosSegmentsBeatingBnh": 2
+    }
+  }
+}
