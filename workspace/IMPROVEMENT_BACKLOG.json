@@ -1630,7 +1630,7 @@
     "title": "Mutation coverage for lib/backtest (first complete Stryker score: 31.22)",
     "domain": "Testing",
     "priority": "P1",
-    "status": "pending",
+    "status": "partial",
     "files": [
       "lib/backtest/",
       "__tests__/backtest/"
@@ -1641,7 +1641,8 @@
     "verify_commands": [
       "npx stryker run --mutate \"lib/backtest/**/*.ts\""
     ],
-    "notes_2026_07_13": "First complete per-domain scores (07-12 sharded run): backtest 31.22 (exitRules.ts itself 79.33 \u2014 the gap is core/portfolioBacktest/walkForward), options 62.25, quant interim \u224868 at 97% tested (6h-cancelled; shard split again 07-13)."
+    "notes_2026_07_13": "First complete per-domain scores (07-12 sharded run): backtest 31.22 (exitRules.ts itself 79.33 \u2014 the gap is core/portfolioBacktest/walkForward), options 62.25, quant interim \u224868 at 97% tested (6h-cancelled; shard split again 07-13).",
+    "notes_2026_07_16": "HARDENING WAVE 1 SHIPPED: __tests__/backtest/mutationHardening.golden.test.ts \u2014 41 golden characterization tests pinning EXACT numeric outputs (deterministic synthetic fixtures) for the worst shard files: portfolioBacktest (6.43), core (26.14), signals (14.71), walkForward (28.83), liveSignal (12.50), signalHelpers (23.39), benchmarkLabel (25.00). Covers both engines under the production regime-only path AND the enhanced path, legacy DEFAULT_EXIT_CONFIG exit family, label pipeline, and every helper threshold boundary. Score validates on the next stryker-weekly run (2026-07-19); acceptance stays >= 70."
   },
   {
     "id": "Q-076",
