@@ -1533,11 +1533,12 @@
     "title": "Shadow signal log (timestamp, path hash, action)",
     "domain": "Data/API",
     "priority": "P2",
-    "status": "pending",
+    "status": "done",
     "files": [
       "workspace/shadow/"
     ],
-    "notes_2026_07_16": "DESIGN BLOCKER found at triage: the filed spec (persist to workspace/shadow/) cannot work in serverless production \u2014 Vercel function filesystems are ephemeral. A prod shadow log needs a storage decision (Vercel Blob / marketplace Redis / external), which is an owner cost+infra call (compare DECISION-D7-DATA). Local-dev-only logging would not answer the live-vs-backtest question the row exists for. Owner-gated pending storage decision."
+    "notes_2026_07_16": "DESIGN BLOCKER found at triage: the filed spec (persist to workspace/shadow/) cannot work in serverless production \u2014 Vercel function filesystems are ephemeral. A prod shadow log needs a storage decision (Vercel Blob / marketplace Redis / external), which is an owner cost+infra call (compare DECISION-D7-DATA). Local-dev-only logging would not answer the live-vs-backtest question the row exists for. Owner-gated pending storage decision.",
+    "resolution_2026_07_16": "SHIPPED (owner-delegated decision): lib/shadowLog.ts \u2014 append-only record of (timestamp, sha256 content hash, per-ticker actions, buy/hold/sell counts) for every fresh full computation served by /api/backtest/live (at most one write per 60s cache window). PLUGGABLE fail-closed sinks resolve the serverless-FS design blocker: (1) Redis/Upstash REST via the SAME KV_REST_API_URL/TOKEN pair the Q-005 rate limiter keys on \u2014 one owner provisioning act activates both \u2014 LPUSH capped at 10k entries; (2) local dev: workspace/shadow/YYYY-MM-DD.jsonl; (3) otherwise no-op. Never throws; 1.5s network timeout; QUANTAN_SHADOW_LOG=0 opt-out. 10 unit tests incl. end-to-end file sink and mocked Redis pipeline. In prod the sink is no-op UNTIL Redis is provisioned (Q-005 blocker)."
   },
   {
     "id": "Q-068-NEW",

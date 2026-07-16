@@ -13,6 +13,7 @@ import type { OhlcvRow } from '@/lib/backtest/dataLoader'
 import { buildLiveInstrumentSignal, type LiveInstrumentSignal } from '@/lib/backtest/liveSignal'
 import { applyRateLimit } from '@/lib/api/rateLimit'
 import { normalizeTicker as strictNormalizeTicker } from '@/lib/api/sanitize'
+import { recordShadowSignals } from '@/lib/shadowLog'
 
 // ─── In-memory cache ──────────────────────────────────────────────────────────
 
@@ -118,7 +119,15 @@ export async function GET(request: NextRequest) {
   }
 
   // Only cache the full (unfiltered) response — same guard as the read path.
-  if (!specificTickers) cache = { data, timestamp: Date.now() }
+  if (!specificTickers) {
+    cache = { data, timestamp: Date.now() }
+    // Q-067 shadow signal log: record what the live path actually served
+    // (full uncached computations only — at most one write per cache window).
+    // recordShadowSignals is fail-closed: no-op without a sink, never throws.
+    await recordShadowSignals(
+      results.map((r) => ({ ticker: r.ticker, action: r.action, confidence: r.confidence })),
+    )
+  }
 
   return NextResponse.json(data, {
     headers: { 'Cache-Control': 's-maxage=60, stale-while-revalidate=120' },
