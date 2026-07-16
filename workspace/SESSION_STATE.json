@@ -2,8 +2,8 @@
   "schema_version": "1.1",
   "project": "QUANTAN-sector-investment",
   "created": "2026-04-28T09:40:00Z",
-  "last_updated": "2026-07-16T06:30:00.000Z",
-  "active_agent": "claude fable-5 (2026-07-16 remaining-tasks wave: #107-#111 merged; Q-077 REJECTED 2/4; Q-074/Q-064/Q-076 done; Q-075 wave 1 shipped (validates 07-19 stryker); Q-071/Q-072 closed already-hardened; stochRsiArray all-NaN defect fixed)",
+  "last_updated": "2026-07-16T09:00:00.000Z",
+  "active_agent": "claude fable-5 (2026-07-16 decision wave: H-DECISION shipped \u2014 engine hold 20->60 bars, 4/4 pre-registered acceptance, prod live-verified WR 64.60%; Q-067/Q-068 done; #113-#115 merged)",
   "prod_bug_fix_2026_07_01": {
     "B-2": "News fetch broken by yahoo-finance2 SearchResult schema drift (yf.search validation threw \u2192 news silently dropped + 66 prod errors on /api/briefs since 2026-04-03). FOUND via Vercel get_runtime_errors. FIXED with validateResult:false on the 4 news-search callers (mirrors options/chain.ts precedent) \u2192 PR #82 \u2192 main 2e6137c. LIVE-VERIFIED: /api/briefs now 200 with full news feed (was empty); 0 SearchResult validation logs on new deploy dpl_D29j.",
     "method_note": "Empirical bug-finding via Vercel runtime-errors/logs is high-signal \u2014 surfaced a real 3-month-old LIVE issue the static inspection didn't (it was a caught-and-logged error, invisible to tsc/tests/benchmark). Consider a runtime-errors sweep as a standing step."
@@ -239,5 +239,21 @@
       "Length-only assertions hide total-failure defects: stochRsiArray had returned all-NaN forever under its default smoothing"
     ],
     "next": "Verify 2026-07-19 stryker-weekly backtest shard score (Q-075 acceptance >= 70; add wave 2 pins if short). Remaining owner-gated: CSP flip, Q09-1, npm audit chain, scheduled-task Run-now approval, DECISION-D7-DATA (Sharadar), H=60 re-baseline question from Q-076, Q-067 storage decision, Q-005 Redis provisioning."
+  },
+  "decision_wave_2026_07_16": {
+    "directive": "owner: \"CONTINUE, YOU MAY MAKE THE DECISION\" \u2014 decision authority delegated (same protocol as the 07-11 D-menu)",
+    "merged_to_main": {
+      "PR_113": "H-DECISION: engine default hold horizon 20 -> 60 bars. Pre-registered D3-style rule (adopt iff H60 beats H20 on Sharpe OR MAR in >=3/4 purged OOS segments) -> 4/4 on BOTH metrics, incl. 2024 (+3.34% vs -5.61%). H=40 worse than both. npm run experiment:hold-horizon. Re-baseline: portfolio +8.31->+53.47% (maxDD 9.87->6.87), per-instrument WR 54.28->64.60%. Label pipeline untouched (LABEL_HOLD_DAYS=20, benchmark byte-identical, D1 gate unchanged). PROD LIVE-VERIFIED: /api/backtest WR 64.60/226 trades/+3.32% byte-matches fixtures. Invariants 1e. CAUTION: engine WR (60d) vs label WR (20d) are different quantities.",
+      "PR_114": "Q-068 done: optimize-grid LOOP 1P (gridSearchPurged per instrument) \u2014 honest pooled OOS 522 trades WR 50.00%; param adoption owner-gated",
+      "PR_115": "Q-067 done: lib/shadowLog.ts shadow signal log \u2014 (ts, sha256, actions) per fresh /api/backtest/live computation; sinks: Redis via the SAME KV_REST_* env pair as the Q-005 rate limiter (one provisioning act activates BOTH), workspace/shadow JSONL in dev, no-op in prod until Redis provisioned; fail-closed, 10 tests"
+    },
+    "owner_actions_remaining": [
+      "Provision marketplace Redis (Upstash) + set KV_REST_API_URL/TOKEN -> activates Q-005 distributed rate limit AND Q-067 shadow log",
+      "Scheduled-task Run-now click to pre-approve Vercel MCP tools (standing)",
+      "DECISION-D7-DATA: Sharadar ~$49/1mo PIT re-benchmark purchase",
+      "CSP enforce flip stays blocked while RO shows violations (self-gating)",
+      "Optional: review H60 re-baseline (evidence in workspace/optimization-runs/hold-horizon-decision.json) \u2014 revert = one-line config change"
+    ],
+    "next": "Sunday 2026-07-19 stryker-weekly: check backtest shard score (Q-075 acceptance >= 70, was 31.22); Monday sweep runs under the H60 engine numbers for the first time"
   }
 }
