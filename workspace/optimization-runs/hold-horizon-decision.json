@@ -1,0 +1,163 @@
+{
+  "timestamp": "2026-07-16T17:26:14.980Z",
+  "experiment": "Hold-horizon decision: H=60 vs incumbent H=20 engine default (owner-delegated 2026-07-16). Label pipeline (20d) untouched either way.",
+  "decisionRule": "PRE-REGISTERED: adopt H=60 iff H60 beats H20 on Sharpe OR MAR in >= 3 of 4 OOS segments (2023, 2024, 2025, 2026H1). H=40 is context only.",
+  "signalPath": "QUANTAN_USE_ENHANCED_SIGNAL=0 (production path)",
+  "structure": "default portfolio (10 slots, 20% cap, correlation-adjusted Kelly)",
+  "segments": [
+    {
+      "year": "2023",
+      "bars": {
+        "universe": 56
+      },
+      "byHold": {
+        "H20": {
+          "totalReturnPct": 6.51,
+          "sharpe": -0.409,
+          "maxDrawdownPct": 4.36,
+          "mar": 0.506,
+          "trades": 70,
+          "winRatePct": 57.14,
+          "avgExposureProxy": 3.36
+        },
+        "H60": {
+          "totalReturnPct": 9.14,
+          "sharpe": -0.126,
+          "maxDrawdownPct": 4.79,
+          "mar": 0.641,
+          "trades": 38,
+          "winRatePct": 57.89,
+          "avgExposureProxy": 4.89
+        },
+        "H40": {
+          "totalReturnPct": 1.59,
+          "sharpe": -0.902,
+          "maxDrawdownPct": 5.48,
+          "mar": 0.1,
+          "trades": 46,
+          "winRatePct": 52.17,
+          "avgExposureProxy": 4.19
+        }
+      },
+      "h60BeatsH20Sharpe": true,
+      "h60BeatsH20Mar": true,
+      "h60Beats": true
+    },
+    {
+      "year": "2024",
+      "bars": {
+        "universe": 56
+      },
+      "byHold": {
+        "H20": {
+          "totalReturnPct": -5.61,
+          "sharpe": -1.557,
+          "maxDrawdownPct": 7.25,
+          "mar": -0.272,
+          "trades": 68,
+          "winRatePct": 50,
+          "avgExposureProxy": 3.18
+        },
+        "H60": {
+          "totalReturnPct": 3.34,
+          "sharpe": -0.611,
+          "maxDrawdownPct": 4.58,
+          "mar": 0.249,
+          "trades": 37,
+          "winRatePct": 51.35,
+          "avgExposureProxy": 4.68
+        },
+        "H40": {
+          "totalReturnPct": -1.19,
+          "sharpe": -1.05,
+          "maxDrawdownPct": 4.61,
+          "mar": -0.089,
+          "trades": 45,
+          "winRatePct": 46.67,
+          "avgExposureProxy": 4.02
+        }
+      },
+      "h60BeatsH20Sharpe": true,
+      "h60BeatsH20Mar": true,
+      "h60Beats": true
+    },
+    {
+      "year": "2025",
+      "bars": {
+        "universe": 56
+      },
+      "byHold": {
+        "H20": {
+          "totalReturnPct": 0.51,
+          "sharpe": -0.652,
+          "maxDrawdownPct": 10.91,
+          "mar": 0.016,
+          "trades": 78,
+          "winRatePct": 51.28,
+          "avgExposureProxy": 3.79
+        },
+        "H60": {
+          "totalReturnPct": 11.36,
+          "sharpe": 0.068,
+          "maxDrawdownPct": 8.11,
+          "mar": 0.468,
+          "trades": 37,
+          "winRatePct": 59.46,
+          "avgExposureProxy": 4.85
+        },
+        "H40": {
+          "totalReturnPct": 2.1,
+          "sharpe": -0.425,
+          "maxDrawdownPct": 11.68,
+          "mar": 0.062,
+          "trades": 50,
+          "winRatePct": 54,
+          "avgExposureProxy": 4.64
+        }
+      },
+      "h60BeatsH20Sharpe": true,
+      "h60BeatsH20Mar": true,
+      "h60Beats": true
+    },
+    {
+      "year": "2026",
+      "bars": {
+        "universe": 56
+      },
+      "byHold": {
+        "H20": {
+          "totalReturnPct": 1.15,
+          "sharpe": -0.684,
+          "maxDrawdownPct": 8.17,
+          "mar": 0.067,
+          "trades": 50,
+          "winRatePct": 58,
+          "avgExposureProxy": 3.15
+        },
+        "H60": {
+          "totalReturnPct": 1.76,
+          "sharpe": -0.54,
+          "maxDrawdownPct": 10.32,
+          "mar": 0.081,
+          "trades": 22,
+          "winRatePct": 59.09,
+          "avgExposureProxy": 3.48
+        },
+        "H40": {
+          "totalReturnPct": 2.53,
+          "sharpe": -0.51,
+          "maxDrawdownPct": 8.63,
+          "mar": 0.139,
+          "trades": 31,
+          "winRatePct": 74.19,
+          "avgExposureProxy": 3.4
+        }
+      },
+      "h60BeatsH20Sharpe": true,
+      "h60BeatsH20Mar": true,
+      "h60Beats": true
+    }
+  ],
+  "segmentsWhereH60Beats": 4,
+  "verdict": "ADOPT H=60"
+}

@@ -23,8 +23,12 @@ import {
   TX_COST_PCT_PER_SIDE,
 } from '@/lib/backtest/core'
 import type { OhlcvRow } from '@/lib/backtest/core'
-import { runPortfolioBacktest } from '@/lib/backtest/portfolioBacktest'
-import { DEFAULT_EXIT_CONFIG } from '@/lib/backtest/exitRules'
+import { runPortfolioBacktest, DEFAULT_PORTFOLIO_CONFIG } from '@/lib/backtest/portfolioBacktest'
+import {
+  DEFAULT_EXIT_CONFIG,
+  LABEL_MATCHED_EXIT_CONFIG,
+  DEFAULT_TIME_EXIT_CONFIG,
+} from '@/lib/backtest/exitRules'
 import { enhancedCombinedSignal, resolveBacktestSignal } from '@/lib/backtest/signals'
 import {
   walkForwardAnalysis,
@@ -115,17 +119,20 @@ afterEach(() => {
 describe('backtestInstrument — golden run (production signal path)', () => {
   beforeEach(() => vi.stubEnv('QUANTAN_USE_ENHANCED_SIGNAL', '0'))
 
-  it('WIN scenario: crash then +0.5%/bar recovery — exact accounting', () => {
+  // H-DECISION (2026-07-16): the engine default hold is 60 bars
+  // (DEFAULT_TIME_EXIT_CONFIG) — these goldens pin the H60 default path.
+
+  it('WIN scenario: crash then +0.5%/bar recovery — exact accounting (H60 default)', () => {
     const res = backtestInstrument('AAPL', 'Technology', dipRecover380())
     expect(res.totalTrades).toBe(1)
-    expect(res.totalReturn).toBeCloseTo(0.01604, 5)
-    expect(res.annualizedReturn).toBeCloseTo(0.010609, 5)
-    expect(res.sharpeRatio).toBeCloseTo(-5.736055, 4)
-    expect(res.sortinoRatio).toBeCloseTo(-7.902196, 4)
+    expect(res.totalReturn).toBeCloseTo(0.052381, 5)
+    expect(res.annualizedReturn).toBeCloseTo(0.034437, 5)
+    expect(res.sharpeRatio).toBeCloseTo(4.219479, 4)
+    expect(res.sortinoRatio).toBeCloseTo(9.386393, 4)
     expect(res.maxDrawdown).toBeCloseTo(0.000163, 5)
     expect(res.winRate).toBe(1)
     expect(res.profitFactor).toBe(Infinity) // one win, zero losses
-    expect(res.avgTradeReturn).toBeCloseTo(0.11042, 5)
+    expect(res.avgTradeReturn).toBeCloseTo(0.355594, 5)
     expect(res.confidenceAvg).toBe(90)
     expect(res.equityCurve).toHaveLength(180)
     expect(res.bnhCurve).toHaveLength(180)
@@ -137,37 +144,37 @@ describe('backtestInstrument — golden run (production signal path)', () => {
     const t = res.closedTrades[0]
     expect(t.date).toBe('2024-10-27')
     expect(t.entryPrice).toBeCloseTo(211.979477, 5)
-    expect(t.exitPrice).toBeCloseTo(235.386263, 5)
+    expect(t.exitPrice).toBeCloseTo(287.358193, 5) // 60-bar ride vs 235.39 at H20
     expect(t.shares).toBe(70)
-    expect(t.pnlPct).toBeCloseTo(0.11042, 5)
+    expect(t.pnlPct).toBeCloseTo(0.355594, 5)
     expect(t.confidence).toBe(90)
     // pnlPct is the raw price move by definition
     expect(t.pnlPct).toBeCloseTo((t.exitPrice - t.entryPrice) / t.entryPrice, 10)
   })
 
-  it('LOSS scenario: crash then −0.3%/bar decline — exact accounting', () => {
+  it('LOSS scenario: crash then −0.3%/bar decline — exact accounting (H60 default)', () => {
     const res = backtestInstrument('AAPL', 'Technology', dipLoss380())
     expect(res.totalTrades).toBe(1)
-    expect(res.totalReturn).toBeCloseTo(-0.00939, 5)
-    expect(res.annualizedReturn).toBeCloseTo(-0.006237, 5)
-    expect(res.sharpeRatio).toBeCloseTo(-25.669592, 3)
-    expect(res.sortinoRatio).toBeCloseTo(-13.511796, 3)
-    expect(res.maxDrawdown).toBeCloseTo(0.00939, 5)
+    expect(res.totalReturn).toBeCloseTo(-0.025148, 5)
+    expect(res.annualizedReturn).toBeCloseTo(-0.016748, 5)
+    expect(res.sharpeRatio).toBeCloseTo(-25.811418, 3)
+    expect(res.sortinoRatio).toBeCloseTo(-13.532242, 3)
+    expect(res.maxDrawdown).toBeCloseTo(0.025148, 5)
     expect(res.winRate).toBe(0)
     expect(res.profitFactor).toBe(0)
-    expect(res.avgTradeReturn).toBeCloseTo(-0.061145, 5)
+    expect(res.avgTradeReturn).toBeCloseTo(-0.167461, 5)
     expect(res.bnhReturn).toBeCloseTo(0.671904, 5)
     const t = res.closedTrades[0]
     expect(t.entryPrice).toBeCloseTo(211.979477, 5)
-    expect(t.exitPrice).toBeCloseTo(199.017901, 5)
-    expect(t.pnlPct).toBeCloseTo(-0.061145, 5)
+    expect(t.exitPrice).toBeCloseTo(176.48121, 5)
+    expect(t.pnlPct).toBeCloseTo(-0.167461, 5)
   })
 
   it('crypto annualization (365d) shifts annualized return + Sharpe on identical rows', () => {
     const res = backtestInstrument('BTC', 'Crypto', dipRecover380())
     expect(res.totalTrades).toBe(1)
-    expect(res.annualizedReturn).toBeCloseTo(0.015402, 5) // vs 0.010609 at 252d
-    expect(res.sharpeRatio).toBeCloseTo(-2.645719, 4) // vs -5.736055 at 252d
+    expect(res.annualizedReturn).toBeCloseTo(0.050262, 5) // vs 0.034437 at 252d
+    expect(res.sharpeRatio).toBeCloseTo(7.707472, 4) // vs 4.219479 at 252d
   })
 
   it('win/loss classification is NET of round-trip costs (F-4 boundary)', () => {
@@ -222,8 +229,31 @@ const portfolioSectors = { AA: 'Technology', BB: 'Healthcare' }
 describe('runPortfolioBacktest — golden run (production signal path)', () => {
   beforeEach(() => vi.stubEnv('QUANTAN_USE_ENHANCED_SIGNAL', '0'))
 
-  it('label-matched default: 4 time-only exits, exact P&L accounting', () => {
+  it('H60 default: 3 time-only exits, exact accounting (H-DECISION 2026-07-16)', () => {
+    expect(DEFAULT_PORTFOLIO_CONFIG.exit).toEqual(DEFAULT_TIME_EXIT_CONFIG)
+    expect(DEFAULT_TIME_EXIT_CONFIG.maxHoldDays).toBe(60)
     const res = runPortfolioBacktest(portfolioData(), portfolioSectors)
+    expect(res.totalTrades).toBe(3)
+    expect(res.finalCapital).toBeCloseTo(107950.444982, 2)
+    expect(res.winRate).toBeCloseTo(2 / 3, 10)
+    expect(res.maxDrawdown).toBeCloseTo(0.006118, 5)
+    expect(res.exitReasonBreakdown).toEqual({
+      signal: 0, stop_loss: 0, time_exit: 3,
+      profit_target: 0, panic_exit: 0, max_drawdown: 0, end_of_data: 0,
+    })
+    const t0 = res.trades[0]
+    expect(t0.ticker).toBe('AA')
+    expect(t0.entryDate).toBe('2024-10-27')
+    expect(t0.exitDate).toBe('2024-12-27') // exactly 60 union bars later
+    expect(t0.shares).toBe(70)
+    expect(t0.pnlPct).toBeCloseTo(0.352615, 5)
+    expect(t0.exitReason).toBe('time_exit')
+  })
+
+  it('explicit H20 label-matched config: 4 time-only exits, exact P&L accounting', () => {
+    const res = runPortfolioBacktest(portfolioData(), portfolioSectors, {
+      exit: LABEL_MATCHED_EXIT_CONFIG,
+    })
     expect(res.totalTrades).toBe(4)
     expect(res.finalCapital).toBeCloseTo(101467.949045, 2)
     expect(res.totalReturn).toBeCloseTo(0.014679, 5)
@@ -414,38 +444,38 @@ describe('walkForward — golden windows (production signal path)', () => {
 
   const wfRows = () => multiDipSeries(700, [300, 420, 540], 0.004, 0.64, 0.005)
 
-  it('3 windows with exact boundaries, returns, Sharpes, and ratio clamp', () => {
+  it('3 windows with exact boundaries, returns, Sharpes, and ratio clamp (H60 default)', () => {
     const wins = walkForwardAnalysis('AAPL', 'Technology', wfRows())
     expect(wins).toHaveLength(3)
 
     expect(wins[0].periodLabel).toBe('2024-09 – 2025-07')
     expect(wins[0].startDate).toBe('2024-09-09')
     expect(wins[0].endDate).toBe('2025-07-20')
-    expect(wins[0].isReturn).toBeCloseTo(0.22084, 5)
-    expect(wins[0].osReturn).toBeCloseTo(1.221443, 5)
-    expect(wins[0].isSharpe).toBeCloseTo(-2.859942, 4)
-    expect(wins[0].osSharpe).toBeCloseTo(5.100604, 4)
-    expect(wins[0].oosRatioRaw).toBeCloseTo(5.530893, 4)
+    expect(wins[0].isReturn).toBeCloseTo(0.711189, 5)
+    expect(wins[0].osReturn).toBeCloseTo(2.376907, 5)
+    expect(wins[0].isSharpe).toBeCloseTo(8.530916, 4)
+    expect(wins[0].osSharpe).toBeCloseTo(5.924775, 4)
+    expect(wins[0].oosRatioRaw).toBeCloseTo(3.34216, 4)
     expect(wins[0].oosRatio).toBe(2) // display clamp at +2
 
     expect(wins[1].periodLabel).toBe('2024-11 – 2025-09')
-    expect(wins[1].isReturn).toBeCloseTo(0.33126, 5)
+    expect(wins[1].isReturn).toBeCloseTo(0.711189, 5)
     expect(wins[1].osReturn).toBe(0)
-    expect(wins[1].isSharpe).toBeCloseTo(-1.140403, 4)
-    expect(wins[1].osSharpe).toBeCloseTo(1.034128, 4)
+    expect(wins[1].isSharpe).toBeCloseTo(9.892501, 4)
+    expect(wins[1].osSharpe).toBeCloseTo(10.915727, 4)
 
     expect(wins[2].periodLabel).toBe('2025-01 – 2025-11')
-    expect(wins[2].isReturn).toBeCloseTo(0.33126, 5)
-    expect(wins[2].isSharpe).toBeCloseTo(0.563108, 4)
+    expect(wins[2].isReturn).toBeCloseTo(0.711189, 5)
+    expect(wins[2].isSharpe).toBeCloseTo(8.52141, 4)
     expect(wins[2].osSharpe).toBeNull()
   })
 
   it('summary aggregates match the window pins exactly', () => {
     const sum = walkForwardSummary(walkForwardAnalysis('AAPL', 'Technology', wfRows()))
-    expect(sum.avgIsReturn).toBeCloseTo(0.294453, 5)
-    expect(sum.avgOsReturn).toBeCloseTo(0.407148, 5)
-    expect(sum.avgIsSharpe).toBeCloseTo(-1.145746, 4)
-    expect(sum.avgOsSharpe).toBeCloseTo(2.044911, 4)
+    expect(sum.avgIsReturn).toBeCloseTo(0.711189, 5)
+    expect(sum.avgOsReturn).toBeCloseTo(0.792302, 5)
+    expect(sum.avgIsSharpe).toBeCloseTo(8.981609, 4)
+    expect(sum.avgOsSharpe).toBeCloseTo(5.613501, 4)
     expect(sum.avgOosRatio).toBeCloseTo(0.666667, 5)
     expect(sum.overfittingIndex).toBe(0) // avgOs > avgIs → clamped at 0
   })

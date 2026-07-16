@@ -64,6 +64,29 @@ export const LABEL_MATCHED_EXIT_CONFIG: ExitConfig = {
   atrStopMultiplier: 0,
 }
 
+/**
+ * H-DECISION (2026-07-16, owner-delegated): the ENGINE default hold horizon
+ * is 60 bars — same time-only family as LABEL_MATCHED_EXIT_CONFIG, longer
+ * horizon. Pre-registered D3-style acceptance
+ * (`npm run experiment:hold-horizon`,
+ * workspace/optimization-runs/hold-horizon-decision.json): H60 beat the H20
+ * incumbent on BOTH Sharpe and MAR in 4/4 OOS segments (2023/2024/2025/
+ * 2026H1) — including 2024, the regime year that killed every other
+ * candidate (H60 +3.34% vs H20 −5.61%); H=40 underperformed both (not a
+ * monotonic-holding artifact). Corroborated by C7 (rotation walk-forward
+ * prefers H=60) and the Q-076 purged grid (H60 = only positive IS Sharpe;
+ * OOS 2025→ +18.58%).
+ *
+ * The LABEL pipeline is NOT touched by this: benchmarkLabel's
+ * LABEL_HOLD_DAYS stays 20 and the published label WR / D1 edge gate keep
+ * their own 20d horizon. LABEL_MATCHED_EXIT_CONFIG remains exported for
+ * research runs that need engine-vs-label horizon parity.
+ */
+export const DEFAULT_TIME_EXIT_CONFIG: ExitConfig = {
+  ...LABEL_MATCHED_EXIT_CONFIG,
+  maxHoldDays: 60,
+}
+
 export type ExitReason =
   | 'signal'          // enhancedCombinedSignal returned SELL
   | 'stop_loss'       // hit ATR-based stop loss

@@ -134,10 +134,11 @@ function timeOnlyExit(holdDays: number): ExitConfig {
 function buildCandidates(): CandidateConfig[] {
   const configs: CandidateConfig[] = []
 
-  // Hold-horizon sweep (time-only exits; H=20 is the shipped default)
+  // Hold-horizon sweep (time-only exits; H=60 is the shipped default since
+  // the 2026-07-16 H-DECISION — see hold-horizon-decision.json)
   for (const h of [10, 20, 40, 60]) {
     configs.push({
-      label: `labelMatched_H${h}${h === 20 ? '_shippedDefault' : ''}`,
+      label: `labelMatched_H${h}${h === 60 ? '_shippedDefault' : ''}`,
       exit: timeOnlyExit(h),
       portfolio: {},
     })

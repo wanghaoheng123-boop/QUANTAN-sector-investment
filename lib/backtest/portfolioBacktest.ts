@@ -21,7 +21,7 @@ import { maxCorrelationVsPeers, correlationAdjustedKelly } from '@/lib/quant/cor
 import { getRiskFreeRateSync } from '@/lib/quant/riskFreeRate'
 import {
   checkExitConditions, updatePosition, atrAdaptiveStop,
-  LABEL_MATCHED_EXIT_CONFIG,
+  DEFAULT_TIME_EXIT_CONFIG,
 } from '@/lib/backtest/exitRules'
 import type { OpenPosition, ExitConfig, ExitReason } from '@/lib/backtest/exitRules'
 import { SECTOR_PROFILES } from '@/lib/optimize/sectorProfiles'
@@ -86,11 +86,14 @@ export const DEFAULT_PORTFOLIO_CONFIG: PortfolioConfig = {
   maxSinglePositionPct: 0.20,
   monthlyRebalance: false,
   correlationGate: 0.20,
-  // D2/D4 (2026-07-11): label-matched exits (time-only, 20 bars) are the
-  // default — ATR/trailing/panic stops and the falling-knife SELL exit are
-  // retired per the acceptance experiments (see exitRules.ts doc). The legacy
-  // stop-based policy remains available by passing `exit: DEFAULT_EXIT_CONFIG`.
-  exit: LABEL_MATCHED_EXIT_CONFIG,
+  // D2/D4 (2026-07-11): time-only exits are the default — ATR/trailing/panic
+  // stops and the falling-knife SELL exit are retired per the acceptance
+  // experiments (see exitRules.ts doc). H-DECISION (2026-07-16): the default
+  // horizon is 60 bars (H60 beat H20 on Sharpe AND MAR in 4/4 OOS segments —
+  // hold-horizon-decision.json). Legacy stop policy via `exit:
+  // DEFAULT_EXIT_CONFIG`; 20d label-horizon parity via
+  // `exit: LABEL_MATCHED_EXIT_CONFIG`.
+  exit: DEFAULT_TIME_EXIT_CONFIG,
 }
 
 export interface PortfolioTrade {

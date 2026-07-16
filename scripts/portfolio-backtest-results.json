@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-07-16T14:35:38.697Z",
+  "timestamp": "2026-07-16T17:32:23.549Z",
   "version": "v2.0-q076-label-matched-grid",
   "protocol": {
     "description": "Q-064/Q-076: label-matched exit-family grid; selection on IS only (purged), one OOS validation of the selected config; full window = context",
@@ -7,10 +7,10 @@
     "isPurgeBars": 21,
     "signalPath": "QUANTAN_USE_ENHANCED_SIGNAL=0"
   },
-  "elapsed_seconds": 42.7,
+  "elapsed_seconds": 43.5,
   "instruments": 56,
   "selectedConfig": {
-    "label": "labelMatched_H60",
+    "label": "labelMatched_H60_shippedDefault",
     "exitConfig": {
       "maxHoldDays": 60,
       "profitTakePct": 0,
@@ -112,7 +112,7 @@
   },
   "isRanking": [
     {
-      "label": "labelMatched_H60",
+      "label": "labelMatched_H60_shippedDefault",
       "isScore": 0.0421,
       "exitConfig": {
         "maxHoldDays": 60,
@@ -496,7 +496,7 @@
       }
     },
     {
-      "label": "labelMatched_H20_shippedDefault",
+      "label": "labelMatched_H20",
       "isScore": -0.6661,
       "exitConfig": {
         "maxHoldDays": 20,
@@ -966,7 +966,7 @@
       }
     },
     {
-      "label": "labelMatched_H20_shippedDefault",
+      "label": "labelMatched_H20",
       "fullScore": -0.6336,
       "metrics": {
         "totalTrades": 307,
@@ -1138,7 +1138,7 @@
       }
     },
     {
-      "label": "labelMatched_H60",
+      "label": "labelMatched_H60_shippedDefault",
       "fullScore": 0.1976,
       "metrics": {
         "totalTrades": 153,
