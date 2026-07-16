@@ -1497,10 +1497,11 @@
     "title": "CPCV / purged splits for grid search",
     "domain": "Quant/Research",
     "priority": "P1",
-    "status": "pending",
+    "status": "done",
     "files": [
       "lib/optimize/gridSearch.ts"
-    ]
+    ],
+    "resolution_2026_07_16": "SHIPPED gridSearchPurged + purgedWalkForwardFolds in lib/optimize/gridSearch.ts: expanding-window purged walk-forward folds (labels close before each boundary by construction, 5-bar embargo, 220-bar OOS warmup), per-fold selection on IS ONLY, OOS reported from unseen data, modal-param stability. Replaces the documented selection-on-OOS bias (caveat #1) of the legacy gridSearch, which stays for back-compat with a pointer. Unit tests pin fold geometry exactly and verify no-leak invariants (__tests__/optimize/gridSearchPurged.test.ts). The same IS-select/OOS-validate protocol is applied to scripts/portfolio-backtest.ts (see Q-076)."
   },
   {
     "id": "Q-065-NEW",
@@ -1648,7 +1649,7 @@
     "title": "Refresh portfolio-backtest optimizer grid for the label-matched exit family",
     "domain": "Quant",
     "priority": "P2",
-    "status": "pending",
+    "status": "done",
     "files": [
       "scripts/portfolio-backtest.ts"
     ],
@@ -1658,7 +1659,8 @@
     "verify_commands": [
       "npm run portfolio:backtest"
     ],
-    "notes_2026_07_13": "Post-D2/D4 the grid only explores retired stop-family exits; ALL members score negative Sharpe (best -0.825) while the shipped label-matched default measures +8.52%/maxDD 9.88% \u2014 grid is stale. Sizing exploration is D6-adjacent: coordinate with the calibrated-score work."
+    "notes_2026_07_13": "Post-D2/D4 the grid only explores retired stop-family exits; ALL members score negative Sharpe (best -0.825) while the shipped label-matched default measures +8.52%/maxDD 9.88% \u2014 grid is stale. Sizing exploration is D6-adjacent: coordinate with the calibrated-score work.",
+    "resolution_2026_07_16": "Grid REFRESHED to the label-matched exit family: H in {10,20,40,60} time-only + structure sweep (maxPositions 5/15, cap 10%) + legacy stop family kept as a single reference row. Q-064 protocol applied: all configs run on the purged IS window (< 2025-01-01 minus 21-bar purge), best-by-IS selected, ONE OOS validation reported. First run (2026-07-16, production signal path): IS selects labelMatched_H60 (only positive IS Sharpe 0.042; consistent with C7 walk-forward preferring H=60); OOS 2025-> : +18.58%, WR 60.34%, maxDD 8.11%, PF 2.90, Sharpe 0.158, 58 trades. Every stop-family and short-hold variant scores negative IS Sharpe. NOTE: engine default stays H=20 (label-matched); an H change is a published-number re-baseline = owner decision."
   },
   {
     "id": "Q-077",

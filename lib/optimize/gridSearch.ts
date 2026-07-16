@@ -13,6 +13,8 @@
  *      upward-biased (the OOS set was used for selection, not held out). An unbiased
  *      estimate needs a THIRD untouched test split (train → validate → test) or nested
  *      CV. Treat the reported OOS numbers as optimistic, not as expected live performance.
+ *      → Q-064 (2026-07-16): use {@link gridSearchPurged} instead — per-fold selection
+ *        on IS only, purged boundaries, embargo, OOS reported from unseen data.
  *   2. The grid optimizes the fast SIMPLIFIED backtest (simpleBacktestSlice), not the
  *      production enhanced signal, so tuned params may not transfer 1:1 (see generateGrid).
  *
@@ -299,6 +301,189 @@ export function gridSearch(
     top5: results.slice(0, 5),
     robustParams,
     splitDate,
+  }
+}
+
+// ─── Q-064: purged walk-forward grid search ──────────────────────────────────
+
+export interface PurgedFold {
+  /**
+   * IS evaluation slice is rows[0, isEnd). Purge is BY CONSTRUCTION:
+   * simpleBacktestSlice stops entries 22 bars before its slice end, so every
+   * IS label window (20-bar hold, T+1 entry) closes strictly before isEnd —
+   * no IS label ever crosses into the OOS block.
+   */
+  isEnd: number
+  /** OOS slice start (isEnd + embargo − warmupBars): warmup bars only feed indicators. */
+  oosWarmupStart: number
+  /** First bar on which an OOS entry can fire (isEnd + embargo). */
+  oosEntryStart: number
+  /** OOS slice end (exclusive). */
+  oosEnd: number
+}
+
+export interface PurgedFoldOptions {
+  folds?: number
+  /** Indicator warmup consumed by simpleBacktestSlice before entries start. */
+  warmupBars?: number
+  /** Bars skipped after the IS boundary before OOS entries may fire (D5 convention). */
+  embargoBars?: number
+  /** Smallest acceptable IS window. */
+  minIsBars?: number
+  /** Smallest span of possible OOS entry bars for a fold to count. */
+  minOosEntryBars?: number
+}
+
+/**
+ * Expanding-window purged walk-forward folds over a single instrument's rows.
+ * The OOS blocks tile the last (1 − isFraction) of the series; each fold's IS
+ * is everything before its block. Folds too small to evaluate are dropped.
+ */
+export function purgedWalkForwardFolds(
+  nRows: number,
+  {
+    folds = 4,
+    warmupBars = 220,
+    embargoBars = 5,
+    minIsBars = 472,
+    minOosEntryBars = 63,
+  }: PurgedFoldOptions = {},
+): PurgedFold[] {
+  const out: PurgedFold[] = []
+  if (folds <= 0) return out
+  const firstBoundary = Math.max(minIsBars, Math.floor(nRows * 0.6))
+  const span = nRows - firstBoundary
+  if (span <= 0) return out
+  const blockLen = Math.floor(span / folds)
+  if (blockLen <= 0) return out
+  for (let f = 0; f < folds; f++) {
+    const isEnd = firstBoundary + f * blockLen
+    const oosEnd = f === folds - 1 ? nRows : isEnd + blockLen
+    const oosEntryStart = isEnd + embargoBars
+    const oosWarmupStart = oosEntryStart - warmupBars
+    if (oosWarmupStart < 0) continue
+    // simpleBacktestSlice needs local i in [warmupBars, len−22) to enter.
+    const entrySpan = oosEnd - oosEntryStart - 22
+    if (entrySpan < minOosEntryBars) continue
+    out.push({ isEnd, oosWarmupStart, oosEntryStart, oosEnd })
+  }
+  return out
+}
+
+export interface PurgedGridFoldResult {
+  fold: number
+  isEnd: number
+  boundaryDate: string
+  selected: GridPoint
+  isSharpe: number | null
+  isWinRate: number
+  isTrades: number
+  oosSharpe: number | null
+  oosWinRate: number
+  oosTrades: number
+}
+
+export interface PurgedGridSummary {
+  ticker: string
+  sector: string
+  totalCombinations: number
+  folds: PurgedGridFoldResult[]
+  /** Trade-weighted mean OOS win rate of the per-fold IS-selected params. */
+  meanOosWinRate: number | null
+  /** Unweighted mean OOS trade-level Sharpe across folds that produced one. */
+  meanOosSharpe: number | null
+  pooledOosTrades: number
+  /** Param values selected in ≥ 60% of folds (selection stability). */
+  modalParams: Partial<GridPoint>
+  protocol: string
+}
+
+/**
+ * Purged walk-forward grid search (Q-064) — the selection-bias-free
+ * replacement for {@link gridSearch}: parameters are selected on IS ONLY
+ * (per fold, expanding window, labels purged at the boundary, 5-bar
+ * embargo) and the reported OOS metrics come from data the selection never
+ * saw. Contrast with gridSearch's documented caveat #1 (best chosen BY OOS
+ * Sharpe and the same OOS reported).
+ */
+export function gridSearchPurged(
+  rows: OhlcvRow[],
+  grid: ParamGrid,
+  ticker: string,
+  sector: string,
+  foldOptions: PurgedFoldOptions = {},
+): PurgedGridSummary {
+  const combos = generateGrid(grid)
+  const folds = purgedWalkForwardFolds(rows.length, foldOptions)
+  const foldResults: PurgedGridFoldResult[] = []
+
+  for (const [f, fold] of folds.entries()) {
+    let best: { params: GridPoint; sharpe: number | null; winRate: number; trades: number } | null =
+      null
+    for (const params of combos) {
+      const is = simpleBacktestSlice(rows, 0, fold.isEnd, params)
+      if (is.trades < 10) continue
+      const score = is.sharpe ?? is.winRate
+      const bestScore = best == null ? -Infinity : (best.sharpe ?? best.winRate)
+      if (score > bestScore) best = { params, ...is }
+    }
+    if (best == null) continue
+
+    const oos = simpleBacktestSlice(rows, fold.oosWarmupStart, fold.oosEnd, best.params)
+    foldResults.push({
+      fold: f,
+      isEnd: fold.isEnd,
+      boundaryDate: new Date(rows[fold.isEnd].time * 1000).toISOString().slice(0, 10),
+      selected: best.params,
+      isSharpe: best.sharpe,
+      isWinRate: best.winRate,
+      isTrades: best.trades,
+      oosSharpe: oos.sharpe,
+      oosWinRate: oos.winRate,
+      oosTrades: oos.trades,
+    })
+  }
+
+  let pooledOosTrades = 0
+  let pooledOosWinSum = 0
+  const oosSharpes: number[] = []
+  for (const r of foldResults) {
+    pooledOosTrades += r.oosTrades
+    pooledOosWinSum += r.oosWinRate * r.oosTrades
+    if (r.oosSharpe != null) oosSharpes.push(r.oosSharpe)
+  }
+
+  // Selection stability: value chosen in >= 60% of folds.
+  const modalParams: Partial<GridPoint> = {}
+  if (foldResults.length > 0) {
+    const keys: (keyof GridPoint)[] = [
+      'slopeThreshold', 'buyWScoreThreshold', 'sellWScoreThreshold',
+      'confidenceThreshold', 'atrStopMultiplier',
+    ]
+    for (const key of keys) {
+      const freq = new Map<number, number>()
+      for (const r of foldResults) {
+        const v = r.selected[key]
+        freq.set(v, (freq.get(v) ?? 0) + 1)
+      }
+      for (const [v, c] of freq) {
+        if (c / foldResults.length >= 0.6) (modalParams as Record<string, number>)[key] = v
+      }
+    }
+  }
+
+  return {
+    ticker,
+    sector,
+    totalCombinations: combos.length,
+    folds: foldResults,
+    meanOosWinRate: pooledOosTrades > 0 ? pooledOosWinSum / pooledOosTrades : null,
+    meanOosSharpe:
+      oosSharpes.length > 0 ? oosSharpes.reduce((a, b) => a + b, 0) / oosSharpes.length : null,
+    pooledOosTrades,
+    modalParams,
+    protocol:
+      'expanding-window purged walk-forward: per-fold selection on IS ONLY (labels close before the boundary by construction), 5-bar embargo, OOS reported from unseen data',
   }
 }
 
