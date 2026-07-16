@@ -122,7 +122,8 @@
     "completed_at": "2026-05-24",
     "notes_2026_05_24": "Confirmed open. lib/api/rateLimit.ts:13 still uses per-process Map. Migrate to Vercel KV with Lua atomic update in S2. | 2026-05-24 Cursor Phase 15 completion batch \u2014 see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md",
     "notes_2026_06_02_reconcile": "Reconciled 2026-06-02 handover: default remains per-process Map; KV path is opt-in via env (documented in lib/api/rateLimit.ts). Status flipped to partial until KV deployed in production.",
-    "notes_2026_06_03": ".env.example documents Vercel KV setup; code path already in applyRateLimit()."
+    "notes_2026_06_03": ".env.example documents Vercel KV setup; code path already in applyRateLimit().",
+    "notes_2026_07_16": "Still owner-gated on env provisioning (BLOCKER-OWNER-ENV). NOTE: Vercel KV is no longer offered as a product \u2014 the equivalent path is marketplace Redis (Upstash) via the Vercel Marketplace; the code path in lib/api/rateLimit.ts stays opt-in via env and unchanged."
   },
   {
     "id": "Q-002",
@@ -1206,7 +1207,8 @@
     "notes_2026_05_24": "Filed during Q-022. Full expanded include measured 62.43% stmts / 57.71% branches / 60.52% funcs / 64.27% lines. Worst gaps: hooks 5.58%, lib/ml 0%, lib/optimize 0.48%, lib/portfolio 51.28%, lib/data/providers 0%. Temporarily excluded via coverage.exclude[] \u2014 do NOT lower threshold percentages. | 2026-05-24 Cursor Phase 15 completion batch \u2014 see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md",
     "blocker": "Global coverage 62% with full include; excludes remain until more unit tests",
     "notes_2026_05_24_progress": "PROGRESS. +44 tests in 3 new files (878 total, 66 files). Closed: __tests__/portfolio/tracker.test.ts (17), __tests__/portfolio/riskParity.test.ts (16), __tests__/data/providers.test.ts (12). Still uncovered: hooks/ (useLivePrices, useDialogA11y, useWatchlist, useErrorToast), lib/ml/, lib/optimize/ (gridSearch, parameterSets, sectorProfiles), lib/data/bloomberg/toBloombergSecurity.ts, lib/data/providers/yahoo.ts + index.ts + types.ts. Vitest config still excludes these from coverage thresholds until backfill completes. Side-discovery during this batch: real convergence bug in lib/portfolio/riskParity.ts:ercWeights (linear update oscillated on asymmetric variances) \u2014 fixed via sqrt() damping per Maillard-Roncalli-Teiletche (2010) \u00a74.2.",
-    "notes_2026_06_03": "Removed lib/quant/frameworks.ts from coverage.exclude[]; added __tests__/quant/frameworks.test.ts."
+    "notes_2026_06_03": "Removed lib/quant/frameworks.ts from coverage.exclude[]; added __tests__/quant/frameworks.test.ts.",
+    "notes_2026_07_16": "Progress: lib/optimize/gridSearch.ts gained direct tests (Q-064), lib/portfolio tracker/var/stressTest exports gained direct tests (Q-074). Un-exclusion still requires measuring full-include coverage in CI (jsdom suites are CI-only on this machine) before touching coverage.exclude[]."
   },
   {
     "id": "Q-052-NEW",
@@ -1534,18 +1536,20 @@
     "status": "pending",
     "files": [
       "workspace/shadow/"
-    ]
+    ],
+    "notes_2026_07_16": "DESIGN BLOCKER found at triage: the filed spec (persist to workspace/shadow/) cannot work in serverless production \u2014 Vercel function filesystems are ephemeral. A prod shadow log needs a storage decision (Vercel Blob / marketplace Redis / external), which is an owner cost+infra call (compare DECISION-D7-DATA). Local-dev-only logging would not answer the live-vs-backtest question the row exists for. Owner-gated pending storage decision."
   },
   {
     "id": "Q-068-NEW",
     "title": "Re-run optimization Loops 1-3 with locked holdout",
     "domain": "Quant/Research",
     "priority": "P2",
-    "status": "pending",
+    "status": "partial",
     "files": [
       "scripts/optimize-grid.ts",
       "reviews/optimization-loop1.md"
-    ]
+    ],
+    "notes_2026_07_16": "PARTIAL via Q-064/Q-076: Loop 3 (portfolio) re-run under the honest protocol \u2014 purged IS (< 2025-01-01, 21-bar purge) selection + one OOS validation (npm run portfolio:backtest; selects labelMatched_H60, OOS +18.58%/WR 60.34%/maxDD 8.11%). Loops 1-2 can now re-run on gridSearchPurged (lib/optimize/gridSearch.ts) \u2014 but ADOPTING re-derived sector-profile params changes published signals = owner-gated re-baseline. Remaining: wire scripts/optimize-grid.ts to gridSearchPurged and re-derive params for owner review."
   },
   {
     "id": "Q-069",
@@ -1577,24 +1581,26 @@
     "title": "Harden sector-rotation / ma-deviation probe timeouts (F-03, F-05)",
     "domain": "Data/API",
     "priority": "P2",
-    "status": "pending",
+    "status": "done",
     "files": [
       "app/api/sector-rotation/route.ts",
       "app/api/ma-deviation/route.ts"
     ],
-    "notes_2026_06_03": "Agent probe timeouts; likely env/cold-start not code defect."
+    "notes_2026_06_03": "Agent probe timeouts; likely env/cold-start not code defect.",
+    "resolution_2026_07_16": "CLOSED as already-hardened: sector-rotation and ma-deviation routes both carry per-call fetch timeouts with retry (attempts 2, 6-7s timeoutMs) and CDN s-maxage/stale-while-revalidate caching, added in phases after this row was filed. The 2026-06-03 note already judged the probe timeouts env/cold-start, and Vercel runtime errors have held at 0 across weekly sweeps since 07-01 (B-2 monitoring). No code defect to fix."
   },
   {
     "id": "Q-072",
     "title": "Briefs / options API probe reliability (F-06, F-07)",
     "domain": "Data/API",
     "priority": "P2",
-    "status": "pending",
+    "status": "done",
     "files": [
       "app/api/briefs/route.ts",
       "app/api/options/[ticker]/route.ts"
     ],
-    "notes_2026_06_03": "UI audit probe timeouts under agent load."
+    "notes_2026_06_03": "UI audit probe timeouts under agent load.",
+    "resolution_2026_07_16": "CLOSED as already-hardened: briefs has per-call withTimeout + Promise.allSettled fan-out (R4-H-2) with partial-degradation caching; options route has s-maxage caching; B-2 fix (07-01) removed the actual briefs prod failure (yahoo-finance2 schema drift). Probe timeouts were agent-load/cold-start artifacts; prod runtime errors 0 across weekly sweeps. No code defect to fix."
   },
   {
     "id": "Q-073",
