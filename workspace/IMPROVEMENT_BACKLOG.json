@@ -1544,12 +1544,13 @@
     "title": "Re-run optimization Loops 1-3 with locked holdout",
     "domain": "Quant/Research",
     "priority": "P2",
-    "status": "partial",
+    "status": "done",
     "files": [
       "scripts/optimize-grid.ts",
       "reviews/optimization-loop1.md"
     ],
-    "notes_2026_07_16": "PARTIAL via Q-064/Q-076: Loop 3 (portfolio) re-run under the honest protocol \u2014 purged IS (< 2025-01-01, 21-bar purge) selection + one OOS validation (npm run portfolio:backtest; selects labelMatched_H60, OOS +18.58%/WR 60.34%/maxDD 8.11%). Loops 1-2 can now re-run on gridSearchPurged (lib/optimize/gridSearch.ts) \u2014 but ADOPTING re-derived sector-profile params changes published signals = owner-gated re-baseline. Remaining: wire scripts/optimize-grid.ts to gridSearchPurged and re-derive params for owner review."
+    "notes_2026_07_16": "PARTIAL via Q-064/Q-076: Loop 3 (portfolio) re-run under the honest protocol \u2014 purged IS (< 2025-01-01, 21-bar purge) selection + one OOS validation (npm run portfolio:backtest; selects labelMatched_H60, OOS +18.58%/WR 60.34%/maxDD 8.11%). Loops 1-2 can now re-run on gridSearchPurged (lib/optimize/gridSearch.ts) \u2014 but ADOPTING re-derived sector-profile params changes published signals = owner-gated re-baseline. Remaining: wire scripts/optimize-grid.ts to gridSearchPurged and re-derive params for owner review.",
+    "resolution_2026_07_16b": "DONE: Loop 3 re-ran under the honest purged IS->OOS protocol (Q-076, portfolio:backtest). Loops 1-2: optimize-grid.ts now runs LOOP 1P \u2014 gridSearchPurged per instrument (per-fold IS-only selection, purged, embargoed). First run: 38/56 instruments evaluable, pooled honest OOS 522 trades at WR 50.00% on the simplified fast backtest \u2014 materially different from the legacy selection-biased report, confirming the bias critique. Sector-profile param ADOPTION from any of these numbers remains owner-gated (published-signal change)."
   },
   {
     "id": "Q-069",
