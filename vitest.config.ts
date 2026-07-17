@@ -47,6 +47,12 @@ export default defineConfig({
       //   - lib/optimize/parameterSets.ts ✓ tested (this kickoff)
       //   - lib/optimize/sectorProfiles.ts ✓ tested (this kickoff)
       //   - hooks/useErrorToast.ts ✓ tested (this kickoff)
+      // Q-051 continuation (2026-07-17):
+      //   - lib/ml/** ✓ un-excluded (__tests__/ml/client.test.ts had landed
+      //     after the exclude — it was stale)
+      //   - lib/data/bloomberg/** ✓ un-excluded (__tests__/data/bloombergBridge.test.ts)
+      //   - lib/optimize/gridSearch.ts ✓ un-excluded (Q-064 purged tests +
+      //     legacy-contract tests in __tests__/optimize/gridSearchPurged.test.ts)
       //
       // Remaining excludes (Phase 16 Q-051-NEW continuation):
       exclude: [
@@ -65,17 +71,13 @@ export default defineConfig({
         // SQLite — already integration-tested but skipped when better-sqlite3
         // native binding is unavailable (which it is in default CI image)
         'lib/data/warehouse.ts',
-        'lib/data/bloomberg/**',
         // (2026-06-27) The lib/data/providers HTTP layer (yahoo/polygon/
         // alphavantage/fred + dispatcher + index) was deleted as dead code
         // (zero prod callers), so its coverage excludes are gone with it. Only
         // lib/data/providers/types.ts remains — pure interfaces, 0 executable
         // lines, so it needs no exclude.
-        // ML sidecar client — needs HTTP fixture suite
-        'lib/ml/**',
-        // Grid search — long-running optimization; tested via end-to-end
-        // benchmark instead. Phase 16 splits this into unit-testable units.
-        'lib/optimize/gridSearch.ts',
+        // 457-line fundamentals assembler — needs a dedicated fixture suite
+        // (the last big Q-051 item; do not remove without one)
         'lib/quant/buildFundamentalsPayload.ts',
       ],
       reporter: ['text', 'text-summary', 'json-summary'],

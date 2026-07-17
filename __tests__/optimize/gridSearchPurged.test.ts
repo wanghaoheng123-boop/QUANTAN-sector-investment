@@ -11,6 +11,8 @@ import {
   purgedWalkForwardFolds,
   gridSearchPurged,
   generateGrid,
+  gridSearch,
+  aggregateGridResults,
 } from '@/lib/optimize/gridSearch'
 import type { ParamGrid } from '@/lib/optimize/gridSearch'
 import type { OhlcvRow } from '@/lib/backtest/dataLoader'
@@ -127,5 +129,60 @@ describe('gridSearchPurged — selection on IS only', () => {
     expect(summary.meanOosWinRate).toBeNull()
     expect(summary.pooledOosTrades).toBe(0)
     expect(summary.modalParams).toEqual({})
+  })
+
+  // ── Legacy 70/30 gridSearch + aggregation (Q-051 coverage backfill) ────────
+  // The legacy API stays for scripts/optimize-grid.ts continuity; these tests
+  // pin its CONTRACT (split geometry, grid membership, ranking, aggregation)
+  // — its known selection-on-OOS bias is documented, not endorsed.
+
+  describe('legacy gridSearch — contract pins', () => {
+    it('70/30 split date, grid-member best params, score-sorted top5', () => {
+      const rows = fixtureRows(1400)
+      const s = gridSearch(rows, grid, 'TST', 'Technology')
+      expect(s.ticker).toBe('TST')
+      expect(s.sector).toBe('Technology')
+      expect(s.totalCombinations).toBe(generateGrid(grid).length)
+      const splitIdx = Math.floor(rows.length * 0.7)
+      expect(s.splitDate).toBe(new Date(rows[splitIdx].time * 1000).toISOString().slice(0, 10))
+      expect(grid.slopeThreshold).toContain(s.best.params.slopeThreshold)
+      expect(grid.atrStopMultiplier).toContain(s.best.params.atrStopMultiplier)
+      for (let i = 1; i < s.top5.length; i++) {
+        expect(s.top5[i - 1].score).toBeGreaterThanOrEqual(s.top5[i].score)
+      }
+      // survivors respect the protocol gates
+      for (const r of s.top5) {
+        expect(r.oosTrades).toBeGreaterThanOrEqual(10)
+        expect(r.overfitGap).toBeLessThanOrEqual(0.08)
+      }
+      expect(s.validCombinations).toBeGreaterThan(0)
+      expect(s.validCombinations).toBeLessThanOrEqual(s.totalCombinations)
+    })
+
+    it('is deterministic', () => {
+      const rows = fixtureRows(1200)
+      expect(gridSearch(rows, grid, 'T', 'T')).toEqual(gridSearch(rows, grid, 'T', 'T'))
+    })
+  })
+
+  describe('aggregateGridResults — modal aggregation', () => {
+    it('picks the modal best params and averages OOS win rate', () => {
+      const rows = fixtureRows(1400)
+      const s1 = gridSearch(rows, grid, 'A', 'T')
+      const s2 = gridSearch(rows, grid, 'B', 'T')
+      const agg = aggregateGridResults([s1, s2])
+      // identical inputs → modal params equal each summary's best params
+      expect(agg.bestGlobalParams.slopeThreshold).toBe(s1.best.params.slopeThreshold)
+      expect(agg.bestGlobalParams.atrStopMultiplier).toBe(s1.best.params.atrStopMultiplier)
+      expect(agg.avgOOSWinRate).toBeCloseTo((s1.best.oosWinRate + s2.best.oosWinRate) / 2, 12)
+      // breakdown counts both summaries
+      const key = `slopeThreshold=${s1.best.params.slopeThreshold}`
+      expect(agg.breakdown[key]).toBe(2)
+    })
+
+    it('empty input yields zeroed aggregate', () => {
+      const agg = aggregateGridResults([])
+      expect(agg.avgOOSWinRate).toBe(0)
+    })
   })
 })
