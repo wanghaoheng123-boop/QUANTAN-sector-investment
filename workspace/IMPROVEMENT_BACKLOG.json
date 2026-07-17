@@ -1695,5 +1695,26 @@
     ],
     "notes_2026_07_13": "D6 experiment: calibration REJECTED (Brier below base, recency-isotonic worse pooled \u2014 base-rate regime shift) so real-Kelly stays blocked; but discrimination PASSED: top-decile non-overlap WR 60.71 Wilson95 [56.12, 65.13] \u2014 first CI lower bound above the base rate (54.71); positive edge all 4 OOS years; only 17.8% overlap with SSOT BUYs. Build the selection experiment on the D5 harness + rotation-experiment portfolio machinery.",
     "resolution_2026_07_16": "EXPERIMENT RUN -> REJECTED 2/4 OOS segments (needed >=3): 2023 YES (Sharpe 3.14 vs B&H 1.75), 2024 no (1.09 vs 2.09), 2025 no (0.58 vs 1.15), 2026H1 LOCKED HOLDOUT YES (2.26 vs 1.83; ret 30.2% vs 12.8%). Robust: MAR selection 2/4, q80 2/4, q95 2/4. Same 2024-25 decay as the per-year edge table (C4). Trade-level discrimination (D6) does not survive as a portfolio B&H-beater under D3 acceptance; score-ranked selection is answered: do not build as v2. Output: workspace/optimization-runs/score-ranked-selection-walkforward.json"
+  },
+  {
+    "id": "Q-078",
+    "title": "Mutation hardening: quant-rest (53.80) and options (62.13) shards",
+    "domain": "Testing",
+    "priority": "P1",
+    "status": "in-progress",
+    "files": [
+      "lib/quant/",
+      "lib/options/",
+      "__tests__/quant/",
+      "__tests__/options/"
+    ],
+    "acceptance_criteria": [
+      "quant-rest shard mutation score >= 70 (stryker-weekly)",
+      "options shard mutation score >= 70 (stryker-weekly)"
+    ],
+    "verify_commands": [
+      "gh workflow run stryker-weekly.yml"
+    ],
+    "notes_2026_07_17": "Filed from the first complete 4-shard run (29553164644). quant-rest 53.80: top uncaught = buildFundamentalsPayload 424 (run PRE-dates PR #119's fixture suite \u2014 already fixed, worth ~+12pp), researchScore 172, regimeDetection 85, dcf 32, frameworks 30, intermarket 27, yahooSymbol 19, constants 17. options 62.13: greeks 118, sentiment 83, chain 44. Method: Q-075-style exact-value golden pins on deterministic fixtures."
   }
 ]
