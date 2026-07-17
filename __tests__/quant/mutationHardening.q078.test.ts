@@ -287,6 +287,34 @@ describe('detectRegime', () => {
     expect(r.confidence).toBeGreaterThanOrEqual(70)
     expect(r.confidence).toBeLessThanOrEqual(80)
   })
+
+  // Q-078 wave 2: exact-value pins (probe-verified) — the first measurement
+  // left 58 survivors here because the assertions above are range-based.
+  it('EXACT pins: ratios, ADX, and the confidence arithmetic', () => {
+    // low-vol fixture: constant-growth tail → identical log returns → vol20 = 0
+    const a: number[] = []
+    let l = 100
+    for (let i = 0; i < 65; i++) { l *= i < 45 ? (i % 2 === 0 ? 1.03 : 0.97) : 1.0005; a.push(l) }
+    const trend = Array.from({ length: 60 }, (_, i) => 100 + i * 2)
+    const r1 = detectRegime(a, bars(trend, 0.3))
+    expect(r1.volRatio!).toBeCloseTo(0, 12) // constant-growth tail → vol20 ~ 0 (FP residue ~1e-17)
+    expect(r1.adxValue).toBeCloseTo(100, 8) // one-directional bars saturate ADX
+    expect(r1.confidence).toBe(80) // 50 + 20 strong + 10 adx>30
+
+    const b: number[] = []
+    l = 100
+    for (let i = 0; i < 65; i++) { l *= i < 45 ? 1.0005 : i % 2 === 0 ? 1.05 : 0.95; b.push(l) }
+    const choppy = Array.from({ length: 60 }, (_, i) => 100 + (i % 2 === 0 ? 1 : -1))
+    const r2 = detectRegime(b, bars(choppy, 0.2))
+    expect(r2.volRatio!).toBeCloseTo(1.76145659, 6)
+    expect(r2.confidence).toBe(65) // 50 + 20 strong − 15 crisis + 10 adx>30
+
+    const c = Array.from({ length: 80 }, (_, i) => 100 + Math.sin(i * 1.3) * 0.6)
+    const r3 = detectRegime(c, bars(c, 0.1))
+    expect(r3.volRatio!).toBeCloseTo(0.99921663, 6)
+    expect(r3.adxValue!).toBeCloseTo(7.79745942, 6)
+    expect(r3.confidence).toBe(80) // 50 + 10 range + 10 normal + 10 adx<12
+  })
 })
 
 // ─── constants — SSOT value pins ─────────────────────────────────────────────

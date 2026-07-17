@@ -1715,6 +1715,7 @@
     "verify_commands": [
       "gh workflow run stryker-weekly.yml"
     ],
-    "notes_2026_07_17": "Filed from the first complete 4-shard run (29553164644). quant-rest 53.80: top uncaught = buildFundamentalsPayload 424 (run PRE-dates PR #119's fixture suite \u2014 already fixed, worth ~+12pp), researchScore 172, regimeDetection 85, dcf 32, frameworks 30, intermarket 27, yahooSymbol 19, constants 17. options 62.13: greeks 118, sentiment 83, chain 44. Method: Q-075-style exact-value golden pins on deterministic fixtures."
+    "notes_2026_07_17": "Filed from the first complete 4-shard run (29553164644). quant-rest 53.80: top uncaught = buildFundamentalsPayload 424 (run PRE-dates PR #119's fixture suite \u2014 already fixed, worth ~+12pp), researchScore 172, regimeDetection 85, dcf 32, frameworks 30, intermarket 27, yahooSymbol 19, constants 17. options 62.13: greeks 118, sentiment 83, chain 44. Method: Q-075-style exact-value golden pins on deterministic fixtures.",
+    "notes_2026_07_17b": "RE-MEASURE (run 29584073911, manual dispatch): OPTIONS 62.13 -> PASS >=70 (SECOND green shard); quant-rest 53.80 -> 65.08 (+11.3pp: researchScore 40->72.5, dcf 60->71.3, regimeDetection 49->65.5, buildFundamentalsPayload 0->32.78). KEY LESSON: line coverage != mutation kills \u2014 the #119 fixture suite covers 97% of buildFundamentalsPayload lines but 275 mutants survived because assertions touched a subset of the payload. WAVE 2: dense full-payload goldens (every technicals/dcf/bands/pillar/pivot/fib/relative number pinned to 6+ decimals) + exact regimeDetection ratio/ADX/confidence pins. Validates next run."
   }
 ]
