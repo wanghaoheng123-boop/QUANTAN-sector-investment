@@ -2,8 +2,8 @@
   "schema_version": "1.1",
   "project": "QUANTAN-sector-investment",
   "created": "2026-04-28T09:40:00Z",
-  "last_updated": "2026-07-16T09:00:00.000Z",
-  "active_agent": "claude fable-5 (2026-07-16 decision wave: H-DECISION shipped \u2014 engine hold 20->60 bars, 4/4 pre-registered acceptance, prod live-verified WR 64.60%; Q-067/Q-068 done; #113-#115 merged)",
+  "last_updated": "2026-07-17T05:00:00.000Z",
+  "active_agent": "claude fable-5 (2026-07-17 continuation: Q-051 + Q-073 CLOSED; Q-075 wave1 measured 58.69, wave2 shipped (validates 07-19); #117-#120 merged; scheduled task confirmed dead \u2014 owner Run-now needed)",
   "prod_bug_fix_2026_07_01": {
     "B-2": "News fetch broken by yahoo-finance2 SearchResult schema drift (yf.search validation threw \u2192 news silently dropped + 66 prod errors on /api/briefs since 2026-04-03). FOUND via Vercel get_runtime_errors. FIXED with validateResult:false on the 4 news-search callers (mirrors options/chain.ts precedent) \u2192 PR #82 \u2192 main 2e6137c. LIVE-VERIFIED: /api/briefs now 200 with full news feed (was empty); 0 SearchResult validation logs on new deploy dpl_D29j.",
     "method_note": "Empirical bug-finding via Vercel runtime-errors/logs is high-signal \u2014 surfaced a real 3-month-old LIVE issue the static inspection didn't (it was a caught-and-logged error, invisible to tsc/tests/benchmark). Consider a runtime-errors sweep as a standing step."
@@ -255,5 +255,16 @@
       "Optional: review H60 re-baseline (evidence in workspace/optimization-runs/hold-horizon-decision.json) \u2014 revert = one-line config change"
     ],
     "next": "Sunday 2026-07-19 stryker-weekly: check backtest shard score (Q-075 acceptance >= 70, was 31.22); Monday sweep runs under the H60 engine numbers for the first time"
+  },
+  "continuation_wave_2026_07_17": {
+    "merged_to_main": {
+      "PR_117": "Q-051: un-exclude lib/ml (stale), lib/data/bloomberg (13 new tests), gridSearch.ts (legacy-contract tests); CI coverage gate green",
+      "PR_118": "Q-073 docs: trading-agents 5-min hold, cold-start regimes, unconfigured 502 by design",
+      "PR_119": "Q-051 CLOSED: buildFundamentalsPayload 3-fixture suite (97.47 lines/100 funcs) \u2014 zero coverage debt left in excludes",
+      "PR_120": "Q-075 wave 2: engine.aggregatePortfolio golden suite (12 pins) + core dividend-accrual pins"
+    },
+    "q075_status": "wave 1 measured 31.22 -> 58.69 via manual workflow_dispatch (run 29553164644); wave 2 targets engine.ts (35.32, zero direct tests) + core 261-278 dividend cluster; acceptance >= 70 validates on the scheduled 2026-07-19 stryker-weekly run",
+    "ops_finding": "Scheduled daily task NEVER EXECUTES (no RUN-HEARTBEAT.log despite the 07-13 first-action heartbeat prompt) \u2014 7 traceless days. Only the owner Run-now + tool-approval click fixes it. Repo-root checkout was 6 merges stale; fast-forwarded to c70b1a1.",
+    "backlog_remaining": "Q-005 (owner: Redis provisioning \u2014 also activates Q-067 shadow log) and Q-075 (pending 07-19 measurement). Everything else in IMPROVEMENT_BACKLOG is done/closed."
   }
 }
