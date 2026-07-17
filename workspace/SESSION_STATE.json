@@ -265,6 +265,7 @@
     },
     "q075_status": "wave 1 measured 31.22 -> 58.69 via manual workflow_dispatch (run 29553164644); wave 2 targets engine.ts (35.32, zero direct tests) + core 261-278 dividend cluster; acceptance >= 70 validates on the scheduled 2026-07-19 stryker-weekly run",
     "ops_finding": "Scheduled daily task NEVER EXECUTES (no RUN-HEARTBEAT.log despite the 07-13 first-action heartbeat prompt) \u2014 7 traceless days. Only the owner Run-now + tool-approval click fixes it. Repo-root checkout was 6 merges stale; fast-forwarded to c70b1a1.",
-    "backlog_remaining": "Q-005 (owner: Redis provisioning \u2014 also activates Q-067 shadow log) and Q-075 (pending 07-19 measurement). Everything else in IMPROVEMENT_BACKLOG is done/closed."
+    "backlog_remaining": "Q-005 (owner: Redis provisioning \u2014 also activates Q-067 shadow log) and Q-075 (pending 07-19 measurement). Everything else in IMPROVEMENT_BACKLOG is done/closed.",
+    "stryker_full_run_2026_07_17": "Run 29553164644 (manual dispatch) completed ALL FOUR shards for the first time ever: quant-indicators 70.24 PASS (first green shard in project history; 2h17m), options 62.13 (1m43s mutation time \u2014 small domain, legit), backtest 58.69 (wave 2 shipped, validates 07-19), quant-rest 53.80 (853 survived + 261 no-cov \u2014 the next Q-075-style hardening target). The 2026-07-13 quant re-shard is VALIDATED: both halves fit far inside the 6h limit. Remaining to a fully-green stryker-weekly: backtest (+11.3pp needed), options (+7.9), quant-rest (+16.2)."
   }
 }
