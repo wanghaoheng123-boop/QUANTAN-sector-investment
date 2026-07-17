@@ -53,6 +53,8 @@ export default defineConfig({
       //   - lib/data/bloomberg/** ✓ un-excluded (__tests__/data/bloombergBridge.test.ts)
       //   - lib/optimize/gridSearch.ts ✓ un-excluded (Q-064 purged tests +
       //     legacy-contract tests in __tests__/optimize/gridSearchPurged.test.ts)
+      //   - lib/quant/buildFundamentalsPayload.ts ✓ un-excluded (2026-07-17:
+      //     __tests__/quant/buildFundamentalsPayload.test.ts fixture suite)
       //
       // Remaining excludes (Phase 16 Q-051-NEW continuation):
       exclude: [
@@ -76,9 +78,6 @@ export default defineConfig({
         // (zero prod callers), so its coverage excludes are gone with it. Only
         // lib/data/providers/types.ts remains — pure interfaces, 0 executable
         // lines, so it needs no exclude.
-        // 457-line fundamentals assembler — needs a dedicated fixture suite
-        // (the last big Q-051 item; do not remove without one)
-        'lib/quant/buildFundamentalsPayload.ts',
       ],
       reporter: ['text', 'text-summary', 'json-summary'],
       thresholds: {
