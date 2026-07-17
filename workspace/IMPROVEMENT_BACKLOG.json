@@ -1610,12 +1610,13 @@
     "title": "Trading-agents route cold-start / timeout docs (F-08)",
     "domain": "Data/API",
     "priority": "P2",
-    "status": "pending",
+    "status": "done",
     "files": [
       "app/api/trading-agents/[ticker]/route.ts",
       "README.md"
     ],
-    "notes_2026_06_03": "5-minute upstream timeout; probe may fail without TRADING_AGENTS_BASE."
+    "notes_2026_06_03": "5-minute upstream timeout; probe may fail without TRADING_AGENTS_BASE.",
+    "resolution_2026_07_17": "DONE: README \"Runtime behavior & timeouts\" section documents the 5-minute upstream hold, 10 req/min rate limit, the three latency regimes (warm 1-4 min; cold-start dyno wake with possible transient host 502; unconfigured -> 502 backend_not_configured BY DESIGN), and the Check-connection health probe as the triage tool. The F-08 probe timeouts were the unconfigured/cold-start regimes \u2014 expected behavior, now documented; no code defect."
   },
   {
     "id": "Q-074",

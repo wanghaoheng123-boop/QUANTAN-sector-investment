@@ -115,6 +115,18 @@ The **LLM Multi-Agent Analysis** tab needs the `server_trading_agents.py` Python
 
 **Local development:** run `python server_trading_agents.py` alongside `npm run dev`. It listens on `http://127.0.0.1:3001` by default. No environment variable needed locally.
 
+**Runtime behavior & timeouts (Q-073):** a full multi-agent analysis is genuinely slow — several LLM
+round-trips per agent — so the Next.js route holds the upstream connection for up to **5 minutes**
+(`TIMEOUT_MS` in `app/api/trading-agents/[ticker]/route.ts`) and rate-limits to 10 requests/min/IP.
+Expect three latency regimes: (1) warm backend → typically 1–4 min per analysis; (2) **cold start** —
+free/hobby tiers (Railway, Render) sleep idle dynos, so the FIRST request after idle may take extra
+tens of seconds or return a transient 502 from the host while the dyno boots (retry once); (3)
+**unconfigured** — without `TRADING_AGENTS_BASE`/`TRADING_AGENTS_FALLBACK_BASE` the route returns
+`502 backend_not_configured` **by design**, so automated probes hitting this route on a deployment
+without a backend are reporting expected behavior, not a defect. Use the LLM tab's **Check
+connection** (backend `/health`) to distinguish cold-start from misconfiguration before running an
+analysis.
+
 ### Deployment status
 
 Replace `YOUR_GITHUB_USER` and `YOUR_REPO` below once, then badges show live status:
