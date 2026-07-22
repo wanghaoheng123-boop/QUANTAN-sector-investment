@@ -6,14 +6,28 @@ import {
 } from '@/lib/quant/intermarket'
 import type { CorrelationMap } from '@/lib/quant/intermarket'
 
-// Generate a smooth price series starting from `base`
+// Deterministic LCG (same constants as engine.equity.invariant.test.ts). Fixtures
+// MUST NOT use Math.random(): a non-seeded fixture makes stryker-weekly mutation
+// scores swing run-to-run (killed↔survived flips on identical commits) because the
+// covering test's inputs change between runs. Seed from the shape params so each
+// distinct series is reproducible without touching any call site.
+function makeRng(seed: number): () => number {
+  let s = seed >>> 0
+  return () => {
+    s = (s * 1664525 + 1013904223) >>> 0
+    return s / 0xFFFFFFFF
+  }
+}
+
+// Generate a smooth price series starting from `base` (deterministic per shape).
 function makeSeries(n: number, base = 100, drift = 0.001, noise = 0.01): { closes: number[]; dates: string[] } {
+  const rng = makeRng((Math.round(n * 7919 + base * 100 + drift * 1e6 + noise * 1e5) >>> 0) || 1)
   const closes: number[] = []
   const dates: string[] = []
   let price = base
   const start = new Date('2022-01-01')
   for (let i = 0; i < n; i++) {
-    price *= 1 + drift + (Math.random() - 0.5) * noise
+    price *= 1 + drift + (rng() - 0.5) * noise
     closes.push(price)
     const d = new Date(start)
     d.setDate(d.getDate() + i)
@@ -24,13 +38,15 @@ function makeSeries(n: number, base = 100, drift = 0.001, noise = 0.01): { close
 
 // Generates a series that is strongly positively correlated with `base`
 function makeCorrelated(base: { closes: number[]; dates: string[] }, multiplier = 1, noiseScale = 0.002): { closes: number[]; dates: string[] } {
-  const closes = base.closes.map((c) => c * multiplier * (1 + (Math.random() - 0.5) * noiseScale))
+  const rng = makeRng((Math.round(base.closes.length * 104729 + multiplier * 1e4 + noiseScale * 1e6) >>> 0) || 1)
+  const closes = base.closes.map((c) => c * multiplier * (1 + (rng() - 0.5) * noiseScale))
   return { closes, dates: [...base.dates] }
 }
 
 // Generates a series that is strongly negatively correlated with `base`
 function makeInverse(base: { closes: number[]; dates: string[] }): { closes: number[]; dates: string[] } {
-  const closes = base.closes.map((c) => 200 - c * 0.5 * (1 + (Math.random() - 0.5) * 0.001))
+  const rng = makeRng((Math.round(base.closes.length * 40503 + 12345) >>> 0) || 1)
+  const closes = base.closes.map((c) => 200 - c * 0.5 * (1 + (rng() - 0.5) * 0.001))
   return { closes, dates: [...base.dates] }
 }
 
