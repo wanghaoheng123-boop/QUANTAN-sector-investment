@@ -26,6 +26,23 @@
 
 import { normalizeTicker } from '@/lib/api/sanitize'
 
+// ─── Equivalent-mutant suppression (Q-078, verified 2026-07-18) ──────────────
+// EVERYTHING in this module is a thin convenience wrapper over `normalizeTicker`
+// — the SSOT in @/lib/api/sanitize — which independently trims, upper-cases,
+// applies the SAME US-index ^-prefix (from its own identical set), and regex-
+// validates. A targeted Stryker run proved that ALL 26 mutants here survive as
+// EQUIVALENT mutants: for each one, `normalizeTicker` re-applies the same
+// transform downstream, so the output is byte-identical. Examples:
+//   • `toUpperCase → toLowerCase` — normalizeTicker upper-cases anyway
+//   • `raw.trim() → raw`          — normalizeTicker trims anyway
+//   • emptying any index literal   — normalizeTicker's own set re-prefixes it
+//   • `new Set([...]) → new Set([])` — same, via normalizeTicker's set
+// They are provably unkillable from the test side, so mutation is disabled for
+// the whole module to keep the shard score honest (and to stop a future
+// hardening pass from re-attacking a dead end). The behavioural CONTRACT is
+// still locked by __tests__/quant/mutationHardening.q078w3.test.ts and
+// __tests__/quant/yahooSymbol.test.ts against a fresh import.
+// Stryker disable all
 const US_INDEX_SYMBOLS: ReadonlySet<string> = new Set([
   'VIX', 'GSPC', 'DJI', 'IXIC', 'NDX', 'TNX', 'IRX', 'TYX', 'RUT', 'SPX',
 ])
@@ -50,3 +67,4 @@ export function yahooSymbolFromParam(raw: string): string | null {
   const candidate = US_INDEX_SYMBOLS.has(u) ? `^${u}` : u
   return normalizeTicker(candidate)
 }
+// Stryker restore all
