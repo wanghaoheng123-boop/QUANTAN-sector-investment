@@ -3,6 +3,18 @@ import { regimeSignal, enhancedCombinedSignal, DEFAULT_CONFIG } from '@/lib/back
 import { smaLatest } from '@/lib/quant/indicators'
 import type { OhlcBar, OhlcvBar } from '@/lib/quant/indicators'
 
+// Deterministic LCG (same constants as engine.equity.invariant.test.ts). Fixtures
+// MUST NOT use Math.random(): a non-seeded fixture makes stryker-weekly mutation
+// scores swing run-to-run (killed↔survived flips on identical commits) because the
+// covering test's inputs change. Seed every pseudo-random fixture instead.
+function makeRng(seed: number): () => number {
+  let s = seed >>> 0
+  return () => {
+    s = (s * 1664525 + 1013904223) >>> 0
+    return s / 0xFFFFFFFF
+  }
+}
+
 // Generate synthetic close series for regime testing
 function generateCloses(basePrice: number, count: number, trend: number = 0): number[] {
   return Array.from({ length: count }, (_, i) => basePrice + trend * i + (Math.sin(i * 0.3) * 2))
@@ -358,7 +370,8 @@ describe('enhancedCombinedSignal — TEAM AUDIT: per-indicator score bounds', ()
     // The rally needs to be large enough to push price meaningfully above
     // the 20-period mean + 2σ band, which requires ~5-10% above the mean
     // on a tight prior series.
-    const base = Array.from({ length: 230 }, () => 100 + (Math.random() - 0.5) * 0.1)
+    const rng = makeRng(20260719)
+    const base = Array.from({ length: 230 }, () => 100 + (rng() - 0.5) * 0.1)
     // Sharp last 20 bars: vertical ramp.
     const rally = Array.from({ length: 20 }, (_, i) => 100 + (i + 1) * 1.5)
     const closes = [...base, ...rally]
@@ -375,7 +388,8 @@ describe('enhancedCombinedSignal — TEAM AUDIT: per-indicator score bounds', ()
 
   it('all weightedConfirm scores remain in [-1, +1] under a Bollinger LOWER overshoot', () => {
     // Sharp recent decline so pctB drops below 0.
-    const base = Array.from({ length: 230 }, () => 100 + (Math.random() - 0.5) * 0.1)
+    const rng = makeRng(20260720)
+    const base = Array.from({ length: 230 }, () => 100 + (rng() - 0.5) * 0.1)
     const crash = Array.from({ length: 20 }, (_, i) => 100 - (i + 1) * 1.5)
     const closes = [...base, ...crash]
     const bars = generateBars(closes)

@@ -9,19 +9,40 @@ import {
 } from '@/lib/backtest/engine'
 import type { OhlcvRow } from '@/lib/backtest/engine'
 
-// Generate synthetic OHLCV data
+// Deterministic LCG (same constants as engine.equity.invariant.test.ts). Fixtures
+// MUST NOT use Math.random(): a non-seeded fixture makes stryker-weekly mutation
+// scores swing run-to-run (killed↔survived flips on identical commits) because the
+// covering test's inputs change between runs. Seed from the shape parameters so
+// each distinct call is reproducible without touching any call site.
+function makeRng(seed: number): () => number {
+  let s = seed >>> 0
+  return () => {
+    s = (s * 1664525 + 1013904223) >>> 0
+    return s / 0xFFFFFFFF
+  }
+}
+
+// Generate synthetic OHLCV data (deterministic; seeded from the shape params,
+// with an optional explicit `seed` for tests that need several distinct-but-
+// reproducible draws — e.g. "retry until the series produces a trade").
 function generateRows(
   count: number,
   startPrice: number,
   dailyReturn: number = 0.0005,
   volatility: number = 0.02,
+  seed?: number,
 ): OhlcvRow[] {
+  const rng = makeRng(
+    seed !== undefined
+      ? (seed >>> 0) || 1
+      : (Math.round(count * 1000 + startPrice * 100 + dailyReturn * 1e6 + volatility * 1e5) >>> 0) || 1,
+  )
   const rows: OhlcvRow[] = []
   let price = startPrice
   const startTime = Math.floor(new Date('2019-01-01').getTime() / 1000)
 
   for (let i = 0; i < count; i++) {
-    const noise = (Math.random() - 0.5) * volatility * price
+    const noise = (rng() - 0.5) * volatility * price
     const open = price
     const close = price * (1 + dailyReturn) + noise
     const high = Math.max(open, close) + Math.abs(noise) * 0.5
@@ -33,7 +54,7 @@ function generateRows(
       high,
       low,
       close: Math.max(close, 1), // prevent negative prices
-      volume: 1_000_000 + Math.floor(Math.random() * 500_000),
+      volume: 1_000_000 + Math.floor(rng() * 500_000),
     })
     price = Math.max(close, 1)
   }
@@ -180,8 +201,8 @@ describe('Portfolio Aggregation', () => {
   // stub dragged minLen to 1, failed the minLen>30 combine gate, and collapsed the
   // entire summary (finalCapital $0, returns 0, Sharpe null, alpha -bnhAvg).
   it('excludes a <252-bar instrument from the summary instead of zeroing it', () => {
-    // Generate rows ONCE so the assertion is deterministic regardless of Math.random:
-    // the same BacktestResult objects feed both the mixed and full-only portfolios.
+    // Reuse the same BacktestResult objects across both the mixed and full-only
+    // portfolios so the comparison isolates the short-instrument exclusion.
     const full1 = backtestInstrument('AAPL', 'Technology', generateRows(500, 100, 0.0008, 0.02))
     const full2 = backtestInstrument('MSFT', 'Technology', generateRows(500, 80, 0.0006, 0.02))
     const short = backtestInstrument('NEWCO', 'Technology', generateRows(150, 50, 0.0005, 0.02))
@@ -325,11 +346,12 @@ describe('F-9 / F-2 regression (2026-07-06)', () => {
     // Before the fix entryPrice = open × 1.0002, which is never an exact row open.
     let rows: OhlcvRow[] = []
     let result: ReturnType<typeof backtestInstrument> | null = null
-    for (let attempt = 0; attempt < 10 && (result?.closedTrades.length ?? 0) === 0; attempt++) {
-      rows = generateRows(600, 100, 0.0004, 0.03)
+    for (let attempt = 0; attempt < 40 && (result?.closedTrades.length ?? 0) === 0; attempt++) {
+      // Distinct-but-reproducible draws per attempt (seed = attempt + 1).
+      rows = generateRows(600, 100, 0.0004, 0.03, attempt + 1)
       result = backtestInstrument('TEST', 'Technology', rows)
     }
-    expect(result!.closedTrades.length, 'synthetic series produced no trades in 10 attempts').toBeGreaterThan(0)
+    expect(result!.closedTrades.length, 'synthetic series produced no trades in 40 attempts').toBeGreaterThan(0)
     const openSet = new Set(rows.map(r => r.open))
     for (const t of result!.closedTrades) {
       if (t.action === 'BUY') {
