@@ -2,11 +2,11 @@
   "schema_version": "1.1",
   "project": "QUANTAN-sector-investment",
   "created": "2026-04-28T09:40:00Z",
-  "last_updated": "2026-07-17T15:00:00.000Z",
-  "active_agent": "claude fable-5 (2026-07-17 mutation sprint closed: options GREEN (2nd shard), backtest 63.50 + waves 3-4 aboard, quant-rest 65.08 + wave 2 aboard; #125-#127 merged; Sunday 07-19 run is the gate)",
+  "last_updated": "2026-07-22T15:00:00.000Z",
+  "active_agent": "claude opus-4.8 (2026-07-22 mutation-gate wave: #129 quant-rest w3 + backtest w5, #130 seeded nondeterministic fixtures for a reproducible gate, #131 quant-indicators w4 btc-indicators+ma200Regime; all merged CI-green; stryker run 29930833563 dispatched to measure)",
   "prod_bug_fix_2026_07_01": {
-    "B-2": "News fetch broken by yahoo-finance2 SearchResult schema drift (yf.search validation threw \u2192 news silently dropped + 66 prod errors on /api/briefs since 2026-04-03). FOUND via Vercel get_runtime_errors. FIXED with validateResult:false on the 4 news-search callers (mirrors options/chain.ts precedent) \u2192 PR #82 \u2192 main 2e6137c. LIVE-VERIFIED: /api/briefs now 200 with full news feed (was empty); 0 SearchResult validation logs on new deploy dpl_D29j.",
-    "method_note": "Empirical bug-finding via Vercel runtime-errors/logs is high-signal \u2014 surfaced a real 3-month-old LIVE issue the static inspection didn't (it was a caught-and-logged error, invisible to tsc/tests/benchmark). Consider a runtime-errors sweep as a standing step."
+    "B-2": "News fetch broken by yahoo-finance2 SearchResult schema drift (yf.search validation threw → news silently dropped + 66 prod errors on /api/briefs since 2026-04-03). FOUND via Vercel get_runtime_errors. FIXED with validateResult:false on the 4 news-search callers (mirrors options/chain.ts precedent) → PR #82 → main 2e6137c. LIVE-VERIFIED: /api/briefs now 200 with full news feed (was empty); 0 SearchResult validation logs on new deploy dpl_D29j.",
+    "method_note": "Empirical bug-finding via Vercel runtime-errors/logs is high-signal — surfaced a real 3-month-old LIVE issue the static inspection didn't (it was a caught-and-logged error, invisible to tsc/tests/benchmark). Consider a runtime-errors sweep as a standing step."
   },
   "post_inspection_remediation_2026_07_01": {
     "summary": "Owner: 'follow your recommendation and complete the tasks, after review/checks merge to github and vercel.' Completed the safe, non-owner-gated follow-through from the 2026-06-30 inspection and promoted to production.",
@@ -14,26 +14,26 @@
       "PR_79": "inspection report + ledger truth-corrections + survivorship disclosure (NEW-Q-1 -> SIGNAL_SSOT.md); main 9476d71; 5 CI gates + Vercel green",
       "PR_80": "a11y/display polish: NEW-C-1 (backtest tab roles), NEW-C-2 (BtcChartPanel aria-pressed), A4-1 (briefs volume field names); main e0f722e; 5 CI gates + Vercel green"
     },
-    "prod_smoke": "PASS on quantan.vercel.app (deploy dpl_BL2M\u2026 READY, target=production): /api/analytics/AAPL=200 (winRate252d 53.17%, beta 0.87), /api/sector-rotation=200 (11 sectors); security headers (HSTS/X-Frame DENY/nosniff/CSP-RO) + CSRF cookie live. Briefs A4-1 route not tool-smokable (Vercel share-URL quirk on the force-dynamic multi-Yahoo route) but tsc+CI-verified + type-checked.",
+    "prod_smoke": "PASS on quantan.vercel.app (deploy dpl_BL2M… READY, target=production): /api/analytics/AAPL=200 (winRate252d 53.17%, beta 0.87), /api/sector-rotation=200 (11 sectors); security headers (HSTS/X-Frame DENY/nosniff/CSP-RO) + CSRF cookie live. Briefs A4-1 route not tool-smokable (Vercel share-URL quirk on the force-dynamic multi-Yahoo route) but tsc+CI-verified + type-checked.",
     "ledger": "NEW-C-1/NEW-C-2/A4-1 -> FIXED; NEW-Q-1 -> partial (internal doc done; user-facing UI disclosure deferred to owner)",
-    "held_per_owner": "F-A1-3 rate-limit self-heal = NO ACTION (hot-path KV round-trip for a millisecond-window rare conjunction \u2014 not worth it). Published-number re-baselines (F-4 net WR label, Q25-1 BTC vol 365) = owner sign-off required (change displayed numbers). CSP nonce completion (#7) = available on request.",
-    "owner_actions_still_open": "(1) RESOLVED 2026-07-06: model re-point no longer needed \u2014 Fable 5 enabled + owner-authorized unlimited (see model_policy_2026_07_06); (2) do NOT flip QUANTAN_CSP_ENFORCE=1 (A6-1 landmine); (3) F-4 gross->net WR label decision still open (F-9/Q25-1 re-baselines were completed 2026-07-06 under owner directive)."
+    "held_per_owner": "F-A1-3 rate-limit self-heal = NO ACTION (hot-path KV round-trip for a millisecond-window rare conjunction — not worth it). Published-number re-baselines (F-4 net WR label, Q25-1 BTC vol 365) = owner sign-off required (change displayed numbers). CSP nonce completion (#7) = available on request.",
+    "owner_actions_still_open": "(1) RESOLVED 2026-07-06: model re-point no longer needed — Fable 5 enabled + owner-authorized unlimited (see model_policy_2026_07_06); (2) do NOT flip QUANTAN_CSP_ENFORCE=1 (A6-1 landmine); (3) F-4 gross->net WR label decision still open (F-9/Q25-1 re-baselines were completed 2026-07-06 under owner directive)."
   },
   "program_doc": "workspace/QUANTAN_EXPERT_TEAM_COMMERCIALIZATION.md",
   "coordination_doc": "workspace/coordination/PROGRESS_COORDINATION_2026-06-03.md",
   "last_weekly_deep_sweep": {
     "date": "2026-07-13",
-    "type": "Monday \u00a77 sweep \u2014 first under the D1 edge-over-base gate and the D2/D4 label-matched exits",
+    "type": "Monday §7 sweep — first under the D1 edge-over-base gate and the D2/D4 label-matched exits",
     "gates": "tsc clean; targeted vitest 738/738; pytest 131p/1s; verify:integrity 0 hard fails; benchmark edge +2.31pp >= +1.81 floor PASS (significance WARN by design); WF OOS pooled edge +2.66pp PASS; prod endpoints 200; /api/backtest LIVE serves D2/D4 engine (WR 54.28%, 339 trades)",
     "stryker": "first complete per-domain scores: backtest 31.22 (Q-075 P1), options 62.25; quant 6h-cancelled at 97% (interim ~68) -> re-sharded quant-indicators/quant-rest this sweep, validates next Sunday",
     "portfolio_backtest": "legacy stop-family grid ALL negative Sharpe (best -0.825) vs shipped label-matched default +8.52%/maxDD 9.88% -> Q-076 grid refresh (D6-adjacent)",
     "report": "workspace/coordination/daily/PROGRAM-DAY-2026-07-13.md",
-    "result": "GO \u2014 live path sound; D2/D4 live-verified in production; data refresh lands tonight (F1.5 dividends activate)"
+    "result": "GO — live path sound; D2/D4 live-verified in production; data refresh lands tonight (F1.5 dividends activate)"
   },
   "last_program_run": {
     "date": "2026-07-13",
     "cell": "PROCEED (owner): scheduled-task fix + D6 + D7",
-    "result": "Scheduled-task prompt hardened (heartbeat + fallbacks + current facts + notify). D6 experiment REJECTED as specified: calibration fails (Brier -1.2% vs base; recency-isotonic worse pooled \u2014 base-rate regime shift binding) so real-Kelly sizing stays blocked; DISCRIMINATION PASSED: top-decile non-overlap WR 60.71 Wilson95 [56.12,65.13] \u2014 first honest CI lower bound above the base rate; positive edge all 4 OOS years; 17.8% SSOT-BUY overlap -> the score finds different bars. Q-077 filed (P1): score-ranked selection + label-matched exits. D7 memo shipped with costed options.",
+    "result": "Scheduled-task prompt hardened (heartbeat + fallbacks + current facts + notify). D6 experiment REJECTED as specified: calibration fails (Brier -1.2% vs base; recency-isotonic worse pooled — base-rate regime shift binding) so real-Kelly sizing stays blocked; DISCRIMINATION PASSED: top-decile non-overlap WR 60.71 Wilson95 [56.12,65.13] — first honest CI lower bound above the base rate; positive edge all 4 OOS years; 17.8% SSOT-BUY overlap -> the score finds different bars. Q-077 filed (P1): score-ranked selection + label-matched exits. D7 memo shipped with costed options.",
     "next_cell": "(1) Verify the next scheduled fire leaves a heartbeat + report; (2) Q-077 score-ranked selection experiment (agent-runnable); (3) owner decisions: D7 $49 data month, scheduled-task Run-now click; (4) next Sunday: validate the 4-shard Stryker run; (5) verify tonight data refresh activates F1.5 dividends."
   },
   "last_inspection": {
@@ -41,7 +41,7 @@
     "wave": 11,
     "review_file": "reviews/INSPECTION-WAVE-11-2026-06-03.md",
     "go_no_go": "GO",
-    "go_no_go_note": "GO \u2014 Q-057 Next.js 15 on main; owner env blockers remain",
+    "go_no_go_note": "GO — Q-057 Next.js 15 on main; owner env blockers remain",
     "results": {
       "git_main_head": "e076a99",
       "git_sync": "origin/main @ e076a99 (post #46 merge)",
@@ -186,7 +186,7 @@
     "origin_main_head": "31973a6",
     "origin_main_subject": "Merge PR #57: fix backtest portfolio-zeroing on <252-bar stub instruments (F-1/F-1a)",
     "open_prs": 1,
-    "open_pr_detail": "#58 fix/trading-agents-apikey-leak-2026-06-14 (F-PY-12) \u2014 CLEAN/MERGEABLE, all CI green; per owner, bundled into the 2026-06-14 consolidation branch rather than merged standalone",
+    "open_pr_detail": "#58 fix/trading-agents-apikey-leak-2026-06-14 (F-PY-12) — CLEAN/MERGEABLE, all CI green; per owner, bundled into the 2026-06-14 consolidation branch rather than merged standalone",
     "recent_merges": [
       "#53",
       "#54",
@@ -205,14 +205,14 @@
     "local_branch": "chore/consolidation-2026-06-14 (worktree quirky-kirch-a8f847)"
   },
   "fix_wave_2026_07_06": {
-    "directive": "owner mid-sweep: 'continue, find out the issues, fix the issues. especially fix the bugs and improve the UI UX and algorithms' \u2014 treated as sign-off for the owner-gated re-baselines below",
+    "directive": "owner mid-sweep: 'continue, find out the issues, fix the issues. especially fix the bugs and improve the UI UX and algorithms' — treated as sign-off for the owner-gated re-baselines below",
     "merged_to_main": {
       "PR_84": "F-9 entry-slippage double-count (raw next-open; 11bps/side sole friction) + F-2 alpha window mismatch (bnhCurve aligned; B&H over the SAME common window; displayed alpha -104.58%->-89.24%) + Q05-1 null-slope fail-closed (HOLD conf 20, never FALLING_KNIFE from missing data). Published label WR BYTE-IDENTICAL (net 56.33/gross 57.35). 5 new regression tests.",
       "PR_85": "Q25-1 BTC conditional vol sqrt(365) + 7-day forecast calendar via tradingDaysPerYear SSOT; BTC displayed vol +20.3%; equities unchanged. 4 new tests.",
       "PR_86": "F1.5 dividends pipeline: fetch script attaches ex-date dividends AND dataLoader preserves the field (second inertness layer found by boundary-tracing). Activates on next Saturday data refresh.",
       "PR_87": "NEW-Q-1 user-facing survivorship Universe note on backtest page + KeyMetricsStrip \"B&H avg (matched window)\" label."
     },
-    "env_lesson": "jsdom component tests freeze locally on FUSE mount AND on local-disk worktree with FUSE node_modules (2x 5-min timeouts) \u2014 CI-only for jsdom; targeted pure-node vitest files fine (~3s). BacktestPage snapshots pin loading/error only (Q-058-NEW) so data-state copy changes are snapshot-neutral.",
+    "env_lesson": "jsdom component tests freeze locally on FUSE mount AND on local-disk worktree with FUSE node_modules (2x 5-min timeouts) — CI-only for jsdom; targeted pure-node vitest files fine (~3s). BacktestPage snapshots pin loading/error only (Q-058-NEW) so data-state copy changes are snapshot-neutral.",
     "ledger": "F-9/F-2/Q05-1/Q25-1 -> FIXED; F1.5 -> FIXED-PENDING-DATA; NEW-Q-1 -> FIXED",
     "wave2": {
       "directive": "owner: 'Continue and finish the project... review and resolve the issues'",
@@ -222,7 +222,7 @@
       "remaining_owner_gated": "QUANTAN_CSP_ENFORCE flip (now SAFE after a clean RO window); Q09-1; published-number research items Q-064..Q-068; npm-audit build chain"
     }
   },
-  "model_policy_2026_07_06": "Owner: use Fable 5, NO usage limits. Fable 5 is enabled (this session ran on it) -> the June scheduled-run 400-stall is RESOLVED; no UI re-point needed. Scheduled task quantan-autonomous-program prompt updated (Fable 5 + no self-throttling + standing runtime-errors sweep + post-primary-pass day plan); next fire 2026-07-07 09:08 local \u2014 verify it produces a PROGRAM-DAY report.",
+  "model_policy_2026_07_06": "Owner: use Fable 5, NO usage limits. Fable 5 is enabled (this session ran on it) -> the June scheduled-run 400-stall is RESOLVED; no UI re-point needed. Scheduled task quantan-autonomous-program prompt updated (Fable 5 + no self-throttling + standing runtime-errors sweep + post-primary-pass day plan); next fire 2026-07-07 09:08 local — verify it produces a PROGRAM-DAY report.",
   "remaining_tasks_wave_2026_07_16": {
     "directive": "owner: \"Continue with all the remaining tasks\"",
     "merged_to_main": {
@@ -230,29 +230,29 @@
       "PR_108": "Q-077 score-ranked selection walk-forward experiment -> REJECTED 2/4 OOS segments (2023 + locked 2026H1 beat B&H, 2024-25 lose; robust to MAR selection and q80/q95 thresholds). Score-ranked selection answered: do not build as v2. npm run experiment:score-select",
       "PR_109": "Q-075 wave 1: 41 golden exact-value mutation-hardening pins for the 7 worst lib/backtest shard files; mutation score validates on the 2026-07-19 stryker-weekly run (acceptance >= 70, was 31.22)",
       "PR_110": "Q-074 done (24/24 audit-flagged exports have direct tests) + BONUS FIX: stochRsiArray all-NaN k/d under default EMA smoothing (dormant defect, no prod consumers)",
-      "PR_111": "Q-064 gridSearchPurged (IS-only per-fold selection, purged + embargo) + Q-076 label-matched portfolio grid (IS selects H60; OOS 2025-> +18.58%, WR 60.34%, maxDD 8.11%; engine default stays H=20 \u2014 H change is owner re-baseline)"
+      "PR_111": "Q-064 gridSearchPurged (IS-only per-fold selection, purged + embargo) + Q-076 label-matched portfolio grid (IS selects H60; OOS 2025-> +18.58%, WR 60.34%, maxDD 8.11%; engine default stays H=20 — H change is owner re-baseline)"
     },
-    "triage": "Q-071/Q-072 CLOSED already-hardened; Q-068 partial (loop 3 done honestly; loops 1-2 need optimize-grid wired to gridSearchPurged, param adoption owner-gated); Q-067 design blocker (serverless FS \u2014 owner storage decision); Q-005 owner-gated env (Vercel KV sunset -> marketplace Upstash)",
+    "triage": "Q-071/Q-072 CLOSED already-hardened; Q-068 partial (loop 3 done honestly; loops 1-2 need optimize-grid wired to gridSearchPurged, param adoption owner-gated); Q-067 design blocker (serverless FS — owner storage decision); Q-005 owner-gated env (Vercel KV sunset -> marketplace Upstash)",
     "lessons": [
-      "Golden pins must avoid discrete classification boundaries: a volume-profile zone score flipped on a 1-ulp Math.pow difference between Node 20 (CI) and Node 25 (local) \u2014 pin pure closes/bars arithmetic exactly, assert zone-coupled components structurally",
+      "Golden pins must avoid discrete classification boundaries: a volume-profile zone score flipped on a 1-ulp Math.pow difference between Node 20 (CI) and Node 25 (local) — pin pure closes/bars arithmetic exactly, assert zone-coupled components structurally",
       "Node >= 22 ships a global localStorage: SSR-guard tests must stub it away explicitly",
       "Length-only assertions hide total-failure defects: stochRsiArray had returned all-NaN forever under its default smoothing"
     ],
     "next": "Verify 2026-07-19 stryker-weekly backtest shard score (Q-075 acceptance >= 70; add wave 2 pins if short). Remaining owner-gated: CSP flip, Q09-1, npm audit chain, scheduled-task Run-now approval, DECISION-D7-DATA (Sharadar), H=60 re-baseline question from Q-076, Q-067 storage decision, Q-005 Redis provisioning."
   },
   "decision_wave_2026_07_16": {
-    "directive": "owner: \"CONTINUE, YOU MAY MAKE THE DECISION\" \u2014 decision authority delegated (same protocol as the 07-11 D-menu)",
+    "directive": "owner: \"CONTINUE, YOU MAY MAKE THE DECISION\" — decision authority delegated (same protocol as the 07-11 D-menu)",
     "merged_to_main": {
       "PR_113": "H-DECISION: engine default hold horizon 20 -> 60 bars. Pre-registered D3-style rule (adopt iff H60 beats H20 on Sharpe OR MAR in >=3/4 purged OOS segments) -> 4/4 on BOTH metrics, incl. 2024 (+3.34% vs -5.61%). H=40 worse than both. npm run experiment:hold-horizon. Re-baseline: portfolio +8.31->+53.47% (maxDD 9.87->6.87), per-instrument WR 54.28->64.60%. Label pipeline untouched (LABEL_HOLD_DAYS=20, benchmark byte-identical, D1 gate unchanged). PROD LIVE-VERIFIED: /api/backtest WR 64.60/226 trades/+3.32% byte-matches fixtures. Invariants 1e. CAUTION: engine WR (60d) vs label WR (20d) are different quantities.",
-      "PR_114": "Q-068 done: optimize-grid LOOP 1P (gridSearchPurged per instrument) \u2014 honest pooled OOS 522 trades WR 50.00%; param adoption owner-gated",
-      "PR_115": "Q-067 done: lib/shadowLog.ts shadow signal log \u2014 (ts, sha256, actions) per fresh /api/backtest/live computation; sinks: Redis via the SAME KV_REST_* env pair as the Q-005 rate limiter (one provisioning act activates BOTH), workspace/shadow JSONL in dev, no-op in prod until Redis provisioned; fail-closed, 10 tests"
+      "PR_114": "Q-068 done: optimize-grid LOOP 1P (gridSearchPurged per instrument) — honest pooled OOS 522 trades WR 50.00%; param adoption owner-gated",
+      "PR_115": "Q-067 done: lib/shadowLog.ts shadow signal log — (ts, sha256, actions) per fresh /api/backtest/live computation; sinks: Redis via the SAME KV_REST_* env pair as the Q-005 rate limiter (one provisioning act activates BOTH), workspace/shadow JSONL in dev, no-op in prod until Redis provisioned; fail-closed, 10 tests"
     },
     "owner_actions_remaining": [
       "Provision marketplace Redis (Upstash) + set KV_REST_API_URL/TOKEN -> activates Q-005 distributed rate limit AND Q-067 shadow log",
       "Scheduled-task Run-now click to pre-approve Vercel MCP tools (standing)",
       "DECISION-D7-DATA: Sharadar ~$49/1mo PIT re-benchmark purchase",
       "CSP enforce flip stays blocked while RO shows violations (self-gating)",
-      "Optional: review H60 re-baseline (evidence in workspace/optimization-runs/hold-horizon-decision.json) \u2014 revert = one-line config change"
+      "Optional: review H60 re-baseline (evidence in workspace/optimization-runs/hold-horizon-decision.json) — revert = one-line config change"
     ],
     "next": "Sunday 2026-07-19 stryker-weekly: check backtest shard score (Q-075 acceptance >= 70, was 31.22); Monday sweep runs under the H60 engine numbers for the first time"
   },
@@ -260,14 +260,29 @@
     "merged_to_main": {
       "PR_117": "Q-051: un-exclude lib/ml (stale), lib/data/bloomberg (13 new tests), gridSearch.ts (legacy-contract tests); CI coverage gate green",
       "PR_118": "Q-073 docs: trading-agents 5-min hold, cold-start regimes, unconfigured 502 by design",
-      "PR_119": "Q-051 CLOSED: buildFundamentalsPayload 3-fixture suite (97.47 lines/100 funcs) \u2014 zero coverage debt left in excludes",
+      "PR_119": "Q-051 CLOSED: buildFundamentalsPayload 3-fixture suite (97.47 lines/100 funcs) — zero coverage debt left in excludes",
       "PR_120": "Q-075 wave 2: engine.aggregatePortfolio golden suite (12 pins) + core dividend-accrual pins"
     },
     "q075_status": "wave 1 measured 31.22 -> 58.69 via manual workflow_dispatch (run 29553164644); wave 2 targets engine.ts (35.32, zero direct tests) + core 261-278 dividend cluster; acceptance >= 70 validates on the scheduled 2026-07-19 stryker-weekly run",
-    "ops_finding": "Scheduled daily task NEVER EXECUTES (no RUN-HEARTBEAT.log despite the 07-13 first-action heartbeat prompt) \u2014 7 traceless days. Only the owner Run-now + tool-approval click fixes it. Repo-root checkout was 6 merges stale; fast-forwarded to c70b1a1.",
-    "backlog_remaining": "Q-005 (owner: Redis provisioning \u2014 also activates Q-067 shadow log) and Q-075 (pending 07-19 measurement). Everything else in IMPROVEMENT_BACKLOG is done/closed.",
-    "stryker_full_run_2026_07_17": "Run 29553164644 (manual dispatch) completed ALL FOUR shards for the first time ever: quant-indicators 70.24 PASS (first green shard in project history; 2h17m), options 62.13 (1m43s mutation time \u2014 small domain, legit), backtest 58.69 (wave 2 shipped, validates 07-19), quant-rest 53.80 (853 survived + 261 no-cov \u2014 the next Q-075-style hardening target). The 2026-07-13 quant re-shard is VALIDATED: both halves fit far inside the 6h limit. Remaining to a fully-green stryker-weekly: backtest (+11.3pp needed), options (+7.9), quant-rest (+16.2).",
+    "ops_finding": "Scheduled daily task NEVER EXECUTES (no RUN-HEARTBEAT.log despite the 07-13 first-action heartbeat prompt) — 7 traceless days. Only the owner Run-now + tool-approval click fixes it. Repo-root checkout was 6 merges stale; fast-forwarded to c70b1a1.",
+    "backlog_remaining": "Q-005 (owner: Redis provisioning — also activates Q-067 shadow log) and Q-075 (pending 07-19 measurement). Everything else in IMPROVEMENT_BACKLOG is done/closed.",
+    "stryker_full_run_2026_07_17": "Run 29553164644 (manual dispatch) completed ALL FOUR shards for the first time ever: quant-indicators 70.24 PASS (first green shard in project history; 2h17m), options 62.13 (1m43s mutation time — small domain, legit), backtest 58.69 (wave 2 shipped, validates 07-19), quant-rest 53.80 (853 survived + 261 no-cov — the next Q-075-style hardening target). The 2026-07-13 quant re-shard is VALIDATED: both halves fit far inside the 6h limit. Remaining to a fully-green stryker-weekly: backtest (+11.3pp needed), options (+7.9), quant-rest (+16.2).",
     "q078_wave1": "#123: 59 exact-value pins for quant-rest (researchScore/regimeDetection/dcf/yahooSymbol/constants) and options (greeks/sentiment/impliedVolatility). Combined with #119 (buildFundamentalsPayload, measured as 0.00/424-mutants pre-merge) and #120 (backtest wave 2), all three sub-70 shards have improvement waves aboard for the 2026-07-19 scheduled stryker run. Check that run: backtest (58.69->?70), quant-rest (53.80->?), options (62.13->?); quant-indicators already PASSES at 70.24.",
     "mutation_sprint_close": "Re-measure 29584073911: options PASS (2nd green), quant-rest 65.08, backtest 63.50 (engine 80.85). LESSON: line coverage != mutation coverage (buildFundamentalsPayload 32.78 despite 97% lines). Post-measurement waves on main: #125 (correlation-seed + signals branches), #126 (dense payload goldens + regimeDetection exact arithmetic), #127 (DD-breaker golden + reason strings). Sunday 07-19 scheduled run measures everything; per-file tails documented in backlog if any shard still short."
+  },
+  "mutation_gate_wave_2026_07_22": {
+    "directive": "owner: 'Continue with the tasks and resolve the issues'",
+    "merged_to_main": {
+      "PR_129": "quant-rest wave 3 + backtest wave 5 golden pins. Local targeted Stryker confirmed: constants 5.56->100 (dynamic-import re-runs the RFR IIFE in-test), frameworks 54->100, relativeStrength 64->91, riskFreeRate 62->89, intermarket 55->83, sectorRotation 69->78; backtest regimeSignal/benchmarkLabel/liveSignal goldens. yahooSymbol = `Stryker disable all` (26 proven-equivalent mutants masked by the normalizeTicker SSOT — the reason #123's pins died).",
+      "PR_130": "GATE INTEGRITY: seeded the 3 nondeterministic Math.random() fixtures (engine.test.ts, signals.test.ts, intermarket.test.ts) with the canonical LCG. Root cause of quant-indicators 72.46 (07-17) -> 60.49 (07-19) on the SAME commit: 131 mutants flipped killed->survived, which ONLY nondeterministic fixtures can cause (timeouts count as kills, lost coverage as no-coverage). engine/signals drive the signal pipeline -> transitively cover indicators.ts/multiTimeframe.ts.",
+      "PR_131": "quant-indicators wave 4. Local targeted Stryker: btc-indicators 39.34->73.07, technicals 47.79->84.56. These two were STABLE weak files (identical 07-17==07-19 scores) that the shard's pass hid behind indicators.ts/multiTimeframe carrying it."
+    },
+    "key_lessons": [
+      "killed->survived flips across two runs of the SAME commit can ONLY come from nondeterministic test fixtures; timeouts count as kills and lost coverage as no-coverage, so neither produces the flip.",
+      "A redundant wrapper over an SSOT (yahooSymbolFromParam over normalizeTicker) yields all-equivalent mutants — unkillable from the test side; suppress with `Stryker disable all` + a proof, don't flail.",
+      "Module-init IIFE mutants show as 'no coverage' because they run before any test body; a vi.resetModules() + dynamic import INSIDE the test attributes coverage and kills them.",
+      "Verify per-file mutation deltas with a LOCAL components-excluded Stryker config (dodges the jsdom freeze) before pushing — don't trust reasoning; #123 burned a full cycle on a wrong guess."
+    ],
+    "next": "Check stryker run 29930833563: quant-rest and backtest should clear 70; quant-indicators should be reproducibly >70 (btc/technicals hardened + indicators/multiTimeframe no longer swinging). Remaining owner-gated items unchanged (Redis provisioning, scheduled-task Run-now, Sharadar, CSP flip)."
   }
 }
