@@ -19,18 +19,30 @@ import { isMarketOpen } from '@/lib/api/marketHours'
 import { applyRateLimit } from '@/lib/api/rateLimit'
 import YahooFinance from 'yahoo-finance2'
 import { withRetry } from '@/lib/api/reliability'
+import { STREAM_AUTO_CLOSE_MS, STREAM_CLOSE_WARN_LEAD_MS } from '@/lib/api/streamBudget'
 
 const yahooFinance = new YahooFinance()
 
+/**
+ * Vercel function timeout for this route, in SECONDS (Next.js route segment
+ * config). Declared EXPLICITLY rather than inheriting the platform default —
+ * see lib/api/streamBudget.ts for the incident that motivated this (the soft
+ * close was scheduled ~3.5 min AFTER the function was killed, making the whole
+ * graceful-close path dead code in production).
+ *
+ * MUST BE A LITERAL. Next.js reads route segment config by STATIC ANALYSIS at
+ * build time, so `= STREAM_MAX_DURATION_S` fails the build with
+ * `Unknown identifier "STREAM_MAX_DURATION_S" at "maxDuration"`. Note that
+ * neither tsc nor vitest can catch that — only the Next/Vercel build does.
+ *
+ * The literal is therefore duplicated from the SSOT, and
+ * __tests__/api/streamTimeout.test.ts asserts this export equals
+ * STREAM_MAX_DURATION_S so the two can never silently diverge.
+ */
+export const maxDuration = 300
+
 const QUOTE_INTERVAL_MS = 15_000     // 15 s
 const HEARTBEAT_INTERVAL_MS = 30_000 // 30 s
-// R4-C-3 (Phase 14 S1): was 10 minutes, which exactly matches Vercel Pro function timeout.
-// Reduced to 9 minutes so our soft close fires first with a warning, giving the client
-// 60 s to reconnect before Vercel terminates the function hard (possibly without flushing).
-// Vercel hobby tier has a 60 s function timeout — SSE on hobby requires Edge Runtime or
-// the user must upgrade; document this in README/env requirements.
-const STREAM_AUTO_CLOSE_MS = 9 * 60 * 1000    // 9 minutes (server-initiated soft close)
-const STREAM_CLOSE_WARN_LEAD_MS = 30_000       // emit closing_soon 30 s before soft close
 
 interface QuoteEvent {
   ticker: string
@@ -194,12 +206,13 @@ export async function GET(
 
       // R4-C-3 (Phase 14 S1): server-initiated soft close with pre-close warning.
       //
-      // Previously, a single 10-minute hard close races against Vercel Pro's
-      // 10-minute function timeout — whichever fires first, the client sees an
-      // abrupt drop with no chance to reconnect cleanly. Now:
+      // Previously, a single hard close raced against the Vercel function
+      // timeout — whichever fired first, the client saw an abrupt drop with no
+      // chance to reconnect cleanly. Now:
       //   • At T - 30 s, emit `closing_soon` so the UI can pre-warm a reconnect.
       //   • At T, emit `close` then controller.close().
-      // Total budget is 9 minutes, well under Vercel Pro's 10-minute ceiling.
+      // T is derived from `maxDuration` (see the top of this file), so the whole
+      // sequence completes a full warn-lead inside the platform ceiling.
       //
       // P15-NEW-7 (Phase 15, 2026-05-23): unify the two chained setTimeouts
       // into a single warn-then-close timer. Prior code armed `closeWarnTimer`
