@@ -22,9 +22,16 @@
 
 /**
  * Vercel function timeout for the stream route, in SECONDS.
- * Re-exported by the route as `maxDuration` (a Next.js route segment config).
+ *
  * 300 s is the current platform default/ceiling; a larger value would be
  * silently clamped and reintroduce the original bug.
+ *
+ * NOTE: the route CANNOT import this for its `maxDuration` export — Next.js
+ * reads route segment config by static analysis at build time and rejects a
+ * non-literal (`Unknown identifier "STREAM_MAX_DURATION_S" at "maxDuration"`,
+ * a build-only failure that tsc and vitest do not catch). The route therefore
+ * duplicates the literal `300`, and __tests__/api/streamTimeout.test.ts
+ * asserts the two are equal so they can never silently diverge.
  */
 export const STREAM_MAX_DURATION_S = 300
 

@@ -19,23 +19,27 @@ import { isMarketOpen } from '@/lib/api/marketHours'
 import { applyRateLimit } from '@/lib/api/rateLimit'
 import YahooFinance from 'yahoo-finance2'
 import { withRetry } from '@/lib/api/reliability'
-import {
-  STREAM_MAX_DURATION_S,
-  STREAM_AUTO_CLOSE_MS,
-  STREAM_CLOSE_WARN_LEAD_MS,
-} from '@/lib/api/streamBudget'
+import { STREAM_AUTO_CLOSE_MS, STREAM_CLOSE_WARN_LEAD_MS } from '@/lib/api/streamBudget'
 
 const yahooFinance = new YahooFinance()
 
 /**
  * Vercel function timeout for this route, in SECONDS (Next.js route segment
- * config). Declared EXPLICITLY rather than inheriting the platform default,
- * and sourced from the same module as the soft-close budget so the two can
- * never drift apart again — see lib/api/streamBudget.ts for the incident that
- * motivated this (soft close scheduled ~3.5 min AFTER the function was killed,
- * making the whole graceful-close path dead code in production).
+ * config). Declared EXPLICITLY rather than inheriting the platform default —
+ * see lib/api/streamBudget.ts for the incident that motivated this (the soft
+ * close was scheduled ~3.5 min AFTER the function was killed, making the whole
+ * graceful-close path dead code in production).
+ *
+ * MUST BE A LITERAL. Next.js reads route segment config by STATIC ANALYSIS at
+ * build time, so `= STREAM_MAX_DURATION_S` fails the build with
+ * `Unknown identifier "STREAM_MAX_DURATION_S" at "maxDuration"`. Note that
+ * neither tsc nor vitest can catch that — only the Next/Vercel build does.
+ *
+ * The literal is therefore duplicated from the SSOT, and
+ * __tests__/api/streamTimeout.test.ts asserts this export equals
+ * STREAM_MAX_DURATION_S so the two can never silently diverge.
  */
-export const maxDuration = STREAM_MAX_DURATION_S
+export const maxDuration = 300
 
 const QUOTE_INTERVAL_MS = 15_000     // 15 s
 const HEARTBEAT_INTERVAL_MS = 30_000 // 30 s
