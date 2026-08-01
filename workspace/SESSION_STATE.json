@@ -2,8 +2,8 @@
   "schema_version": "1.1",
   "project": "QUANTAN-sector-investment",
   "created": "2026-04-28T09:40:00Z",
-  "last_updated": "2026-07-22T15:00:00.000Z",
-  "active_agent": "claude opus-4.8 (2026-07-22 mutation-gate wave: #129 quant-rest w3 + backtest w5, #130 seeded nondeterministic fixtures for a reproducible gate, #131 quant-indicators w4 btc-indicators+ma200Regime; all merged CI-green; stryker run 29930833563 dispatched to measure)",
+  "last_updated": "2026-08-02T16:15:00.000Z",
+  "active_agent": "claude opus-5 (2026-08-02: verified the 07-22/07-26 stryker pair — 3/4 shards pass on BOTH; shipped backtest wave 6 (#133), the /api/stream 300s timeout fix (#134), and the next-auth critical bump (#135); stryker 30707395928 dispatched to measure wave 6)",
   "prod_bug_fix_2026_07_01": {
     "B-2": "News fetch broken by yahoo-finance2 SearchResult schema drift (yf.search validation threw → news silently dropped + 66 prod errors on /api/briefs since 2026-04-03). FOUND via Vercel get_runtime_errors. FIXED with validateResult:false on the 4 news-search callers (mirrors options/chain.ts precedent) → PR #82 → main 2e6137c. LIVE-VERIFIED: /api/briefs now 200 with full news feed (was empty); 0 SearchResult validation logs on new deploy dpl_D29j.",
     "method_note": "Empirical bug-finding via Vercel runtime-errors/logs is high-signal — surfaced a real 3-month-old LIVE issue the static inspection didn't (it was a caught-and-logged error, invisible to tsc/tests/benchmark). Consider a runtime-errors sweep as a standing step."
@@ -284,5 +284,32 @@
       "Verify per-file mutation deltas with a LOCAL components-excluded Stryker config (dodges the jsdom freeze) before pushing — don't trust reasoning; #123 burned a full cycle on a wrong guess."
     ],
     "next": "Check stryker run 29930833563: quant-rest and backtest should clear 70; quant-indicators should be reproducibly >70 (btc/technicals hardened + indicators/multiTimeframe no longer swinging). Remaining owner-gated items unchanged (Redis provisioning, scheduled-task Run-now, Sharadar, CSP flip)."
+  },
+  "mutation_gate_verification_2026_07_26": {
+    "what_the_pair_answers": "The 2026-07-22 dispatch and the 2026-07-26 SCHEDULED run together settle the question the 07-22 session left open. THREE OF FOUR SHARDS NOW PASS ON BOTH RUNS: quant-rest 75.05/75.05, options 71.25/71.38, quant-indicators 86.83/74.29 (passes in both modes). Only backtest fails.",
+    "backtest_69_99": "69.99 on BOTH runs — every per-file score byte-identical across the two (the only delta is 1 mutant shifting killed<->timeout in core.ts, and timeouts count as kills, so the score is unchanged). It is therefore fully DETERMINISTIC and misses the 70.00 break threshold by 0.01pp, i.e. ~1 mutant of 2619 (1833/2619 = 69.99%).",
+    "130_worked_but_partially": "The #130 seeded-fixture fix DID hold where it applied: btc-indicators (73.77) and technicals (85.29) are byte-identical across both runs, and the whole backtest shard is now stable. Those stable #131 pins are also what keeps quant-indicators above 70 in its low mode (it was 60.49 FAIL before them).",
+    "unresolved_swing": {
+      "pattern_OBSERVED": "quant-indicators is BIMODAL and perfectly correlated with the trigger: scheduled/Sunday runs land at 74.29 (indicators.ts 74.16, multiTimeframe 63.78) and workflow_dispatch/weekday runs at 86.83 (indicators.ts 90.51, multiTimeframe 98.82). Verified across 4 runs: 07-17 Fri dispatch HIGH, 07-19 Sun schedule LOW, 07-22 Wed dispatch HIGH, 07-26 Sun schedule LOW. Within each mode the numbers repeat EXACTLY (indicators.ts 74.16 twice, 90.51 twice) — two stable attractors, not noise. In LOW mode the multiTimeframe mutants are covered only by walk-forward tests; in HIGH mode multiTimeframe.test.ts also covers them (0 survivors).",
+      "mechanism_UNRESOLVED": "NOT diagnosed. Do NOT record a cause. Checked and ruled out: the shard's own test files contain no Math.random/new Date()/Date.now (multiTimeframe.test.ts uses a fixed 2020-01-02 start), and BOTH runs report 'Initial test run succeeded. Ran 611 tests'. A parallel-coverage-attribution hypothesis exists but has NO evidence behind it. The 2026-07-22 session recorded a WRONG mechanism ('slow-runner timeout') from similar reasoning — do not repeat that.",
+      "discriminating_experiment": "One manual dispatch with stryker `coverageAnalysis: 'all'` (or vitest `fileParallelism: false`). If the bimodality collapses, it is per-test coverage attribution under parallelism; if it persists, it is not. Config-only, no source change, one ~2.5h run whenever someone wants the answer.",
+      "severity": "BENIGN for the gate today (the shard clears 70 in both modes) but it is a MEASUREMENT-INTEGRITY defect: the same commit reports two different scores."
+    }
+  },
+  "improvement_wave_2026_08_02": {
+    "directive": "owner: 'Continue on the project, find out areas for improvements'",
+    "merged_to_main": {
+      "PR_133": "Q-075 wave 6 — the sectorGates path of enhancedCombinedSignal, the largest untested block in the backtest shard (30 NO-COVERAGE mutants: the 3 score bonuses, the gate filters, the post-gate SELL re-check). Production runs the regime-only path so it had never been exercised. Unlock: buyWScoreThreshold is itself a sectorGates override, so setting it below the fixture score keeps action==='BUY' alive into the filter block. MEASURED locally (identical test subset, wave 6 the only difference): signals.ts 57.84 -> 73.53, +48 killed, no-coverage 31 -> 21.",
+      "PR_134": "/api/stream/[ticker] was logging 'Vercel Runtime Timeout Error: Task timed out after 300 seconds' (13x on 2026-07-28; the prior 7d sweep was clean). The route hard-coded a 9-MINUTE soft close against a stale 'Vercel Pro = 10 min' comment while the platform timeout is 300s on ALL plans and the route declared no maxDuration. So closing_soon was scheduled at 510s and close at 540s — both AFTER the 300s kill. The ENTIRE graceful-close path was dead code in production. Fixed with lib/api/streamBudget.ts as SSOT (soft close DERIVED from the ceiling: warn 240s -> close 270s -> ceiling 300s) + 7 regression tests binding to the real constants.",
+      "PR_135": "next-auth 4.24.13 -> 4.24.15: 3 advisories incl. a CRITICAL (GHSA-xmf8-cvqr-rfgj, CVSS 7.5, getToken() uncaught exception on malformed Bearer headers) on the live /api/auth route. ^4.24.11 already permitted it — only the lockfile was pinning. Criticals 2 -> 1, total 51 -> 50."
+    },
+    "backtest_projection_HONEST": "Wave 6's local +48 will NOT transfer in full: the local baseline for signals.ts was 57.84 (177 killed) while CI showed 66.67 (204 killed), so the full CI suite already kills 27 that the reduced local subset did not. The DURABLE basis is the no-coverage block: CI had 30 no-coverage mutants in signals.ts and the local subset 31 — i.e. that block is genuinely untouched by the full suite — and wave 6 converted 10 of them. That alone puts the shard at ~1843/2619 = 70.4%. Honest claim: FLOOR ~70.4, UP TO ~71.5. Either clears 70, but do not quote 71.5 as the expectation.",
+    "key_lesson_next_route_config": "Next.js reads route segment config (maxDuration/runtime/dynamic) by STATIC ANALYSIS at build time. `export const maxDuration = SOME_IMPORTED_CONST` fails the build with 'Unknown identifier ... at maxDuration' + 'Invalid segment configuration export detected'. CRITICALLY: tsc and vitest BOTH PASS on this — only the Next/Vercel build catches it, so the Vercel preview build is the gate for any change to those exports. Fix = literal in the route + the SSOT for internal use + a test asserting route.maxDuration === SSOT so they cannot diverge.",
+    "npm_audit_state": "51 -> 50 after #135. The remaining critical (tar) and ALL 34 high advisories trace to the `vercel` DEVdependency pinned at ^50.35.0 while the current CLI is 56.x — build tooling, not production runtime. Stays the owner-gated 'npm-audit build chain' item; a major devDep bump is its own change.",
+    "owner_actions_surfaced": [
+      "CRITICAL (env, no code change): NEXTAUTH_SECRET is not configured in production — the app falls back to a random per-instance secret, so SESSIONS ARE INVALIDATED ON EVERY COLD START. Self-reported by the app on /api/auth/[...nextauth]. Fix: set NEXTAUTH_SECRET in the Vercel project env.",
+      "Optional: bump the `vercel` devDependency 50.x -> 56.x to clear the remaining critical + 34 high audit findings."
+    ],
+    "next": "Read stryker run 30707395928: expect backtest >= 70 (first-ever 4/4 green). Then the quant-indicators swing experiment above."
   }
 }
