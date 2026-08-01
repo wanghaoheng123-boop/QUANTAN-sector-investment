@@ -46,7 +46,7 @@
     "lightweight-charts": "^4.1.3",
     "lucide-react": "^1.17.0",
     "next": "^15.5.19",
-    "next-auth": "^4.24.11",
+    "next-auth": "^4.24.15",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "swr": "^2.2.5",
