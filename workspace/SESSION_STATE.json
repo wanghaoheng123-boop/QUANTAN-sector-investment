@@ -2,8 +2,8 @@
   "schema_version": "1.1",
   "project": "QUANTAN-sector-investment",
   "created": "2026-04-28T09:40:00Z",
-  "last_updated": "2026-08-02T16:15:00.000Z",
-  "active_agent": "claude opus-5 (2026-08-02: verified the 07-22/07-26 stryker pair — 3/4 shards pass on BOTH; shipped backtest wave 6 (#133), the /api/stream 300s timeout fix (#134), and the next-auth critical bump (#135); stryker 30707395928 dispatched to measure wave 6)",
+  "last_updated": "2026-08-02T18:00:00.000Z",
+  "active_agent": "claude opus-5 (2026-08-02: FIRST-EVER 4/4 GREEN mutation gate verified on two consecutive runs incl. a scheduled Sunday; continue-on-error removed so the gate now actually gates)",
   "prod_bug_fix_2026_07_01": {
     "B-2": "News fetch broken by yahoo-finance2 SearchResult schema drift (yf.search validation threw → news silently dropped + 66 prod errors on /api/briefs since 2026-04-03). FOUND via Vercel get_runtime_errors. FIXED with validateResult:false on the 4 news-search callers (mirrors options/chain.ts precedent) → PR #82 → main 2e6137c. LIVE-VERIFIED: /api/briefs now 200 with full news feed (was empty); 0 SearchResult validation logs on new deploy dpl_D29j.",
     "method_note": "Empirical bug-finding via Vercel runtime-errors/logs is high-signal — surfaced a real 3-month-old LIVE issue the static inspection didn't (it was a caught-and-logged error, invisible to tsc/tests/benchmark). Consider a runtime-errors sweep as a standing step."
@@ -311,5 +311,18 @@
       "Optional: bump the `vercel` devDependency 50.x -> 56.x to clear the remaining critical + 34 high audit findings."
     ],
     "next": "Read stryker run 30707395928: expect backtest >= 70 (first-ever 4/4 green). Then the quant-indicators swing experiment above."
+  },
+  "mutation_gate_GREEN_2026_08_02": {
+    "headline": "FIRST-EVER 4/4 GREEN stryker-weekly, confirmed on TWO consecutive runs (30707395928 dispatch @51774ac, 30742899850 scheduled-Sunday @cdf4087).",
+    "scores": {
+      "backtest": "71.02 / 71.02  (was 69.99 — the 0.01pp miss is closed)",
+      "options": "71.38 / 71.25",
+      "quant-rest": "75.14 / 75.14",
+      "quant-indicators": "86.83 / 86.83"
+    },
+    "wave6_effect_MEASURED": "signals.ts 66.67 -> 74.18; killed 204 -> 227; no-coverage 30 -> 20 — i.e. exactly the 10 no-coverage mutants the honest projection was based on. Shard 69.99 -> 71.02, landing INSIDE the predicted 70.4-71.5 band. The floor-based projection method was correct; the optimistic local +48 would have overstated it.",
+    "swing_did_NOT_recur": "The 2026-08-02 SCHEDULED (Sunday) run reported quant-indicators 86.83 with indicators.ts 90.51 and multiTimeframe.ts 98.82 — the HIGH mode. Every previous Sunday run gave 74.16/63.78. This is the exact discriminating diagnostic that was put on file, and it came back clean. IMPORTANT: do NOT record this as fixed. Nothing in #133-#136 targeted indicators.ts or multiTimeframe.ts, so the cause remains UNKNOWN and the swing may be latent rather than gone. Evidence is one Sunday. If it returns, the discriminating experiment is unchanged: one dispatch with coverageAnalysis:'all' or fileParallelism:false.",
+    "gate_enforced": "`continue-on-error: true` REMOVED from .github/workflows/stryker-weekly.yml — it carried the note 'until the >=70% baseline holds on every shard', and that precondition is now met. Stryker already exits non-zero via `break: 70`, so a sub-70 shard now fails the workflow for real. `fail-fast: false` is retained so all four shards still report on a failure (needed for diagnosis). Margins are thin on backtest (+1.02) and options (+1.25) — that is the intent: a real regression should break the build instead of silently drifting.",
+    "journey": "backtest 31.22 -> 58.69 -> 63.50 -> 69.99 -> 71.02; options 62.25 -> 71.25; quant-rest 53.80 -> 75.14; quant-indicators 60.49 -> 86.83."
   }
 }
