@@ -3,11 +3,34 @@
 # cancelled at 97% tested (4,124/4,154; 1,324 survived + 38 TO; interim score
 # ≈68%), nine minutes from the finish line. quant is now split into two
 # sub-shards (indicator family vs the rest), each well inside the limit.
-# First complete per-domain scores (2026-07-12 run): backtest 31.22 (real
-# coverage gap — Q-075), options 62.25. Shards are allowed-to-fail
-# (continue-on-error) until the ≥70% baseline holds on every shard — but
-# check the JOB conclusions, not the workflow badge (the badge stayed green
-# through 5 weeks of dead runs; lesson recorded 2026-07-10).
+#
+# GATE ENFORCED 2026-08-02. The long-standing `continue-on-error: true` carried
+# the note "until the ≥70% baseline holds on every shard". That precondition is
+# now met, on TWO consecutive runs including a scheduled Sunday one — so the
+# escape hatch is removed and a sub-70 shard now fails the workflow for real
+# (Stryker already exits non-zero via `break: 70` in stryker.conf.mjs).
+#
+#   shard             2026-08-01 (dispatch)   2026-08-02 (schedule)
+#   backtest                        71.02                   71.02
+#   options                         71.38                   71.25
+#   quant-rest                      75.14                   75.14
+#   quant-indicators                86.83                   86.83
+#
+# Journey: backtest 31.22 (2026-07-12) → 58.69 → 63.50 → 69.99 → 71.02;
+# options 62.25 → pass; quant-rest 53.80 → 75.14; quant-indicators 60.49 → 86.83.
+#
+# Margins are thin on backtest (+1.02) and options (+1.25), which is the point:
+# a real regression should now break the build rather than silently drift.
+# If a shard fails, read the JOB log for the per-file table — do NOT trust the
+# workflow badge alone (it stayed green through 5 weeks of dead runs; lesson
+# recorded 2026-07-10).
+#
+# KNOWN, UNRESOLVED: quant-indicators has previously reported a bimodal score
+# (74.29 on scheduled runs vs 86.83 on dispatches, same commit) driven by
+# indicators.ts/multiTimeframe.ts coverage attribution. It did NOT recur on
+# 2026-08-02, and even its low mode (74.29) clears 70 — but if this workflow
+# starts failing on that shard alone, suspect the swing before suspecting a
+# real regression. See workspace/SESSION_STATE.json → mutation_gate_verification.
 name: Stryker Weekly
 
 on:
@@ -18,7 +41,6 @@ on:
 jobs:
   stryker:
     runs-on: ubuntu-latest
-    continue-on-error: true
     strategy:
       fail-fast: false
       matrix:
