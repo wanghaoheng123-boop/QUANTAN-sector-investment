@@ -104,7 +104,7 @@ python server_trading_agents.py`
                 LLM agent
               </span>
             </button>
-            <p className="text-[9px] text-slate-500 text-center leading-snug">
+            <p className="text-[9px] text-slate-400 text-center leading-snug">
               Opens guided setup (Railway + Vercel env)
             </p>
           </>
@@ -208,7 +208,7 @@ python server_trading_agents.py`
                     {copiedId === 'root' ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
                   </button>
                 </div>
-                <p className="text-[10px] text-slate-500">
+                <p className="text-[10px] text-slate-400">
                   Railway uses the repo <code className="text-slate-400">Procfile</code> and{' '}
                   <code className="text-slate-400">requirements.txt</code> automatically.{' '}
                   <a href={RAILWAY_DOCS_PYTHON} target="_blank" rel="noopener noreferrer" className="text-emerald-400/90 underline">
@@ -236,12 +236,12 @@ python server_trading_agents.py`
                     {copiedId === 'envname' ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
                   </button>
                 </div>
-                <p className="text-[10px] text-slate-500">Redeploy the Next.js app after saving the variable.</p>
+                <p className="text-[10px] text-slate-400">Redeploy the Next.js app after saving the variable.</p>
               </div>
 
               <div className="rounded-xl border border-slate-700/80 bg-slate-900/40 px-4 py-3 space-y-2">
                 <p className="text-[11px] font-semibold text-slate-300 uppercase tracking-wide">Local install (optional)</p>
-                <p className="text-[10px] text-slate-500">Run the Python server on your machine next to <code className="text-slate-400">npm run dev</code>:</p>
+                <p className="text-[10px] text-slate-400">Run the Python server on your machine next to <code className="text-slate-400">npm run dev</code>:</p>
                 <div className="relative">
                   <pre className="text-[10px] font-mono bg-black/40 rounded-lg p-3 pr-10 text-slate-300 whitespace-pre-wrap break-all overflow-x-auto max-h-28 overflow-y-auto">
                     {localInstallCmd}

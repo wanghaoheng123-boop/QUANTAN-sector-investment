@@ -109,7 +109,7 @@ export default function NewsFeed({ sector, news: staticNews, color }: NewsFeedPr
 
   if (news.length === 0) {
     return (
-      <div className="rounded-xl border border-slate-800 p-6 text-center text-xs text-slate-500">
+      <div className="rounded-xl border border-slate-800 p-6 text-center text-xs text-slate-400">
         No recent news found for this {sector ? 'sector' : 'topic'} on Yahoo Finance.
       </div>
     )
@@ -147,7 +147,7 @@ export default function NewsFeed({ sector, news: staticNews, color }: NewsFeedPr
           </div>
 
           {getSnippet(item) && (
-            <p className="text-xs text-slate-500 leading-relaxed line-clamp-2">{getSnippet(item)}</p>
+            <p className="text-xs text-slate-400 leading-relaxed line-clamp-2">{getSnippet(item)}</p>
           )}
 
           <div className="flex items-center justify-between gap-2 mt-2 flex-wrap">

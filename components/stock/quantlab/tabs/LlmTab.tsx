@@ -117,7 +117,7 @@ export const LlmTab = memo(function LlmTab(props: LlmTabProps) {
               </div>
               <p className="mt-2 text-[11px] text-slate-400">{llmBackendHealth.message}</p>
               {llmBackendHealth.checked && llmBackendHealth.base && (
-                <p className="mt-1 text-[10px] text-slate-500 font-mono break-all">
+                <p className="mt-1 text-[10px] text-slate-400 font-mono break-all">
                   {llmBackendHealth.source || 'backend'}: {llmBackendHealth.base}
                 </p>
               )}

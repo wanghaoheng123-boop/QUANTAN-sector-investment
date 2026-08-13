@@ -50,11 +50,11 @@ export default async function BriefsPage() {
   return (
     <div className="max-w-3xl mx-auto px-4 py-12">
       <div className="mb-10">
-        <Link href="/" className="text-xs text-slate-500 hover:text-slate-400 transition-colors">
+        <Link href="/" className="text-xs text-slate-400 hover:text-slate-200 transition-colors">
           ← Markets
         </Link>
         <h1 className="text-3xl font-bold text-white mt-4 mb-2">Intelligence Briefs</h1>
-        <p className="text-slate-500">
+        <p className="text-slate-400">
           Live sector intelligence sourced from Yahoo Finance — analyst ratings, top holdings,
           key statistics, and latest headlines. Refreshes every 5 minutes.
         </p>
@@ -65,7 +65,7 @@ export default async function BriefsPage() {
       </div>
 
       {briefs.length === 0 && (
-        <div className="rounded-xl border border-slate-800 p-8 text-center text-slate-500">
+        <div className="rounded-xl border border-slate-800 p-8 text-center text-slate-400">
           No briefs available. All Yahoo Finance requests failed.
         </div>
       )}

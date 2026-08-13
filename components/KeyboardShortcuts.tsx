@@ -17,8 +17,34 @@ const SHORTCUTS: Shortcut[] = [
   { keys: ['⌘', '\\'], description: 'Go to Markets', category: 'Navigation' },
   { keys: ['g', 'd'], description: 'Go to Desk', category: 'Navigation' },
   { keys: ['g', 'b'], description: 'Go to Backtest', category: 'Navigation' },
+  { keys: ['g', 'p'], description: 'Go to Portfolio', category: 'Navigation' },
+  { keys: ['g', 'r'], description: 'Go to Risk Scenarios', category: 'Navigation' },
   { keys: ['Esc'], description: 'Close modal', category: 'General' },
 ]
+
+/**
+ * F-UX-1 (2026-08-14) — the overlay was reachable ONLY by pressing `?`, with
+ * no button, hint or footer link anywhere saying so. An affordance nobody can
+ * see is an affordance nobody uses. `ShortcutsButton` renders a real control
+ * in the header and opens the overlay through a window event, so the two
+ * components stay decoupled (no context provider needed for one boolean).
+ */
+export const SHORTCUTS_OPEN_EVENT = 'quantan:open-shortcuts'
+
+export function ShortcutsButton() {
+  return (
+    <button
+      type="button"
+      onClick={() => window.dispatchEvent(new Event(SHORTCUTS_OPEN_EVENT))}
+      aria-haspopup="dialog"
+      title="Keyboard shortcuts (?)"
+      aria-label="Show keyboard shortcuts"
+      className="hidden md:flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-slate-700 bg-slate-900 font-mono text-xs text-slate-300 transition-colors hover:border-slate-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-amber-400"
+    >
+      ?
+    </button>
+  )
+}
 
 export default function KeyboardShortcuts() {
   const [isOpen, setIsOpen] = useState(false)
@@ -97,6 +123,19 @@ export default function KeyboardShortcuts() {
           router.push('/backtest')
           return
         }
+        // 2026-08-14 (F-IA-1): /portfolio and /risk/scenarios had no
+        // navigational entry point at all. They are in the nav now; give them
+        // the same keyboard parity the other destinations already had.
+        if (e.key === 'p') {
+          e.preventDefault()
+          router.push('/portfolio')
+          return
+        }
+        if (e.key === 'r') {
+          e.preventDefault()
+          router.push('/risk/scenarios')
+          return
+        }
       }
     }
 
@@ -106,6 +145,13 @@ export default function KeyboardShortcuts() {
       if (gTimeout) clearTimeout(gTimeout)
     }
   }, [close, router])
+
+  // Open on the header button's event (F-UX-1).
+  useEffect(() => {
+    const open = () => setIsOpen(true)
+    window.addEventListener(SHORTCUTS_OPEN_EVENT, open)
+    return () => window.removeEventListener(SHORTCUTS_OPEN_EVENT, open)
+  }, [])
 
   useEffect(() => {
     close()
@@ -145,7 +191,7 @@ export default function KeyboardShortcuts() {
             ref={closeBtnRef}
             type="button"
             onClick={close}
-            className="text-slate-500 hover:text-white transition-colors p-1 rounded-md hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-400"
+            className="text-slate-400 hover:text-white transition-colors p-1 rounded-md hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-400"
             aria-label="Close shortcuts"
           >
             {/* Phase 14 wave 24 Pattern D: aria-hidden on decorative SVG so
@@ -159,7 +205,7 @@ export default function KeyboardShortcuts() {
         <div className="px-5 py-4 max-h-[60vh] overflow-y-auto">
           {Object.entries(grouped).map(([category, shortcuts]) => (
             <div key={category} className="mb-4 last:mb-0">
-              <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-2">{category}</div>
+              <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">{category}</div>
               <div className="space-y-1">
                 {shortcuts.map((shortcut, i) => (
                   <div key={i} className="flex items-center justify-between py-1.5">
@@ -182,7 +228,7 @@ export default function KeyboardShortcuts() {
         </div>
         <div className="px-5 py-3 border-t border-slate-800 bg-slate-950/50">
           <p className="text-[10px] text-slate-400 text-center">
-            Press <kbd className="inline-flex items-center justify-center h-4 px-1 text-[10px] font-mono text-slate-500 bg-slate-800 border border-slate-700 rounded">?</kbd> to toggle this overlay
+            Press <kbd className="inline-flex items-center justify-center h-4 px-1 text-[10px] font-mono text-slate-400 bg-slate-800 border border-slate-700 rounded">?</kbd> to toggle this overlay
           </p>
         </div>
       </div>

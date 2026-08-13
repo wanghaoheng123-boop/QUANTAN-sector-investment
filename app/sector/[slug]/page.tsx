@@ -250,8 +250,8 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
               </div>
               <div>
                 <div className="flex items-center gap-2 mb-0.5">
-                  <Link href="/" className="text-xs text-slate-500 hover:text-slate-400">Markets</Link>
-                  <span className="text-slate-700 text-xs">/</span>
+                  <Link href="/" className="text-xs text-slate-400 hover:text-slate-200">Markets</Link>
+                  <span className="text-slate-700 text-xs" aria-hidden="true">/</span>
                   <span className="text-xs" style={{ color: sector.color }}>{sector.name}</span>
                 </div>
                 <h1 className="text-2xl font-bold text-white">{sector.name} Sector</h1>
@@ -314,7 +314,7 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
 
           {/* Quick stats */}
           {quote && (
-            <div className="flex flex-wrap gap-4 mt-4 text-xs text-slate-500">
+            <div className="flex flex-wrap gap-4 mt-4 text-xs text-slate-400">
               <span className="flex items-center">
                 52W High: <span className="text-white font-mono ml-1">{formatCurrency(quote.high52w)}</span>
                 <MetricTooltip label="52-week high" content="Highest price over the past 52 weeks. Reference for resistance and breakout signals — price approaching 52W high after consolidation often precedes a leg up." compact />
@@ -431,7 +431,7 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
                     className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all ${
                       activeTab === tab
                         ? 'bg-slate-700 text-white'
-                        : 'text-slate-500 hover:text-slate-300'
+                        : 'text-slate-400 hover:text-slate-300'
                     }`}
                   >
                     {label}
@@ -449,7 +449,7 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
                       className={`px-2 py-1 text-[11px] rounded-md transition-all ${
                         activeRange === r
                           ? 'bg-slate-700 text-white'
-                          : 'text-slate-500 hover:text-slate-300'
+                          : 'text-slate-400 hover:text-slate-300'
                       }`}
                     >
                       {r}
@@ -464,7 +464,7 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
               <div role="tabpanel" id="panel-chart" aria-labelledby="tab-chart" className="bg-slate-900/60 rounded-2xl border border-slate-800 p-4">
                 <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
                   <span className="text-sm font-semibold text-white">{sector.etf} · Candlestick Chart</span>
-                  <div className="flex items-center gap-3 text-xs text-slate-500 font-mono">
+                  <div className="flex items-center gap-3 text-xs text-slate-400 font-mono">
                     {isStockIntradayPollRange(activeRange) && (
                       <span className="text-green-400/60">● {CHART_POLL_MS(activeRange) / 1000}s</span>
                     )}
@@ -481,7 +481,7 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
                 ) : chartError ? (
                   <div className="h-[480px] bg-slate-800/10 rounded-xl flex flex-col items-center justify-center gap-3 border border-dashed border-amber-500/30">
                     <span className="text-amber-400/90 text-sm font-medium">Chart unavailable</span>
-                    <p className="text-slate-500 text-xs font-mono max-w-md text-center px-4">{chartError}</p>
+                    <p className="text-slate-400 text-xs font-mono max-w-md text-center px-4">{chartError}</p>
                     <button
                       type="button"
                       onClick={() => fetchChartData(activeRange)}
@@ -547,7 +547,7 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
             {/* Signal Card */}
             {signal && (
               <div>
-                <h3 className="text-xs font-medium text-slate-500 uppercase tracking-widest mb-3">
+                <h3 className="text-xs font-medium text-slate-400 uppercase tracking-widest mb-3">
                   Session vs prior close (Yahoo)
                 </h3>
                 <SignalCard signal={signal} color={sector.color} />
@@ -557,16 +557,16 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
             {/* Dark Pool Summary (always visible) */}
             {darkPoolPrints.length > 0 && (
               <div>
-                <h3 className="text-xs font-medium text-slate-500 uppercase tracking-widest mb-3">Dark Pool Summary</h3>
+                <h3 className="text-xs font-medium text-slate-400 uppercase tracking-widest mb-3">Dark Pool Summary</h3>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="bg-slate-900/60 rounded-xl p-3.5 border border-slate-800">
-                    <div className="text-xs text-slate-500 mb-1">Total Block Vol</div>
+                    <div className="text-xs text-slate-400 mb-1">Total Block Vol</div>
                     <div className="text-lg font-bold text-white font-mono">
                       {(darkPoolPrints.reduce((s, p) => s + p.size, 0) / 1e6).toFixed(2)}M
                     </div>
                   </div>
                   <div className="bg-slate-900/60 rounded-xl p-3.5 border border-slate-800">
-                    <div className="text-xs text-slate-500 mb-1">Bullish Prints</div>
+                    <div className="text-xs text-slate-400 mb-1">Bullish Prints</div>
                     <div className="text-lg font-bold text-green-400 font-mono">
                       {darkPoolPrints.filter(p => p.sentiment === 'BULLISH').length}
                       <span className="text-slate-400 text-sm font-normal">/{darkPoolPrints.length}</span>
@@ -578,7 +578,7 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
 
             {/* Related Sectors */}
             <div>
-              <h3 className="text-xs font-medium text-slate-500 uppercase tracking-widest mb-3">Other Sectors</h3>
+              <h3 className="text-xs font-medium text-slate-400 uppercase tracking-widest mb-3">Other Sectors</h3>
               <div className="space-y-2">
                 {SECTORS.filter(s => s.slug !== sector.slug).slice(0, 5).map(s => (
                   <Link key={s.slug} href={`/sector/${s.slug}`}>

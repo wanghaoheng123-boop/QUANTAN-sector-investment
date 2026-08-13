@@ -27,12 +27,12 @@ export function TechnicalsTab({
   setKellyLoss: (v: number) => void
 }) {
   if (!data.technicals) {
-    return <p className="text-sm text-slate-500">Technicals could not be computed for this symbol.</p>
+    return <p className="text-sm text-slate-400">Technicals could not be computed for this symbol.</p>
   }
 
   return (
     <div className="space-y-6">
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-slate-400">
               Indicators use daily closes (~2y+ when available). ATR stops are <strong className="text-slate-400">2×ATR</strong> offsets — not a trade recommendation.
             </p>
 
@@ -48,7 +48,7 @@ export function TechnicalsTab({
                 ['ATR(14)', data.technicals.atr14?.toFixed(3) ?? '—'],
               ].map(([k, v]) => (
                 <div key={k} className="rounded-lg border border-slate-800 bg-slate-900/40 p-2.5">
-                  <div className="text-slate-500 text-[10px]">{k}</div>
+                  <div className="text-slate-400 text-[10px]">{k}</div>
                   <div className="font-mono text-white mt-0.5">{v}</div>
                 </div>
               ))}
@@ -115,7 +115,7 @@ export function TechnicalsTab({
                 <p className="text-xs text-slate-400 mt-2 leading-relaxed">
                   {data.ma200Regime.dipSignalExplained}
                 </p>
-                <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
+                <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
                   {data.ma200Regime.forwardReturnContext}
                 </p>
                 <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-2 text-[10px] text-slate-400">
@@ -182,19 +182,19 @@ export function TechnicalsTab({
                 <table className="w-full text-xs font-mono text-slate-300">
                   <tbody>
                     <tr className="border-b border-slate-800/60">
-                      <td className="py-1 text-slate-500">P</td>
+                      <td className="py-1 text-slate-400">P</td>
                       <td className="text-right">{data.pivots.pivot.toFixed(2)}</td>
-                      <td className="pl-4 text-slate-500">R1</td>
+                      <td className="pl-4 text-slate-400">R1</td>
                       <td className="text-right">{data.pivots.r1.toFixed(2)}</td>
-                      <td className="pl-4 text-slate-500">S1</td>
+                      <td className="pl-4 text-slate-400">S1</td>
                       <td className="text-right">{data.pivots.s1.toFixed(2)}</td>
                     </tr>
                     <tr>
-                      <td className="py-1 text-slate-500">R2</td>
+                      <td className="py-1 text-slate-400">R2</td>
                       <td className="text-right">{data.pivots.r2.toFixed(2)}</td>
-                      <td className="pl-4 text-slate-500">S2</td>
+                      <td className="pl-4 text-slate-400">S2</td>
                       <td className="text-right">{data.pivots.s2.toFixed(2)}</td>
-                      <td className="pl-4 text-slate-500">R3/S3</td>
+                      <td className="pl-4 text-slate-400">R3/S3</td>
                       <td className="text-right">
                         {data.pivots.r3.toFixed(2)} / {data.pivots.s3.toFixed(2)}
                       </td>
@@ -218,7 +218,7 @@ export function TechnicalsTab({
 
             <div className="rounded-xl border border-slate-700 p-4 space-y-3">
               <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-widest">Extended analytics (5y history)</h3>
-              {advLoading && <p className="text-xs text-slate-500">Loading win rate & beta proxy…</p>}
+              {advLoading && <p className="text-xs text-slate-400">Loading win rate & beta proxy…</p>}
               {adv && (
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs font-mono text-slate-300">
                   <div>Win rate (~252d): {adv.winRate252d != null ? fmtPct(adv.winRate252d) : '—'}</div>
@@ -233,7 +233,7 @@ export function TechnicalsTab({
 
             <div className="rounded-xl border border-blue-500/25 bg-blue-950/10 p-4 space-y-3">
               <h3 className="text-xs font-semibold text-blue-300 uppercase tracking-widest">Kelly calculator (education)</h3>
-              <p className="text-[10px] text-slate-500">
+              <p className="text-[10px] text-slate-400">
                 f* = p − (1−p)/b with b = avgWin/avgLoss. Shown: <strong className="text-slate-400">half-Kelly</strong>. Real strategies need transaction costs and correlation across bets.
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

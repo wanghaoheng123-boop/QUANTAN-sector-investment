@@ -38,7 +38,7 @@ export function DataFreshnessIndicator({ quoteTime, compact = false, label }: Pr
   if (quoteTime == null) {
     return (
       <span
-        className="inline-flex items-center gap-1.5 text-[10.5px] text-slate-500"
+        className="inline-flex items-center gap-1.5 text-[10.5px] text-slate-400"
         title="Data timestamp unknown"
         role="status"
       >

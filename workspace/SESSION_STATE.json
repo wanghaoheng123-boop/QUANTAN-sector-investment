@@ -2,8 +2,8 @@
   "schema_version": "1.1",
   "project": "QUANTAN-sector-investment",
   "created": "2026-04-28T09:40:00Z",
-  "last_updated": "2026-08-02T18:00:00.000Z",
-  "active_agent": "claude opus-5 (2026-08-02: FIRST-EVER 4/4 GREEN mutation gate verified on two consecutive runs incl. a scheduled Sunday; continue-on-error removed so the gate now actually gates)",
+  "last_updated": "2026-08-14T01:20:00.000Z",
+  "active_agent": "claude opus-5 (2026-08-14: interface review + reform — 3 orphaned pages made reachable, mobile header 211px -> 57px, 136 -> 0 contrast failures on /, first prefers-reduced-motion support)",
   "prod_bug_fix_2026_07_01": {
     "B-2": "News fetch broken by yahoo-finance2 SearchResult schema drift (yf.search validation threw → news silently dropped + 66 prod errors on /api/briefs since 2026-04-03). FOUND via Vercel get_runtime_errors. FIXED with validateResult:false on the 4 news-search callers (mirrors options/chain.ts precedent) → PR #82 → main 2e6137c. LIVE-VERIFIED: /api/briefs now 200 with full news feed (was empty); 0 SearchResult validation logs on new deploy dpl_D29j.",
     "method_note": "Empirical bug-finding via Vercel runtime-errors/logs is high-signal — surfaced a real 3-month-old LIVE issue the static inspection didn't (it was a caught-and-logged error, invisible to tsc/tests/benchmark). Consider a runtime-errors sweep as a standing step."
@@ -324,5 +324,39 @@
     "swing_did_NOT_recur": "The 2026-08-02 SCHEDULED (Sunday) run reported quant-indicators 86.83 with indicators.ts 90.51 and multiTimeframe.ts 98.82 — the HIGH mode. Every previous Sunday run gave 74.16/63.78. This is the exact discriminating diagnostic that was put on file, and it came back clean. IMPORTANT: do NOT record this as fixed. Nothing in #133-#136 targeted indicators.ts or multiTimeframe.ts, so the cause remains UNKNOWN and the swing may be latent rather than gone. Evidence is one Sunday. If it returns, the discriminating experiment is unchanged: one dispatch with coverageAnalysis:'all' or fileParallelism:false.",
     "gate_enforced": "`continue-on-error: true` REMOVED from .github/workflows/stryker-weekly.yml — it carried the note 'until the >=70% baseline holds on every shard', and that precondition is now met. Stryker already exits non-zero via `break: 70`, so a sub-70 shard now fails the workflow for real. `fail-fast: false` is retained so all four shards still report on a failure (needed for diagnosis). Margins are thin on backtest (+1.02) and options (+1.25) — that is the intent: a real regression should break the build instead of silently drifting.",
     "journey": "backtest 31.22 -> 58.69 -> 63.50 -> 69.99 -> 71.02; options 62.25 -> 71.25; quant-rest 53.80 -> 75.14; quant-indicators 60.49 -> 86.83."
+  },
+  "interface_review_2026_08_14": {
+    "directive": "owner: 'find out error, room for improvements, detail design and interface reform to make it easier to use and make sure that there is no error or bug.'",
+    "report": "reviews/INTERFACE-REVIEW-2026-08-14.md",
+    "branch": "claude/error-review-interface-91806b (committed; NOT pushed/PR'd/deployed — the directive carried no merge instruction)",
+    "baseline_was_green": "tsc clean; vitest 1354 passed / 17 DB-gated skips; all 16 page routes 200 locally; Vercel runtime errors over 7d = 1 group, the known NEXTAUTH_SECRET env item.",
+    "findings": {
+      "C-1_CRITICAL_owner_env": "NEXTAUTH_SECRET still unset in production. First seen 2026-07-28, still firing 2026-08-12 on dpl_6ChCoZ6W1YjLXhJ846Q9HncYxNNU. Sessions invalidated on every cold start. Repo cannot fix it.",
+      "F-IA-1_HIGH": "THREE SHIPPED PAGES HAD ZERO WAY IN. Link-graph sweep over app/+components/: /portfolio had 0 inbound links; /portfolio/factor-attribution and /risk/scenarios were linked ONLY from it, so they inherited the orphaning. All 3 return 200 and render. /backtest had exactly one mid-page link on the home page while KeyboardShortcuts already bound `g b` to it as a first-class destination.",
+      "F-UI-1_HIGH": "Sticky header measured 211 px at 375x812 = 26% of the viewport, on every page. The flex-wrap row collapsed into five stacked bands. Adding the missing destinations to it would have made it worse.",
+      "F-A11Y-1_HIGH": "136 WCAG 1.4.3 failures on / alone. 105 of them trace to ONE token: text-slate-500 (259 occurrences, 53 files) at 3.07:1 on slate-800 and 4.19:1 on the page bg. The primary CTA (white on amber-600) was 3.19:1. This closes NEW-C-5, which had been deferred as 'owner-gated design decision' — this directive IS that decision.",
+      "F-A11Y-2_MEDIUM": "ZERO prefers-reduced-motion support anywhere in the codebase, alongside four infinite animations. The 50s price marquee could only be paused by :hover — no keyboard or touch path (WCAG 2.2.2 Level A). Its doubled item list was also announced twice by screen readers (no aria-hidden on the duplicate half).",
+      "F-UX-1_LOW": "The `?` shortcuts overlay had no visible affordance at all. Two hardcoded NEW badges with no expiry (200MA since May)."
+    },
+    "fixed": "F-IA-1 (components/SiteNav.tsx = new SSOT for destinations: 4 primary + Research/Portfolio disclosure menus on desktop, modal drawer below lg, aria-current everywhere; Breadcrumbs branches for the 3 new routes; `g p`/`g r` shortcuts). F-UI-1 (single 56 px row at every breakpoint; search hint moved out of layout flow). F-A11Y-1 (slate-500 -> slate-400 global swap + CTA/skip-link amber fix + 3 real slate-700 content blocks). F-A11Y-2 (prefers-reduced-motion block; real pause button; aria-hidden on the duplicated marquee half). F-UX-1 (header ? button via a window event).",
+    "verification": {
+      "gates": "tsc clean; vitest 1376 passed / 106 files (+22 new); production `next build` SUCCEEDS (all 16 pages + 27 API routes).",
+      "header": "211 px -> 57 px at 375x812 (26% -> 7%). One row at 1024 (19 px slack) and 1280 (101 px slack); zero horizontal overflow at both.",
+      "contrast": "/ 136 -> 0. /backtest, /desk, /portfolio, /stock/AAPL all 0 (no before-numbers measured for those four — post-fix state only). Honest split: ~113 recoloured, ~23 were decorative separators now aria-hidden (a scope change, not a contrast improvement).",
+      "cta": "white-on-amber-600 3.19:1 -> slate-950-on-amber-500 9.39:1.",
+      "ia": "Mobile drawer live-asserted: aria-expanded=true, body scroll lock, initial focus on Close, all 11 destinations present. Desktop Portfolio disclosure: opens with 3 links, Escape closes + returns focus. /portfolio breadcrumb now renders Home/Portfolio (was suppressed).",
+      "snapshots": "2 DOM-shape snapshots in QuantLabPanel.test.tsx failed on the token swap — exactly the intended substitution, nothing else — and were regenerated. The snapshot did its job."
+    },
+    "regression_guard": "__tests__/components/SiteNav.test.tsx walks app/**/page.tsx and asserts every static top-level route has a nav entry, with an explicit exemption set. FILESYSTEM-DRIVEN, not a hand-maintained list — a future page that ships without a way in fails CI instead of silently becoming an orphan.",
+    "stryker_unaffected": "All edits are in app/ and components/, both excluded from stryker.conf.mjs. No lib/ module changed, so the thin backtest (+1.02) and options (+1.25) margins are untouched.",
+    "env_notes_corrected": [
+      "`npm run dev` is NOT broken on the worktree — first boot just takes 5+ minutes on the Google Drive FUSE mount before the port binds. .claude/launch.json (gitignored, not in the diff) invokes `node node_modules/next/dist/bin/next dev` directly.",
+      "The memory note 'jsdom tests are CI-only on this machine' is STALE — the component suite runs locally (6 files / 26 tests before this wave)."
+    ],
+    "deferred_owner_gated": "Sector-card copy (Prior:/Last:/Move scale), the '6/13 streams' implementation detail in the LIVE badge, the two stale NEW badges, and a multiplexed /api/stream to replace 13 concurrent EventSource per dashboard viewer (NOT a prod bug — prod is HTTP/2, verified — but 13 concurrent function invocations per viewer and a materially degraded local dev experience under the HTTP/1.1 six-connection cap).",
+    "owner_actions": [
+      "CRITICAL: set NEXTAUTH_SECRET in the Vercel project env (C-1).",
+      "Merge/deploy decision — nothing pushed."
+    ]
   }
 }

@@ -54,10 +54,10 @@ export default function QuantLabPanel({ ticker }: { ticker: string }) {
         <div>
           <div className="flex items-center gap-2">
             <span className="text-[10px] uppercase tracking-[0.2em] text-blue-400/90 font-semibold">Quant Lab</span>
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-500 font-mono">{ticker}</span>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 font-mono">{ticker}</span>
           </div>
           <h2 className="text-lg font-bold text-white mt-1">{data?.narrative?.name ?? ticker}</h2>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <p className="text-xs text-slate-400 mt-0.5">
             {data?.narrative?.sector}
             {data?.narrative?.industry ? ` · ${data.narrative.industry}` : ''}
           </p>

@@ -66,7 +66,7 @@ export default function IndicatorPanel({
 }: IndicatorPanelProps) {
   return (
     <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-4 w-full">
-      <h3 className="text-xs font-medium text-slate-500 uppercase tracking-widest mb-3">{title}</h3>
+      <h3 className="text-xs font-medium text-slate-400 uppercase tracking-widest mb-3">{title}</h3>
 
       <div className="space-y-3">
         {/* EMA Group */}
@@ -129,7 +129,7 @@ export default function IndicatorPanel({
                   <span className={`w-2 h-2 rounded-full ${on ? d.dotColor : 'bg-slate-700'} transition-colors duration-200 shrink-0`} aria-hidden="true" />
                   <span className={`w-5 h-0.5 ${d.color} inline-block rounded transition-all duration-200 ${!on ? 'opacity-30' : 'opacity-100'}`} aria-hidden="true" />
                   <span className="flex-1">{d.label}</span>
-                  <span className={`text-[9px] ml-2 transition-opacity duration-200 ${on ? 'text-cyan-400/70' : 'text-slate-700'}`}>
+                  <span className={`text-[9px] ml-2 transition-opacity duration-200 ${on ? 'text-cyan-400/70' : 'text-slate-400'}`}>
                     {on ? 'ON' : 'OFF'}
                   </span>
                 </button>

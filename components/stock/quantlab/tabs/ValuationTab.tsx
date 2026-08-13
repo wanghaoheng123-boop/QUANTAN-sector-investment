@@ -35,7 +35,7 @@ export function ValuationTab({
 }) {
   return (
     <div className="space-y-6">
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-slate-400">
               Adjust growth and discount assumptions; the server recomputes DCF scenarios and volatility-adaptive bands. This mirrors the <em>bear / base / bull</em> tables in your QUANTAN memos — not a single “true” fair value.
             </p>
 
@@ -58,7 +58,7 @@ export function ValuationTab({
             <div className="rounded-xl border border-slate-800 overflow-hidden">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="bg-slate-900/80 text-left text-xs text-slate-500 uppercase tracking-wider">
+                  <tr className="bg-slate-900/80 text-left text-xs text-slate-400 uppercase tracking-wider">
                     <th className="p-3">Scenario</th>
                     <th className="p-3 text-right font-mono">Implied / sh</th>
                   </tr>
@@ -88,17 +88,17 @@ export function ValuationTab({
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
               <div className="rounded-lg border border-slate-800 p-3">
-                <div className="text-slate-500">DCF base anchor</div>
+                <div className="text-slate-400">DCF base anchor</div>
                 <div className="font-mono text-white mt-1">{data.anchors.dcfBase != null ? `$${data.anchors.dcfBase.toFixed(2)}` : '—'}</div>
               </div>
               <div className="rounded-lg border border-slate-800 p-3">
-                <div className="text-slate-500">Analyst mean target</div>
+                <div className="text-slate-400">Analyst mean target</div>
                 <div className="font-mono text-white mt-1">
                   {data.anchors.analystTarget != null ? `$${data.anchors.analystTarget.toFixed(2)}` : '—'}
                 </div>
               </div>
               <div className="rounded-lg border border-slate-800 p-3">
-                <div className="text-slate-500">Forward EPS × P/E heuristic</div>
+                <div className="text-slate-400">Forward EPS × P/E heuristic</div>
                 <div className="font-mono text-white mt-1">
                   {data.anchors.forwardEarningsHeuristic != null
                     ? `$${data.anchors.forwardEarningsHeuristic.toFixed(2)}`

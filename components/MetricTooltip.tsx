@@ -74,7 +74,7 @@ export function MetricTooltip({ metricKey, label, content, compact = false }: Pr
         }}
         onFocus={() => setOpen(true)}
         onBlur={() => setOpen(false)}
-        className="text-slate-500 hover:text-cyan-400 transition-colors focus:outline-none focus:ring-1 focus:ring-cyan-500 rounded ml-1"
+        className="text-slate-400 hover:text-cyan-400 transition-colors focus:outline-none focus:ring-1 focus:ring-cyan-500 rounded ml-1"
         aria-label={`Explain ${displayLabel}`}
         aria-expanded={open}
       >
@@ -92,13 +92,13 @@ export function MetricTooltip({ metricKey, label, content, compact = false }: Pr
             <>
               <span className="block text-[11px] text-slate-300 leading-relaxed mb-1.5">{meta.definition}</span>
               <span className="block text-[10.5px] text-slate-400 mb-1">
-                <span className="text-slate-500 font-medium">Range: </span>{meta.range}
+                <span className="text-slate-400 font-medium">Range: </span>{meta.range}
               </span>
               <span className="block text-[10.5px] text-amber-200/90 leading-relaxed mt-1.5 pt-1.5 border-t border-slate-700/50">
                 <span className="text-amber-400 font-medium">How to use: </span>{meta.howToUse}
               </span>
               {meta.source && (
-                <span className="block text-[9.5px] text-slate-500 mt-1.5 italic">Source: {meta.source}</span>
+                <span className="block text-[9.5px] text-slate-400 mt-1.5 italic">Source: {meta.source}</span>
               )}
             </>
           ) : (

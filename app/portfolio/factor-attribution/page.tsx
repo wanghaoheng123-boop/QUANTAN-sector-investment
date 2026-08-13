@@ -23,7 +23,7 @@ export default function FactorAttributionPage() {
           </li>
         ))}
       </ul>
-      <p className="text-xs text-slate-500">
+      <p className="text-xs text-slate-400">
         Alpha (daily): {attr.alpha.toFixed(5)} · R²: {attr.rSquared != null ? attr.rSquared.toFixed(2) : 'N/A (multivariate OLS deferred)'}
       </p>
     </main>

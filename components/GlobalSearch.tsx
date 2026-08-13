@@ -174,11 +174,13 @@ export default function GlobalSearch() {
 
   const showRecent = isOpen && query.trim().length === 0 && recentSearches.length > 0
   const showResults = isOpen && query.trim().length > 0
+  // Keep the dropdown clear of the absolutely-positioned error banner (F-UI-1).
+  const dropdownOffset = fetchError ? 'mt-7' : 'mt-1'
 
   return (
     <div ref={wrapperRef} className="relative w-full max-w-md">
       <div className="relative flex items-center">
-        <div className="absolute left-3 text-slate-500 pointer-events-none">
+        <div className="absolute left-3 text-slate-400 pointer-events-none">
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
@@ -202,26 +204,39 @@ export default function GlobalSearch() {
           {loading ? (
             <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
           ) : (
-            <kbd className="hidden sm:flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-mono text-slate-500 bg-slate-800 border border-slate-700 rounded">
+            <kbd className="hidden sm:flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-mono text-slate-400 bg-slate-800 border border-slate-700 rounded">
               <span className="text-xs">⌘</span>K
             </kbd>
           )}
         </div>
       </div>
 
-      <p className="text-[10px] text-slate-400 mt-1 px-0.5">
-        Up to {SEARCH_LIMIT} Yahoo results · symbol + Enter opens the stock page even if the list is empty
-      </p>
+      {/* 2026-08-14 (F-UI-1): the hint used to be a permanent in-flow <p>. In the
+          global header that added ~26 px to EVERY page at EVERY breakpoint — a
+          quarter of the mobile header budget spent on text nobody reads twice.
+          It is now contextual (shown while the field is focused and there is
+          nothing better to show) and absolutely positioned, so it can never
+          change the header's height. */}
+      {isOpen && !showRecent && !showResults && (
+        <p className="absolute top-full left-0 right-0 mt-1 z-[100] rounded-md border border-slate-800 bg-slate-900 px-3 py-2 text-[10px] text-slate-400 shadow-xl">
+          Up to {SEARCH_LIMIT} Yahoo results · symbol + Enter opens the stock page even if the list is empty
+        </p>
+      )}
       {fetchError && (
-        <p className="text-[10px] text-amber-500/90 mt-1 px-0.5">{fetchError}</p>
+        <p
+          role="status"
+          className="absolute top-full left-0 right-0 mt-1 z-[101] truncate rounded-md border border-amber-500/30 bg-slate-900 px-3 py-1 text-[10px] text-amber-400 shadow-xl"
+        >
+          {fetchError}
+        </p>
       )}
 
       {showRecent && (
         <div
-          className="absolute top-full left-0 right-0 mt-1 bg-slate-900 border border-slate-800 rounded-md shadow-xl overflow-hidden z-[100]"
+          className={`absolute top-full left-0 right-0 ${dropdownOffset} bg-slate-900 border border-slate-800 rounded-md shadow-xl overflow-hidden z-[100]`}
           onMouseDown={(e) => e.preventDefault()}
         >
-          <div className="px-3 py-2 text-[10px] text-slate-500 uppercase tracking-wider font-medium border-b border-slate-800">
+          <div className="px-3 py-2 text-[10px] text-slate-400 uppercase tracking-wider font-medium border-b border-slate-800">
             Recent Searches
           </div>
           <ul role="listbox" aria-label="Recent searches">
@@ -251,14 +266,14 @@ export default function GlobalSearch() {
                     </svg>
                     <div className="min-w-0">
                       <div className="text-sm font-bold text-white font-mono">{quote.symbol}</div>
-                      <div className="text-xs text-slate-500 truncate max-w-[180px]">{quote.shortname}</div>
+                      <div className="text-xs text-slate-400 truncate max-w-[180px]">{quote.shortname}</div>
                     </div>
                   </div>
                 </button>
                 <button
                   type="button"
                   onClick={(e) => handleRemoveRecent(e, quote.symbol)}
-                  className="opacity-0 group-hover:opacity-100 focus:opacity-100 p-1 mr-2 text-slate-500 hover:text-white focus:outline-none focus:ring-1 focus:ring-blue-400 rounded transition-all"
+                  className="opacity-0 group-hover:opacity-100 focus:opacity-100 p-1 mr-2 text-slate-400 hover:text-white focus:outline-none focus:ring-1 focus:ring-blue-400 rounded transition-all"
                   aria-label={`Remove ${quote.symbol} from recent searches`}
                 >
                   <svg
@@ -280,7 +295,7 @@ export default function GlobalSearch() {
 
       {showResults && (
         <div
-          className="absolute top-full left-0 right-0 mt-1 bg-slate-900 border border-slate-800 rounded-md shadow-xl overflow-hidden z-[100] max-h-96 overflow-y-auto"
+          className={`absolute top-full left-0 right-0 ${dropdownOffset} bg-slate-900 border border-slate-800 rounded-md shadow-xl overflow-hidden z-[100] max-h-96 overflow-y-auto`}
           onMouseDown={(e) => e.preventDefault()}
           role="listbox"
           aria-label="Search results"
@@ -299,7 +314,7 @@ export default function GlobalSearch() {
                       <div className="text-xs text-slate-400 truncate max-w-[200px] sm:max-w-xs">{quote.shortname}</div>
                     </div>
                     <div className="text-right shrink-0">
-                      <div className="text-xs font-mono text-slate-500">{quote.typeDisp}</div>
+                      <div className="text-xs font-mono text-slate-400">{quote.typeDisp}</div>
                       <div className="text-[10px] text-slate-400 uppercase truncate max-w-[100px]">{quote.exchange}</div>
                     </div>
                   </button>

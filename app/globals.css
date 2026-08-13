@@ -153,6 +153,63 @@ body {
   animation: fadeIn 0.5s ease-out forwards;
 }
 
+/* ---------------------------------------------------------------------------
+   Reduced motion — F-A11Y-2 (2026-08-14 interface review)
+   ---------------------------------------------------------------------------
+   Before this block the codebase had ZERO `prefers-reduced-motion` support
+   (`grep -rn "prefers-reduced-motion" app components tailwind.config.js` → 0
+   matches) while shipping four infinite animations: a 50 s full-width price
+   marquee, the skeleton shimmer, the confidence pulse, and Tailwind's own
+   `animate-spin` / `animate-pulse` / `animate-ping` utilities.
+
+   WCAG 2.3.3 Animation from Interactions (AAA) and the vestibular-disorder
+   guidance behind it both say the same thing: when the user has asked their
+   OS to reduce motion, honour it. Loading spinners are kept — but slowed and
+   made non-vestibular — because a frozen spinner reads as a hung page.
+
+   Deliberately NOT `animation: none !important` on everything: one-shot
+   entrance animations (`cardEnter`, `fadeIn`, `ringDraw`) end in their final
+   state, so collapsing them to a 1 ms duration preserves the layout while
+   removing the movement.
+   -------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  /* One-shot entrances: jump straight to the end state. */
+  .animate-card-enter,
+  .animate-fade-in,
+  .animate-confidence-ring {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+  }
+
+  /* Continuous motion that carries no information: stop it. */
+  .animate-ticker,
+  .animate-pulse-subtle {
+    animation: none !important;
+  }
+
+  /* Continuous motion that DOES carry information (work in progress):
+     keep it, but slow it down and drop the transform-based movement. */
+  .skeleton-shimmer {
+    animation-duration: 4s !important;
+  }
+
+  /* Tailwind's built-in infinite utilities. */
+  .animate-spin,
+  .animate-ping,
+  .animate-pulse,
+  .animate-bounce {
+    animation-duration: 2s !important;
+  }
+
+  /* Blanket cap on incidental transitions (hover colour fades, etc.). */
+  *,
+  *::before,
+  *::after {
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* Gradient text */
 .gradient-text {
   background: linear-gradient(135deg, #fff 0%, #94a3b8 100%);

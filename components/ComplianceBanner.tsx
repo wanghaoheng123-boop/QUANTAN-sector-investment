@@ -26,7 +26,7 @@ export default function ComplianceBanner() {
           {open ? <ChevronUp className="w-4 h-4 text-slate-400 shrink-0" /> : <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />}
         </button>
         {open && (
-          <div id="compliance-detail" className="mt-3 text-xs text-slate-500 space-y-2 leading-relaxed border-t border-slate-800/80 pt-3">
+          <div id="compliance-detail" className="mt-3 text-xs text-slate-400 space-y-2 leading-relaxed border-t border-slate-800/80 pt-3">
             <p>
               QUANTAN is a research and visualization tool. It does not route orders, hold customer funds, or provide personalized recommendations
               regulated under MiFID II, SEC RIA, or equivalent regimes unless you separately engage a licensed entity.

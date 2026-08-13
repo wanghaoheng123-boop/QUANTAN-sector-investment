@@ -322,7 +322,7 @@ export default function KLineChart({
             className={`px-2.5 py-1 rounded text-[11px] font-mono font-medium transition-all ${
               selectedTimeframe === tf
                 ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40'
-                : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/50 border border-transparent'
+                : 'text-slate-400 hover:text-slate-300 hover:bg-slate-800/50 border border-transparent'
             }`}
           >
             {tf}
@@ -331,7 +331,7 @@ export default function KLineChart({
         <div className="ml-auto flex items-center gap-2">
           {/* VP hint */}
           <span className="text-[10px] text-slate-400 font-mono">VP</span>
-          <span className="text-[10px] text-slate-700">|</span>
+          <span className="text-[10px] text-slate-700" aria-hidden="true">|</span>
           {/* Crosshair OHLCV display */}
           {crosshairData ? (
             <div className="flex items-center gap-3 text-[10px] font-mono">
@@ -370,7 +370,7 @@ export default function KLineChart({
           {isUp ? '+' : ''}{chgPct}%
         </span>
         {volStr && (
-          <span className="text-xs font-mono text-slate-500 border-l border-slate-700 pl-2">
+          <span className="text-xs font-mono text-slate-400 border-l border-slate-700 pl-2">
             Vol {volStr}
           </span>
         )}
@@ -433,19 +433,19 @@ export default function KLineChart({
       {showRSI && (
         <>
           <div className="relative border-t border-slate-800">
-            <div className="absolute left-3 top-1 z-10 text-[10px] text-slate-500 font-mono">
+            <div className="absolute left-3 top-1 z-10 text-[10px] text-slate-400 font-mono">
               RSI(14) {latestRsi != null ? latestRsi.toFixed(1) : '—'}
             </div>
             <div ref={rsiRef} className="w-full overflow-hidden" />
           </div>
           <div className="relative border-t border-slate-800">
-            <div className="absolute left-3 top-1 z-10 text-[10px] text-slate-500 font-mono">
+            <div className="absolute left-3 top-1 z-10 text-[10px] text-slate-400 font-mono">
               MACD(12,26,9)
             </div>
             <div ref={macdRef} className="w-full overflow-hidden" />
           </div>
           <div className="relative border-t border-slate-800">
-            <div className="absolute left-3 top-1 z-10 text-[10px] text-slate-500 font-mono">
+            <div className="absolute left-3 top-1 z-10 text-[10px] text-slate-400 font-mono">
               ATR(14) {latestAtr14 != null ? `$${latestAtr14.toFixed(2)}` : '—'}
             </div>
             <div ref={atrRef} className="w-full rounded-b-lg overflow-hidden" />

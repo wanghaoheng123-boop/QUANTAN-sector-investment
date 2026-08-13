@@ -272,7 +272,7 @@ export default function HomePage() {
                 : 'CONNECTING'}
             <span className="text-slate-400">·</span>
             {lastUpdate ? `Updated ${lastUpdate.toLocaleTimeString()}` : 'Awaiting first tick…'}
-            <span className="ml-1 text-slate-500 font-mono text-[10px]">
+            <span className="ml-1 text-slate-400 font-mono text-[10px]">
               {Object.values(live.connections).filter(Boolean).length}/{live.active} streams
             </span>
           </div>
@@ -298,7 +298,7 @@ export default function HomePage() {
             </div>
             <Link
               href="/backtest"
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-amber-600 hover:bg-amber-500 text-white text-sm font-semibold rounded-xl transition-colors shadow-lg shadow-amber-900/40"
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 text-sm font-semibold rounded-xl transition-colors shadow-lg shadow-amber-900/40"
             >
               <span>View Backtest</span>
               <span>→</span>
@@ -311,7 +311,7 @@ export default function HomePage() {
           <div className="flex items-center justify-between mb-5">
             <div>
               <h2 id="section-top-signals" className="text-lg font-bold text-white">Largest session moves</h2>
-              <p className="text-xs text-slate-500 mt-0.5">From Yahoo change % (normalized). UP/DOWN = vs prior close — not buy/sell advice.</p>
+              <p className="text-xs text-slate-400 mt-0.5">From Yahoo change % (normalized). UP/DOWN = vs prior close — not buy/sell advice.</p>
             </div>
             <Link href="/briefs" className="text-sm text-blue-400 hover:text-blue-300 transition-colors">
               View all briefs →
@@ -343,7 +343,7 @@ export default function HomePage() {
                 {stat.value}
                 {stat.of && <span className="text-slate-400 text-base font-normal">/{stat.of}</span>}
               </div>
-              <div className="text-xs text-slate-500 mt-1">{stat.label}</div>
+              <div className="text-xs text-slate-400 mt-1">{stat.label}</div>
             </div>
           ))}
         </section>
@@ -353,7 +353,7 @@ export default function HomePage() {
           <div className="flex items-center justify-between mb-4">
             <div>
               <h2 id="section-market-breadth" className="text-sm font-bold text-white">Market Breadth</h2>
-              <p className="text-[10px] text-slate-500 mt-0.5">Session direction distribution across all sectors</p>
+              <p className="text-[10px] text-slate-400 mt-0.5">Session direction distribution across all sectors</p>
             </div>
             <div className="flex items-center gap-4 text-[10px] font-mono">
               <div className="flex items-center gap-1.5">
@@ -436,7 +436,7 @@ export default function HomePage() {
           <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
             <div>
               <h2 id="section-all-sectors" className="text-lg font-bold text-white">All Sectors</h2>
-              <p className="text-xs text-slate-500 mt-0.5">Click any sector to view K-line chart, dark pool data, and signals</p>
+              <p className="text-xs text-slate-400 mt-0.5">Click any sector to view K-line chart, dark pool data, and signals</p>
             </div>
             <div className="flex gap-2 flex-wrap">
               {['ALL', 'BUY', 'SELL', 'HOLD'].map((f) => (
@@ -472,7 +472,7 @@ export default function HomePage() {
           <div className="flex items-center justify-between mb-5">
             <div>
               <h2 id="section-latest-news" className="text-lg font-bold text-white">Latest Financial News</h2>
-              <p className="text-xs text-slate-500 mt-0.5">
+              <p className="text-xs text-slate-400 mt-0.5">
                 {newsLoading ? 'Loading latest news...' : `Live from Yahoo Finance · ${newsBriefs.length} articles`}
               </p>
             </div>
@@ -543,10 +543,10 @@ export default function HomePage() {
                       <h3 className="text-base font-semibold text-white group-hover:text-slate-200 mb-1.5 leading-snug line-clamp-2">
                         {brief.title}
                       </h3>
-                      <p className="text-sm text-slate-500 line-clamp-2">{brief.summary}</p>
+                      <p className="text-sm text-slate-400 line-clamp-2">{brief.summary}</p>
                       <div className="flex flex-wrap gap-1.5 mt-2.5">
                         {brief.tags.slice(0, 4).map(tag => (
-                          <span key={tag} className="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-500">{tag}</span>
+                          <span key={tag} className="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-400">{tag}</span>
                         ))}
                       </div>
                     </div>
@@ -557,7 +557,7 @@ export default function HomePage() {
             </div>
           ) : (
             <div className="rounded-xl border border-slate-800 p-8 text-center">
-              <p className="text-slate-500">No news available at the moment. Check back shortly.</p>
+              <p className="text-slate-400">No news available at the moment. Check back shortly.</p>
             </div>
           )}
         </section>
@@ -574,7 +574,7 @@ export default function HomePage() {
               <div key={i} className="text-center space-y-2 p-4 rounded-xl border border-slate-800 hover:border-amber-800/40 hover:bg-amber-500/5 transition-all">
                 <div className="text-2xl">{item.icon}</div>
                 <div className="font-semibold text-white text-sm">{item.title}</div>
-                <div className="text-xs text-slate-500 leading-relaxed">{item.desc}</div>
+                <div className="text-xs text-slate-400 leading-relaxed">{item.desc}</div>
               </div>
             ))}
           </div>

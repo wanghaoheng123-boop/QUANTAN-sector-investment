@@ -306,8 +306,8 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
               </div>
               <div>
                 <div className="flex items-center gap-2 mb-0.5">
-                  <Link href="/" className="text-xs text-slate-500 hover:text-slate-400">Markets</Link>
-                  <span className="text-slate-700 text-xs">/</span>
+                  <Link href="/" className="text-xs text-slate-400 hover:text-slate-200">Markets</Link>
+                  <span className="text-slate-700 text-xs" aria-hidden="true">/</span>
                   <span className="text-xs text-slate-400">Individual Stock</span>
                 </div>
                 <h1 className="text-2xl font-bold text-white tracking-wide">{ticker}</h1>
@@ -325,7 +325,7 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
                   <div className={`text-sm font-mono ${isUp ? 'text-green-400' : 'text-red-400'}`}>
                     {isUp ? '▲' : '▼'} {formatSignedNumber(quote.change)} ({Math.abs(quote.changePct).toFixed(2)}%)
                   </div>
-                  <div className="text-xs text-slate-500 mt-1 font-mono">Market Cap: {quote.marketCap}</div>
+                  <div className="text-xs text-slate-400 mt-1 font-mono">Market Cap: {quote.marketCap}</div>
                   {/* Phase 14 wave 36: real-time stream status pill. */}
                   <div className="flex items-center justify-end gap-2 mt-1">
                     <span
@@ -396,7 +396,7 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
                 aria-controls={`panel-${tab}`}
                 tabIndex={activeTab === tab ? 0 : -1}
                 onClick={() => setActiveTab(tab)}
-                className={`px-3 sm:px-4 py-1.5 text-xs font-medium rounded-md transition-all ${activeTab === tab ? 'bg-slate-700 text-white' : 'text-slate-500 hover:text-slate-300'}`}
+                className={`px-3 sm:px-4 py-1.5 text-xs font-medium rounded-md transition-all ${activeTab === tab ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-slate-300'}`}
               >
                 {label}
               </button>
@@ -409,7 +409,7 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
                 {STOCK_CHART_RANGES.map((r) => (
                   <button key={r} onClick={() => setActiveRange(r)}
                     aria-pressed={activeRange === r}
-                    className={`px-2.5 py-1 text-[11px] rounded-md transition-all ${activeRange === r ? 'bg-slate-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>
+                    className={`px-2.5 py-1 text-[11px] rounded-md transition-all ${activeRange === r ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-300'}`}>
                     {r}
                   </button>
                 ))}
@@ -418,7 +418,7 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
                 {STOCK_INDICATOR_PRESETS.map(([val, label]) => (
                   <button key={val} type="button" onClick={() => { setActiveIndicator(val); setVis(buildVisFromIndicatorPreset(val)) }}
                     aria-pressed={activeIndicator === val}
-                    className={`px-2.5 py-1 text-[11px] rounded-md transition-all ${activeIndicator === val ? 'bg-slate-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>
+                    className={`px-2.5 py-1 text-[11px] rounded-md transition-all ${activeIndicator === val ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-300'}`}>
                     {label}
                   </button>
                 ))}
@@ -438,7 +438,7 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
                 <div role="tabpanel" id="panel-chart" aria-labelledby="tab-chart" className="bg-slate-900/60 rounded-2xl border border-slate-800 p-4 shadow-xl">
                   <div className="flex items-center justify-between mb-3">
                     <span className="text-sm font-semibold text-white">{ticker} · Advanced Technicals</span>
-                    <div className="flex items-center gap-3 text-xs text-slate-500 font-mono">
+                    <div className="flex items-center gap-3 text-xs text-slate-400 font-mono">
                       {isStockIntradayPollRange(activeRange) && (
                         <span className="text-green-400/60">
                           ● REFRESHES EVERY {CHART_POLL_MS(activeRange) / 1000}s
@@ -453,12 +453,12 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
                   </div>
                   {loading && candles.length === 0 ? (
                     <div className="h-[480px] bg-slate-800/20 rounded-xl animate-pulse flex flex-col items-center justify-center border border-slate-800/50">
-                      <span className="text-slate-500 text-sm font-mono mb-2">Connecting to Data Feed...</span>
+                      <span className="text-slate-400 text-sm font-mono mb-2">Connecting to Data Feed...</span>
                     </div>
                   ) : chartError ? (
                     <div className="h-[480px] bg-slate-800/10 rounded-xl flex flex-col items-center justify-center gap-3 border border-dashed border-amber-500/30">
                       <span className="text-amber-400/90 text-sm font-medium">Chart unavailable</span>
-                      <p className="text-slate-500 text-xs font-mono max-w-md text-center px-4">{chartError}</p>
+                      <p className="text-slate-400 text-xs font-mono max-w-md text-center px-4">{chartError}</p>
                       <button
                         type="button"
                         onClick={() => fetchChartData(activeRange)}
@@ -632,7 +632,7 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
               )}
 
               <div className="bg-slate-900/40 rounded-2xl border border-slate-800 p-6">
-                <h3 className="text-xs font-medium text-slate-500 uppercase tracking-widest mb-4">Session snapshot</h3>
+                <h3 className="text-xs font-medium text-slate-400 uppercase tracking-widest mb-4">Session snapshot</h3>
                 <div className="space-y-4">
                   <div className="flex justify-between items-center border-b border-slate-800/50 pb-2">
                     <span className="text-sm text-slate-400">1d change</span>
@@ -642,7 +642,7 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
                       </span>
                     ) : <span className="text-sm text-slate-400">—</span>}
                   </div>
-                  <p className="text-xs text-slate-500 leading-relaxed">
+                  <p className="text-xs text-slate-400 leading-relaxed">
                     Open <strong className="text-slate-400">Quant Lab</strong> for live fundamentals, DCF bear/base/bull, volatility-aware buy/sell bands, and Codex-style allocator checklists (not trade advice).
                   </p>
                 </div>
@@ -650,16 +650,16 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
 
               {darkPoolPrints.length > 0 && (
                 <div>
-                  <h3 className="text-xs font-medium text-slate-500 uppercase tracking-widest mb-3">Dark Pool Summary</h3>
+                  <h3 className="text-xs font-medium text-slate-400 uppercase tracking-widest mb-3">Dark Pool Summary</h3>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="bg-slate-900/60 rounded-xl p-3.5 border border-slate-800">
-                      <div className="text-xs text-slate-500 mb-1">Total Block Vol</div>
+                      <div className="text-xs text-slate-400 mb-1">Total Block Vol</div>
                       <div className="text-lg font-bold text-white font-mono">
                         {formatCompactNumber(darkPoolPrints.reduce((s, p) => s + p.size, 0))}
                       </div>
                     </div>
                     <div className="bg-slate-900/60 rounded-xl p-3.5 border border-slate-800">
-                      <div className="text-xs text-slate-500 mb-1">Bullish Prints</div>
+                      <div className="text-xs text-slate-400 mb-1">Bullish Prints</div>
                       <div className="text-lg font-bold text-green-400 font-mono">
                         {darkPoolPrints.filter(p => p.sentiment === 'BULLISH').length}
                         <span className="text-slate-400 text-sm font-normal">/{darkPoolPrints.length}</span>

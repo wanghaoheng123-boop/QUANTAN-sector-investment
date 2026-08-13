@@ -71,7 +71,7 @@ export default function TradeLog({ trades, sectorColors }: Props) {
           </div>
         </div>
         <div className="bg-slate-900/60 rounded-xl p-4 border border-slate-800">
-          <div className="text-xs text-slate-500 mb-1">All Trades</div>
+          <div className="text-xs text-slate-400 mb-1">All Trades</div>
           <div className="text-xl font-bold font-mono text-white">{filtered.length}</div>
           <div className="text-[10px] text-slate-400 mt-1">
             {new Set(filtered.map(t => t.ticker)).size} instruments
@@ -115,7 +115,7 @@ export default function TradeLog({ trades, sectorColors }: Props) {
               {['Date', 'Ticker', 'Sector', 'Action', 'Entry Price', 'Exit Price', 'PnL %', 'Shares', 'Value', 'Regime', 'Signal', 'Conf%', 'Reason'].map(h => {
                 const tip = HEADER_TOOLTIPS[h]
                 return (
-                  <th key={h} scope="col" className="px-3 py-2.5 text-left text-slate-500 uppercase tracking-wider font-medium">
+                  <th key={h} scope="col" className="px-3 py-2.5 text-left text-slate-400 uppercase tracking-wider font-medium">
                     <span className="inline-flex items-center">
                       {h}
                       {tip && <MetricTooltip metricKey={tip.metricKey} content={tip.content} compact />}
@@ -146,17 +146,17 @@ export default function TradeLog({ trades, sectorColors }: Props) {
                   </td>
                   <td className="px-3 py-2.5 font-mono text-slate-400">{t.shares}</td>
                   <td className="px-3 py-2.5 font-mono text-slate-400">${t.value.toLocaleString()}</td>
-                  <td className="px-3 py-2.5 text-[10px] text-slate-500">{t.regime}</td>
-                  <td className="px-3 py-2.5 text-[10px] text-slate-500">{t.dipSignal}</td>
+                  <td className="px-3 py-2.5 text-[10px] text-slate-400">{t.regime}</td>
+                  <td className="px-3 py-2.5 text-[10px] text-slate-400">{t.dipSignal}</td>
                   <td className="px-3 py-2.5 font-mono text-slate-400">{t.confidence}</td>
-                  <td className="px-3 py-2.5 text-[10px] text-slate-500 max-w-[200px] truncate" title={t.reason}>{t.reason}</td>
+                  <td className="px-3 py-2.5 text-[10px] text-slate-400 max-w-[200px] truncate" title={t.reason}>{t.reason}</td>
                 </tr>
               )
             })}
           </tbody>
         </table>
         {filtered.length === 0 && (
-          <div className="py-12 text-center text-slate-500 text-sm">No trades found.</div>
+          <div className="py-12 text-center text-slate-400 text-sm">No trades found.</div>
         )}
         {filtered.length > 200 && (
           <div className="py-2 text-center text-[10px] text-slate-400 border-t border-slate-800">

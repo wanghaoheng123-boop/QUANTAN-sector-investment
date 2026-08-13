@@ -87,22 +87,22 @@ export default function BriefCard({ brief }: { brief: SectorBrief }) {
               >
                 {brief.changePct >= 0 ? '+' : ''}{brief.changePct.toFixed(2)}%
               </span>
-              <span className="text-sm text-slate-500 font-mono">
+              <span className="text-sm text-slate-400 font-mono">
                 {brief.change >= 0 ? '+' : ''}{brief.change.toFixed(2)}
               </span>
-              <span className="ml-auto text-xs text-slate-500 font-mono">
+              <span className="ml-auto text-xs text-slate-400 font-mono">
                 H: ${(brief.high52w ?? 0).toFixed(2)}
               </span>
             </div>
 
-            <p className="text-sm text-slate-500 line-clamp-2 mb-2">{brief.summary}</p>
+            <p className="text-sm text-slate-400 line-clamp-2 mb-2">{brief.summary}</p>
 
             {/* Key signals row */}
             {brief.signals.length > 0 && (
               <div className="flex flex-wrap gap-3 mt-2">
                 {brief.signals.slice(0, 4).map((s, i) => (
                   <span key={i} className="text-[11px] px-2 py-0.5 rounded bg-slate-800 text-slate-400">
-                    <span className="text-slate-500">{s.key}: </span>
+                    <span className="text-slate-400">{s.key}: </span>
                     <span style={{
                       color: s.impact === 'positive' ? '#00d084' : s.impact === 'negative' ? '#ff4757' : '#94a3b8'
                     }}>{s.value}</span>

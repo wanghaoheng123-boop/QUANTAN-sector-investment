@@ -83,7 +83,7 @@ export default function HeatmapPage() {
               Between exchange sessions the vendor quote usually does not move; the clock above is when we last polled, not a new auction print. Colors map fixed % buckets (0, ±1%, ±2%).
             </p>
           </div>
-          <div className="text-sm text-slate-500 font-mono">
+          <div className="text-sm text-slate-400 font-mono">
             {lastUpdate ? `Poll · ${lastUpdate.toLocaleTimeString()}` : 'Connecting...'}
           </div>
         </div>
@@ -130,14 +130,14 @@ export default function HeatmapPage() {
         
         {/* Legend */}
         <div className="flex items-center justify-end gap-1 mt-6 overflow-x-auto pb-1 max-w-full">
-          <span className="text-xs text-slate-500 mr-2">Bearish</span>
+          <span className="text-xs text-slate-400 mr-2">Bearish</span>
           <div className="w-6 h-4 bg-red-600 rounded-sm"></div>
           <div className="w-6 h-4 bg-red-700 rounded-sm"></div>
           <div className="w-6 h-4 bg-red-900 rounded-sm"></div>
           <div className="w-6 h-4 bg-green-900 rounded-sm"></div>
           <div className="w-6 h-4 bg-green-700 rounded-sm"></div>
           <div className="w-6 h-4 bg-green-600 rounded-sm"></div>
-          <span className="text-xs text-slate-500 ml-2">Bullish</span>
+          <span className="text-xs text-slate-400 ml-2">Bullish</span>
         </div>
 
       </div>

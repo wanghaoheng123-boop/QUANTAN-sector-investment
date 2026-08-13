@@ -91,7 +91,7 @@ export default function SignInButtons({
         className={`block text-center text-sm pt-2 transition-colors ${
           isDisabled
             ? 'text-slate-700 pointer-events-none'
-            : 'text-slate-500 hover:text-slate-400'
+            : 'text-slate-400 hover:text-slate-200'
         }`}
         aria-disabled={isDisabled}
         tabIndex={isDisabled ? -1 : undefined}

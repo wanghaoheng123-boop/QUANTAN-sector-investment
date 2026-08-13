@@ -66,7 +66,7 @@ function SectorCard({ sector, quote, signal }: SectorCardProps) {
           <div>
             <div className="flex items-center gap-1.5 mb-0.5">
               <span className="text-base">{sector.icon}</span>
-              <span className="text-[10px] font-mono tracking-wider text-slate-500">{sector.etf}</span>
+              <span className="text-[10px] font-mono tracking-wider text-slate-400">{sector.etf}</span>
             </div>
             <div className="text-sm font-bold text-white">{sector.name}</div>
           </div>
@@ -114,11 +114,11 @@ function SectorCard({ sector, quote, signal }: SectorCardProps) {
                 <div className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 shadow-xl whitespace-nowrap">
                   <div className="text-[10px] text-slate-400 font-mono space-y-0.5">
                     <div className="flex justify-between gap-3">
-                      <span className="text-slate-500">Prior:</span>
+                      <span className="text-slate-400">Prior:</span>
                       <span className="text-slate-300">${safeFixed(priorPrice, 2)}</span>
                     </div>
                     <div className="flex justify-between gap-3">
-                      <span className="text-slate-500">Last:</span>
+                      <span className="text-slate-400">Last:</span>
                       <span className="text-white font-medium">${safeFixed(lastPrice, 2)}</span>
                     </div>
                   </div>
@@ -126,7 +126,7 @@ function SectorCard({ sector, quote, signal }: SectorCardProps) {
                 </div>
               </div>
               <Sparkline data={sparkData} color={sector.color} width={72} height={28} />
-              <span className="text-[8px] text-slate-400 font-mono text-right group-hover/sparkline:text-slate-500 transition-colors">prior→last</span>
+              <span className="text-[8px] text-slate-400 font-mono text-right group-hover/sparkline:text-slate-200 transition-colors">prior→last</span>
             </div>
           ) : (
             <span className="text-[9px] text-slate-400 self-end">—</span>
@@ -155,7 +155,7 @@ function SectorCard({ sector, quote, signal }: SectorCardProps) {
         {/* Top holdings chips */}
         <div className="flex gap-1 flex-wrap relative">
           {sector.topHoldings.slice(0, 4).map(h => (
-            <span key={h} className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800/90 text-slate-500 font-mono">
+            <span key={h} className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800/90 text-slate-400 font-mono">
               {h}
             </span>
           ))}

@@ -94,7 +94,7 @@ function SignalCard({ signal, color, compact = false }: SignalCardProps) {
           </div>
           <span className="text-xs font-mono" style={{ color }}>{signal.confidence}%</span>
         </div>
-        <div className="text-xs text-slate-500">
+        <div className="text-xs text-slate-400">
           {signal.sector} · {signal.timeframe}
           {session ? ' · Yahoo' : ''}
         </div>
@@ -119,7 +119,7 @@ function SignalCard({ signal, color, compact = false }: SignalCardProps) {
             {session ? `${headline} SESSION` : `${config.label} SIGNAL`}
           </span>
         </div>
-        <span className="text-xs text-slate-500 bg-slate-800 px-2 py-1 rounded font-mono">{signal.timeframe}</span>
+        <span className="text-xs text-slate-400 bg-slate-800 px-2 py-1 rounded font-mono">{signal.timeframe}</span>
       </div>
 
       {/* Confidence Ring + ETF */}
@@ -168,11 +168,11 @@ function SignalCard({ signal, color, compact = false }: SignalCardProps) {
       {session ? (
         <div className="grid grid-cols-2 gap-2 mb-4">
           <div className="bg-slate-900/60 rounded-lg p-2.5 border border-slate-800">
-            <div className="text-xs text-slate-500">Last price</div>
+            <div className="text-xs text-slate-400">Last price</div>
             <div className="font-mono text-sm text-white font-semibold">${safeFixed(signal.entry, 2)}</div>
           </div>
           <div className="bg-slate-900/60 rounded-lg p-2.5 border border-slate-800">
-            <div className="text-xs text-slate-500">Session vs prior</div>
+            <div className="text-xs text-slate-400">Session vs prior</div>
             <div className="font-mono text-sm text-white font-semibold">
               {signal.sessionChangePct != null && Number.isFinite(signal.sessionChangePct)
                 ? `${signal.sessionChangePct >= 0 ? '+' : ''}${safeFixed(signal.sessionChangePct, 2)}%`
@@ -183,24 +183,24 @@ function SignalCard({ signal, color, compact = false }: SignalCardProps) {
       ) : (
         <div className="grid grid-cols-3 gap-2 mb-4">
           <div className="bg-slate-900/60 rounded-lg p-2.5 border border-slate-800">
-            <div className="text-xs text-slate-500">Entry</div>
+            <div className="text-xs text-slate-400">Entry</div>
             <div className="font-mono text-sm text-white font-semibold">${safeFixed(signal.entry, 2)}</div>
           </div>
           <div className="bg-red-950/30 rounded-lg p-2.5 border border-red-900/40">
-            <div className="text-xs text-slate-500 inline-flex items-center">
+            <div className="text-xs text-slate-400 inline-flex items-center">
               Stop Loss<MetricTooltip metricKey="atrStop" compact />
             </div>
             <div className="font-mono text-sm text-red-400 font-semibold">${safeFixed(signal.stopLoss, 2)}</div>
           </div>
           <div className="bg-green-950/30 rounded-lg p-2.5 border border-green-900/40">
-            <div className="text-xs text-slate-500">Target</div>
+            <div className="text-xs text-slate-400">Target</div>
             <div className="font-mono text-sm text-green-400 font-semibold">${safeFixed(signal.target, 2)}</div>
           </div>
         </div>
       )}
 
       {/* Risk/Reward */}
-      <div className="flex items-center justify-between text-xs text-slate-500 mb-3">
+      <div className="flex items-center justify-between text-xs text-slate-400 mb-3">
         <span className="inline-flex items-center">
           Risk/Reward Ratio<MetricTooltip metricKey="riskReward" compact />
         </span>

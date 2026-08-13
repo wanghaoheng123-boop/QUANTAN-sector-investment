@@ -82,7 +82,7 @@ export default function SectorRotationPanel() {
     return (
       <div className="text-center py-8 px-4 space-y-2">
         <p className="text-slate-400 text-sm">Sector rotation ranks are temporarily unavailable.</p>
-        <p className="text-slate-500 text-xs">
+        <p className="text-slate-400 text-xs">
           {data.excludedSectors?.length
             ? `${data.excludedSectors.length} sector ETF(s) excluded (Yahoo data thin or fetch failed). Retry in a few minutes.`
             : 'Upstream market data did not return enough history for 12-month momentum scoring.'}

@@ -120,7 +120,7 @@ export default function BtcPage() {
           </CryptoChartBoundary>
         )}
 
-        <div className="text-center text-[10px] text-slate-700 max-w-3xl mx-auto space-y-1">
+        <div className="text-center text-[10px] text-slate-400 max-w-3xl mx-auto space-y-1">
           <p>
             Spot ticker from Coinbase. OHLC from CoinGecko, Kraken REST, or Coinbase candles. Live candles via Kraken
             WebSocket when a timeframe is supported (monthly uses REST only). Derivatives metrics from Bybit/OKX — not

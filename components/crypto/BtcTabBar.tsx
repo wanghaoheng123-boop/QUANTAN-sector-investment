@@ -32,7 +32,7 @@ function BtcTabBar({ activeTab, onTabChange, activeRange, onRangeChange }: BtcTa
             aria-selected={activeTab === tab}
             onClick={() => onTabChange(tab)}
             className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all ${
-              activeTab === tab ? 'bg-slate-700 text-white' : 'text-slate-500 hover:text-slate-300'
+              activeTab === tab ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-slate-300'
             }`}
           >
             {label}
@@ -49,7 +49,7 @@ function BtcTabBar({ activeTab, onTabChange, activeRange, onRangeChange }: BtcTa
               onClick={() => onRangeChange(val)}
               aria-pressed={activeRange === val}
               className={`px-2.5 py-1 text-[11px] rounded-md transition-all ${
-                activeRange === val ? 'bg-slate-600 text-white' : 'text-slate-500 hover:text-slate-300'
+                activeRange === val ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-300'
               }`}
             >
               {label}

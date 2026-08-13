@@ -103,7 +103,7 @@ export default function LiveBriefClient({ slug, initialBrief }: { slug: string; 
 
   return (
     <article className="max-w-2xl mx-auto px-4 py-8">
-      <Link href="/briefs" className="text-xs text-slate-500 hover:text-slate-400 transition-colors">
+      <Link href="/briefs" className="text-xs text-slate-400 hover:text-slate-200 transition-colors">
         ← All Briefs
       </Link>
 
@@ -132,7 +132,7 @@ export default function LiveBriefClient({ slug, initialBrief }: { slug: string; 
               >
                 {sector?.icon} {sector?.name}
               </span>
-              <span className="text-xs text-slate-500">
+              <span className="text-xs text-slate-400">
                 {brief.lastUpdated
                   ? new Date(brief.lastUpdated).toLocaleString('en-US', {
                       weekday: 'short', month: 'short', day: 'numeric',
@@ -164,7 +164,7 @@ export default function LiveBriefClient({ slug, initialBrief }: { slug: string; 
 
             <div className="flex items-center gap-4 p-4 rounded-xl border border-slate-800 bg-slate-900/40 mb-4">
               <div>
-                <div className="text-xs text-slate-500 mb-0.5">Price</div>
+                <div className="text-xs text-slate-400 mb-0.5">Price</div>
                 <div className="text-2xl font-bold text-white font-mono">${brief.price.toFixed(2)}</div>
               </div>
               <div
@@ -177,7 +177,7 @@ export default function LiveBriefClient({ slug, initialBrief }: { slug: string; 
                 {brief.change >= 0 ? '+' : ''}{brief.change.toFixed(2)}
               </div>
               <div className="ml-auto text-right">
-                <div className="text-xs text-slate-500">52W Range</div>
+                <div className="text-xs text-slate-400">52W Range</div>
                 <div className="text-xs text-slate-400 font-mono">
                   ${(brief.low52w ?? 0).toFixed(2)} → ${(brief.high52w ?? 0).toFixed(2)}
                 </div>
@@ -201,37 +201,37 @@ export default function LiveBriefClient({ slug, initialBrief }: { slug: string; 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 {brief.peRatio !== null && (
                   <div>
-                    <div className="text-[10px] text-slate-500 mb-0.5">Trailing P/E</div>
+                    <div className="text-[10px] text-slate-400 mb-0.5">Trailing P/E</div>
                     <div className="text-sm font-mono font-semibold text-white">{brief.peRatio > 0 ? brief.peRatio.toFixed(1) : '—'}</div>
                   </div>
                 )}
                 {brief.forwardPe !== null && (
                   <div>
-                    <div className="text-[10px] text-slate-500 mb-0.5">Forward P/E</div>
+                    <div className="text-[10px] text-slate-400 mb-0.5">Forward P/E</div>
                     <div className="text-sm font-mono font-semibold text-white">{brief.forwardPe > 0 ? brief.forwardPe.toFixed(1) : '—'}</div>
                   </div>
                 )}
                 {brief.beta !== null && (
                   <div>
-                    <div className="text-[10px] text-slate-500 mb-0.5">Beta</div>
+                    <div className="text-[10px] text-slate-400 mb-0.5">Beta</div>
                     <div className="text-sm font-mono font-semibold text-white">{brief.beta.toFixed(2)}</div>
                   </div>
                 )}
                 {brief.dividendYield !== null && brief.dividendYield > 0 && (
                   <div>
-                    <div className="text-[10px] text-slate-500 mb-0.5">Dividend Yield</div>
+                    <div className="text-[10px] text-slate-400 mb-0.5">Dividend Yield</div>
                     <div className="text-sm font-mono font-semibold text-white">{(brief.dividendYield * 100).toFixed(2)}%</div>
                   </div>
                 )}
                 {brief.marketCap !== null && (
                   <div>
-                    <div className="text-[10px] text-slate-500 mb-0.5">Market Cap</div>
+                    <div className="text-[10px] text-slate-400 mb-0.5">Market Cap</div>
                     <div className="text-sm font-mono font-semibold text-white">{brief.marketCap}</div>
                   </div>
                 )}
                 {brief.analystRating !== null && (
                   <div>
-                    <div className="text-[10px] text-slate-500 mb-0.5">Analyst Rating</div>
+                    <div className="text-[10px] text-slate-400 mb-0.5">Analyst Rating</div>
                     <div className="text-sm font-mono font-semibold" style={{ color: brief.analystRating === 'BUY' ? '#00d084' : brief.analystRating === 'SELL' ? '#ff4757' : '#fbbf24' }}>
                       {brief.analystRating}
                     </div>
@@ -272,7 +272,7 @@ export default function LiveBriefClient({ slug, initialBrief }: { slug: string; 
                       >
                         {h.ticker}
                       </Link>
-                      <span className="text-xs text-slate-500 font-mono">${h.price.toFixed(2)}</span>
+                      <span className="text-xs text-slate-400 font-mono">${h.price.toFixed(2)}</span>
                     </div>
                     <span className="text-sm font-mono font-semibold" style={{ color: h.changePct >= 0 ? '#00d084' : '#ff4757' }}>
                       {h.changePct >= 0 ? '+' : ''}{h.changePct.toFixed(2)}%
@@ -303,7 +303,7 @@ export default function LiveBriefClient({ slug, initialBrief }: { slug: string; 
                           {item.title}
                         </div>
                         {item.snippet && (
-                          <div className="text-xs text-slate-500 mt-1 line-clamp-2">{item.snippet}</div>
+                          <div className="text-xs text-slate-400 mt-1 line-clamp-2">{item.snippet}</div>
                         )}
                         <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                           <span className="text-[10px] text-slate-400">{item.publisher}</span>

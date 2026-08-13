@@ -209,3 +209,45 @@ Blockers: Typecheck command cannot execute due invalid package config in `node_m
 | Env (Production) | QUANTAN_FRED_PREWARM, QUANTAN_API_KEY present (encrypted) |
 | Local pull | Skipped — `git fetch origin` failed (443 timeout); use GIT_HTTP_VERSION=1.1 when network stable |
 
+
+---
+
+### Interface review & reform — 2026-08-14 — claude opus-5
+Goal: owner — "find out error, room for improvements, detail design and interface reform to
+make it easier to use and make sure that there is no error or bug."
+Report: `reviews/INTERFACE-REVIEW-2026-08-14.md`
+Branch: `claude/error-review-interface-91806b` (committed only — the directive carried no
+merge instruction, so nothing pushed, PR'd, or deployed).
+
+Method: empirical first (Vercel runtime errors → local browser measurement), then static
+reading, with every candidate diffed against `reviews/findings-ledger.csv` so closed rows
+were not re-flagged.
+
+| ID | Sev | Finding | State |
+|---|---|---|---|
+| C-1 | CRITICAL | `NEXTAUTH_SECRET` unset in prod since 2026-07-28 — sessions die on every cold start | OWNER (env only) |
+| F-IA-1 | HIGH | `/portfolio` had **zero** inbound links; `/portfolio/factor-attribution` + `/risk/scenarios` linked only from it → all three unreachable. `/backtest` had one mid-page link | FIXED |
+| F-UI-1 | HIGH | Sticky header **211 px = 26 %** of a 375×812 viewport, five stacked bands | FIXED |
+| F-A11Y-1 | HIGH | **136** WCAG 1.4.3 failures on `/`; 105 from one token (`text-slate-500`, 259×/53 files); primary CTA 3.19:1 | FIXED (closes NEW-C-5) |
+| F-A11Y-2 | MEDIUM | Zero `prefers-reduced-motion` anywhere; 50 s marquee pausable only by `:hover` (WCAG 2.2.2 A); doubled list announced twice | FIXED |
+| F-UX-1 | LOW | `?` overlay had no visible affordance; two `NEW` badges with no expiry | FIXED (badges = owner copy call) |
+
+Verify: A=PASS (tsc clean) B=PASS (vitest 1376/106, +22 new) C=PASS (`next build` succeeds,
+16 pages + 27 API routes) D=PASS (header 211→57 px; no overflow at 1024 or 1280)
+E=PASS (contrast 136→0 on `/`; 0 on `/backtest`, `/desk`, `/portfolio`, `/stock/AAPL`)
+F=PASS (drawer + disclosure a11y asserted live: scroll lock, initial focus, Escape returns focus)
+
+Blockers: none. Two DOM-shape snapshots caught the token swap exactly as designed and were
+regenerated. Stryker untouched (all edits in `app/`+`components/`, both excluded).
+
+Lessons:
+- **A link-graph sweep is cheap and finds things no gate can.** tsc, 1354 tests, five CI
+  gates and fifteen prior inspection waves were all green while three finished pages had no
+  way in. The new guard is filesystem-driven (`__tests__/components/SiteNav.test.tsx` walks
+  `app/**/page.tsx`), so it cannot rot the way a hand-maintained list would.
+- **"Owner-gated design decision" is a state, not a verdict.** NEW-C-5 sat deferred since
+  2026-07-10; this directive was the decision it was waiting for. Re-read deferred rows
+  against the current directive instead of inheriting the old gate.
+- **Env corrections:** `npm run dev` is NOT broken on the worktree — first boot just takes
+  5+ min on the Google Drive FUSE mount. And "jsdom tests are CI-only on this machine" is
+  STALE: the component suite runs locally.
