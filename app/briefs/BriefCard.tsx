@@ -31,7 +31,7 @@ export default function BriefCard({ brief }: { brief: SectorBrief }) {
 
   const analystBadgeColor =
     brief.analystRating === 'BUY' ? '#00d084' :
-    brief.analystRating === 'SELL' ? '#ff4757' :
+    brief.analystRating === 'SELL' ? '#ff6b7a' :
     brief.analystRating === 'HOLD' ? '#fbbf24' : '#94a3b8'
 
   return (
@@ -83,7 +83,7 @@ export default function BriefCard({ brief }: { brief: SectorBrief }) {
               <span className="text-lg font-bold text-white font-mono">${brief.price.toFixed(2)}</span>
               <span
                 className="text-sm font-mono font-semibold"
-                style={{ color: brief.changePct >= 0 ? '#00d084' : '#ff4757' }}
+                style={{ color: brief.changePct >= 0 ? '#00d084' : '#ff6b7a' }}
               >
                 {brief.changePct >= 0 ? '+' : ''}{brief.changePct.toFixed(2)}%
               </span>
@@ -104,7 +104,7 @@ export default function BriefCard({ brief }: { brief: SectorBrief }) {
                   <span key={i} className="text-[11px] px-2 py-0.5 rounded bg-slate-800 text-slate-400">
                     <span className="text-slate-400">{s.key}: </span>
                     <span style={{
-                      color: s.impact === 'positive' ? '#00d084' : s.impact === 'negative' ? '#ff4757' : '#94a3b8'
+                      color: s.impact === 'positive' ? '#00d084' : s.impact === 'negative' ? '#ff6b7a' : '#94a3b8'
                     }}>{s.value}</span>
                   </span>
                 ))}

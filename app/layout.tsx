@@ -82,7 +82,7 @@ export default function RootLayout({
 
               <div className="flex-1" />
 
-              <div className="hidden sm:block w-36 md:w-48 lg:w-56 xl:w-72 shrink-0">
+              <div className="hidden sm:block w-36 md:w-48 lg:w-56 xl:w-72 min-w-0 shrink">
                 <GlobalSearch />
               </div>
               <ShortcutsButton />

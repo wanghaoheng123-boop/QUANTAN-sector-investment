@@ -19,7 +19,11 @@
   --amber-glow-strong: rgba(245, 158, 11, 0.3);
   /* Semantic colors */
   --color-up: #00d084;
-  --color-down: #ff4757;
+  /* 2026-08-14 (F-A11Y-1): was #ff6b7a — 4.38:1 on slate-800 at 10-12px,
+     just under the 4.5:1 AA floor for the small type this is used at.
+     #ff6b7a clears it while staying unmistakably "down" against
+     --color-up #00d084. Token only — no displayed value changes. */
+  --color-down: #ff6b7a;
   --color-accent-amber: #f59e0b;
   --color-accent-blue: #3b82f6;
   --color-accent-cyan: #06b6d4;
@@ -181,10 +185,16 @@ body {
     animation-iteration-count: 1 !important;
   }
 
-  /* Continuous motion that carries no information: stop it. */
+  /* Continuous motion that carries no information: stop it. The marquee then
+     rests at translateX(0) inside an overflow-hidden container, so make the
+     off-screen tickers reachable by scroll instead of unreachable. */
   .animate-ticker,
   .animate-pulse-subtle {
     animation: none !important;
+  }
+  .animate-ticker {
+    max-width: 100%;
+    overflow-x: auto;
   }
 
   /* Continuous motion that DOES carry information (work in progress):

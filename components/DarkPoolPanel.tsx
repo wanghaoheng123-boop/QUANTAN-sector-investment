@@ -62,7 +62,7 @@ export default function DarkPoolPanel({
 
   const shortColor =
     shortSignal === 'DISTRIBUTION'
-      ? '#ff4757'
+      ? '#ff6b7a'
       : shortSignal === 'ACCUMULATION'
         ? '#00d084'
         : '#94a3b8'
@@ -215,7 +215,7 @@ export default function DarkPoolPanel({
               className="h-full rounded-full transition-all duration-700"
               style={{
                 width: `${bullishPct}%`,
-                background: `linear-gradient(90deg, #ff4757 0%, ${color} 100%)`,
+                background: `linear-gradient(90deg, #ff6b7a 0%, ${color} 100%)`,
               }}
             />
           </div>

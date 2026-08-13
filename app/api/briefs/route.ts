@@ -27,7 +27,7 @@ const SECTOR_QUERY_MAP: Record<string, { name: string; tickers: string[]; color:
   'financials':        { name: 'Financials',         tickers: ['JPM', 'BAC', 'WFC', 'GS', 'MS'], color: '#10b981' },
   'healthcare':        { name: 'Healthcare',         tickers: ['LLY', 'UNH', 'JNJ', 'ABBV', 'MRK'], color: '#ec4899' },
   'consumer-discretionary': { name: 'Consumer Disc.',  tickers: ['AMZN', 'TSLA', 'HD', 'MCD', 'NKE'], color: '#f97316' },
-  'industrials':       { name: 'Industrials',       tickers: ['GE', 'CAT', 'RTX', 'UNP', 'HON'], color: '#6366f1' },
+  'industrials':       { name: 'Industrials',       tickers: ['GE', 'CAT', 'RTX', 'UNP', 'HON'], color: '#7c7ff5' },
   'communication':     { name: 'Communication',     tickers: ['META', 'GOOGL', 'NFLX', 'DIS', 'T'], color: '#8b5cf6' },
   'materials':         { name: 'Materials',          tickers: ['FCX', 'LIN', 'APD', 'NEM', 'DOW'], color: '#14b8a6' },
   'utilities':         { name: 'Utilities',          tickers: ['NEE', 'SO', 'DUK', 'AEP', 'PCG'], color: '#22c55e' },

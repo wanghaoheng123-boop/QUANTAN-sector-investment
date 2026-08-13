@@ -296,6 +296,27 @@ One row at every breakpoint. At 1280×800 the row has 101 px of slack; at
 | `/portfolio` | not measured before | **0** |
 | `/stock/AAPL` | not measured before | **0** |
 
+**A caveat on how that zero was reached.** The first pass measured `/` on the
+dev server before the live quote feed had populated, and reported 0. Re-running
+it against the **production build with data on screen** surfaced 5 more that
+the empty page could not have contained:
+
+| Element | Ratio | Fix |
+|---|---|---|
+| `ALL` / `BUY` / `SELL` / `HOLD` filter chip, selected (white on `amber-600`) | 3.19:1 | `slate-950` on `amber-500` → 9.39:1 |
+| "Run LLM Analysis" button, same defect | 3.19:1 | same |
+| `--color-down` `#ff4757` at 10–12 px on `slate-800` (15 hardcoded literals) | 4.38:1 | `#ff6b7a` → 5.32:1 |
+| `industrials` sector colour `#6366f1` | 4.47:1 | `#7c7ff5` → 5.90:1 |
+
+The lesson is worth recording: **audit a data-driven page after its data
+loads.** An empty state has fewer elements and flatters the score. The numbers
+above are post-fix, from the production build, with live quotes rendered.
+
+Both colour changes are tokens — the `#ff4757` → `#ff6b7a` swap keeps "down"
+unmistakable next to `--color-up` `#00d084`, and the legend swatch on
+`/sector/[slug]` uses the same literal so it stays consistent. No displayed
+value changes.
+
 Honest accounting of where the 136 went:
 
 * **~113** were fixed by recolouring: `text-slate-500` → `text-slate-400`
@@ -330,6 +351,25 @@ transition-duration cap.
 The marquee now has a real focusable pause button with `aria-pressed`, and the
 duplicated half carries `aria-hidden` so it is announced once, not twice.
 
+### The signed-in header — the case every screenshot missed
+
+Every measurement above is the **signed-out** state, where `SafeAuth` renders an
+81 px "Sign in" link. The old header absorbed a wider authenticated block by
+wrapping; the new single row cannot, and `h-14` would hide the overflow by
+clipping it. So the authenticated block was simulated at its widest (avatar +
+truncated account name + Sign out) and measured at every breakpoint:
+
+| Viewport | Signed-in auth block | Search absorbs | Header | Horizontal overflow |
+|---|---|---|---|---|
+| 640 | 117 px | 144 px | 57 px | **0** |
+| 768 | 117 px | 192 px | 57 px | **0** |
+| 1024 | 109 px | 224 → 209 px | 57 px | **0** |
+| 1280 (+ breadcrumbs + account name) | 203 px | 288 → 151 px | 57 px | **0** |
+
+Two changes make that work: the search wrapper is `min-w-0 shrink` rather than
+`shrink-0`, so it yields space before anything overflows, and the account name
+is gated to `xl` (it is redundant next to the avatar until there is room).
+
 ### F-IA-1 — reachability
 
 * Mobile drawer, asserted live in the browser: opens, `aria-expanded="true"`,
@@ -355,9 +395,11 @@ of quietly becoming an orphan.
   are byte-identical and no `app/api/**/route.ts` was touched. A full local
   `next build` was run anyway and succeeds. The Vercel preview build is still the
   final word for any future change to those exports.
-* **Stryker is unaffected.** All edits are in `app/` and `components/`, which are
-  excluded from the mutation config. No `lib/` module changed, so the thin
-  backtest (+1.02) and options (+1.25) margins are untouched.
+* **Stryker is unaffected — verified, not assumed.** `stryker.conf.mjs` mutates
+  exactly `lib/quant/**`, `lib/backtest/**` and `lib/options/**`. Nothing under
+  `app/` or `components/` is in scope, and the only `lib/` file this wave
+  touches is `lib/sectors.ts` (one colour literal), which is outside all three
+  globs. The thin backtest (+1.02) and options (+1.25) margins are untouched.
 * **C-1 cannot be fixed from the repo.** It is a Vercel environment variable.
 
 ---

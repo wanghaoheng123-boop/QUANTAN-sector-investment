@@ -59,7 +59,7 @@ interface SectorBrief {
 }
 
 function impactColor(impact: string): string {
-  return impact === 'positive' ? '#00d084' : impact === 'negative' ? '#ff4757' : '#94a3b8'
+  return impact === 'positive' ? '#00d084' : impact === 'negative' ? '#ff6b7a' : '#94a3b8'
 }
 
 export default function LiveBriefClient({ slug, initialBrief }: { slug: string; initialBrief: SectorBrief | null }) {
@@ -169,7 +169,7 @@ export default function LiveBriefClient({ slug, initialBrief }: { slug: string; 
               </div>
               <div
                 className="text-lg font-mono font-semibold"
-                style={{ color: brief.changePct >= 0 ? '#00d084' : '#ff4757' }}
+                style={{ color: brief.changePct >= 0 ? '#00d084' : '#ff6b7a' }}
               >
                 {brief.changePct >= 0 ? '+' : ''}{brief.changePct.toFixed(2)}%
               </div>
@@ -232,7 +232,7 @@ export default function LiveBriefClient({ slug, initialBrief }: { slug: string; 
                 {brief.analystRating !== null && (
                   <div>
                     <div className="text-[10px] text-slate-400 mb-0.5">Analyst Rating</div>
-                    <div className="text-sm font-mono font-semibold" style={{ color: brief.analystRating === 'BUY' ? '#00d084' : brief.analystRating === 'SELL' ? '#ff4757' : '#fbbf24' }}>
+                    <div className="text-sm font-mono font-semibold" style={{ color: brief.analystRating === 'BUY' ? '#00d084' : brief.analystRating === 'SELL' ? '#ff6b7a' : '#fbbf24' }}>
                       {brief.analystRating}
                     </div>
                   </div>
@@ -274,7 +274,7 @@ export default function LiveBriefClient({ slug, initialBrief }: { slug: string; 
                       </Link>
                       <span className="text-xs text-slate-400 font-mono">${h.price.toFixed(2)}</span>
                     </div>
-                    <span className="text-sm font-mono font-semibold" style={{ color: h.changePct >= 0 ? '#00d084' : '#ff4757' }}>
+                    <span className="text-sm font-mono font-semibold" style={{ color: h.changePct >= 0 ? '#00d084' : '#ff6b7a' }}>
                       {h.changePct >= 0 ? '+' : ''}{h.changePct.toFixed(2)}%
                     </span>
                   </div>

@@ -25,7 +25,7 @@ export default function Sparkline({ data, color, width = 80, height = 32, ariaLa
   const first = data[0]
   const last = data[data.length - 1]
   const isUp = last >= first
-  const lineColor = isUp ? '#00d084' : '#ff4757'
+  const lineColor = isUp ? '#00d084' : '#ff6b7a'
 
   // F6.2 (Phase 13 S2): screen-reader-friendly chart description (WCAG 1.1.1).
   // Default summarizes direction + percent change + bar count.

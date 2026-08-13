@@ -334,7 +334,7 @@ export default function HomePage() {
         <section aria-label="Market overview stats" className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
             { label: 'Sectors Bullish', value: buySignals.length, of: 11, color: '#00d084' },
-            { label: 'Sectors Bearish', value: sellSignals.length, of: 11, color: '#ff4757' },
+            { label: 'Sectors Bearish', value: sellSignals.length, of: 11, color: '#ff6b7a' },
             { label: 'Neutral', value: holdSignals.length, of: 11, color: '#f59e0b' },
             { label: 'Avg Confidence', value: `${avgConfidence}%`, color: '#f59e0b', noOf: true },
           ].map((stat, i) => (
@@ -412,7 +412,7 @@ export default function HomePage() {
                 const sector = SECTORS.find((s) => s.etf === signal.etf)
                 const isUp = signal.direction === 'BUY'
                 const isDown = signal.direction === 'SELL'
-                const color = isUp ? '#00d084' : isDown ? '#ff4757' : '#eab308'
+                const color = isUp ? '#00d084' : isDown ? '#ff6b7a' : '#eab308'
                 return (
                   <div
                     key={signal.etf}
@@ -446,7 +446,7 @@ export default function HomePage() {
                   aria-pressed={activeFilter === f}
                   className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
                     activeFilter === f
-                      ? 'bg-amber-600 text-white'
+                      ? 'bg-amber-500 text-slate-950'
                       : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
                   }`}
                 >

@@ -251,3 +251,20 @@ Lessons:
 - **Env corrections:** `npm run dev` is NOT broken on the worktree — first boot just takes
   5+ min on the Google Drive FUSE mount. And "jsdom tests are CI-only on this machine" is
   STALE: the component suite runs locally.
+
+**Follow-up pass (same session, after adversarial review):**
+- **Stryker scope VERIFIED** against `stryker.conf.mjs` rather than assumed — `mutate` is
+  `lib/quant/**`, `lib/backtest/**`, `lib/options/**` only. The one `lib/` file this wave
+  touches (`lib/sectors.ts`, a colour literal) is outside all three globs.
+- **The signed-in header was never rendered** in any screenshot. Simulated the widest
+  authenticated block at 640/768/1024/1280: header holds at 57 px with zero horizontal
+  overflow, because the search wrapper is `min-w-0 shrink` (yields 288→151 px at 1280) and
+  the account name is gated to `xl`.
+- **TRAP worth remembering:** running `next build` while the dev server is up overwrites
+  `.next`, 404s the dev chunk manifest, and React silently stops hydrating — every
+  interaction check then returns false. The tell was that the *known-good* `?` key path
+  failed too. Verify against `next start` on a fresh build, never a mix of the two.
+- **LESSON:** audit a data-driven page AFTER its data loads. The first contrast pass ran on
+  an empty dev page and reported 0; the production build with 349 text nodes rendered
+  surfaced 5 more (selected filter chip + Run-LLM button at 3.19:1, `--color-down` at
+  4.38:1 across 15 literals, `industrials` at 4.47:1). All fixed; final `/` = **0 of 349**.

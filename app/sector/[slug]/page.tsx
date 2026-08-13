@@ -397,7 +397,7 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
           ]}
           legend={[
             { color: '#00d084', label: 'Bullish bar / signal', meaning: 'price up vs prior close, or BUY signal' },
-            { color: '#ff4757', label: 'Bearish bar / signal', meaning: 'price down vs prior close, or SELL signal' },
+            { color: '#ff6b7a', label: 'Bearish bar / signal', meaning: 'price down vs prior close, or SELL signal' },
             { color: '#fbbf24', label: 'Indicator overlay', meaning: 'EMA, MACD, ATR overlays on chart' },
             { color: '#3b82f6', label: 'Dark pool print', meaning: 'institutional block trade off-exchange' },
           ]}

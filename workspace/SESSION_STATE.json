@@ -342,21 +342,26 @@
     "verification": {
       "gates": "tsc clean; vitest 1376 passed / 106 files (+22 new); production `next build` SUCCEEDS (all 16 pages + 27 API routes).",
       "header": "211 px -> 57 px at 375x812 (26% -> 7%). One row at 1024 (19 px slack) and 1280 (101 px slack); zero horizontal overflow at both.",
-      "contrast": "/ 136 -> 0. /backtest, /desk, /portfolio, /stock/AAPL all 0 (no before-numbers measured for those four — post-fix state only). Honest split: ~113 recoloured, ~23 were decorative separators now aria-hidden (a scope change, not a contrast improvement).",
+      "contrast": "/ 136 -> 0 on the PRODUCTION build with 349 text nodes checked (live quotes rendered). /backtest, /desk, /portfolio, /stock/AAPL all 0. Honest split: ~113 recoloured, ~23 were decorative separators now aria-hidden (a scope change, not a contrast improvement).",
       "cta": "white-on-amber-600 3.19:1 -> slate-950-on-amber-500 9.39:1.",
       "ia": "Mobile drawer live-asserted: aria-expanded=true, body scroll lock, initial focus on Close, all 11 destinations present. Desktop Portfolio disclosure: opens with 3 links, Escape closes + returns focus. /portfolio breadcrumb now renders Home/Portfolio (was suppressed).",
-      "snapshots": "2 DOM-shape snapshots in QuantLabPanel.test.tsx failed on the token swap — exactly the intended substitution, nothing else — and were regenerated. The snapshot did its job."
+      "snapshots": "2 DOM-shape snapshots in QuantLabPanel.test.tsx failed on the token swap — exactly the intended substitution, nothing else — and were regenerated. The snapshot did its job.",
+      "signed_in_header": "Every screenshot was the SIGNED-OUT state (81px Sign in). Simulated the widest authenticated block (avatar + truncated name + Sign out) at 640/768/1024/1280: header stays 57px and horizontal overflow is 0 at all four. Two changes make it hold: the search wrapper is `min-w-0 shrink` (not shrink-0) so it yields space first (288->151px at 1280), and the account name is gated to xl.",
+      "shortcuts_button": "Verified on the production build: the ? header button opens the overlay, initial focus lands on Close shortcuts, body scroll lock engages, and `g p` / `g r` are listed."
     },
     "regression_guard": "__tests__/components/SiteNav.test.tsx walks app/**/page.tsx and asserts every static top-level route has a nav entry, with an explicit exemption set. FILESYSTEM-DRIVEN, not a hand-maintained list — a future page that ships without a way in fails CI instead of silently becoming an orphan.",
-    "stryker_unaffected": "All edits are in app/ and components/, both excluded from stryker.conf.mjs. No lib/ module changed, so the thin backtest (+1.02) and options (+1.25) margins are untouched.",
+    "stryker_unaffected": "VERIFIED against stryker.conf.mjs, not assumed: mutate = lib/quant/**, lib/backtest/**, lib/options/** only. Nothing under app/ or components/ is in scope, and the only lib/ file this wave touches is lib/sectors.ts (one colour literal), outside all three globs. backtest (+1.02) and options (+1.25) margins untouched.",
     "env_notes_corrected": [
       "`npm run dev` is NOT broken on the worktree — first boot just takes 5+ minutes on the Google Drive FUSE mount before the port binds. .claude/launch.json (gitignored, not in the diff) invokes `node node_modules/next/dist/bin/next dev` directly.",
-      "The memory note 'jsdom tests are CI-only on this machine' is STALE — the component suite runs locally (6 files / 26 tests before this wave)."
+      "The memory note 'jsdom tests are CI-only on this machine' is STALE — the component suite runs locally (6 files / 26 tests before this wave).",
+      "TRAP: running `next build` while the dev server is up overwrites .next and 404s the dev chunk manifest — React silently stops hydrating and every interaction check returns false. The tell was that the known-good `?` KEY path failed too. Verify against `next start` on a fresh build instead of mixing the two.",
+      "LESSON: audit a data-driven page AFTER its data loads. The empty state has fewer elements and flatters the contrast score."
     ],
     "deferred_owner_gated": "Sector-card copy (Prior:/Last:/Move scale), the '6/13 streams' implementation detail in the LIVE badge, the two stale NEW badges, and a multiplexed /api/stream to replace 13 concurrent EventSource per dashboard viewer (NOT a prod bug — prod is HTTP/2, verified — but 13 concurrent function invocations per viewer and a materially degraded local dev experience under the HTTP/1.1 six-connection cap).",
     "owner_actions": [
       "CRITICAL: set NEXTAUTH_SECRET in the Vercel project env (C-1).",
       "Merge/deploy decision — nothing pushed."
-    ]
+    ],
+    "late_catches": "A second audit pass on the PRODUCTION build WITH DATA LOADED found 5 contrast failures the first (empty-state, dev-server) pass could not contain: the selected ALL/BUY/SELL/HOLD filter chip and the Run-LLM button (white on amber-600, 3.19:1) -> slate-950 on amber-500 9.39:1; --color-down #ff4757 4.38:1 at 10-12px (15 hardcoded literals) -> #ff6b7a 5.32:1; industrials sector colour #6366f1 4.47:1 -> #7c7ff5 5.90:1. Both colour changes are tokens; no displayed value changes."
   }
 }

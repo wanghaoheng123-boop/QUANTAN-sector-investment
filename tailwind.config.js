@@ -29,7 +29,7 @@ module.exports = {
         },
         accent: {
           green: '#00d084',
-          red: '#ff4757',
+          red: '#ff6b7a',
           blue: '#3b82f6',
           yellow: '#f59e0b',
           purple: '#a855f7',

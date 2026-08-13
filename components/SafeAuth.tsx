@@ -32,7 +32,7 @@ function AuthContent() {
             <User className="w-4 h-4 text-slate-400" />
           </span>
         )}
-        <span className="text-xs text-slate-400 max-w-[100px] truncate hidden sm:inline" title={session.user.email ?? ''}>
+        <span className="text-xs text-slate-400 max-w-[100px] truncate hidden xl:inline" title={session.user.email ?? ''}>
           {session.user.name ?? session.user.email ?? 'Account'}
         </span>
         <button
