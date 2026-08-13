@@ -113,12 +113,16 @@ function SectorCard({ sector, quote, signal }: SectorCardProps) {
               <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 opacity-0 group-hover/sparkline:opacity-100 transition-opacity duration-200 pointer-events-none z-10">
                 <div className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 shadow-xl whitespace-nowrap">
                   <div className="text-[10px] text-slate-400 font-mono space-y-0.5">
+                    {/* 2026-08-14 copy pass: "Prior" was ambiguous (prior tick?
+                        prior session?). The value is the previous session's
+                        close — say so. Colons dropped on both rows so the two
+                        labels stay visually consistent. Values unchanged. */}
                     <div className="flex justify-between gap-3">
-                      <span className="text-slate-400">Prior:</span>
+                      <span className="text-slate-400">Prev close</span>
                       <span className="text-slate-300">${safeFixed(priorPrice, 2)}</span>
                     </div>
                     <div className="flex justify-between gap-3">
-                      <span className="text-slate-400">Last:</span>
+                      <span className="text-slate-400">Last</span>
                       <span className="text-white font-medium">${safeFixed(lastPrice, 2)}</span>
                     </div>
                   </div>
@@ -126,7 +130,7 @@ function SectorCard({ sector, quote, signal }: SectorCardProps) {
                 </div>
               </div>
               <Sparkline data={sparkData} color={sector.color} width={72} height={28} />
-              <span className="text-[8px] text-slate-400 font-mono text-right group-hover/sparkline:text-slate-200 transition-colors">prior→last</span>
+              <span className="text-[8px] text-slate-400 font-mono text-right group-hover/sparkline:text-slate-200 transition-colors">prev close → last</span>
             </div>
           ) : (
             <span className="text-[9px] text-slate-400 self-end">—</span>
@@ -136,12 +140,40 @@ function SectorCard({ sector, quote, signal }: SectorCardProps) {
         {/* Signal confidence bar */}
         {signal && (
           <div className="relative mb-2.5">
+            {/* 2026-08-14 copy pass. "Move scale" named a unit, not a meaning.
+                For session rows the bar is NOT a confidence: it is
+                |session change %| rescaled onto a 0-100 bar
+                (42 + 14×|Δ%|, saturating at 82 near ±2.9% — see
+                lib/sessionSignalsFromQuotes.ts). "Session move size" says what
+                it encodes; the tooltip carries the caveat. The rendered number
+                is unchanged — only its label and accessible name. */}
             <div className="flex justify-between text-[10px] mb-1 text-slate-400">
               <span className="inline-flex items-center">
-                {session ? 'Move scale' : 'Confidence'}
-                {!session && <MetricTooltip metricKey="confidence" compact />}
+                {session ? 'Session move size' : 'Confidence'}
+                {session ? (
+                  <MetricTooltip
+                    label="Session move size"
+                    content="How big today's move is versus the prior close, rescaled onto a 0-100 bar (it saturates near ±3%). It is a size indicator only — not a confidence, probability, or forecast."
+                    compact
+                  />
+                ) : (
+                  <MetricTooltip metricKey="confidence" compact />
+                )}
               </span>
-              <span style={{ color: sector.color }} className="font-mono">{signal.confidence}%</span>
+              {/* Bare "62%" has no accessible name of its own — the visible
+                  label sits in a sibling span, so a screen reader announcing
+                  this chip alone would read a naked number. */}
+              <span
+                style={{ color: sector.color }}
+                className="font-mono"
+                aria-label={
+                  session
+                    ? `Session move size ${signal.confidence} out of 100`
+                    : `Confidence ${signal.confidence} percent`
+                }
+              >
+                {signal.confidence}%
+              </span>
             </div>
             <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden">
               <div

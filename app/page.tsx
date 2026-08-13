@@ -109,6 +109,11 @@ export default function HomePage() {
   )
   const live = useLiveQuotes(liveTickers)
 
+  // One multiplexed SSE transport backs every subscribed ticker, so the
+  // per-ticker `connections` map is all-true or all-false. Collapse it once
+  // instead of recomputing the same `.some()` five times in the badge below.
+  const streamConnected = Object.values(live.connections).some(Boolean)
+
   // Merge live updates into the `quotes` state map. We don't replace the
   // whole map (the boot REST fetch may carry fields the SSE payload doesn't,
   // e.g. dataSource/provenance) — instead we overlay price/change/changePct
@@ -239,16 +244,21 @@ export default function HomePage() {
 
         {/* Hero */}
         <div className="text-center space-y-4 py-6">
-          {/* Phase 14 wave 38: status pill reflects live-stream state instead of
-              the legacy "Live" claim. Three states keyed off useLiveQuotes:
-                • emerald + pulsing  — all SSE connections healthy, market open
-                • amber              — connected, market closed (snapshot only)
-                • slate              — reconnecting / EventSource unavailable */}
+          {/* Status pill — three states keyed off useLiveQuotes:
+                • emerald + pulsing  — stream connected, market open
+                • amber              — stream connected, market closed (snapshot only)
+                • slate              — reconnecting / EventSource unavailable
+              2026-08-14: the trailing "N/M streams" counter is gone. It existed
+              because the dashboard once held one SSE connection PER ticker and
+              the browser's ~6-per-origin cap silently starved most of them, so
+              the count was real signal ("6/13"). With a single multiplexed
+              stream there is nothing to count — and connection topology was
+              never something to put in front of a user anyway. */}
           <div
             className={`inline-flex items-center gap-2.5 rounded-full px-4 py-1.5 text-xs mb-2 shadow-lg ${
-              live.marketOpen && Object.values(live.connections).some(Boolean)
+              live.marketOpen && streamConnected
                 ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 shadow-emerald-900/20'
-                : Object.values(live.connections).some(Boolean)
+                : streamConnected
                   ? 'bg-amber-500/10 border border-amber-500/30 text-amber-400 shadow-amber-900/20'
                   : 'bg-slate-700/30 border border-slate-600/40 text-slate-400'
             }`}
@@ -257,24 +267,21 @@ export default function HomePage() {
           >
             <span
               className={`w-1.5 h-1.5 rounded-full ${
-                live.marketOpen && Object.values(live.connections).some(Boolean)
+                live.marketOpen && streamConnected
                   ? 'bg-emerald-400 animate-pulse'
-                  : Object.values(live.connections).some(Boolean)
+                  : streamConnected
                     ? 'bg-amber-400'
                     : 'bg-slate-500'
               }`}
               aria-hidden="true"
             />
-            {live.marketOpen && Object.values(live.connections).some(Boolean)
+            {live.marketOpen && streamConnected
               ? 'LIVE'
-              : Object.values(live.connections).some(Boolean)
+              : streamConnected
                 ? 'MARKET CLOSED'
                 : 'CONNECTING'}
             <span className="text-slate-400">·</span>
             {lastUpdate ? `Updated ${lastUpdate.toLocaleTimeString()}` : 'Awaiting first tick…'}
-            <span className="ml-1 text-slate-400 font-mono text-[10px]">
-              {Object.values(live.connections).filter(Boolean).length}/{live.active} streams
-            </span>
           </div>
           <h1 className="text-4xl sm:text-5xl font-bold tracking-tight">
             <span className="gradient-text">Sector Intelligence</span>
@@ -288,8 +295,10 @@ export default function HomePage() {
         <section aria-labelledby="section-backtest" className="bg-gradient-to-r from-amber-950/40 via-slate-900/80 to-amber-950/30 rounded-2xl border border-amber-800/30 p-6">
           <div className="flex items-center justify-between flex-wrap gap-4">
             <div>
+              {/* 2026-08-14: dropped the hardcoded "NEW" badge — the backtest
+                  dashboard shipped months ago, so the badge was stale copy
+                  nothing could ever expire. */}
               <div className="flex items-center gap-2 mb-1">
-                <span className="text-xs font-mono text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded">NEW</span>
                 <h2 id="section-backtest" className="text-lg font-bold text-white">Institutional Backtest Dashboard</h2>
               </div>
               <p className="text-sm text-slate-400 max-w-lg">
