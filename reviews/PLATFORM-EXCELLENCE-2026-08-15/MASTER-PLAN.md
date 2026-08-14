@@ -88,6 +88,25 @@ reason (false positive / won't-fix / owner-gated) so no future wave re-flags the
 | 1 | E1+E2 | DONE | 8 commits, disjoint worktrees, cherry-picked |
 | 1 | A (audit) | DONE | tsc clean; vitest 1449/17; **PR #142 merged → main 2f72d49** |
 | 1 | V (verify) | **DONE 2026-08-15** | Prod live-verified during market hours: search "bank" returns results (was `{"quotes":[]}`); ma-deviation `regime.slopePositive:true, slopePct:0.0245, tradingDays:277` (slope was permanently null); stream vs prices changePct both percent-form (−0.598 vs −0.566, 11s quote skew, was 100× risk); no "refreshes every 60s" in served /backtest; /api/backtest/live 200. DQ-1 close-transition pinned by 17 hook tests (observing the real 20:00 UTC close = optional follow-up). Vercel runtime-errors sweep NOT run (MCP unauthenticated) — next session with access should sweep. |
-| 1 | E3a/E3b | RUNNING | charts (UX-7/8/22/37); briefs outage + honesty (UX-6/14/26/27) → PR #143 off new main |
+| 1 | E3a/E3b | **DONE** | 9 commits + 2 coordinator integrations → **PR #143 merged → main `b0fc60f`**; vitest 1539/17 |
+| 1 | V (E3) | **DONE — WAVE 1 CLOSED 2026-08-15** | Prod live-verified: /briefs renders real briefs (was outage); sector detail 200, RSC `"error":null` (was 500 digest); /stock/AAPL chart fills full pane (was ~15%), legend −0.02% ≡ header, "DAILY+ BARS" correct on 1Y; dark-pool flow gauge + Block Prints both badged ILLUSTRATIVE with real metrics loaded, Yahoo attribution scoped; /portfolio TailRiskBanner leads with ILLUSTRATIVE + named demo inputs + "Nothing here is a recommendation." |
+
+## Wave 2 queue (staged; cut assignments at next J)
+
+1. **Data-architecture / cadence (needs OWNER-DECISION-CADENCE first):** decouple fixture
+   data from git (warehouse/Blob) OR accept deploy-multiplication for daily cron; includes
+   the /briefs ~88-uncapped-Yahoo-calls-per-view cap (memo/cache with as-of stamp) and
+   AL-1 staleness cut 5 sessions → 1.
+2. **Remaining verified P1s never assigned in wave 1:** AL-3, AL-7 (see algorithms-live.md);
+   DQ-2 dropped `degraded` flag, DQ-3/4/6/9/10 (holiday calendar = M, conditional-vol
+   truth-in-labeling vs orphan-route decision); UX P1/P2 backlog (34 findings remain in
+   ux-interface.md TOP 10 order).
+3. **Small residuals:** buildFundamentalsPayload ≥220→≥221 (mutation-aware);
+   stream/[ticker] raw changePct; bridgeClient same class (dormant); useLiveQuotes coverage
+   exclude removal; LiveSignalsPanel cadence copy ties to decision 1; KLineChart dead
+   `range?` prop → UX-38 timeVisible; `4H` serves 1h bars unaggregated; chartYahoo.ts not
+   in coverage/stryker globs; briefs error.tsx digest boilerplate; unknown-sector 404.
+4. **Owner-gated (unchanged):** auth env, Redis provisioning, CSP flip, `vercel` dep major,
+   Sharadar PIT. Plus: Vercel runtime-errors sweep owed when MCP access exists.
 
 Findings ledger for this program lives in the three report files + `TRIAGE.md` (written at J).
