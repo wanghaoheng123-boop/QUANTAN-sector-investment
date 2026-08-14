@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { getAllSectorBriefs, aggregateDataQuality } from '@/lib/briefs/sectorBrief'
+import { getAllSectorBriefs, briefsHealth } from '@/lib/briefs/sectorBrief'
 import BriefCard from './BriefCard'
 
 /**
@@ -21,7 +21,13 @@ import BriefCard from './BriefCard'
  */
 export const dynamic = 'force-dynamic'
 
-/** Presentation for the header pill — one row per aggregate data-quality state. */
+/**
+ * Presentation for the header pill — one row per state of `briefsHealth()`.
+ *
+ * Note which labels name Yahoo and which don't: `internal` is a QUANTAN-side
+ * failure, so its copy must not send the reader to debug the provider. That
+ * misattribution is half of what made the outage so hard to read.
+ */
 const QUALITY_PILL = {
   live: {
     className: 'text-green-400',
@@ -38,12 +44,16 @@ const QUALITY_PILL = {
     dotClassName: 'bg-red-400',
     label: 'Degraded — Yahoo Finance data is unavailable for at least one sector',
   },
+  internal: {
+    className: 'text-red-400',
+    dotClassName: 'bg-red-400',
+    label: 'Degraded — some briefs could not be built (application error)',
+  },
 } as const
 
 export default async function BriefsPage() {
   const { briefs, failedSlugs } = await getAllSectorBriefs()
-  const quality = aggregateDataQuality(briefs)
-  const pill = QUALITY_PILL[quality]
+  const pill = QUALITY_PILL[briefsHealth(briefs, failedSlugs)]
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-12">

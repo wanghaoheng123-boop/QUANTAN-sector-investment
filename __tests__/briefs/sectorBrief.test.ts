@@ -26,6 +26,7 @@ import {
   getSectorBriefSafe,
   getAllSectorBriefs,
   aggregateDataQuality,
+  briefsHealth,
   type BriefFetchers,
   type SectorBrief,
 } from '@/lib/briefs/sectorBrief'
@@ -245,5 +246,37 @@ describe('aggregateDataQuality — what the header pill renders', () => {
 
   it('treats an empty list as unavailable — never as live', () => {
     expect(aggregateDataQuality([])).toBe('unavailable')
+  })
+})
+
+describe('briefsHealth — the pill reads BOTH failure axes', () => {
+  const at = (q: SectorBrief['dataQuality']) => ({ dataQuality: q }) as SectorBrief
+
+  it('is live only when everything built and every brief is live', () => {
+    expect(briefsHealth([at('live'), at('live')], [])).toBe('live')
+  })
+
+  it('is NEVER live while any brief failed to build', () => {
+    // The trap: aggregateDataQuality only sees briefs that SUCCEEDED, so five
+    // live briefs plus six builder throws would render the green "Live data
+    // from Yahoo Finance" pill directly above "6 briefs could not be built".
+    expect(briefsHealth([at('live'), at('live')], ['energy'])).toBe('internal')
+    expect(briefsHealth([at('live')], ['energy', 'utilities'])).not.toBe('live')
+  })
+
+  it('reports an internal failure rather than blaming the provider', () => {
+    // Total builder failure: zero briefs. Without the failedSlugs axis this
+    // would report 'unavailable', i.e. "Yahoo is down" for our own bug.
+    expect(briefsHealth([], ['energy', 'technology'])).toBe('internal')
+  })
+
+  it('an internal failure outranks a degraded provider', () => {
+    expect(briefsHealth([at('unavailable')], ['energy'])).toBe('internal')
+    expect(briefsHealth([at('partial')], ['energy'])).toBe('internal')
+  })
+
+  it('falls through to provider quality when everything built', () => {
+    expect(briefsHealth([at('live'), at('partial')], [])).toBe('partial')
+    expect(briefsHealth([at('unavailable')], [])).toBe('unavailable')
   })
 })

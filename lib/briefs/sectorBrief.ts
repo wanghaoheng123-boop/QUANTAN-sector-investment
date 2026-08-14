@@ -544,3 +544,27 @@ export function aggregateDataQuality(
   if (briefs.some(b => b.dataQuality === 'partial')) return 'partial'
   return 'live'
 }
+
+/** The four states the /briefs header pill can be in. */
+export type BriefsHealth = 'live' | 'partial' | 'unavailable' | 'internal'
+
+/**
+ * What the /briefs header pill must say, across BOTH failure axes.
+ *
+ * `aggregateDataQuality` only sees briefs that built, so on its own it would
+ * report `live` while a sibling banner said six sectors failed to build — the
+ * original UX-26 defect (a green "Live data from Yahoo Finance" pill in the
+ * same viewport as the failure text) reintroduced through a data-driven route.
+ *
+ * A builder throw is OURS, and it outranks provider quality: `internal` is
+ * checked first and its copy must not name Yahoo, because the page would
+ * otherwise blame the provider for an application error — exactly what the
+ * "All Yahoo Finance requests failed" copy did.
+ */
+export function briefsHealth(
+  briefs: SectorBrief[],
+  failedSlugs: string[],
+): BriefsHealth {
+  if (failedSlugs.length > 0) return 'internal'
+  return aggregateDataQuality(briefs)
+}
