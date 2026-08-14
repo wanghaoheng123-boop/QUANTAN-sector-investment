@@ -45,7 +45,7 @@ export function OverviewTab({ results, sectorSummary, sectorColors, initialCapit
 
       {/* Equity curves — top performers */}
       <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-6">
-        <h3 className="text-sm font-semibold text-white mb-4 uppercase tracking-wider text-slate-400">Equity Curves — Top 8 by Return</h3>
+        <h2 className="text-sm font-semibold text-white mb-4 uppercase tracking-wider text-slate-400">Equity Curves — Top 8 by Return</h2>
         <ChartErrorBoundary label="Equity Curves" fallbackHeight={320}>
           <EquityCurveChart
             instruments={results.slice().sort((a, b) => b.annualizedReturn - a.annualizedReturn).slice(0, 8)}
@@ -56,7 +56,7 @@ export function OverviewTab({ results, sectorSummary, sectorColors, initialCapit
 
       {/* Strategy explanation */}
       <div className="bg-slate-900/40 rounded-xl border border-slate-800 p-6">
-        <h3 className="text-sm font-semibold text-white mb-3 uppercase tracking-wider text-slate-400">Strategy Rules</h3>
+        <h2 className="text-sm font-semibold text-white mb-3 uppercase tracking-wider text-slate-400">Strategy Rules</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs text-slate-400">
           {STRATEGY_RULES.map(([title, desc]) => (
             <div key={title} className="bg-slate-800/50 rounded-lg p-3 border border-slate-700/50">

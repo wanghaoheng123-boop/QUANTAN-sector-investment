@@ -24,9 +24,9 @@ export default function SectorHeatmap({ sectorSummary, sectorColors }: Props) {
 
   return (
     <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-6">
-      <h3 className="text-sm font-semibold text-white mb-4 uppercase tracking-wider text-slate-400">
+      <h2 className="text-sm font-semibold text-white mb-4 uppercase tracking-wider text-slate-400">
         Sector Performance — Annualized Return %
-      </h3>
+      </h2>
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
         {entries.map(([sector, data]) => {
           const ret = data.annReturn

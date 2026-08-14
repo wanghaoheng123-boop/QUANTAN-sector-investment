@@ -71,9 +71,9 @@ export function WalkForwardPanel({ results }: { results: BacktestResult[] }) {
   return (
     <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-6">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold text-white uppercase tracking-wider text-slate-400">
+        <h2 className="text-sm font-semibold text-white uppercase tracking-wider text-slate-400">
           Walk-Forward / Overfitting Check
-        </h3>
+        </h2>
         <select
           value={selectedTicker}
           onChange={e => setSelectedTicker(e.target.value)}

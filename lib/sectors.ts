@@ -91,7 +91,15 @@ export const SECTORS: Sector[] = [
     name: 'Communication',
     etf: 'XLC',
     description: 'Social media, streaming, and telecom at the intersection of AI and media',
-    color: '#8b5cf6',
+    // 2026-08-14: violet-500 #8b5cf6 rendered at 4.05:1 on the session-up signal
+    // card (composite bg #0c1f18), under the 4.5:1 AA floor for the text-xs
+    // confidence figure in components/SignalCard.tsx — the one contrast failure
+    // axe still found after the interface wave. Same class of defect already
+    // fixed for industrials (#6366f1 -> #7c7ff5). #b57bff measures 5.91:1 and
+    // stays in the violet theme; it is also further from its two neighbours
+    // (dE 19.0 from industrials, 14.9 from real-estate #a78bfa) than those two
+    // already are from each other (11.3), so sector identity does not blur.
+    color: '#b57bff',
     bgGradient: 'from-violet-900/20 to-violet-950/10',
     borderColor: 'border-violet-500/30',
     icon: '📡',

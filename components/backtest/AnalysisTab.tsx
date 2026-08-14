@@ -50,9 +50,9 @@ export function AnalysisTab({ results, sectorColors }: { results: BacktestResult
     <div className="space-y-6">
       {/* Sector Performance Table */}
       <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-6">
-        <h3 className="text-sm font-semibold text-white mb-4 uppercase tracking-wider text-slate-400">
+        <h2 className="text-sm font-semibold text-white mb-4 uppercase tracking-wider text-slate-400">
           Performance Attribution by Sector
-        </h3>
+        </h2>
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <caption className="sr-only">Performance attribution by sector — annualised return, total return, and ranking</caption>
@@ -97,9 +97,9 @@ export function AnalysisTab({ results, sectorColors }: { results: BacktestResult
 
       {/* Risk/Return Matrix */}
       <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-6">
-        <h3 className="text-sm font-semibold text-white mb-4 uppercase tracking-wider text-slate-400">
+        <h2 className="text-sm font-semibold text-white mb-4 uppercase tracking-wider text-slate-400">
           Risk/Return Map
-        </h3>
+        </h2>
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <caption className="sr-only">Risk/return matrix — per-ticker annualised return, drawdown, Sharpe, Sortino, win rate, and alpha vs buy-and-hold</caption>
