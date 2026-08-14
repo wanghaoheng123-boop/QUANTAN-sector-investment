@@ -1,7 +1,8 @@
 # Vercel Operations — QUANTAN
 
-**Last updated:** 2026-05-26  
-**Auditor:** deployment-expert (Cursor)  
+**Last updated:** 2026-08-14 (§1 project table, §9 checklist and §12 re-verified against live
+state; sections not named there still carry their 2026-05-26 audit and may be stale)  
+**Auditor:** deployment-expert (Cursor), 2026-05-26 · re-verification 2026-08-14  
 **Production URL:** https://quantan.vercel.app  
 **GitHub repo:** `wanghaoheng123-boop/QUANTAN-sector-investment`  
 **Production branch:** `main` (auto-deploy on push per AGENTS.md)
@@ -23,13 +24,35 @@
 | Vercel MCP | **Not used** | Plugin requires auth; audit used `gh` + HTTP probes only |
 | npm security (Q-057) | **BLOCKER** | `next@14.2.15` — 23 advisories; see §6 |
 
-**Linked Vercel projects** (from PR status checks, 2026-05-26):
+**Linked Vercel projects** — ⚠️ **re-verified 2026-08-14: only ONE project now builds this repo.**
 
-| Project name | Role (inferred) | Example preview (PR #18) |
-|--------------|-----------------|---------------------------|
-| `quantan` | Primary production alias (`quantan.vercel.app`) | [deployment](https://vercel.com/wanghaoheng123-7549s-projects/quantan/RhhRJ82tEZx5nGbE1zox7WpKd9nT) |
-| `quantan-sector-investment` | Repo-named project (same GitHub repo) | [deployment](https://vercel.com/wanghaoheng123-7549s-projects/quantan-sector-investment/5epZdUmsXaWvqHYJbFb7RyLyXKjc) |
-| `quantan-release-work` | Secondary / release worktree project | [deployment](https://vercel.com/wanghaoheng123-7549s-projects/quantan-release-work/5YHnuePhf9cwiSusEAB7rFRS1Ek5) |
+| Project name | Status (2026-08-14) | Evidence |
+|--------------|---------------------|----------|
+| `quantan` | **ACTIVE** — the only project that builds PRs and deploys production (`quantan.vercel.app`) | Sole Vercel check on PRs #138, #139, #140; exactly **one** Production deployment per commit across the full deployments history |
+| `quantan-sector-investment` | **no longer building this repo** | absent from PR checks since (at least) #138 |
+| `quantan-release-work` | **no longer building this repo** | absent from PR checks since (at least) #138 |
+
+This supersedes the 2026-05-26 table, which listed all three as linked and produced 3×
+build minutes per PR. The "decide whether they are still needed" checklist item in §9 is
+therefore **resolved in practice** — the GitHub integration now fans out to `quantan` only.
+
+**No stale public copy — checked, not assumed (2026-08-14).** The risk with a
+disconnected-but-alive project is that it keeps serving its last build forever on a public
+URL. Both retired hostnames were probed directly and are gone:
+
+| URL | HTTP |
+|-----|------|
+| `https://quantan-sector-investment.vercel.app/` | **404** |
+| `https://quantan-release-work.vercel.app/` | **404** |
+| `https://quantan.vercel.app/` | **200** |
+
+So there is exactly one live deployment of this app and no owner follow-up is required here.
+(A 404 needs no dashboard auth to confirm — re-run the three `curl -o /dev/null -w '%{http_code}'`
+probes above if this is ever in doubt.)
+
+**Deploy mechanism (verified 2026-08-14):** production branch is `main` with **auto-deploy on
+push**, so **merging a PR IS the production deploy**. Do not also run `vercel --prod` — that
+creates a second, redundant deployment of the same commit.
 
 **Production tracking `main`:** Remote `main` tip at audit time was `e1cb168` — *chore(data): weekly backtest data refresh (2026-05-24)* (pushed by `.github/workflows/refresh-data.yml`). Open feature work (#17–#21) is **not** on production until merged to `main`.
 
@@ -252,7 +275,7 @@ PR #19 targets `refactor/q-054-backtest-decomp`, so Actions never fire.
 - [ ] Post-merge: `SMOKE_BASE_URL=https://quantan.vercel.app npm run check:smoke`
 - [ ] Schedule **Q-057-NEW** Next.js upgrade (sign-off on target version)
 - [ ] Sync local `ci.yml` from `main` if developing in Google Drive workspace
-- [ ] Decide whether `quantan-sector-investment` / `quantan-release-work` projects are still needed (3× build minutes per PR)
+- [x] ~~Decide whether `quantan-sector-investment` / `quantan-release-work` projects are still needed (3× build minutes per PR)~~ — **RESOLVED 2026-08-14:** both are disconnected AND their public URLs return 404, so only `quantan` builds PRs, deploys production, and serves traffic. No stale copy, no owner follow-up (see §1).
 
 ---
 
@@ -286,7 +309,12 @@ SMOKE_BASE_URL=https://quantan.vercel.app npm run check:smoke
 
 ---
 
-## 12. Single production project (wave 3 — 2026-05-26)
+## 12. Single production project (wave 3 — 2026-05-26) — ✅ **DONE, verified 2026-08-14**
+
+> **This section is now a historical record of a completed migration, not a to-do.**
+> Re-verified 2026-08-14: `quantan` is the sole project building PRs and deploying
+> production, and both other hostnames return **404**. The plan below was carried out; keep
+> it only for the rationale. See §1 for the current state.
 
 **Keep exactly one Vercel project for this GitHub repo:**
 
