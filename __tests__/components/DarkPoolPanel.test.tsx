@@ -58,23 +58,35 @@ const render = (apiData: DarkPoolAnalysis | null) =>
     <DarkPoolPanel prints={PRINTS} ticker="AAPL" color="#3b82f6" apiData={apiData} />,
   )
 
+/**
+ * Markup from the "Block Prints" header onwards. The flow gauge above it now
+ * carries an ILLUSTRATIVE badge too, so a bare `toContain('ILLUSTRATIVE')`
+ * against the whole document would pass even with the prints badge deleted —
+ * scoping the assertion to this section is what makes it a real guard.
+ */
+function printsSection(html: string): string {
+  const i = html.indexOf('Block Prints')
+  expect(i).toBeGreaterThan(-1)
+  return html.slice(i)
+}
+
 describe('DarkPoolPanel — the prints table is disclosed unconditionally (UX-6)', () => {
   it('shows ILLUSTRATIVE when the real metrics DID load (the regression case)', () => {
-    const html = render(analysis(true))
-    expect(html).toContain('ILLUSTRATIVE')
-    expect(html).toContain('Illustrative block prints')
+    const section = printsSection(render(analysis(true)))
+    expect(section).toContain('ILLUSTRATIVE')
+    expect(section).toContain('Illustrative block prints')
   })
 
   it('shows ILLUSTRATIVE when the real metrics did not load', () => {
-    const html = render(analysis(false))
-    expect(html).toContain('ILLUSTRATIVE')
-    expect(html).toContain('Illustrative block prints')
+    const section = printsSection(render(analysis(false)))
+    expect(section).toContain('ILLUSTRATIVE')
+    expect(section).toContain('Illustrative block prints')
   })
 
   it('shows ILLUSTRATIVE before any metrics request resolves', () => {
-    const html = render(null)
-    expect(html).toContain('ILLUSTRATIVE')
-    expect(html).toContain('Illustrative block prints')
+    const section = printsSection(render(null))
+    expect(section).toContain('ILLUSTRATIVE')
+    expect(section).toContain('Illustrative block prints')
   })
 
   it('renders the prints table in every one of those states', () => {

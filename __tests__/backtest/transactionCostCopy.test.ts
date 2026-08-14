@@ -27,7 +27,10 @@ import {
   costBpsPerSide,
   roundTripCostPct,
 } from '@/lib/backtest/executionModel'
-import { TX_COST_RULE } from '@/components/backtest/OverviewTab'
+import { TX_COST_RULE, STRATEGY_RULES } from '@/components/backtest/OverviewTab'
+
+/** The Transaction Costs row exactly as the Strategy Rules grid renders it. */
+const RENDERED_TX_ROW = STRATEGY_RULES.find(([title]) => title === 'Transaction Costs')?.[1] ?? ''
 
 const ROOT = join(__dirname, '..', '..')
 const perSide = costBpsPerSide()
@@ -61,25 +64,25 @@ describe('the SSOT itself', () => {
 
 describe('STRATEGY RULES → Transaction Costs (components/backtest/OverviewTab.tsx)', () => {
   it('states the per-side cost from the SSOT', () => {
-    expect(TX_COST_RULE).toContain(`${perSide} bps per side`)
+    expect(RENDERED_TX_ROW).toContain(`${perSide} bps per side`)
   })
 
   it('states the round-trip cost from the SSOT', () => {
-    expect(TX_COST_RULE).toContain(`≈${roundTrip} bps round-trip`)
+    expect(RENDERED_TX_ROW).toContain(`≈${roundTrip} bps round-trip`)
   })
 
   it('never calls the per-side number a round-trip number', () => {
     // The original defect, expressed as a property: whatever figure precedes
     // "round-trip" must be the round-trip figure.
-    const m = TX_COST_RULE.match(/≈?~?(\d+)\s*bps\s+round-?\s?trip/i)
+    const m = RENDERED_TX_ROW.match(/≈?~?(\d+)\s*bps\s+round-?\s?trip/i)
     expect(m).not.toBeNull()
     expect(Number(m![1])).toBe(roundTrip)
   })
 
   it('itemises the per-side cost exactly as the model composes it', () => {
-    expect(TX_COST_RULE).toContain(`${DEFAULT_EXECUTION_COSTS.spreadBpsPerSide} bps spread`)
-    expect(TX_COST_RULE).toContain(`${DEFAULT_EXECUTION_COSTS.slippageBpsPerSide} bps slippage`)
-    expect(TX_COST_RULE).toContain(`${DEFAULT_EXECUTION_COSTS.commissionBpsPerSide} bps commission`)
+    expect(RENDERED_TX_ROW).toContain(`${DEFAULT_EXECUTION_COSTS.spreadBpsPerSide} bps spread`)
+    expect(RENDERED_TX_ROW).toContain(`${DEFAULT_EXECUTION_COSTS.slippageBpsPerSide} bps slippage`)
+    expect(RENDERED_TX_ROW).toContain(`${DEFAULT_EXECUTION_COSTS.commissionBpsPerSide} bps commission`)
     const parts =
       DEFAULT_EXECUTION_COSTS.spreadBpsPerSide +
       DEFAULT_EXECUTION_COSTS.slippageBpsPerSide +
@@ -88,13 +91,17 @@ describe('STRATEGY RULES → Transaction Costs (components/backtest/OverviewTab.
   })
 
   it('says the cost is charged on both legs', () => {
-    expect(TX_COST_RULE).toMatch(/entry AND exit/i)
+    expect(RENDERED_TX_ROW).toMatch(/entry AND exit/i)
   })
 
   it('is derived, not hardcoded', () => {
     const code = flatCode('components/backtest/OverviewTab.tsx')
     expect(code).toContain("from '@/lib/backtest/executionModel'")
     expect(code).not.toContain('11bps round-trip')
+  })
+
+  it('the grid renders the DERIVED constant, not a literal that happens to match', () => {
+    expect(RENDERED_TX_ROW).toBe(TX_COST_RULE)
   })
 })
 
@@ -137,7 +144,7 @@ describe('THE CLASS: no /backtest surface may contradict the round-trip figure',
    */
   const SURFACES: Array<[string, string]> = [
     ['app/backtest/page.tsx', flatCode('app/backtest/page.tsx')],
-    ['components/backtest/OverviewTab.tsx (rendered)', TX_COST_RULE],
+    ['STRATEGY RULES → Transaction Costs (rendered row)', RENDERED_TX_ROW],
   ]
 
   it.each(SURFACES)('%s: every round-trip bps claim equals the SSOT', (_label, text) => {

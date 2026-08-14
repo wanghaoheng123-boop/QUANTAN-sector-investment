@@ -51,7 +51,8 @@ interface OverviewTabProps {
   initialCapital: number
 }
 
-const STRATEGY_RULES: ReadonlyArray<readonly [string, string]> = [
+/** Exported so the cost-copy spec asserts what actually RENDERS, not a helper. */
+export const STRATEGY_RULES: ReadonlyArray<readonly [string, string]> = [
   ['BUY Signal', '200EMA deviation dip zone + 200SMA rising (>0.5%/20bars) + price near SMA + ≥2 of: RSI<35, MACD hist>0, ATR%>2, BB%<0.20 → BUY with Half-Kelly (10-25%)'],
   ['HOLD', 'Confidence <55% or HEALTHY_BULL / EXTENDED_BULL → No action. Slope insufficient or price not near SMA = no buy.'],
   ['SELL Signal', 'FALLING_KNIFE (dip zone + declining SMA) or HEALTHY_BULL + RSI>70 → Exit full position'],
