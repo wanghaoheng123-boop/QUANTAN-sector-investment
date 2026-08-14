@@ -162,10 +162,13 @@ function callArgs(src: string, openIdx: number): string {
 }
 
 describe('THE CLASS: every Yahoo search() call site is schema-drift tolerant', () => {
-  it('no `search()` call in app/ omits validateResult:false', () => {
+  // lib/ is scanned alongside app/ because UX-26 moved the briefs caller into
+  // lib/briefs/sectorBrief.ts — a call site that leaves app/ must not leave
+  // the guard.
+  it('no `search()` call in app/ or lib/ omits validateResult:false', () => {
     const offenders: string[] = []
     const repoRoot = join(__dirname, '..', '..')
-    for (const file of tsFiles(join(repoRoot, 'app'))) {
+    for (const file of [...tsFiles(join(repoRoot, 'app')), ...tsFiles(join(repoRoot, 'lib'))]) {
       const src = stripComments(readFileSync(file, 'utf8'))
       // Both spellings used in the repo: `yahooFinance.search(` and `yf.search(`.
       const re = /\b(?:yahooFinance|yf)\.search\s*\(/g
@@ -184,10 +187,11 @@ describe('THE CLASS: every Yahoo search() call site is schema-drift tolerant', (
   it('the scan actually finds call sites (guards against a vacuous pass)', () => {
     const repoRoot = join(__dirname, '..', '..')
     let sites = 0
-    for (const file of tsFiles(join(repoRoot, 'app'))) {
+    for (const file of [...tsFiles(join(repoRoot, 'app')), ...tsFiles(join(repoRoot, 'lib'))]) {
       sites += (stripComments(readFileSync(file, 'utf8')).match(/\b(?:yahooFinance|yf)\.search\s*\(/g) ?? []).length
     }
-    // 4 news callers (72f42fc) + /api/search (DQ-8).
+    // 3 news callers still in app/ (72f42fc) + /api/search (DQ-8) + the briefs
+    // caller now in lib/briefs/sectorBrief.ts (UX-26).
     expect(sites).toBeGreaterThanOrEqual(5)
   })
 })

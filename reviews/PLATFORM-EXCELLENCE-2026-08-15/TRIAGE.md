@@ -85,5 +85,28 @@ E1 chose WATCH_DIP for null-slope deep zones = regimeSignal parity (AL-5) — ac
 | UX-1..39 rest | P1-P3 | Queued; not re-verified individually — E3 agents re-verify before touching. |
 | UX clean list | — | Quant Lab NaN-free + best lineage disclosure; indicator aria-pressed correct; no mobile horizontal overflow; sector→stock nav no dead ends. Recorded to prevent re-derivation. |
 
+## E3a/E3b AUDIT RESULT (2026-08-15): LANDED on `claude/platform-excellence-e3` → PR #143
+
+All 8 UX fixes audited + integrated; tsc clean; vitest **1539/17** (from 1449 post-#142).
+Coordinator inline work: UX-22 page wiring (E3a's deliberate handoff — its file-set discipline
+held) and the #142↔E3b merge hazard (search scan test extended to lib/, ≥5 floor kept).
+Notable: E3a PROVED the review's prescribed UX-22 fix wrong (poll-eligibility ≠ bar
+granularity; 1D/1W trap) and built `isIntradayBarRange`/`chartBarKindLabel` instead. E3b
+ROOT-CAUSED UX-26b as a missing `await` (`return res.json()` escaping the try/catch on 2xx
+non-JSON bodies), reproduced on a prod build with the exact error class — correcting the
+review's "cannot be the self-fetch" attribution. E3a disclosed reconstructing
+useKLineChart.ts after an accidental checkout-discard; coordinator line-audited the diff.
+
+**Named-not-fixed (conscious-decision items → wave 2):**
+- `/briefs` (force-dynamic) now fans out ~88 uncapped in-process Yahoo calls per view (the
+  old self-fetch path was incidentally rate-limit-capped). Wave-2: server-side memo/cache
+  with as-of stamp — folds into OWNER-DECISION-CADENCE data-architecture work.
+- briefs `error.tsx` still renders `{error.message}` (digest boilerplate in prod); unknown
+  sector slugs return 200 not 404.
+- E3a residuals: dead `range?` prop on KLineChart (input for UX-38 timeVisible); `4H` maps
+  to 1h bars with no aggregation (route); `lib/chartYahoo.ts` outside coverage+stryker globs.
+
 ## Killed / not entering queue
-(none — all elevated findings survived verification in wave 1; a first for this repo's fleets)
+(none — all elevated findings survived verification in wave 1; a first for this repo's fleets.
+Two review *mechanisms* were corrected by implementers with proof: UX-22's prescribed fix,
+UX-26b's attribution — both recorded above.)
