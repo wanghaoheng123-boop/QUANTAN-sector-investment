@@ -22,7 +22,7 @@ import { getNewsForSector, generateDarkPoolPrints } from '@/lib/mockData'
 import { DarkPoolPrint, SECTORS } from '@/lib/sectors'
 import type { DarkPoolAnalysis } from '@/lib/darkpool'
 import { buildVisFromIndicatorPreset, type ChartEmaKey } from '@/lib/chartEma'
-import { STOCK_CHART_RANGES, isStockIntradayPollRange } from '@/lib/chartYahoo'
+import { STOCK_CHART_RANGES, isStockIntradayPollRange, chartBarKindLabel } from '@/lib/chartYahoo'
 import { ChartErrorBoundary } from '@/components/ChartErrorBoundary'
 import type { EnrichedChain } from '@/lib/options/chain'
 import type { GexResult } from '@/lib/options/gex'
@@ -448,7 +448,7 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
                           Deliberately NOT applied to the live price itself —
                           announcing every SSE tick is an aria-live anti-pattern. */}
                       {quoteError && <span role="status" aria-live="polite" className="text-amber-400/70">QUOTE DEGRADED</span>}
-                      <span>{activeRange === '1D' || activeRange === '1W' || activeRange === '5m' || activeRange === '15m' || activeRange === '1H' || activeRange === '4H' ? 'INTRADAY' : 'DAILY+'} BARS</span>
+                      <span>{chartBarKindLabel(activeRange)} BARS</span>
                     </div>
                   </div>
                   {loading && candles.length === 0 ? (
