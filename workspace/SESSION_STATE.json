@@ -2,7 +2,7 @@
   "schema_version": "1.1",
   "project": "QUANTAN-sector-investment",
   "created": "2026-04-28T09:40:00Z",
-  "last_updated": "2026-08-14T11:55:00.000Z",
+  "last_updated": "2026-08-14T13:40:00.000Z",
   "active_agent": "claude opus-5 (2026-08-14: stream multiplex + copy pass — 13 EventSource -> 1, /api/stream added, sector-card jargon + last NEW badge cleared)",
   "prod_bug_fix_2026_07_01": {
     "B-2": "News fetch broken by yahoo-finance2 SearchResult schema drift (yf.search validation threw → news silently dropped + 66 prod errors on /api/briefs since 2026-04-03). FOUND via Vercel get_runtime_errors. FIXED with validateResult:false on the 4 news-search callers (mirrors options/chain.ts precedent) → PR #82 → main 2e6137c. LIVE-VERIFIED: /api/briefs now 200 with full news feed (was empty); 0 SearchResult validation logs on new deploy dpl_D29j.",
@@ -437,5 +437,17 @@
     "guard_added": "__tests__/architecture/module-ssot.test.ts asserts the CONSUMERS, not the SSOT: both color consumers must import from lib/sectorColors and carry no assigned hex literal; the palette must contain no duplicate color; slug and name views must agree with lib/sectors.",
     "verification": "tsc clean; vitest 1399 passed / 17 skipped (1395 + 4 new); next build 0; PR #139 CI 6/6; a11y-axe re-run on main = ZERO violations on both routes; production serves #b57bff with 0 occurrences of #8b5cf6.",
     "shipped": "PR #139 squash-merged as 02840ec, production deployment 5905585596 success."
+  },
+  "sync_audit_2026_08_14": {
+    "directive": "owner: 'Continue with the remaining tasks to make sure all progress is in sync especially vercel and github.'",
+    "github_vercel": "IN SYNC — origin/main e421902 and the latest Production deployment sha are the same commit. No open PRs. Every local commit exists on a remote.",
+    "unshipped_work": "NONE. git branch --no-merged lists ~30 branches, but that is squash-merge residue: squashing makes the original commits unreachable while their CONTENT is in main. Verified by content, not by the commit graph — fix/api-resilience (allSettled x4 in briefs), refactor/signals-split (regimeSignal/signalHelpers/signalTypes all present), refactor/klinechart-hook (hooks/useKLineChart.ts present), fix/ssot-dedup (calcMVRV present) are all shipped; fix/a11y-sweep, chore/cleanup-dead-files and fix/dead-ema-and-progress-audit have merged PRs (#32, #6, #7). Do NOT re-audit these from --no-merged output.",
+    "ledger": "All 5 tasks[] are DONE. The 3 remaining blockers are ALL owner-gated and none is agent-resolvable: BLOCKER-OWNER-ENV (env/secrets), BLOCKER-TASK-TOOL-APPROVAL (owner must click Run now), DECISION-D7-DATA (a purchase).",
+    "workflow_health": "ci / refresh-data / nightly-backtest / stryker-weekly all green on recent runs. CAVEAT: a11y-axe reports success even when failing (continue-on-error) — its 2026-08-10 green run actually carried 33 violations.",
+    "blockers_reverified_not_assumed": {
+      "csp": "STILL report-only in production — header is content-security-policy-report-only. BLOCKER-OWNER-ENV remains true for CSP enforce.",
+      "auth": "/api/auth/providers returns {} — ZERO providers configured. GOOGLE_CLIENT_ID/SECRET and GITHUB_CLIENT_ID/SECRET are unset in production in addition to NEXTAUTH_SECRET. This is a GRACEFULLY handled state, not an outage: auth is optional by design, the app works signed-out, and /auth/signin renders a correct setup panel."
+    },
+    "bug_found_and_fixed": "The /auth/signin setup panel instructed the operator to set GITHUB_ID / GITHUB_SECRET, while lib/auth.ts gates on GITHUB_CLIENT_ID / GITHUB_CLIENT_SECRET (as does .env.example). An owner following that screen to clear BLOCKER-OWNER-ENV would have set two variables nothing reads and seen OAuth not configured persist with no feedback. Fixed; __tests__/components/signinEnvNames.test.tsx now pins page text, lib/auth.ts and .env.example together (validated both ways: 11/11 on the fix, fails on the original with a clear message)."
   }
 }

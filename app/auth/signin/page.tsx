@@ -54,7 +54,13 @@ export default async function SignInPage() {
               <p className="text-slate-300 font-medium pt-2">At least one provider</p>
               <ul className="list-disc pl-4 space-y-1 font-mono text-[11px]">
                 <li>GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET — redirect: <code className="text-slate-300">…/api/auth/callback/google</code></li>
-                <li>GITHUB_ID / GITHUB_SECRET — callback: <code className="text-slate-300">…/api/auth/callback/github</code></li>
+                {/* These names must match what lib/auth.ts actually reads. They said
+                    GITHUB_ID / GITHUB_SECRET until 2026-08-14 while the code gated on
+                    GITHUB_CLIENT_ID / GITHUB_CLIENT_SECRET (as does .env.example), so an
+                    owner following this screen would have set two variables nothing reads
+                    and seen "OAuth not configured" persist with no explanation.
+                    __tests__/components/signinEnvNames.test.tsx now pins them together. */}
+                <li>GITHUB_CLIENT_ID / GITHUB_CLIENT_SECRET — callback: <code className="text-slate-300">…/api/auth/callback/github</code></li>
               </ul>
             </div>
 
