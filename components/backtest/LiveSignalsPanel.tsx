@@ -206,9 +206,18 @@ export function LiveSignalsPanel() {
               ))}
             </select>
           </div>
+          {/* AL-2/DQ-7 (2026-08-15): this line used to read "Live data refreshes
+              every 60s". Nothing here refreshes every 60 seconds. The inputs are
+              committed weekly fixtures (scripts/backtestData/*.json, refreshed by
+              the Sunday 22:00 UTC data cron), the 60s was CACHE_TTL_MS in
+              app/api/backtest/live/route.ts — a server-side memo window for
+              recomputing the SAME frozen inputs — and this panel fetches exactly
+              once on mount (no polling), so nothing repeats client-side either.
+              Stating the fixture's as-of date and its real cadence is the only
+              claim here that survives contact with the data. */}
           {latestDataDate && (
             <div className="text-[10px] text-slate-400">
-              Data as of: <span className="text-slate-400 font-mono">{latestDataDate}</span> · Live data refreshes every 60s
+              Data through <span className="text-slate-400 font-mono">{latestDataDate}</span> · fixture refreshed weekly (Sun 22:00 UTC)
             </div>
           )}
         </div>
