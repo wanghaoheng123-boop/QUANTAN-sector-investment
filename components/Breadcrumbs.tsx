@@ -70,6 +70,27 @@ function getBreadcrumbs(pathname: string): Crumb[] {
     return crumbs
   }
 
+  // 2026-08-14 (F-IA-1): these three routes were unreachable from the UI, so
+  // they had never needed crumbs. They are in the nav now — without these
+  // branches they would render the bare "Home" crumb, which `Breadcrumbs`
+  // suppresses entirely (`crumbs.length <= 1`), leaving no trail at all.
+  if (pathname.startsWith('/portfolio/factor-attribution')) {
+    crumbs.push({ label: 'Portfolio', href: '/portfolio' })
+    crumbs.push({ label: 'Factor Attribution' })
+    return crumbs
+  }
+
+  if (pathname.startsWith('/portfolio')) {
+    crumbs.push({ label: 'Portfolio', href: '/portfolio' })
+    return crumbs
+  }
+
+  if (pathname.startsWith('/risk/scenarios')) {
+    crumbs.push({ label: 'Risk', href: '/risk/scenarios' })
+    crumbs.push({ label: 'Scenarios' })
+    return crumbs
+  }
+
   return crumbs
 }
 

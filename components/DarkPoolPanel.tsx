@@ -62,7 +62,7 @@ export default function DarkPoolPanel({
 
   const shortColor =
     shortSignal === 'DISTRIBUTION'
-      ? '#ff4757'
+      ? '#ff6b7a'
       : shortSignal === 'ACCUMULATION'
         ? '#00d084'
         : '#94a3b8'
@@ -88,7 +88,7 @@ export default function DarkPoolPanel({
         <>
           {/* Status note when no real data */}
           {statusNote && (
-            <div className="rounded-xl border border-slate-700 bg-slate-900/40 p-3 text-xs text-slate-500 leading-relaxed">
+            <div className="rounded-xl border border-slate-700 bg-slate-900/40 p-3 text-xs text-slate-400 leading-relaxed">
               <span className="text-amber-300/80 font-semibold">Note: </span>
               {statusNote}
             </div>
@@ -147,7 +147,7 @@ export default function DarkPoolPanel({
                 <div className="text-xs font-semibold" style={{ color: shortColor }}>
                   Short Interest Signal: {shortSignal}
                 </div>
-                <div className="text-[10px] text-slate-500 mt-0.5 leading-relaxed">
+                <div className="text-[10px] text-slate-400 mt-0.5 leading-relaxed">
                   {shortSignal === 'DISTRIBUTION'
                     ? 'Elevated short interest (>10% of float) may indicate bearish sentiment or institutional hedging.'
                     : shortSignal === 'ACCUMULATION'
@@ -161,7 +161,7 @@ export default function DarkPoolPanel({
 
           {/* Price */}
           {apiData.quote.price > 0 && (
-            <div className="flex items-center gap-3 text-xs text-slate-500">
+            <div className="flex items-center gap-3 text-xs text-slate-400">
               <span>
                 Last:{' '}
                 <span className="text-white font-mono">
@@ -205,7 +205,7 @@ export default function DarkPoolPanel({
       {/* ── Short interest / off-exchange bar (real or synthetic) ─── */}
       {(hasRealData || true) && (
         <div className="bg-slate-900/60 rounded-xl p-4 border border-slate-800" role="region" aria-label="Off-exchange flow sentiment">
-          <div className="flex items-center justify-between text-xs text-slate-500 mb-2">
+          <div className="flex items-center justify-between text-xs text-slate-400 mb-2">
             <span aria-label="Bearish sentiment">BEARISH</span>
             <span className="text-slate-300 font-medium">Off-Exchange Flow</span>
             <span aria-label="Bullish sentiment">BULLISH</span>
@@ -215,7 +215,7 @@ export default function DarkPoolPanel({
               className="h-full rounded-full transition-all duration-700"
               style={{
                 width: `${bullishPct}%`,
-                background: `linear-gradient(90deg, #ff4757 0%, ${color} 100%)`,
+                background: `linear-gradient(90deg, #ff6b7a 0%, ${color} 100%)`,
               }}
             />
           </div>
@@ -232,7 +232,7 @@ export default function DarkPoolPanel({
           <span className="text-sm font-semibold text-white">
             Block Prints — {ticker}
           </span>
-          <div className="flex items-center gap-2 text-xs text-slate-500">
+          <div className="flex items-center gap-2 text-xs text-slate-400">
             {!hasRealData && (
               <span className="px-2 py-0.5 rounded bg-amber-900/30 text-amber-400 border border-amber-500/30 text-[10px]">
                 ILLUSTRATIVE
@@ -247,7 +247,7 @@ export default function DarkPoolPanel({
           <table className="w-full text-xs">
             <caption className="sr-only">Dark pool prints — recent off-exchange block trades</caption>
             <thead>
-              <tr className="text-slate-500 border-b border-slate-800">
+              <tr className="text-slate-400 border-b border-slate-800">
                 <th scope="col" className="text-left px-4 py-2 font-medium">Time</th>
                 <th scope="col" className="text-right px-3 py-2 font-medium">Size</th>
                 <th scope="col" className="text-right px-3 py-2 font-medium">Price</th>
@@ -333,7 +333,7 @@ function MetricCard({
 }) {
   return (
     <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-3">
-      <div className="text-[10px] text-slate-500 mb-1 leading-tight">{label}</div>
+      <div className="text-[10px] text-slate-400 mb-1 leading-tight">{label}</div>
       <div className="text-lg font-bold font-mono text-white">{value}</div>
       <div className="text-[10px] text-slate-400 mt-0.5 leading-tight">{sub}</div>
     </div>

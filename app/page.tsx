@@ -109,6 +109,11 @@ export default function HomePage() {
   )
   const live = useLiveQuotes(liveTickers)
 
+  // One multiplexed SSE transport backs every subscribed ticker, so the
+  // per-ticker `connections` map is all-true or all-false. Collapse it once
+  // instead of recomputing the same `.some()` five times in the badge below.
+  const streamConnected = Object.values(live.connections).some(Boolean)
+
   // Merge live updates into the `quotes` state map. We don't replace the
   // whole map (the boot REST fetch may carry fields the SSE payload doesn't,
   // e.g. dataSource/provenance) — instead we overlay price/change/changePct
@@ -239,16 +244,21 @@ export default function HomePage() {
 
         {/* Hero */}
         <div className="text-center space-y-4 py-6">
-          {/* Phase 14 wave 38: status pill reflects live-stream state instead of
-              the legacy "Live" claim. Three states keyed off useLiveQuotes:
-                • emerald + pulsing  — all SSE connections healthy, market open
-                • amber              — connected, market closed (snapshot only)
-                • slate              — reconnecting / EventSource unavailable */}
+          {/* Status pill — three states keyed off useLiveQuotes:
+                • emerald + pulsing  — stream connected, market open
+                • amber              — stream connected, market closed (snapshot only)
+                • slate              — reconnecting / EventSource unavailable
+              2026-08-14: the trailing "N/M streams" counter is gone. It existed
+              because the dashboard once held one SSE connection PER ticker and
+              the browser's ~6-per-origin cap silently starved most of them, so
+              the count was real signal ("6/13"). With a single multiplexed
+              stream there is nothing to count — and connection topology was
+              never something to put in front of a user anyway. */}
           <div
             className={`inline-flex items-center gap-2.5 rounded-full px-4 py-1.5 text-xs mb-2 shadow-lg ${
-              live.marketOpen && Object.values(live.connections).some(Boolean)
+              live.marketOpen && streamConnected
                 ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 shadow-emerald-900/20'
-                : Object.values(live.connections).some(Boolean)
+                : streamConnected
                   ? 'bg-amber-500/10 border border-amber-500/30 text-amber-400 shadow-amber-900/20'
                   : 'bg-slate-700/30 border border-slate-600/40 text-slate-400'
             }`}
@@ -257,24 +267,21 @@ export default function HomePage() {
           >
             <span
               className={`w-1.5 h-1.5 rounded-full ${
-                live.marketOpen && Object.values(live.connections).some(Boolean)
+                live.marketOpen && streamConnected
                   ? 'bg-emerald-400 animate-pulse'
-                  : Object.values(live.connections).some(Boolean)
+                  : streamConnected
                     ? 'bg-amber-400'
                     : 'bg-slate-500'
               }`}
               aria-hidden="true"
             />
-            {live.marketOpen && Object.values(live.connections).some(Boolean)
+            {live.marketOpen && streamConnected
               ? 'LIVE'
-              : Object.values(live.connections).some(Boolean)
+              : streamConnected
                 ? 'MARKET CLOSED'
                 : 'CONNECTING'}
             <span className="text-slate-400">·</span>
             {lastUpdate ? `Updated ${lastUpdate.toLocaleTimeString()}` : 'Awaiting first tick…'}
-            <span className="ml-1 text-slate-500 font-mono text-[10px]">
-              {Object.values(live.connections).filter(Boolean).length}/{live.active} streams
-            </span>
           </div>
           <h1 className="text-4xl sm:text-5xl font-bold tracking-tight">
             <span className="gradient-text">Sector Intelligence</span>
@@ -288,8 +295,10 @@ export default function HomePage() {
         <section aria-labelledby="section-backtest" className="bg-gradient-to-r from-amber-950/40 via-slate-900/80 to-amber-950/30 rounded-2xl border border-amber-800/30 p-6">
           <div className="flex items-center justify-between flex-wrap gap-4">
             <div>
+              {/* 2026-08-14: dropped the hardcoded "NEW" badge — the backtest
+                  dashboard shipped months ago, so the badge was stale copy
+                  nothing could ever expire. */}
               <div className="flex items-center gap-2 mb-1">
-                <span className="text-xs font-mono text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded">NEW</span>
                 <h2 id="section-backtest" className="text-lg font-bold text-white">Institutional Backtest Dashboard</h2>
               </div>
               <p className="text-sm text-slate-400 max-w-lg">
@@ -298,7 +307,7 @@ export default function HomePage() {
             </div>
             <Link
               href="/backtest"
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-amber-600 hover:bg-amber-500 text-white text-sm font-semibold rounded-xl transition-colors shadow-lg shadow-amber-900/40"
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 text-sm font-semibold rounded-xl transition-colors shadow-lg shadow-amber-900/40"
             >
               <span>View Backtest</span>
               <span>→</span>
@@ -311,7 +320,7 @@ export default function HomePage() {
           <div className="flex items-center justify-between mb-5">
             <div>
               <h2 id="section-top-signals" className="text-lg font-bold text-white">Largest session moves</h2>
-              <p className="text-xs text-slate-500 mt-0.5">From Yahoo change % (normalized). UP/DOWN = vs prior close — not buy/sell advice.</p>
+              <p className="text-xs text-slate-400 mt-0.5">From Yahoo change % (normalized). UP/DOWN = vs prior close — not buy/sell advice.</p>
             </div>
             <Link href="/briefs" className="text-sm text-blue-400 hover:text-blue-300 transition-colors">
               View all briefs →
@@ -334,7 +343,7 @@ export default function HomePage() {
         <section aria-label="Market overview stats" className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
             { label: 'Sectors Bullish', value: buySignals.length, of: 11, color: '#00d084' },
-            { label: 'Sectors Bearish', value: sellSignals.length, of: 11, color: '#ff4757' },
+            { label: 'Sectors Bearish', value: sellSignals.length, of: 11, color: '#ff6b7a' },
             { label: 'Neutral', value: holdSignals.length, of: 11, color: '#f59e0b' },
             { label: 'Avg Confidence', value: `${avgConfidence}%`, color: '#f59e0b', noOf: true },
           ].map((stat, i) => (
@@ -343,7 +352,7 @@ export default function HomePage() {
                 {stat.value}
                 {stat.of && <span className="text-slate-400 text-base font-normal">/{stat.of}</span>}
               </div>
-              <div className="text-xs text-slate-500 mt-1">{stat.label}</div>
+              <div className="text-xs text-slate-400 mt-1">{stat.label}</div>
             </div>
           ))}
         </section>
@@ -353,7 +362,7 @@ export default function HomePage() {
           <div className="flex items-center justify-between mb-4">
             <div>
               <h2 id="section-market-breadth" className="text-sm font-bold text-white">Market Breadth</h2>
-              <p className="text-[10px] text-slate-500 mt-0.5">Session direction distribution across all sectors</p>
+              <p className="text-[10px] text-slate-400 mt-0.5">Session direction distribution across all sectors</p>
             </div>
             <div className="flex items-center gap-4 text-[10px] font-mono">
               <div className="flex items-center gap-1.5">
@@ -412,7 +421,7 @@ export default function HomePage() {
                 const sector = SECTORS.find((s) => s.etf === signal.etf)
                 const isUp = signal.direction === 'BUY'
                 const isDown = signal.direction === 'SELL'
-                const color = isUp ? '#00d084' : isDown ? '#ff4757' : '#eab308'
+                const color = isUp ? '#00d084' : isDown ? '#ff6b7a' : '#eab308'
                 return (
                   <div
                     key={signal.etf}
@@ -436,7 +445,7 @@ export default function HomePage() {
           <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
             <div>
               <h2 id="section-all-sectors" className="text-lg font-bold text-white">All Sectors</h2>
-              <p className="text-xs text-slate-500 mt-0.5">Click any sector to view K-line chart, dark pool data, and signals</p>
+              <p className="text-xs text-slate-400 mt-0.5">Click any sector to view K-line chart, dark pool data, and signals</p>
             </div>
             <div className="flex gap-2 flex-wrap">
               {['ALL', 'BUY', 'SELL', 'HOLD'].map((f) => (
@@ -446,7 +455,7 @@ export default function HomePage() {
                   aria-pressed={activeFilter === f}
                   className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
                     activeFilter === f
-                      ? 'bg-amber-600 text-white'
+                      ? 'bg-amber-500 text-slate-950'
                       : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
                   }`}
                 >
@@ -472,7 +481,7 @@ export default function HomePage() {
           <div className="flex items-center justify-between mb-5">
             <div>
               <h2 id="section-latest-news" className="text-lg font-bold text-white">Latest Financial News</h2>
-              <p className="text-xs text-slate-500 mt-0.5">
+              <p className="text-xs text-slate-400 mt-0.5">
                 {newsLoading ? 'Loading latest news...' : `Live from Yahoo Finance · ${newsBriefs.length} articles`}
               </p>
             </div>
@@ -543,10 +552,10 @@ export default function HomePage() {
                       <h3 className="text-base font-semibold text-white group-hover:text-slate-200 mb-1.5 leading-snug line-clamp-2">
                         {brief.title}
                       </h3>
-                      <p className="text-sm text-slate-500 line-clamp-2">{brief.summary}</p>
+                      <p className="text-sm text-slate-400 line-clamp-2">{brief.summary}</p>
                       <div className="flex flex-wrap gap-1.5 mt-2.5">
                         {brief.tags.slice(0, 4).map(tag => (
-                          <span key={tag} className="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-500">{tag}</span>
+                          <span key={tag} className="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-400">{tag}</span>
                         ))}
                       </div>
                     </div>
@@ -557,7 +566,7 @@ export default function HomePage() {
             </div>
           ) : (
             <div className="rounded-xl border border-slate-800 p-8 text-center">
-              <p className="text-slate-500">No news available at the moment. Check back shortly.</p>
+              <p className="text-slate-400">No news available at the moment. Check back shortly.</p>
             </div>
           )}
         </section>
@@ -574,7 +583,7 @@ export default function HomePage() {
               <div key={i} className="text-center space-y-2 p-4 rounded-xl border border-slate-800 hover:border-amber-800/40 hover:bg-amber-500/5 transition-all">
                 <div className="text-2xl">{item.icon}</div>
                 <div className="font-semibold text-white text-sm">{item.title}</div>
-                <div className="text-xs text-slate-500 leading-relaxed">{item.desc}</div>
+                <div className="text-xs text-slate-400 leading-relaxed">{item.desc}</div>
               </div>
             ))}
           </div>

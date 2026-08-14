@@ -66,7 +66,7 @@ export function WalkForwardPanel({ results }: { results: BacktestResult[] }) {
     }).filter((x): x is QuarterStats => x !== null)
   })()
 
-  if (!selected) return <div className="text-slate-500 text-sm py-8 text-center">No instrument data available.</div>
+  if (!selected) return <div className="text-slate-400 text-sm py-8 text-center">No instrument data available.</div>
 
   return (
     <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-6">
@@ -86,15 +86,15 @@ export function WalkForwardPanel({ results }: { results: BacktestResult[] }) {
       {/* Rolling quarterly performance */}
       {quarters.length > 0 && (
         <div className="mb-4">
-          <div className="text-xs text-slate-500 mb-2">Rolling Quarterly Performance — {selectedTicker}</div>
+          <div className="text-xs text-slate-400 mb-2">Rolling Quarterly Performance — {selectedTicker}</div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {quarters.map(q => (
               <div key={q.label} className="bg-slate-800/60 rounded-lg p-3 border border-slate-700/50">
-                <div className="text-[10px] text-slate-500 mb-1">{q.label}</div>
+                <div className="text-[10px] text-slate-400 mb-1">{q.label}</div>
                 <div className={`text-lg font-bold font-mono ${q.ann >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                   {(q.ann * 100).toFixed(1)}%
                 </div>
-                <div className="text-[10px] text-slate-500 mt-0.5">
+                <div className="text-[10px] text-slate-400 mt-0.5">
                   Sharpe: {q.sharpe != null ? q.sharpe.toFixed(2) : '—'}
                 </div>
                 <div className={`text-[10px] mt-0.5 ${q.ret >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
@@ -109,19 +109,19 @@ export function WalkForwardPanel({ results }: { results: BacktestResult[] }) {
       {/* Overfitting metric */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="bg-slate-800/40 rounded-lg p-3 border border-slate-700/50">
-          <div className="text-[10px] text-slate-500 uppercase mb-1">In-Sample Ann. Return</div>
+          <div className="text-[10px] text-slate-400 uppercase mb-1">In-Sample Ann. Return</div>
           <div className={`text-xl font-bold font-mono ${selected.annualizedReturn >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
             {(selected.annualizedReturn * 100).toFixed(1)}%
           </div>
         </div>
         <div className="bg-slate-800/40 rounded-lg p-3 border border-slate-700/50">
-          <div className="text-[10px] text-slate-500 uppercase mb-1">B&amp;H Ann. Return</div>
+          <div className="text-[10px] text-slate-400 uppercase mb-1">B&amp;H Ann. Return</div>
           <div className={`text-xl font-bold font-mono ${selected.bnhReturn >= 0 ? 'text-slate-300' : 'text-red-300'}`}>
             {(selected.bnhReturn * 100).toFixed(1)}%
           </div>
         </div>
         <div className="bg-slate-800/40 rounded-lg p-3 border border-slate-700/50">
-          <div className="text-[10px] text-slate-500 uppercase mb-1">Strategy Alpha</div>
+          <div className="text-[10px] text-slate-400 uppercase mb-1">Strategy Alpha</div>
           <div className={`text-xl font-bold font-mono ${selected.excessReturn >= 0 ? 'text-cyan-400' : 'text-orange-400'}`}>
             {(selected.excessReturn * 100).toFixed(1)}%
           </div>

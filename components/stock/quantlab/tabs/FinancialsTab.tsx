@@ -10,7 +10,7 @@ export function FinancialsTab({ data }: { data: QuantLabPayload }) {
             <div className="overflow-x-auto rounded-xl border border-slate-800">
               <table className="w-full text-xs font-mono">
                 <thead>
-                  <tr className="text-slate-500 border-b border-slate-800 text-left">
+                  <tr className="text-slate-400 border-b border-slate-800 text-left">
                     <th className="p-2">Period</th>
                     <th className="p-2 text-right">Assets</th>
                     <th className="p-2 text-right">Liabilities</th>
@@ -24,7 +24,7 @@ export function FinancialsTab({ data }: { data: QuantLabPayload }) {
                 <tbody>
                   {data.balances.map((b, i) => (
                     <tr key={i} className="border-b border-slate-800/60 text-slate-300">
-                      <td className="p-2 text-slate-500">{b.endDate ?? '—'}</td>
+                      <td className="p-2 text-slate-400">{b.endDate ?? '—'}</td>
                       <td className="p-2 text-right">{fmtB(b.totalAssets)}</td>
                       <td className="p-2 text-right">{fmtB(b.totalLiab)}</td>
                       <td className="p-2 text-right">{fmtB(b.equity)}</td>
@@ -42,7 +42,7 @@ export function FinancialsTab({ data }: { data: QuantLabPayload }) {
             <div className="overflow-x-auto rounded-xl border border-slate-800">
               <table className="w-full text-xs font-mono">
                 <thead>
-                  <tr className="text-slate-500 border-b border-slate-800 text-left">
+                  <tr className="text-slate-400 border-b border-slate-800 text-left">
                     <th className="p-2">Period</th>
                     <th className="p-2 text-right">Revenue</th>
                     <th className="p-2 text-right">Gross profit</th>
@@ -52,7 +52,7 @@ export function FinancialsTab({ data }: { data: QuantLabPayload }) {
                 <tbody>
                   {data.incomes.map((r, i) => (
                     <tr key={i} className="border-b border-slate-800/60 text-slate-300">
-                      <td className="p-2 text-slate-500">{r.endDate ?? '—'}</td>
+                      <td className="p-2 text-slate-400">{r.endDate ?? '—'}</td>
                       <td className="p-2 text-right">{fmtB(r.revenue)}</td>
                       <td className="p-2 text-right">{fmtB(r.grossProfit)}</td>
                       <td className="p-2 text-right">{fmtB(r.netIncome)}</td>

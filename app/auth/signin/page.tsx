@@ -25,7 +25,7 @@ export default async function SignInPage() {
             AG
           </div>
           <h1 className="text-xl font-bold text-white">Sign in (optional)</h1>
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-slate-400">
             The rest of the app works without an account. OAuth only syncs your watchlist key in the browser when you are logged in (JWT — no user database in this repo).
           </p>
         </div>
@@ -44,10 +44,10 @@ export default async function SignInPage() {
               <p className="text-slate-300 font-medium">Required for NextAuth</p>
               <ul className="list-disc pl-4 space-y-1 font-mono text-[11px]">
                 <li>
-                  <span className="text-slate-500">NEXTAUTH_SECRET=</span> run <code className="text-slate-300">openssl rand -base64 32</code>
+                  <span className="text-slate-400">NEXTAUTH_SECRET=</span> run <code className="text-slate-300">openssl rand -base64 32</code>
                 </li>
                 <li>
-                  <span className="text-slate-500">NEXTAUTH_URL=</span>
+                  <span className="text-slate-400">NEXTAUTH_URL=</span>
                   <span className="text-slate-300"> {baseUrl}</span>
                 </li>
               </ul>

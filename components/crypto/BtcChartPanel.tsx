@@ -11,7 +11,7 @@ const KLineChart = dynamic(() => import('@/components/KLineChart'), {
   ssr: false,
   loading: () => (
     <div className="h-[480px] bg-slate-800/20 rounded-xl flex items-center justify-center border border-slate-800/50">
-      <span className="text-slate-500 text-sm font-mono">Loading chart…</span>
+      <span className="text-slate-400 text-sm font-mono">Loading chart…</span>
     </div>
   ),
 })
@@ -66,7 +66,7 @@ function BtcChartPanel({
                 {wsConnected ? 'KLINE WSS' : 'REST + POLL'}
               </span>
             </div>
-            <div className="flex items-center gap-3 text-xs text-slate-500 font-mono">
+            <div className="flex items-center gap-3 text-xs text-slate-400 font-mono">
               <span>{activeRange.toUpperCase()} BARS</span>
               <span>{candles.length} candles</span>
             </div>
@@ -85,7 +85,7 @@ function BtcChartPanel({
           )}
           {loading && candles.length === 0 ? (
             <div className="h-[480px] bg-slate-800/20 rounded-xl animate-pulse flex flex-col items-center justify-center border border-slate-800/50">
-              <span className="text-slate-500 text-sm font-mono mb-2">Loading market data…</span>
+              <span className="text-slate-400 text-sm font-mono mb-2">Loading market data…</span>
             </div>
           ) : candles.length > 0 ? (
             <CryptoChartBoundary title="BTC chart crashed">
@@ -103,11 +103,11 @@ function BtcChartPanel({
             </CryptoChartBoundary>
           ) : (
             <div className="h-[480px] bg-slate-800/10 rounded-xl flex flex-col items-center justify-center gap-2 border border-dashed border-slate-800 px-6 text-center">
-              <span className="text-slate-500 text-sm">No candle data yet</span>
+              <span className="text-slate-400 text-sm">No candle data yet</span>
               <span className="text-[11px] text-slate-400 max-w-md">
                 If this persists, open DevTools → Network, reload, and check{' '}
-                <code className="text-slate-500">/api/crypto/btc</code> (should be 200 with a{' '}
-                <code className="text-slate-500">candles</code> array). Disable VPN or try another network if all
+                <code className="text-slate-400">/api/crypto/btc</code> (should be 200 with a{' '}
+                <code className="text-slate-400">candles</code> array). Disable VPN or try another network if all
                 exchanges time out.
               </span>
             </div>
@@ -123,7 +123,7 @@ function BtcChartPanel({
               onClick={() => onIndicatorPresetChange(val)}
               aria-pressed={activeIndicator === val}
               className={`px-2.5 py-1 text-[11px] rounded-md transition-all ${
-                activeIndicator === val ? 'bg-slate-600 text-white' : 'text-slate-500 hover:text-slate-300'
+                activeIndicator === val ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-300'
               }`}
             >
               {label}

@@ -79,7 +79,7 @@ export default function CommoditiesPage() {
             ETF and ETP proxies for energy, metals, and agriculture. Use charts on each symbol page; verify roll yield and tax treatment with your desk before sizing.
           </p>
         </div>
-        <div className="text-xs text-slate-500 font-mono">
+        <div className="text-xs text-slate-400 font-mono">
           {lastUpdate ? `Last update ${lastUpdate.toLocaleTimeString()}` : 'Loading…'}
         </div>
       </div>
@@ -112,7 +112,7 @@ export default function CommoditiesPage() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-slate-800 bg-slate-900/80 text-left text-xs uppercase tracking-wider text-slate-500">
+              <tr className="border-b border-slate-800 bg-slate-900/80 text-left text-xs uppercase tracking-wider text-slate-400">
                 <th className="px-4 py-3">Symbol</th>
                 <th className="px-4 py-3">Name</th>
                 <th className="px-4 py-3 hidden md:table-cell">Category</th>
@@ -138,7 +138,7 @@ export default function CommoditiesPage() {
                       </div>
                       <div className="text-xs text-slate-400 truncate">{c.benchmarkNote}</div>
                     </td>
-                    <td className="px-4 py-3 hidden md:table-cell capitalize text-slate-500">{c.category}</td>
+                    <td className="px-4 py-3 hidden md:table-cell capitalize text-slate-400">{c.category}</td>
                     <td className="px-4 py-3 text-right font-mono text-white">
                       {q ? q.price.toFixed(2) : '—'}
                     </td>
@@ -147,7 +147,7 @@ export default function CommoditiesPage() {
                     >
                       {q ? `${up ? '+' : ''}${q.changePct.toFixed(2)}%` : '—'}
                     </td>
-                    <td className="px-4 py-3 text-right font-mono text-slate-500 hidden sm:table-cell">
+                    <td className="px-4 py-3 text-right font-mono text-slate-400 hidden sm:table-cell">
                       {q && q.volume ? `${(q.volume / 1e6).toFixed(2)}M` : '—'}
                     </td>
                     <td className="px-4 py-3">

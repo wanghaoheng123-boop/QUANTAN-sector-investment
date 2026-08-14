@@ -25,10 +25,10 @@ function BtcHeader({ btcPrice, wsConnected }: BtcHeaderProps) {
             </div>
             <div>
               <div className="flex items-center gap-2 mb-0.5">
-                <Link href="/" className="text-xs text-slate-500 hover:text-slate-400">
+                <Link href="/" className="text-xs text-slate-400 hover:text-slate-200">
                   Markets
                 </Link>
-                <span className="text-slate-700 text-xs">/</span>
+                <span className="text-slate-700 text-xs" aria-hidden="true">/</span>
                 <span className="text-xs text-slate-400">Crypto</span>
               </div>
               <h1 className="text-2xl font-bold text-white tracking-wide">Bitcoin (BTC)</h1>

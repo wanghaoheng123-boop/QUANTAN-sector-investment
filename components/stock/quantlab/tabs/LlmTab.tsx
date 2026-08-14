@@ -117,7 +117,7 @@ export const LlmTab = memo(function LlmTab(props: LlmTabProps) {
               </div>
               <p className="mt-2 text-[11px] text-slate-400">{llmBackendHealth.message}</p>
               {llmBackendHealth.checked && llmBackendHealth.base && (
-                <p className="mt-1 text-[10px] text-slate-500 font-mono break-all">
+                <p className="mt-1 text-[10px] text-slate-400 font-mono break-all">
                   {llmBackendHealth.source || 'backend'}: {llmBackendHealth.base}
                 </p>
               )}
@@ -280,7 +280,7 @@ export const LlmTab = memo(function LlmTab(props: LlmTabProps) {
                     llmBackendHealth.status === 'config_error' ||
                     llmBackendHealth.status === 'unreachable'
                   }
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-xs font-semibold transition-colors"
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 text-xs font-semibold transition-colors"
                 >
                   {llmLoading ? '⏳ Running agents…' : '▶ Run LLM Analysis'}
                 </button>

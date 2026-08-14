@@ -92,7 +92,7 @@ export default function InstrumentTable({ results, sectorColors }: Props) {
                   key={col.key}
                   scope="col"
                   aria-sort={sortKey === col.key ? (sortDir === 'desc' ? 'descending' : 'ascending') : 'none'}
-                  className={`px-3 py-2.5 ${col.align ?? 'text-right'} text-slate-500 uppercase tracking-wider font-medium select-none`}
+                  className={`px-3 py-2.5 ${col.align ?? 'text-right'} text-slate-400 uppercase tracking-wider font-medium select-none`}
                 >
                   {/* F4 (WS-F a11y): the sort control was a clickable <span> —
                       not focusable or keyboard-operable (WCAG 2.1.1 / 4.1.2). A

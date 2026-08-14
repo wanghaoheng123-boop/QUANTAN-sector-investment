@@ -17,7 +17,7 @@ exports[`QuantLabPanel (Q-058-NEW snapshot precondition) > renders error state w
           Quant Lab
         </span>
         <span
-          class="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-500 font-mono"
+          class="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 font-mono"
         >
           MSFT
         </span>
@@ -28,7 +28,7 @@ exports[`QuantLabPanel (Q-058-NEW snapshot precondition) > renders error state w
         MSFT
       </h2>
       <p
-        class="text-xs text-slate-500 mt-0.5"
+        class="text-xs text-slate-400 mt-0.5"
       />
     </div>
     <button
@@ -138,7 +138,7 @@ exports[`QuantLabPanel (Q-058-NEW snapshot precondition) > renders loading skele
           Quant Lab
         </span>
         <span
-          class="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-500 font-mono"
+          class="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 font-mono"
         >
           AAPL
         </span>
@@ -149,7 +149,7 @@ exports[`QuantLabPanel (Q-058-NEW snapshot precondition) > renders loading skele
         AAPL
       </h2>
       <p
-        class="text-xs text-slate-500 mt-0.5"
+        class="text-xs text-slate-400 mt-0.5"
       />
     </div>
     <button

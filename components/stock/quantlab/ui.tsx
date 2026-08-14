@@ -3,7 +3,7 @@
 export function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg bg-slate-950/40 border border-slate-800/80 px-2 py-1.5">
-      <div className="text-slate-500">{label}</div>
+      <div className="text-slate-400">{label}</div>
       <div className="text-slate-200 font-mono">{value}</div>
     </div>
   )

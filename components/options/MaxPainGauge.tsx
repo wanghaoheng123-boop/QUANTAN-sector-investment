@@ -18,7 +18,7 @@ export default function MaxPainGauge({ maxPain, spot }: Props) {
   // spot=0. A null maxPain (no OI on the chain) hit `.toFixed` and threw.
   if (!Number.isFinite(spot) || spot <= 0 || maxPain == null || !Number.isFinite(maxPain)) {
     return (
-      <div className="text-xs text-slate-500 py-2">
+      <div className="text-xs text-slate-400 py-2">
         Max-pain data unavailable for this chain.
       </div>
     )

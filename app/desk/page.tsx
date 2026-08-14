@@ -130,7 +130,7 @@ export default function DeskPage() {
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight">Trading desk</h1>
-          <p className="text-xs text-slate-500 mt-1">
+          <p className="text-xs text-slate-400 mt-1">
             High-density quote strip for floor-style monitoring. Pair with your vendor feeds for execution.
           </p>
         </div>
@@ -175,7 +175,7 @@ export default function DeskPage() {
         if (sectionRows.length === 0) return null
         return (
           <div key={key} className="rounded-xl border border-slate-800 bg-slate-950/50 overflow-hidden">
-            <div className="px-3 py-2 border-b border-slate-800 text-[10px] uppercase tracking-widest text-slate-500 font-semibold">
+            <div className="px-3 py-2 border-b border-slate-800 text-[10px] uppercase tracking-widest text-slate-400 font-semibold">
               {title}
             </div>
             <div className="overflow-x-auto">
@@ -183,7 +183,7 @@ export default function DeskPage() {
               <table className="w-full text-xs font-mono">
                 <caption className="sr-only">{`${title} live quotes — symbol, name, last price, dollar change, percent change, volume in millions, watchlist status, and drill-down link.`}</caption>
                 <thead>
-                  <tr className="text-slate-500 border-b border-slate-800/80">
+                  <tr className="text-slate-400 border-b border-slate-800/80">
                     <th scope="col" className="text-left px-2 py-1.5 w-16">Sym</th>
                     <th scope="col" className="text-left px-2 py-1.5 min-w-[120px]">Name</th>
                     <th scope="col" className="text-right px-2 py-1.5">Last</th>
@@ -201,7 +201,7 @@ export default function DeskPage() {
                     return (
                       <tr key={t} className="border-b border-slate-800/40 hover:bg-slate-900/60">
                         <td className="px-2 py-1 text-slate-200 font-semibold">{sym}</td>
-                        <td className="px-2 py-1 text-slate-500 truncate max-w-[180px]" title={label}>
+                        <td className="px-2 py-1 text-slate-400 truncate max-w-[180px]" title={label}>
                           {label}
                         </td>
                         <td className="px-2 py-1 text-right text-slate-100">{q ? formatCurrency(q.price) : '—'}</td>
@@ -235,7 +235,7 @@ export default function DeskPage() {
                           {SECTORS.some((s) => s.etf === t) && (
                             <>
                               {' · '}
-                              <Link href={`/sector/${SECTORS.find((s) => s.etf === t)!.slug}`} className="text-slate-500 hover:text-slate-300">
+                              <Link href={`/sector/${SECTORS.find((s) => s.etf === t)!.slug}`} className="text-slate-400 hover:text-slate-300">
                                 sector
                               </Link>
                             </>

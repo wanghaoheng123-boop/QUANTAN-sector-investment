@@ -12,11 +12,11 @@ export function QuantLabMarketCards({
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
       <div className="rounded-lg border border-slate-800 p-3">
-        <p className="text-xs text-slate-500">Price</p>
+        <p className="text-xs text-slate-400">Price</p>
         <p className="text-lg text-slate-100">{price != null ? formatCurrency(price) : '—'}</p>
       </div>
       <div className="rounded-lg border border-slate-800 p-3">
-        <p className="text-xs text-slate-500">Market cap</p>
+        <p className="text-xs text-slate-400">Market cap</p>
         <p className="text-lg text-slate-100">
           {market.marketCap != null ? formatCurrency(market.marketCap) : '—'}
         </p>

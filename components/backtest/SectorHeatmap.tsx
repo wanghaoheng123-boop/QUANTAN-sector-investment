@@ -15,7 +15,7 @@ export default function SectorHeatmap({ sectorSummary, sectorColors }: Props) {
   if (!sectorSummary || typeof sectorSummary !== 'object') {
     return (
       <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-6 flex items-center justify-center h-32">
-        <p className="text-slate-500 text-sm">Loading sector data…</p>
+        <p className="text-slate-400 text-sm">Loading sector data…</p>
       </div>
     )
   }
@@ -54,7 +54,7 @@ export default function SectorHeatmap({ sectorSummary, sectorColors }: Props) {
               <div className={`text-2xl font-bold font-mono ${isPositive ? 'text-emerald-400' : 'text-red-400'}`}>
                 {isPositive ? '+' : '−'}{(ret * 100).toFixed(2)}%
               </div>
-              <div className="text-[10px] text-slate-500 mt-1">
+              <div className="text-[10px] text-slate-400 mt-1">
                 {isPositive ? '+' : '−'}{(data.totalReturn * 100).toFixed(2)}% total
               </div>
               {/* Bar visualization */}

@@ -9,7 +9,7 @@ export function FrameworksTab() {
   const [openFrameworkId, setOpenFrameworkId] = useState<string | null>(null)
   return (
     <div className="space-y-4">
-            <p className="text-xs text-slate-500 leading-relaxed">
+            <p className="text-xs text-slate-400 leading-relaxed">
               Seven <strong className="text-slate-400">framework themes</strong> distilled from your QUANTAN Investment Codex (pillars / sprints). They are checklists for disciplined thinking — not impersonations of any investor and not trade instructions.
             </p>
             <div className="space-y-3">
@@ -30,9 +30,9 @@ export function FrameworksTab() {
                       {frameworkIcon(f.id)}
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-semibold text-white">{f.title}</div>
-                        <div className="text-[11px] text-slate-500 mt-0.5 truncate">{f.themes[0]}</div>
+                        <div className="text-[11px] text-slate-400 mt-0.5 truncate">{f.themes[0]}</div>
                       </div>
-                      <ChevronDown className={`w-4 h-4 text-slate-500 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+                      <ChevronDown className={`w-4 h-4 text-slate-400 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
                     </button>
                     {open && (
                       <div id={`framework-panel-${f.id}`} className="px-4 pb-4 pt-0 space-y-3 border-t border-slate-800/60">
@@ -41,7 +41,7 @@ export function FrameworksTab() {
                             <li key={t}>{t}</li>
                           ))}
                         </ul>
-                        <div className="text-[11px] text-slate-500 uppercase tracking-wider font-semibold">Checklist</div>
+                        <div className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">Checklist</div>
                         <ul className="text-xs text-slate-300 space-y-1.5">
                           {f.checklist.map((c) => (
                             <li key={c} className="flex gap-2">

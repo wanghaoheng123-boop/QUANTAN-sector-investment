@@ -48,7 +48,7 @@ interface LiqData {
 function MetricCard({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
   return (
     <div className="bg-slate-900/60 rounded-xl p-4 border border-slate-800">
-      <div className="text-xs text-slate-500 mb-1 uppercase tracking-wider">{label}</div>
+      <div className="text-xs text-slate-400 mb-1 uppercase tracking-wider">{label}</div>
       <div className={`text-lg font-bold font-mono ${color ?? 'text-white'}`}>{value}</div>
       {sub && <div className="text-[10px] text-slate-400 mt-0.5">{sub}</div>}
     </div>
@@ -229,19 +229,19 @@ export default function BtcQuantLab({ candles }: Props) {
       label: 'RSI(14)',
       value: rsiOk ? latestRSI.toFixed(1) : '—',
       signal: !rsiOk ? 'INSUFFICIENT DATA' : latestRSI > 70 ? 'OVERBOUGHT' : latestRSI < 30 ? 'OVERSOLD' : 'NEUTRAL',
-      color: !rsiOk ? 'text-slate-500' : latestRSI > 70 ? 'text-red-400' : latestRSI < 30 ? 'text-green-400' : 'text-slate-400',
+      color: !rsiOk ? 'text-slate-400' : latestRSI > 70 ? 'text-red-400' : latestRSI < 30 ? 'text-green-400' : 'text-slate-400',
     },
     {
       label: 'MACD Histogram',
       value: macdOk ? (macdHist as number).toFixed(2) : '—',
       signal: !macdOk ? 'INSUFFICIENT DATA' : (macdHist ?? 0) > 0 ? 'BULLISH' : (macdHist ?? 0) < 0 ? 'BEARISH' : 'FLAT',
-      color: !macdOk ? 'text-slate-500' : (macdHist ?? 0) > 0 ? 'text-green-400' : (macdHist ?? 0) < 0 ? 'text-red-400' : 'text-slate-400',
+      color: !macdOk ? 'text-slate-400' : (macdHist ?? 0) > 0 ? 'text-green-400' : (macdHist ?? 0) < 0 ? 'text-red-400' : 'text-slate-400',
     },
     {
       label: 'EMA 20 vs 50',
       value: !emaOk ? '—' : latestEMA20 > latestEMA50 ? 'E20>E50 ↑' : 'E20<E50 ↓',
       signal: !emaOk ? 'INSUFFICIENT DATA' : latestEMA20 > latestEMA50 ? 'BULLISH CROSS' : 'BEARISH CROSS',
-      color: !emaOk ? 'text-slate-500' : latestEMA20 > latestEMA50 ? 'text-green-400' : 'text-red-400',
+      color: !emaOk ? 'text-slate-400' : latestEMA20 > latestEMA50 ? 'text-green-400' : 'text-red-400',
     },
     {
       label: 'VWAP',
@@ -263,7 +263,7 @@ export default function BtcQuantLab({ candles }: Props) {
         : latestATR > latestClose * 0.05
           ? 'HIGH VOL'
           : 'NORMAL VOL',
-      color: !atrOk ? 'text-slate-500' : latestATR > latestClose * 0.05 ? 'text-amber-400' : 'text-slate-400',
+      color: !atrOk ? 'text-slate-400' : latestATR > latestClose * 0.05 ? 'text-amber-400' : 'text-slate-400',
     },
     {
       label: 'Stoch %K / %D',
@@ -276,7 +276,7 @@ export default function BtcQuantLab({ candles }: Props) {
             ? 'OVERSOLD'
             : 'NEUTRAL',
       color: !stochOk
-        ? 'text-slate-500'
+        ? 'text-slate-400'
         : latestStK > 80
           ? 'text-red-400'
           : latestStK < 20
@@ -331,14 +331,14 @@ export default function BtcQuantLab({ candles }: Props) {
 
   return (
     <div className="space-y-6">
-      <p className="text-[11px] text-slate-500 border border-slate-800 rounded-lg px-3 py-2 bg-slate-900/40">
+      <p className="text-[11px] text-slate-400 border border-slate-800 rounded-lg px-3 py-2 bg-slate-900/40">
         <span className="text-emerald-400/90 font-semibold">Live quant</span> — RSI, MACD, EMA, Bollinger, VWAP, ATR(14), Stochastic(14,3,3), 200MA regime recalculated in your browser from the loaded candle series ({candles.length} bars). Derivatives (funding, OI) refresh every 30s; liquidations every 60s. Exchange APIs may be empty when geo-blocked.
       </p>
       {derivativesError && (
         <div className="rounded-lg border border-amber-500/30 bg-amber-950/20 px-3 py-2 text-[11px] text-amber-200/90">
           <span className="font-medium text-amber-100">Derivatives / liquidity API</span>
           <p className="text-amber-200/80 mt-0.5">{derivativesError}</p>
-          <p className="text-slate-500 mt-1">Price-action indicators above still work; perp metrics load from Bybit/OKX public APIs (no Binance).</p>
+          <p className="text-slate-400 mt-1">Price-action indicators above still work; perp metrics load from Bybit/OKX public APIs (no Binance).</p>
         </div>
       )}
       {/* Top signals grid */}
@@ -346,7 +346,7 @@ export default function BtcQuantLab({ candles }: Props) {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {signals.map(s => (
             <div key={s.label} className="bg-slate-900/60 rounded-xl p-3.5 border border-slate-800">
-              <div className="text-[10px] text-slate-500 uppercase tracking-wide mb-1">{s.label}</div>
+              <div className="text-[10px] text-slate-400 uppercase tracking-wide mb-1">{s.label}</div>
               <div className={`text-base font-bold font-mono ${s.color}`}>{s.value}</div>
               <div className={`text-[10px] mt-1 ${s.color}`}>{s.signal}</div>
             </div>
@@ -359,7 +359,7 @@ export default function BtcQuantLab({ candles }: Props) {
         <div className="flex flex-wrap gap-1 bg-slate-900 rounded-lg p-1 border border-slate-800 mb-4 w-fit">
           {([['funding', 'Funding & OI'], ['liquidations', 'Liquidations'], ['signals', 'Analysis']] as const).map(([tab, label]) => (
             <button key={tab} onClick={() => setActiveMetricTab(tab)}
-              className={`px-4 py-1.5 text-xs rounded-md transition-all ${activeMetricTab === tab ? 'bg-slate-700 text-white' : 'text-slate-500 hover:text-slate-300'}`}>
+              className={`px-4 py-1.5 text-xs rounded-md transition-all ${activeMetricTab === tab ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-slate-300'}`}>
               {label}
             </button>
           ))}
@@ -388,7 +388,7 @@ export default function BtcQuantLab({ candles }: Props) {
               label="Data Source"
               value={metricsLoading ? 'Refreshing…' : metrics?.source?.includes('Unavailable') ? 'Unavailable' : (metrics?.source ?? '—')}
               sub={metricsFetchedAt ? `Updated ${metricsFetchedAt}` : undefined}
-              color="text-slate-500"
+              color="text-slate-400"
             />
           </div>
         )}
@@ -433,8 +433,8 @@ export default function BtcQuantLab({ candles }: Props) {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="bg-slate-900/60 rounded-xl p-4 border border-slate-800">
-                <div className="text-xs text-slate-500 uppercase tracking-wide mb-2">Trend</div>
-                <div className={`text-lg font-bold ${!emaOk ? 'text-slate-500' : latestEMA20 > latestEMA50 ? 'text-green-400' : 'text-red-400'}`}>
+                <div className="text-xs text-slate-400 uppercase tracking-wide mb-2">Trend</div>
+                <div className={`text-lg font-bold ${!emaOk ? 'text-slate-400' : latestEMA20 > latestEMA50 ? 'text-green-400' : 'text-red-400'}`}>
                   {!emaOk ? '—' : latestEMA20 > latestEMA50 ? '↑ BULLISH TREND' : '↓ BEARISH TREND'}
                 </div>
                 <div className="text-[10px] text-slate-400 mt-1">
@@ -444,8 +444,8 @@ export default function BtcQuantLab({ candles }: Props) {
                 </div>
               </div>
               <div className="bg-slate-900/60 rounded-xl p-4 border border-slate-800">
-                <div className="text-xs text-slate-500 uppercase tracking-wide mb-2">Momentum</div>
-                <div className={`text-lg font-bold ${!rsiOk ? 'text-slate-500' : latestRSI > 70 ? 'text-red-400' : latestRSI < 30 ? 'text-green-400' : 'text-slate-400'}`}>
+                <div className="text-xs text-slate-400 uppercase tracking-wide mb-2">Momentum</div>
+                <div className={`text-lg font-bold ${!rsiOk ? 'text-slate-400' : latestRSI > 70 ? 'text-red-400' : latestRSI < 30 ? 'text-green-400' : 'text-slate-400'}`}>
                   {rsiOk ? (
                     <>RSI {latestRSI.toFixed(1)} — {latestRSI > 70 ? 'OVERBOUGHT' : latestRSI < 30 ? 'OVERSOLD' : 'NEUTRAL'}</>
                   ) : (
@@ -457,14 +457,14 @@ export default function BtcQuantLab({ candles }: Props) {
                 </div>
               </div>
               <div className="bg-slate-900/60 rounded-xl p-4 border border-slate-800">
-                <div className="text-xs text-slate-500 uppercase tracking-wide mb-2">Rainbow Stage</div>
+                <div className="text-xs text-slate-400 uppercase tracking-wide mb-2">Rainbow Stage</div>
                 <div className={`text-lg font-bold`} style={{ color: rainbowBand.color === '#f59e0b' ? '#f59e0b' : undefined }}>
                   {rainbowBand.label}
                 </div>
                 <div className="text-[10px] text-slate-400 mt-1">Based on 20-week high/low range</div>
               </div>
               <div className="bg-slate-900/60 rounded-xl p-4 border border-slate-800">
-                <div className="text-xs text-slate-500 uppercase tracking-wide mb-2">Volatility</div>
+                <div className="text-xs text-slate-400 uppercase tracking-wide mb-2">Volatility</div>
                 <div className={`text-lg font-bold text-slate-400`}>
                   {bbPositionPct != null && Number.isFinite(bbPositionPct) ? `${bbPositionPct.toFixed(0)}%` : 'N/A'} BB Position
                 </div>
@@ -497,7 +497,7 @@ export default function BtcQuantLab({ candles }: Props) {
                   </div>
                 </div>
                 <p className="text-xs text-slate-400 mt-2 leading-relaxed">{regime.dipSignalExplained}</p>
-                <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-2 text-[10px] text-slate-500">
+                <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-2 text-[10px] text-slate-400">
                   <div>
                     <span className="uppercase tracking-wide">Risk: </span>
                     <span className={regime.riskLevel === 'low' ? 'text-green-400' : regime.riskLevel === 'medium' ? 'text-amber-400' : 'text-red-400'}>{regime.riskLevel}</span>
@@ -511,7 +511,7 @@ export default function BtcQuantLab({ candles }: Props) {
             )}
             {ma200 == null && (
               <div className="rounded-xl border border-slate-800 p-4 mt-2 bg-slate-900/40">
-                <div className="text-sm text-slate-500">200-day MA Regime requires at least 200 daily candles to compute — not enough history loaded yet.</div>
+                <div className="text-sm text-slate-400">200-day MA Regime requires at least 200 daily candles to compute — not enough history loaded yet.</div>
               </div>
             )}
           </div>
@@ -519,7 +519,7 @@ export default function BtcQuantLab({ candles }: Props) {
       </Section>
 
       {/* Disclaimer */}
-      <div className="text-center text-[10px] text-slate-700 max-w-2xl mx-auto space-y-1">
+      <div className="text-center text-[10px] text-slate-400 max-w-2xl mx-auto space-y-1">
         <p>
           Indicators are simplified heuristics — not tested alpha, not execution logic, and can disagree with other venues or
           professional systems. Funding is shown in exchange decimal form; always verify on the exchange before trading.

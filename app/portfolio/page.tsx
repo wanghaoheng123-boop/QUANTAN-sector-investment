@@ -38,20 +38,20 @@ export default function PortfolioPage() {
       ) : (
         <div className="grid gap-4 sm:grid-cols-3">
           <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-4">
-            <p className="text-xs text-slate-500 uppercase">Best config</p>
+            <p className="text-xs text-slate-400 uppercase">Best config</p>
             <p className="text-lg text-slate-100 font-medium">{best.label}</p>
           </div>
           <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-4">
-            <p className="text-xs text-slate-500 uppercase">Win rate</p>
+            <p className="text-xs text-slate-400 uppercase">Win rate</p>
             <p className="text-lg text-emerald-400">{best.metrics.winRate.toFixed(2)}%</p>
           </div>
           <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-4">
-            <p className="text-xs text-slate-500 uppercase">Max drawdown</p>
+            <p className="text-xs text-slate-400 uppercase">Max drawdown</p>
             <p className="text-lg text-amber-400">{best.metrics.maxDrawdown.toFixed(2)}%</p>
           </div>
         </div>
       )}
-      {data?.computedAt && <p className="text-xs text-slate-500">Computed {data.computedAt}</p>}
+      {data?.computedAt && <p className="text-xs text-slate-400">Computed {data.computedAt}</p>}
       <Link href="/portfolio/factor-attribution" className="text-sm text-cyan-400 hover:underline">
         Factor attribution →
       </Link>

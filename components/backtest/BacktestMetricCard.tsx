@@ -21,7 +21,7 @@ export interface BacktestMetricCardProps {
 export function BacktestMetricCard({ label, value, sub, color }: BacktestMetricCardProps) {
   return (
     <div className="bg-slate-900/60 rounded-xl p-4 border border-slate-800">
-      <div className="text-xs text-slate-500 mb-1 uppercase tracking-wider">{label}</div>
+      <div className="text-xs text-slate-400 mb-1 uppercase tracking-wider">{label}</div>
       <div className={`text-xl font-bold font-mono ${color ?? 'text-white'}`}>{value}</div>
       {sub && <div className="text-[10px] text-slate-400 mt-0.5">{sub}</div>}
     </div>

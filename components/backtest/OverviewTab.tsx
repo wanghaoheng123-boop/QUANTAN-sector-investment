@@ -61,7 +61,7 @@ export function OverviewTab({ results, sectorSummary, sectorColors, initialCapit
           {STRATEGY_RULES.map(([title, desc]) => (
             <div key={title} className="bg-slate-800/50 rounded-lg p-3 border border-slate-700/50">
               <div className="text-slate-300 font-medium mb-1">{title}</div>
-              <div className="text-slate-500 leading-relaxed">{desc}</div>
+              <div className="text-slate-400 leading-relaxed">{desc}</div>
             </div>
           ))}
         </div>

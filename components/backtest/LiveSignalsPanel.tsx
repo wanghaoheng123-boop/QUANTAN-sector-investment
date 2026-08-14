@@ -160,7 +160,7 @@ export function LiveSignalsPanel() {
 
   const sortIcon = (key: SortKey) => sortKey === key ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''
 
-  const thClass = (key: SortKey) => `px-3 py-2 text-left text-slate-500 uppercase tracking-wider font-medium cursor-pointer hover:text-slate-300 select-none ${sortKey === key ? 'text-cyan-400' : ''}`
+  const thClass = (key: SortKey) => `px-3 py-2 text-left text-slate-400 uppercase tracking-wider font-medium cursor-pointer hover:text-slate-300 select-none ${sortKey === key ? 'text-cyan-400' : ''}`
 
   return (
     <div className="space-y-4">
@@ -176,7 +176,7 @@ export function LiveSignalsPanel() {
         </div>
         {/* Breadth indicators */}
         <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-4">
-          <div className="text-xs text-slate-500 uppercase tracking-widest mb-2">Signal Breadth</div>
+          <div className="text-xs text-slate-400 uppercase tracking-widest mb-2">Signal Breadth</div>
           <div className="flex items-center gap-4 mb-1">
             <div className="flex gap-2">
               <span className="text-xs px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-bold">{buyCount} BUY</span>
@@ -184,7 +184,7 @@ export function LiveSignalsPanel() {
               <span className="text-xs px-2 py-0.5 rounded bg-red-500/10 border border-red-500/30 text-red-400 font-bold">{sellCount} SELL</span>
             </div>
           </div>
-          <div className="text-[10px] text-slate-500">{rsiBreadth}</div>
+          <div className="text-[10px] text-slate-400">{rsiBreadth}</div>
           <div className="mt-1 h-1.5 bg-slate-800 rounded-full overflow-hidden flex">
             <div className="h-full bg-emerald-500" style={{ width: `${buyPct}%` }} />
             <div className="h-full bg-slate-600" style={{ width: `${(holdCount / Math.max(total, 1)) * 100}%` }} />
@@ -193,7 +193,7 @@ export function LiveSignalsPanel() {
         </div>
         {/* Data freshness + filters */}
         <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-4">
-          <div className="text-xs text-slate-500 uppercase tracking-widest mb-2">Filters</div>
+          <div className="text-xs text-slate-400 uppercase tracking-widest mb-2">Filters</div>
           <div className="flex flex-wrap gap-2 mb-1">
             <select value={filterSector} onChange={e => setFilterSector(e.target.value)}
               className="bg-slate-800 text-slate-300 text-[11px] rounded px-2 py-1 border border-slate-700">
@@ -208,7 +208,7 @@ export function LiveSignalsPanel() {
           </div>
           {latestDataDate && (
             <div className="text-[10px] text-slate-400">
-              Data as of: <span className="text-slate-500 font-mono">{latestDataDate}</span> · Live data refreshes every 60s
+              Data as of: <span className="text-slate-400 font-mono">{latestDataDate}</span> · Live data refreshes every 60s
             </div>
           )}
         </div>
@@ -216,7 +216,7 @@ export function LiveSignalsPanel() {
 
       {/* ── Sector regime matrix ── */}
       <div className="bg-slate-900/40 rounded-xl border border-slate-800 p-4">
-        <div className="text-xs text-slate-500 uppercase tracking-widest mb-3">Sector Regime Map</div>
+        <div className="text-xs text-slate-400 uppercase tracking-widest mb-3">Sector Regime Map</div>
         <div className="flex flex-wrap gap-2">
           {sectors.filter(s => s !== 'All').map(sector => {
             const sInsts = rawInsts.filter(i => i.sector === sector)
@@ -228,7 +228,7 @@ export function LiveSignalsPanel() {
               <div key={sector} className="flex flex-col items-center px-3 py-2 rounded-lg border border-slate-800" style={{ backgroundColor: col + '15' }}>
                 <span className="text-[10px] text-slate-400 mb-1">{sector}</span>
                 <span className="text-sm font-bold font-mono" style={{ color: col }}>{sBuy}↑ {sSell}↓</span>
-                <span className="text-[9px] text-slate-500 mt-0.5">{sInsts.length} instr.</span>
+                <span className="text-[9px] text-slate-400 mt-0.5">{sInsts.length} instr.</span>
               </div>
             )
           })}
@@ -246,8 +246,8 @@ export function LiveSignalsPanel() {
                   else { setSortKey(k as SortKey); setSortDir('desc') }
                 }}>{h}{sortIcon(k as SortKey)}</th>
               ))}
-              <th className="px-3 py-2 text-left text-slate-500 uppercase tracking-wider font-medium">Kelly</th>
-              <th className="px-3 py-2 text-left text-slate-500 uppercase tracking-wider font-medium">Last Data</th>
+              <th className="px-3 py-2 text-left text-slate-400 uppercase tracking-wider font-medium">Kelly</th>
+              <th className="px-3 py-2 text-left text-slate-400 uppercase tracking-wider font-medium">Last Data</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800/50">
@@ -278,7 +278,7 @@ export function LiveSignalsPanel() {
               const zoneColor = zone != null ? (zoneColorMap[zone] ?? '#64748b') : '#64748b'
               const zoneLabel = zone != null ? zone.replace(/_/g, ' ') : '—'
 
-              const changePctColor = changePct == null ? 'text-slate-500' : changePct >= 0 ? 'text-emerald-400' : 'text-red-400'
+              const changePctColor = changePct == null ? 'text-slate-400' : changePct >= 0 ? 'text-emerald-400' : 'text-red-400'
               const confidenceColor = confidence == null
                 ? 'bg-slate-700/50 text-slate-400'
                 : confidence >= 70
@@ -287,13 +287,13 @@ export function LiveSignalsPanel() {
                     ? 'bg-amber-500/20 text-amber-400'
                     : 'bg-slate-700/50 text-slate-400'
               const deviationColor = deviationPct == null
-                ? 'text-slate-500'
+                ? 'text-slate-400'
                 : deviationPct < -20
                   ? 'text-red-400'
                   : deviationPct < 0
                     ? 'text-amber-400'
                     : 'text-emerald-400'
-              const slopeColor = slopePct == null ? 'text-slate-500' : slopePct > 0 ? 'text-emerald-400' : 'text-slate-400'
+              const slopeColor = slopePct == null ? 'text-slate-400' : slopePct > 0 ? 'text-emerald-400' : 'text-slate-400'
 
               return (
                 <tr key={i} className={`hover:bg-slate-800/30 transition-colors ${action === 'BUY' ? 'border-l-2 border-l-emerald-500/50' : action === 'SELL' ? 'border-l-2 border-l-red-500/50' : ''}`}>
@@ -342,7 +342,7 @@ export function LiveSignalsPanel() {
           </tbody>
         </table>
         {insts.length === 0 && (
-          <div className="py-8 text-center text-slate-500 text-xs">No instruments match current filters.</div>
+          <div className="py-8 text-center text-slate-400 text-xs">No instruments match current filters.</div>
         )}
         {insts.length > 200 && (
           <div className="py-2 text-center text-[10px] text-slate-400 border-t border-slate-800">
@@ -352,7 +352,7 @@ export function LiveSignalsPanel() {
       </div>
 
       {/* Q-063-NEW: factual caveat — this panel is current model state, not P&L. */}
-      <p className="text-[10px] leading-relaxed text-slate-500">
+      <p className="text-[10px] leading-relaxed text-slate-400">
         Live signals reflect the current model state, not realized trade P&amp;L.
         Backtested win rate and cost assumptions are shown in the metrics summary above.
       </p>

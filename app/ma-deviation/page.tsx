@@ -50,7 +50,7 @@ const DIP_SIGNAL_CONFIG: Record<DipSignal, { label: string; badgeClass: string; 
   FALLING_KNIFE:     { label: 'Falling Knife ⚠', badgeClass: 'bg-red-500/20 border-red-500/40 text-red-300',    icon: '🔴' },
   OVERBOUGHT:        { label: 'Overbought', badgeClass: 'bg-orange-500/20 border-orange-500/40 text-orange-300', icon: '🟠' },
   IN_TREND:          { label: 'In Uptrend', badgeClass: 'bg-blue-500/20 border-blue-500/40 text-blue-300',       icon: '🔵' },
-  INSUFFICIENT_DATA: { label: 'No Data', badgeClass: 'bg-slate-700/50 border-slate-600 text-slate-500',          icon: '⚫' },
+  INSUFFICIENT_DATA: { label: 'No Data', badgeClass: 'bg-slate-700/50 border-slate-600 text-slate-400',          icon: '⚫' },
 }
 
 // empirical reference table (static educational content)
@@ -135,7 +135,7 @@ function SortTh({ label, skey, sortKey, sortDir, handleSort }: {
     : `Sort by ${label}`
   return (
     <button
-      className={`text-left text-[11px] font-medium tracking-wide flex items-center gap-1 transition-colors ${active ? 'text-blue-400' : 'text-slate-500 hover:text-slate-300'}`}
+      className={`text-left text-[11px] font-medium tracking-wide flex items-center gap-1 transition-colors ${active ? 'text-blue-400' : 'text-slate-400 hover:text-slate-300'}`}
       onClick={() => handleSort(skey)}
       aria-label={ariaLabel}
     >
@@ -206,8 +206,8 @@ export default function MADeviationPage() {
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <div className="flex items-center gap-2 mb-3">
-                <Link href="/" className="text-xs text-slate-500 hover:text-slate-400">Markets</Link>
-                <span className="text-slate-700 text-xs">/</span>
+                <Link href="/" className="text-xs text-slate-400 hover:text-slate-200">Markets</Link>
+                <span className="text-slate-700 text-xs" aria-hidden="true">/</span>
                 <span className="text-xs text-blue-400">200MA Deviation</span>
               </div>
               <h1 className="text-3xl sm:text-4xl font-bold text-white mb-2">
@@ -260,7 +260,7 @@ export default function MADeviationPage() {
         {showEmpiricalTable && (
           <section className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6">
             <h2 className="text-sm font-bold text-white mb-1">📊 Empirical Forward Return Reference</h2>
-            <p className="text-xs text-slate-500 mb-4">
+            <p className="text-xs text-slate-400 mb-4">
               Based on historical cross-section analysis of S&amp;P 500 &amp; sector ETF daily data (1990–2024).
               Returns shown are <em>median</em> forward returns following instances where price entered each zone.
               Forward returns when 200MA slope is positive vs negative diverge significantly — see interpretation column.
@@ -272,7 +272,7 @@ export default function MADeviationPage() {
                 <thead>
                   <tr className="border-b border-slate-700">
                     {['Deviation Zone', 'Zone Label', 'Dip Signal', '3M Fwd', '6M Fwd', '12M Fwd', '12M Hit Rate', 'Context'].map(h => (
-                      <th key={h} scope="col" className="text-left pb-2 pr-4 text-slate-500 font-medium whitespace-nowrap">{h}</th>
+                      <th key={h} scope="col" className="text-left pb-2 pr-4 text-slate-400 font-medium whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -292,7 +292,7 @@ export default function MADeviationPage() {
                         <td className="py-2 pr-4 font-mono text-slate-300">{row.fwd6m}</td>
                         <td className="py-2 pr-4 font-mono font-semibold text-white">{row.fwd12m}</td>
                         <td className="py-2 pr-4 font-mono text-slate-400">{row.hitRate12m}</td>
-                        <td className="py-2 pr-4 text-slate-500 max-w-[200px]">{row.note}</td>
+                        <td className="py-2 pr-4 text-slate-400 max-w-[200px]">{row.note}</td>
                       </tr>
                     )
                   })}
@@ -317,11 +317,11 @@ export default function MADeviationPage() {
             <span />
             <SortTh label="Sector / ETF" skey="name" sortKey={sortKey} sortDir={sortDir} handleSort={handleSort} />
             <SortTh label="Price" skey="price" sortKey={sortKey} sortDir={sortDir} handleSort={handleSort} />
-            <span className="text-[11px] text-slate-500 font-medium">SMA 200</span>
+            <span className="text-[11px] text-slate-400 font-medium">SMA 200</span>
             <SortTh label="Dev %" skey="deviation" sortKey={sortKey} sortDir={sortDir} handleSort={handleSort} />
             <SortTh label="RSI 14" skey="rsi" sortKey={sortKey} sortDir={sortDir} handleSort={handleSort} />
-            <span className="text-[11px] text-slate-500 font-medium">200MA Slope</span>
-            <span className="text-[11px] text-slate-500 font-medium">Dip Signal</span>
+            <span className="text-[11px] text-slate-400 font-medium">200MA Slope</span>
+            <span className="text-[11px] text-slate-400 font-medium">Dip Signal</span>
           </div>
 
           {loading && Array.from({ length: 13 }).map((_, i) => <SkeletonRow key={i} />)}
@@ -347,7 +347,7 @@ export default function MADeviationPage() {
                   {/* Name + ticker */}
                   <div>
                     <div className="text-sm font-semibold text-white">{row.name}</div>
-                    <div className="text-xs text-slate-500 font-mono">{row.ticker}</div>
+                    <div className="text-xs text-slate-400 font-mono">{row.ticker}</div>
                   </div>
 
                   {/* Price */}
@@ -393,20 +393,20 @@ export default function MADeviationPage() {
                   <div id={`detail-${row.ticker}`} className="px-5 pb-5 pt-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 bg-slate-900/50 border-t border-slate-800/50">
                     {/* Zone info */}
                     <div className="rounded-xl border border-slate-700 p-4" style={{ borderColor: `${regime.color}30` }}>
-                      <div className="text-xs text-slate-500 mb-1 uppercase tracking-wider">Zone</div>
+                      <div className="text-xs text-slate-400 mb-1 uppercase tracking-wider">Zone</div>
                       <div className="text-base font-bold mb-2" style={{ color: regime.color }}>{regime.label}</div>
                       <p className="text-xs text-slate-400 leading-relaxed">{regime.interpretation}</p>
                     </div>
 
                     {/* Forward return context */}
                     <div className="rounded-xl border border-slate-700 p-4">
-                      <div className="text-xs text-slate-500 mb-1 uppercase tracking-wider">Historical Return Context</div>
+                      <div className="text-xs text-slate-400 mb-1 uppercase tracking-wider">Historical Return Context</div>
                       <p className="text-xs text-slate-300 leading-relaxed">{regime.forwardReturnContext}</p>
                     </div>
 
                     {/* Dip signal detail */}
                     <div className={`rounded-xl border p-4 ${cfg.badgeClass.replace('text-', 'border-').split(' ')[1]}`} style={{ borderColor: `${regime.color}30` }}>
-                      <div className="text-xs text-slate-500 mb-1 uppercase tracking-wider">🔬 Dip Signal Analysis</div>
+                      <div className="text-xs text-slate-400 mb-1 uppercase tracking-wider">🔬 Dip Signal Analysis</div>
                       <div className={`text-xs font-semibold mb-2 ${cfg.badgeClass.split(' ').find(c => c.startsWith('text-')) ?? 'text-slate-300'}`}>
                         {cfg.label}
                       </div>
@@ -429,7 +429,7 @@ export default function MADeviationPage() {
                           { label: 'Risk Level', value: regime.riskLevel.toUpperCase() },
                         ].map(({ label, value, color }) => (
                           <div key={label} className="bg-slate-800/50 rounded-lg px-3 py-2">
-                            <div className="text-slate-500 text-[10px] mb-0.5">{label}</div>
+                            <div className="text-slate-400 text-[10px] mb-0.5">{label}</div>
                             <div className="font-mono font-semibold" style={{ color: color ?? '#cbd5e1' }}>{value}</div>
                           </div>
                         ))}
@@ -456,7 +456,7 @@ export default function MADeviationPage() {
         {!loading && sorted.length > 0 && (
           <section className="rounded-2xl border border-slate-800 bg-slate-900/30 p-6">
             <h2 className="text-sm font-bold text-white mb-1">Deviation Spectrum — All Sectors vs 200-Day MA</h2>
-            <p className="text-xs text-slate-500 mb-5">
+            <p className="text-xs text-slate-400 mb-5">
               Each bar shows how far the sector ETF is trading above (right) or below (left) its 200-day SMA. Center line = 0%.
             </p>
             <div className="space-y-2">
@@ -501,7 +501,7 @@ export default function MADeviationPage() {
                           )}
                         </div>
                       </div>
-                      <div className="w-28 text-xs text-slate-500 shrink-0">{row.regime?.label}</div>
+                      <div className="w-28 text-xs text-slate-400 shrink-0">{row.regime?.label}</div>
                     </div>
                   )
                 })}
@@ -528,7 +528,7 @@ export default function MADeviationPage() {
             <div className="space-y-3">
               <div>
                 <div className="text-emerald-400 font-semibold mb-1">✅ Strong Dip Buy Conditions</div>
-                <ul className="list-disc list-inside space-y-1 text-slate-500">
+                <ul className="list-disc list-inside space-y-1 text-slate-400">
                   <li>Price is 0–10% below the 200-day SMA</li>
                   <li>The 200MA slope is <strong className="text-white">still positive</strong> (rising)</li>
                   <li>RSI is below 40 (oversold confirmation)</li>
@@ -537,7 +537,7 @@ export default function MADeviationPage() {
               </div>
               <div>
                 <div className="text-red-400 font-semibold mb-1">🔪 Falling Knife Warning Signs</div>
-                <ul className="list-disc list-inside space-y-1 text-slate-500">
+                <ul className="list-disc list-inside space-y-1 text-slate-400">
                   <li>Price is &gt;15% below a <strong className="text-white">declining</strong> 200MA</li>
                   <li>RSI is 35–50 (momentum deteriorating, not capitulating)</li>
                   <li>The 200MA has been declining for &gt;30 days</li>
@@ -548,14 +548,14 @@ export default function MADeviationPage() {
             <div className="space-y-3">
               <div>
                 <div className="text-yellow-400 font-semibold mb-1">⚠️ Watch Zone Discipline</div>
-                <p className="text-slate-500">
+                <p className="text-slate-400">
                   When the signal shows "Watch / Caution", scale in with a maximum of 30–40% of your target position.
                   Use a staged entry (e.g., 3 tranches over 2–4 weeks). Only add if the 200MA slope shows signs of flattening.
                 </p>
               </div>
               <div>
                 <div className="text-blue-400 font-semibold mb-1">📐 The 200MA Slope is the Key Variable</div>
-                <p className="text-slate-500">
+                <p className="text-slate-400">
                   A rising 200MA acting as support = institutional buy zone. A declining 200MA acting as resistance = falling knife territory.
                   The same -12% deviation can be a screaming buy (rising 200MA, 2010/2016) or a warning (declining 200MA, 2008/2022).
                 </p>

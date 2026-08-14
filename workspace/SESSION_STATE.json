@@ -2,8 +2,8 @@
   "schema_version": "1.1",
   "project": "QUANTAN-sector-investment",
   "created": "2026-04-28T09:40:00Z",
-  "last_updated": "2026-08-02T18:00:00.000Z",
-  "active_agent": "claude opus-5 (2026-08-02: FIRST-EVER 4/4 GREEN mutation gate verified on two consecutive runs incl. a scheduled Sunday; continue-on-error removed so the gate now actually gates)",
+  "last_updated": "2026-08-14T02:10:00.000Z",
+  "active_agent": "claude opus-5 (2026-08-14: stream multiplex + copy pass — 13 EventSource -> 1, /api/stream added, sector-card jargon + last NEW badge cleared)",
   "prod_bug_fix_2026_07_01": {
     "B-2": "News fetch broken by yahoo-finance2 SearchResult schema drift (yf.search validation threw → news silently dropped + 66 prod errors on /api/briefs since 2026-04-03). FOUND via Vercel get_runtime_errors. FIXED with validateResult:false on the 4 news-search callers (mirrors options/chain.ts precedent) → PR #82 → main 2e6137c. LIVE-VERIFIED: /api/briefs now 200 with full news feed (was empty); 0 SearchResult validation logs on new deploy dpl_D29j.",
     "method_note": "Empirical bug-finding via Vercel runtime-errors/logs is high-signal — surfaced a real 3-month-old LIVE issue the static inspection didn't (it was a caught-and-logged error, invisible to tsc/tests/benchmark). Consider a runtime-errors sweep as a standing step."
@@ -324,5 +324,86 @@
     "swing_did_NOT_recur": "The 2026-08-02 SCHEDULED (Sunday) run reported quant-indicators 86.83 with indicators.ts 90.51 and multiTimeframe.ts 98.82 — the HIGH mode. Every previous Sunday run gave 74.16/63.78. This is the exact discriminating diagnostic that was put on file, and it came back clean. IMPORTANT: do NOT record this as fixed. Nothing in #133-#136 targeted indicators.ts or multiTimeframe.ts, so the cause remains UNKNOWN and the swing may be latent rather than gone. Evidence is one Sunday. If it returns, the discriminating experiment is unchanged: one dispatch with coverageAnalysis:'all' or fileParallelism:false.",
     "gate_enforced": "`continue-on-error: true` REMOVED from .github/workflows/stryker-weekly.yml — it carried the note 'until the >=70% baseline holds on every shard', and that precondition is now met. Stryker already exits non-zero via `break: 70`, so a sub-70 shard now fails the workflow for real. `fail-fast: false` is retained so all four shards still report on a failure (needed for diagnosis). Margins are thin on backtest (+1.02) and options (+1.25) — that is the intent: a real regression should break the build instead of silently drifting.",
     "journey": "backtest 31.22 -> 58.69 -> 63.50 -> 69.99 -> 71.02; options 62.25 -> 71.25; quant-rest 53.80 -> 75.14; quant-indicators 60.49 -> 86.83."
+  },
+  "interface_review_2026_08_14": {
+    "directive": "owner: 'find out error, room for improvements, detail design and interface reform to make it easier to use and make sure that there is no error or bug.'",
+    "report": "reviews/INTERFACE-REVIEW-2026-08-14.md",
+    "branch": "claude/error-review-interface-91806b (committed; NOT pushed/PR'd/deployed — the directive carried no merge instruction)",
+    "baseline_was_green": "tsc clean; vitest 1354 passed / 17 DB-gated skips; all 16 page routes 200 locally; Vercel runtime errors over 7d = 1 group, the known NEXTAUTH_SECRET env item.",
+    "findings": {
+      "C-1_CRITICAL_owner_env": "NEXTAUTH_SECRET still unset in production. First seen 2026-07-28, still firing 2026-08-12 on dpl_6ChCoZ6W1YjLXhJ846Q9HncYxNNU. Sessions invalidated on every cold start. Repo cannot fix it.",
+      "F-IA-1_HIGH": "THREE SHIPPED PAGES HAD ZERO WAY IN. Link-graph sweep over app/+components/: /portfolio had 0 inbound links; /portfolio/factor-attribution and /risk/scenarios were linked ONLY from it, so they inherited the orphaning. All 3 return 200 and render. /backtest had exactly one mid-page link on the home page while KeyboardShortcuts already bound `g b` to it as a first-class destination.",
+      "F-UI-1_HIGH": "Sticky header measured 211 px at 375x812 = 26% of the viewport, on every page. The flex-wrap row collapsed into five stacked bands. Adding the missing destinations to it would have made it worse.",
+      "F-A11Y-1_HIGH": "136 WCAG 1.4.3 failures on / alone. 105 of them trace to ONE token: text-slate-500 (259 occurrences, 53 files) at 3.07:1 on slate-800 and 4.19:1 on the page bg. The primary CTA (white on amber-600) was 3.19:1. This closes NEW-C-5, which had been deferred as 'owner-gated design decision' — this directive IS that decision.",
+      "F-A11Y-2_MEDIUM": "ZERO prefers-reduced-motion support anywhere in the codebase, alongside four infinite animations. The 50s price marquee could only be paused by :hover — no keyboard or touch path (WCAG 2.2.2 Level A). Its doubled item list was also announced twice by screen readers (no aria-hidden on the duplicate half).",
+      "F-UX-1_LOW": "The `?` shortcuts overlay had no visible affordance at all. Two hardcoded NEW badges with no expiry (200MA since May)."
+    },
+    "fixed": "F-IA-1 (components/SiteNav.tsx = new SSOT for destinations: 4 primary + Research/Portfolio disclosure menus on desktop, modal drawer below lg, aria-current everywhere; Breadcrumbs branches for the 3 new routes; `g p`/`g r` shortcuts). F-UI-1 (single 56 px row at every breakpoint; search hint moved out of layout flow). F-A11Y-1 (slate-500 -> slate-400 global swap + CTA/skip-link amber fix + 3 real slate-700 content blocks). F-A11Y-2 (prefers-reduced-motion block; real pause button; aria-hidden on the duplicated marquee half). F-UX-1 (header ? button via a window event).",
+    "verification": {
+      "gates": "tsc clean; vitest 1376 passed / 106 files (+22 new); production `next build` SUCCEEDS (all 16 pages + 27 API routes).",
+      "header": "211 px -> 57 px at 375x812 (26% -> 7%). One row at 1024 (19 px slack) and 1280 (101 px slack); zero horizontal overflow at both.",
+      "contrast": "/ 136 -> 0 on the PRODUCTION build with 349 text nodes checked (live quotes rendered). /backtest, /desk, /portfolio, /stock/AAPL all 0. Honest split: ~113 recoloured, ~23 were decorative separators now aria-hidden (a scope change, not a contrast improvement).",
+      "cta": "white-on-amber-600 3.19:1 -> slate-950-on-amber-500 9.39:1.",
+      "ia": "Mobile drawer live-asserted: aria-expanded=true, body scroll lock, initial focus on Close, all 11 destinations present. Desktop Portfolio disclosure: opens with 3 links, Escape closes + returns focus. /portfolio breadcrumb now renders Home/Portfolio (was suppressed).",
+      "snapshots": "2 DOM-shape snapshots in QuantLabPanel.test.tsx failed on the token swap — exactly the intended substitution, nothing else — and were regenerated. The snapshot did its job.",
+      "signed_in_header": "Every screenshot was the SIGNED-OUT state (81px Sign in). Simulated the widest authenticated block (avatar + truncated name + Sign out) at 640/768/1024/1280: header stays 57px and horizontal overflow is 0 at all four. Two changes make it hold: the search wrapper is `min-w-0 shrink` (not shrink-0) so it yields space first (288->151px at 1280), and the account name is gated to xl.",
+      "shortcuts_button": "Verified on the production build: the ? header button opens the overlay, initial focus lands on Close shortcuts, body scroll lock engages, and `g p` / `g r` are listed."
+    },
+    "regression_guard": "__tests__/components/SiteNav.test.tsx walks app/**/page.tsx and asserts every static top-level route has a nav entry, with an explicit exemption set. FILESYSTEM-DRIVEN, not a hand-maintained list — a future page that ships without a way in fails CI instead of silently becoming an orphan.",
+    "stryker_unaffected": "VERIFIED against stryker.conf.mjs, not assumed: mutate = lib/quant/**, lib/backtest/**, lib/options/** only. Nothing under app/ or components/ is in scope, and the only lib/ file this wave touches is lib/sectors.ts (one colour literal), outside all three globs. backtest (+1.02) and options (+1.25) margins untouched.",
+    "env_notes_corrected": [
+      "`npm run dev` is NOT broken on the worktree — first boot just takes 5+ minutes on the Google Drive FUSE mount before the port binds. .claude/launch.json (gitignored, not in the diff) invokes `node node_modules/next/dist/bin/next dev` directly.",
+      "The memory note 'jsdom tests are CI-only on this machine' is STALE — the component suite runs locally (6 files / 26 tests before this wave).",
+      "TRAP: running `next build` while the dev server is up overwrites .next and 404s the dev chunk manifest — React silently stops hydrating and every interaction check returns false. The tell was that the known-good `?` KEY path failed too. Verify against `next start` on a fresh build instead of mixing the two.",
+      "LESSON: audit a data-driven page AFTER its data loads. The empty state has fewer elements and flatters the contrast score."
+    ],
+    "deferred_owner_gated": "Sector-card copy (Prior:/Last:/Move scale), the '6/13 streams' implementation detail in the LIVE badge, the two stale NEW badges, and a multiplexed /api/stream to replace 13 concurrent EventSource per dashboard viewer (NOT a prod bug — prod is HTTP/2, verified — but 13 concurrent function invocations per viewer and a materially degraded local dev experience under the HTTP/1.1 six-connection cap).",
+    "owner_actions": [
+      "CRITICAL: set NEXTAUTH_SECRET in the Vercel project env (C-1).",
+      "Merge/deploy decision — nothing pushed."
+    ],
+    "late_catches": "A second audit pass on the PRODUCTION build WITH DATA LOADED found 5 contrast failures the first (empty-state, dev-server) pass could not contain: the selected ALL/BUY/SELL/HOLD filter chip and the Run-LLM button (white on amber-600, 3.19:1) -> slate-950 on amber-500 9.39:1; --color-down #ff4757 4.38:1 at 10-12px (15 hardcoded literals) -> #ff6b7a 5.32:1; industrials sector colour #6366f1 4.47:1 -> #7c7ff5 5.90:1. Both colour changes are tokens; no displayed value changes."
+  },
+  "stream_multiplex_2026_08_14": {
+    "directive": "owner: pre-approved plan — multiplexed SSE endpoint + label/copy polish; plan then execute; COMMIT ONLY (no push, no PR, no deploy).",
+    "report": "reviews/STREAM-MULTIPLEX-2026-08-14.md",
+    "branch": "claude/error-review-interface-91806b (from c472af3; committed, NOT pushed, no PR, not deployed)",
+    "closes": "The deferred_owner_gated block from interface_review_2026_08_14: multiplexed /api/stream, the \"6/13 streams\" leak in the LIVE badge, sector-card copy (Prior: / Move scale), and the last stale NEW badge.",
+    "problem": "hooks/useLiveQuotes opened ONE EventSource per ticker for 13 dashboard symbols. HTTP/1.1 caps ~6 connections per origin, so most never opened (pre-change network log: 30+ net::ERR_FAILED, 6 x 200 OK) and the badge printed the damage as \"6/13 streams\". Prod is HTTP/2 so that half was not a prod outage, but 13 serverless invocations + 13 independent Yahoo polls per viewer was unconditional.",
+    "changed": {
+      "app/api/stream/route.ts": "NEW additive multiplexed endpoint. ?tickers= list through the shared normalizeTicker whitelist; 400 on missing/invalid/>20; validation BEFORE the rate limiter (own bucket stream-multi, 10/60s); ONE batched yahoo quote() per 15s tick with validateResult:false, rows matched BY SYMBOL not index; one aggregated market_state; closing_soon/close from the streamBudget SSOT; maxDuration = 300 literal.",
+      "lib/api/streamTickers.ts": "NEW. MAX_STREAM_TICKERS (20, pinned equal to the hook cap by test) + parseTickerParam. Lives in lib because of the route-export constraint below.",
+      "hooks/useLiveQuotes.ts": "Internals rewritten onto ONE EventSource. PUBLIC API UNCHANGED (quotes/connections/marketOpen/supported/active/dropped + MAX_LIVE_STREAMS). Reconnect semantics preserved (backoff 1/2/4/8s; closing_soon capped 60s with 30s fallback; close 500ms). app/page.tsx needed ZERO changes.",
+      "app/page.tsx": "LIVE badge drops the N/M streams counter (LIVE / MARKET CLOSED / CONNECTING + \"Updated HH:MM:SS\" remain); stale NEW badge on the backtest CTA removed — it was the last rendered one in app/ + components/.",
+      "components/SectorCard.tsx": "Labels only, NO rendered number changed. \"Prior:\"/\"Last:\" -> \"Prev close\"/\"Last\"; \"prior->last\" -> \"prev close -> last\"; \"Move scale\" -> \"Session move size\" + tooltip; aria-label on the bare % chip.",
+      "__tests__/api/streamMultiplex.test.ts": "NEW, 19 tests."
+    },
+    "move_scale_finding": "\"Move scale\" named a unit, not a meaning. For session rows the bar is NOT a confidence: per lib/sessionSignalsFromQuotes.ts it is 42 + 14*|delta%|, saturating at 82 near +/-2.9% — a rescaled move MAGNITUDE. The new tooltip says so explicitly, and the accessible name reads \"Session move size 58 out of 100\" instead of implying a percentage.",
+    "gates": {
+      "tsc": "PASS — exit 0, no output.",
+      "vitest": "PASS — 1395 passed / 17 skipped (107 files passed, 1 skipped). Baseline 1376/17; delta = exactly the 19 new tests. No existing test changed; the 17 skips are the same DB-gated ones.",
+      "build": "PASS — next build exit 0, \"Compiled successfully in 3.5s\". Route table shows BOTH streams dynamic: \"f /api/stream\" and \"f /api/stream/[ticker]\".",
+      "runtime": "PASS — next start on a fresh build (no dev server running); server stopped afterwards."
+    },
+    "verification": {
+      "multiplex": "curl -sN -m 8 on the 13-ticker URL: 13 quote events, 13 distinct tickers (QQQ SPY XLB XLC XLE XLF XLI XLK XLP XLRE XLU XLV XLY), 1 market_state — on ONE connection.",
+      "poll_loop": "curl -sN -m 20 on XLK,SPY: 4 quote events across 2 distinct timestamps = initial burst + one 15s tick on the SAME connection.",
+      "validation": "no param 400 missing_tickers; empty 400; ../etc 400 invalid_ticker; 21 tickers 400 too_many_tickers; 20 tickers 200 (cap boundary accepted).",
+      "browser": "FRESH TAB, one page load = EXACTLY ONE request: GET /api/stream?tickers=XLK%2C...%2CQQQ -> 200 OK. Badge \"LIVE - Updated 02:04:52\" then 02:05:52 with ticker prices moving (live data flowing through the single stream). Body regex for \"N/M streams\" = false. Any span whose text is exactly NEW = false.",
+      "copy": "Caption \"prev close -> last\" measures 64.4px in a 72px column = ONE line, no wrap. Tooltip row: \"Prev close | $188.86 | Last | $191.03\". \"Move scale\" absent; \"Session move size\" label one line with 139px row slack. % chip text \"58%\" UNCHANGED, aria-label \"Session move size 58 out of 100\". Tooltip button \"Explain Session move size\".",
+      "regression": "Singular /api/stream/XLK still streams (file untouched); /sector/technology (a useLiveQuote consumer) returns 200."
+    },
+    "route_export_finding": "A Next.js route may export ONLY method handlers and route-segment config fields — and NEITHER tsc NOR vitest sees a violation. MAX_STREAM_TICKERS + parseTickerParam were first written as route exports for testability: tsc clean, all 1394 tests green, then the BUILD failed with `Type error: Route \"app/api/stream/route.ts\" does not match the required types of a Next.js Route. \"parseTickerParam\" is not a valid Route export field.` This is the SAME static-analysis gate already documented in lib/api/streamBudget.ts for the maxDuration literal, but BROADER than that note implies. Fixed by moving both into lib/api/streamTickers.ts — then added a test asserting the route export surface against the legal-field set, so the next occurrence fails in vitest in under a second instead of at build time.",
+    "other_findings": {
+      "yahoo_row_matching": "Yahoo does not promise one row per requested symbol nor stable ordering. Batch results are matched back by q.symbol; index-matching would silently mislabel prices. Covered by a short-and-reordered-response test.",
+      "ticker_alias": "Server normalizes (VIX -> ^VIX) while the hook keys quotes by the caller string. Identical for the 13 plain ETFs; the hook builds a small alias map so a future index subscription cannot silently drop quotes.",
+      "plan_correction": "The plan named app/page.tsx AND the heatmap as callers to re-verify. useLiveQuotes has exactly ONE caller — app/page.tsx. Neither app/heatmap/page.tsx nor components/backtest/SectorHeatmap.tsx uses live streams.",
+      "pwa_and_middleware": "CHECKED, no change needed: an SW cache rule matching an SSE endpoint would be catastrophic, and it could have been keyed to a path shape with a segment after /api/stream/. next.config.js uses urlPattern: ({url}) => url.pathname.startsWith(\"/api/\") -> NetworkOnly — a PATHNAME predicate, so the query-string form is covered identically to /api/stream/XLK. middleware.ts matches /((?!_next/static|_next/image|favicon.ico).*) which includes the new route; the browser and curl verifications both went through it."
+    },
+    "not_changed": "app/api/stream/[ticker]/route.ts (untouched — useLiveQuote consumers keep it); every displayed number, win-rate label and disclosure string; MAX_LIVE_STREAMS value and export; UseLiveQuotesResult shape (no error field added — no caller reads one); no EventSource lifecycle harness (repo precedent); nothing under lib/quant|backtest|options, so the Stryker 4/4 margins are unaffected.",
+    "owner_actions": [
+      "Merge/deploy decision — nothing pushed.",
+      "CRITICAL still open from the prior wave: set NEXTAUTH_SECRET in the Vercel project env."
+    ]
   }
 }

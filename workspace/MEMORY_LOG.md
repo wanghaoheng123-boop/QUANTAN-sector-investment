@@ -209,3 +209,121 @@ Blockers: Typecheck command cannot execute due invalid package config in `node_m
 | Env (Production) | QUANTAN_FRED_PREWARM, QUANTAN_API_KEY present (encrypted) |
 | Local pull | Skipped — `git fetch origin` failed (443 timeout); use GIT_HTTP_VERSION=1.1 when network stable |
 
+
+---
+
+### Interface review & reform — 2026-08-14 — claude opus-5
+Goal: owner — "find out error, room for improvements, detail design and interface reform to
+make it easier to use and make sure that there is no error or bug."
+Report: `reviews/INTERFACE-REVIEW-2026-08-14.md`
+Branch: `claude/error-review-interface-91806b` (committed only — the directive carried no
+merge instruction, so nothing pushed, PR'd, or deployed).
+
+Method: empirical first (Vercel runtime errors → local browser measurement), then static
+reading, with every candidate diffed against `reviews/findings-ledger.csv` so closed rows
+were not re-flagged.
+
+| ID | Sev | Finding | State |
+|---|---|---|---|
+| C-1 | CRITICAL | `NEXTAUTH_SECRET` unset in prod since 2026-07-28 — sessions die on every cold start | OWNER (env only) |
+| F-IA-1 | HIGH | `/portfolio` had **zero** inbound links; `/portfolio/factor-attribution` + `/risk/scenarios` linked only from it → all three unreachable. `/backtest` had one mid-page link | FIXED |
+| F-UI-1 | HIGH | Sticky header **211 px = 26 %** of a 375×812 viewport, five stacked bands | FIXED |
+| F-A11Y-1 | HIGH | **136** WCAG 1.4.3 failures on `/`; 105 from one token (`text-slate-500`, 259×/53 files); primary CTA 3.19:1 | FIXED (closes NEW-C-5) |
+| F-A11Y-2 | MEDIUM | Zero `prefers-reduced-motion` anywhere; 50 s marquee pausable only by `:hover` (WCAG 2.2.2 A); doubled list announced twice | FIXED |
+| F-UX-1 | LOW | `?` overlay had no visible affordance; two `NEW` badges with no expiry | FIXED (badges = owner copy call) |
+
+Verify: A=PASS (tsc clean) B=PASS (vitest 1376/106, +22 new) C=PASS (`next build` succeeds,
+16 pages + 27 API routes) D=PASS (header 211→57 px; no overflow at 1024 or 1280)
+E=PASS (contrast 136→0 on `/`; 0 on `/backtest`, `/desk`, `/portfolio`, `/stock/AAPL`)
+F=PASS (drawer + disclosure a11y asserted live: scroll lock, initial focus, Escape returns focus)
+
+Blockers: none. Two DOM-shape snapshots caught the token swap exactly as designed and were
+regenerated. Stryker untouched (all edits in `app/`+`components/`, both excluded).
+
+Lessons:
+- **A link-graph sweep is cheap and finds things no gate can.** tsc, 1354 tests, five CI
+  gates and fifteen prior inspection waves were all green while three finished pages had no
+  way in. The new guard is filesystem-driven (`__tests__/components/SiteNav.test.tsx` walks
+  `app/**/page.tsx`), so it cannot rot the way a hand-maintained list would.
+- **"Owner-gated design decision" is a state, not a verdict.** NEW-C-5 sat deferred since
+  2026-07-10; this directive was the decision it was waiting for. Re-read deferred rows
+  against the current directive instead of inheriting the old gate.
+- **Env corrections:** `npm run dev` is NOT broken on the worktree — first boot just takes
+  5+ min on the Google Drive FUSE mount. And "jsdom tests are CI-only on this machine" is
+  STALE: the component suite runs locally.
+
+**Follow-up pass (same session, after adversarial review):**
+- **Stryker scope VERIFIED** against `stryker.conf.mjs` rather than assumed — `mutate` is
+  `lib/quant/**`, `lib/backtest/**`, `lib/options/**` only. The one `lib/` file this wave
+  touches (`lib/sectors.ts`, a colour literal) is outside all three globs.
+- **The signed-in header was never rendered** in any screenshot. Simulated the widest
+  authenticated block at 640/768/1024/1280: header holds at 57 px with zero horizontal
+  overflow, because the search wrapper is `min-w-0 shrink` (yields 288→151 px at 1280) and
+  the account name is gated to `xl`.
+- **TRAP worth remembering:** running `next build` while the dev server is up overwrites
+  `.next`, 404s the dev chunk manifest, and React silently stops hydrating — every
+  interaction check then returns false. The tell was that the *known-good* `?` key path
+  failed too. Verify against `next start` on a fresh build, never a mix of the two.
+- **LESSON:** audit a data-driven page AFTER its data loads. The first contrast pass ran on
+  an empty dev page and reported 0; the production build with 349 text nodes rendered
+  surfaced 5 more (selected filter chip + Run-LLM button at 3.19:1, `--color-down` at
+  4.38:1 across 15 literals, `industrials` at 4.47:1). All fixed; final `/` = **0 of 349**.
+
+---
+
+### SSE stream multiplex + copy pass — 2026-08-14 — claude opus-5
+Goal: owner-approved plan — replace the per-ticker SSE fan-out with ONE multiplexed stream,
+then polish the labels it exposed. Plan first, then execute; **commit only** (no push, no PR,
+no deploy).
+Report: `reviews/STREAM-MULTIPLEX-2026-08-14.md`
+Branch: `claude/error-review-interface-91806b` (from `c472af3`).
+
+Closes the whole `deferred_owner_gated` block the interface review left behind earlier the
+same day: the multiplexed endpoint, the `6/13 streams` leak in the LIVE badge, the sector-card
+jargon, and the last stale `NEW` badge.
+
+| | Before | After |
+|---|---|---|
+| Dashboard connections | 13 EventSource (only ~6 opened under HTTP/1.1) | **1** |
+| Serverless invocations / viewer | 13, each pinned to the 300 s ceiling | **1** |
+| Upstream Yahoo calls / 15 s tick | 13 independent | **1** batched |
+
+The old fan-out's damage, straight from the pre-change network log on one page load: 30+
+`net::ERR_FAILED` against `/api/stream/<TICKER>` and six `200 OK`. Production is HTTP/2 so
+that half was never a prod outage — but the 13 invocations were unconditional.
+
+Verify: A=PASS (tsc clean) B=PASS (vitest **1395 passed / 17 skipped**; baseline 1376/17,
+delta = exactly the 19 new tests) C=PASS (`next build` exit 0, both `ƒ /api/stream` and
+`ƒ /api/stream/[ticker]` in the route table) D=PASS (13 quote events + 13 distinct tickers +
+1 aggregated `market_state` on ONE curl connection; 20 s capture shows the 15 s poll tick on
+the same connection) E=PASS (400s for missing / `../etc` / 21 tickers, 200 at the 20 cap)
+F=PASS (**fresh tab, one page load = exactly one `/api/stream` request**; badge reads
+`LIVE · Updated 02:04:52`, no `N/M streams` anywhere, no `NEW` span).
+
+Blockers: none. Singular `/api/stream/[ticker]` untouched and re-verified live. Nothing under
+`lib/quant|backtest|options`, so the Stryker 4/4 margins are unaffected.
+
+Lessons:
+- **A Next.js route may export ONLY handlers and route-segment config — and neither tsc nor
+  vitest can see the violation.** `MAX_STREAM_TICKERS` and `parseTickerParam` were first
+  written as `route.ts` exports for testability. `tsc --noEmit` was clean and all 1394 tests
+  passed; the *build* then failed with `"parseTickerParam" is not a valid Route export field`.
+  This is the **same static-analysis gate** already recorded in `lib/api/streamBudget.ts` for
+  the `maxDuration` literal — but **broader than that note implies**, and now the third time
+  this repo has been bitten by "the Vercel build is the only gate that sees it". Fix:
+  `lib/api/streamTickers.ts`. Then a test was added asserting the route's **export surface**
+  against the legal-field set, so the next occurrence fails in vitest in under a second
+  instead of at build time. Prefer converting a build-only trap into a suite-visible one over
+  writing it down again.
+- **A label can name a unit and still say nothing.** `Move scale` survived many waves. Reading
+  `lib/sessionSignalsFromQuotes.ts` shows the bar is `42 + 14×|Δ%|` saturating at 82 — a
+  rescaled move *magnitude*, not a confidence, sharing a component with a real confidence bar.
+  Now `Session move size`, with a tooltip that says outright it is "not a confidence,
+  probability, or forecast", and an accessible name (`Session move size 58 out of 100`) that
+  avoids implying a percentage. **Read the math before renaming the label.**
+- **Yahoo does not promise one row per requested symbol, nor stable order.** The batched
+  `quote()` results are matched back by `q.symbol`; index-matching would silently mislabel
+  prices the first time a row went missing.
+- **A user-facing counter is a bug report in disguise.** `6/13 streams` was shipped copy
+  describing a defect. It was right to delete the counter — but only *after* deleting the
+  defect.

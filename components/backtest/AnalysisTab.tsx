@@ -59,7 +59,7 @@ export function AnalysisTab({ results, sectorColors }: { results: BacktestResult
             <thead>
               <tr className="border-b border-slate-800">
                 {['Sector', 'Ann. Return', 'Total Return', 'Avg Trades', 'vs B&H α', 'Rank'].map(h => (
-                  <th key={h} scope="col" className="px-4 py-2 text-left text-slate-500 uppercase tracking-wider">{h}</th>
+                  <th key={h} scope="col" className="px-4 py-2 text-left text-slate-400 uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -84,7 +84,7 @@ export function AnalysisTab({ results, sectorColors }: { results: BacktestResult
                     {i === 0 ? '🏆 Top' : i === sectorRows.length - 1 ? '📉 Bot' : '—'}
                   </td>
                   <td className="px-4 py-3">
-                    <span className={`text-xs px-2 py-0.5 rounded font-bold ${i < 3 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-500'}`}>
+                    <span className={`text-xs px-2 py-0.5 rounded font-bold ${i < 3 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-400'}`}>
                       #{i + 1}
                     </span>
                   </td>
@@ -106,7 +106,7 @@ export function AnalysisTab({ results, sectorColors }: { results: BacktestResult
             <thead>
               <tr className="border-b border-slate-800">
                 {['Ticker', 'Sector', 'Ann. Ret', 'Max DD', 'Sharpe', 'Sortino', 'Win Rate', 'PF', 'B&H Ret', 'Alpha'].map(h => (
-                  <th key={h} scope="col" className="px-3 py-2 text-left text-slate-500 uppercase tracking-wider">{h}</th>
+                  <th key={h} scope="col" className="px-3 py-2 text-left text-slate-400 uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
             </thead>

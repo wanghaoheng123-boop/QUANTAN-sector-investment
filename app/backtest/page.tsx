@@ -148,7 +148,7 @@ export default function BacktestPage() {
             </div>
             <div className="flex items-center gap-3">
               <div className="text-right">
-                <div className="text-xs text-slate-500">Last computed</div>
+                <div className="text-xs text-slate-400">Last computed</div>
                 <div className="text-sm font-mono text-slate-300">{new Date(computedAt).toLocaleString()}</div>
                 <div className="text-[10px] text-slate-400">{formatFreshness(computedAt)}</div>
               </div>
@@ -201,7 +201,7 @@ export default function BacktestPage() {
             {selectedTickers.length > 0 && (
               <button
                 onClick={() => setSelectedTickers([])}
-                className="text-[10px] text-slate-500 hover:text-slate-300 underline"
+                className="text-[10px] text-slate-400 hover:text-slate-300 underline"
               >
                 Clear all
               </button>
@@ -212,7 +212,7 @@ export default function BacktestPage() {
           </div>
 
           {/* Strategy info bar */}
-          <div className="flex flex-wrap gap-4 text-[11px] text-slate-500 border border-slate-800 rounded-lg px-4 py-2 bg-slate-900/40">
+          <div className="flex flex-wrap gap-4 text-[11px] text-slate-400 border border-slate-800 rounded-lg px-4 py-2 bg-slate-900/40">
             <span><span className="text-slate-400">Strategy:</span> resolveBacktestSignal (regime dip-buy; enhanced in dev only)</span>
             <span><span className="text-slate-400">Capital:</span> $100,000 per instrument</span>
             <span><span className="text-slate-400">Stop Loss:</span> ATR-adaptive (1.5× ATR, 3–15%)</span>
@@ -233,7 +233,7 @@ export default function BacktestPage() {
             §1c. No hardcoded WR (it drifts with each rebaseline).
             NEW-Q-1 (2026-07-06): user-facing survivorship-scope disclosure —
             mirrors lib/backtest/SIGNAL_SSOT.md. */}
-        <p className="text-[11px] leading-relaxed text-slate-500">
+        <p className="text-[11px] leading-relaxed text-slate-400">
           <span className="font-medium text-slate-400">How these are measured:</span>{' '}
           metrics come from a cost-aware simulation — trades fill at the next
           session&apos;s open (T+1) and include round-trip transaction costs of
@@ -267,7 +267,7 @@ export default function BacktestPage() {
           {(['overview', 'instruments', 'trades', 'signals', 'analysis'] as const).map(tab => (
             <button key={tab} type="button" role="tab" aria-selected={activeTab === tab} onClick={() => setActiveTab(tab)}
               className={`px-4 py-1.5 text-xs rounded-md transition-all capitalize ${
-                activeTab === tab ? 'bg-slate-700 text-white' : 'text-slate-500 hover:text-slate-300'
+                activeTab === tab ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-slate-300'
               }`}>
               {tab}
             </button>

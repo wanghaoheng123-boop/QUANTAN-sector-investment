@@ -79,7 +79,7 @@ export const SECTORS: Sector[] = [
     name: 'Industrials',
     etf: 'XLI',
     description: 'Aerospace, defense, machinery, and logistics in a reshoring supercycle',
-    color: '#6366f1',
+    color: '#7c7ff5',
     bgGradient: 'from-indigo-900/20 to-indigo-950/10',
     borderColor: 'border-indigo-500/30',
     icon: '⚙️',
