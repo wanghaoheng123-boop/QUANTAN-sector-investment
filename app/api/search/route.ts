@@ -123,9 +123,21 @@ async function handleSearchGet(request: NextRequest) {
   }
 
   try {
-    const result = await yahooFinance.search(q, { newsCount: 0, quotesCount: limit })
+    // validateResult:false — tolerate Yahoo's drifted SearchResult schema, the
+    // same guard 72f42fc applied to the four news callers. Without it
+    // yahoo-finance2 validates Yahoo's response against its own JSON schema and
+    // THROWS on drift; the catch below then returns a well-formed `{quotes:[]}`
+    // with HTTP 200, so "Yahoo's schema changed" is indistinguishable from "no
+    // securities match" — exactly what let the news equivalent run for three
+    // months. This route was the last unguarded `search()` call site.
+    // The untyped result is cast; every row is `in`-narrowed below.
+    const result = await yahooFinance.search(
+      q,
+      { newsCount: 0, quotesCount: limit },
+      { validateResult: false },
+    ) as { quotes?: unknown[] }
 
-    const raw = result.quotes ?? []
+    const raw = result?.quotes ?? []
     for (const row of raw) {
       if (!row || typeof row !== 'object') continue
       if (!('symbol' in row) || typeof row.symbol !== 'string') continue
