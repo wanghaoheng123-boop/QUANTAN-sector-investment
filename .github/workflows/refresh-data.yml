@@ -24,18 +24,112 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # scripts/fetchBacktestData.mjs already exits non-zero when a ticker
+      # throws or trips an integrity floor (its `failed > 0` guard), so a hard
+      # fetch failure fails this step and every step below it is skipped.
       - name: Refresh backtest data from Yahoo Finance
         run: node scripts/fetchBacktestData.mjs
 
+      # AL-6 (2026-08-15): the hole the guard above does NOT cover.
+      #
+      # A fetch can "succeed" for all 56 instruments and still leave the
+      # fixtures untouched — a Yahoo outage serving cached bodies, an upstream
+      # schema change that lands zero new rows, a silently-empty response. That
+      # produced no diff, the commit step below printed "No data changes" and
+      # exited 0, and the run showed a GREEN CHECK. Nothing in the pipeline
+      # could tell "the market did not move" (impossible across a week for 56
+      # instruments) from "the fetch brought back nothing", and nothing asserted
+      # the fixtures' newest bar was recent. The nightly backtest cannot catch
+      # this either — a frozen fixture yields a perfectly stable win rate
+      # forever.
+      #
+      # This step is the assertion that gives the refresh teeth: every fixture's
+      # newest bar must be within MAX_STALE_DAYS of now, or the run goes RED and
+      # the commit/push below never runs. 5 days clears the worst legitimate
+      # case (a Sunday 22:00 UTC run whose newest equity bar is Friday's open,
+      # plus a holiday-shortened week); anything past that is a failed refresh,
+      # not a quiet market.
+      - name: Assert fixture freshness
+        env:
+          MAX_STALE_DAYS: '5'
+        run: |
+          node - <<'NODE'
+          const { readdirSync, readFileSync } = require('node:fs')
+          const path = require('node:path')
+
+          const DIR = 'scripts/backtestData'
+          const MAX_STALE_DAYS = Number(process.env.MAX_STALE_DAYS || 5)
+          const DAY_MS = 86400000
+          const now = Date.now()
+
+          const files = readdirSync(DIR).filter((f) => f.endsWith('.json'))
+          if (files.length === 0) {
+            console.error(`FAIL: no fixtures found in ${DIR} — the refresh produced nothing.`)
+            process.exit(1)
+          }
+
+          const bad = []
+          let newest = null
+
+          for (const file of files) {
+            const ticker = file.replace(/\.json$/, '')
+            let parsed
+            try {
+              parsed = JSON.parse(readFileSync(path.join(DIR, file), 'utf8'))
+            } catch (err) {
+              bad.push(`${ticker}: unreadable — ${err.message}`)
+              continue
+            }
+            const candles = Array.isArray(parsed.candles) ? parsed.candles : []
+            const last = candles[candles.length - 1]
+            if (!last || !Number.isFinite(last.time)) {
+              bad.push(`${ticker}: no usable final bar (${candles.length} candles)`)
+              continue
+            }
+            const lastMs = last.time * 1000
+            if (newest == null || lastMs > newest) newest = lastMs
+            const ageDays = (now - lastMs) / DAY_MS
+            if (ageDays > MAX_STALE_DAYS) {
+              const day = new Date(lastMs).toISOString().slice(0, 10)
+              bad.push(`${ticker}: newest bar ${day} is ${ageDays.toFixed(1)} days old`)
+            }
+          }
+
+          console.log(`Checked ${files.length} fixtures against a ${MAX_STALE_DAYS}-day ceiling.`)
+          if (newest != null) {
+            console.log(`Newest bar across all fixtures: ${new Date(newest).toISOString().slice(0, 10)}`)
+          }
+
+          if (bad.length > 0) {
+            console.error(`\nFAIL: ${bad.length}/${files.length} fixture(s) stale or unusable after the refresh:`)
+            for (const line of bad) console.error(`  - ${line}`)
+            console.error(`\nFixtures this old mean the refresh FAILED — this is not "no market change".`)
+            console.error(`Refusing to commit. Investigate the fetch (upstream outage, schema change,`)
+            console.error(`rate limiting) before re-running this workflow.`)
+            process.exit(1)
+          }
+
+          console.log('OK: every fixture is within the freshness ceiling.')
+          NODE
+
+      # `if: success()` is the default, but it is stated explicitly on both
+      # steps below: the whole point of the gate above is that nothing commits
+      # or pushes when the data is not verifiably fresh.
       - name: Configure git
+        if: success()
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
 
       - name: Commit & push if changed
+        if: success()
         run: |
+          # A no-diff run stays a SKIP rather than a failure — a same-day
+          # workflow_dispatch re-run legitimately produces no diff, and the
+          # freshness gate above has already proven the data is current. That
+          # gate, not this branch, is what catches a dead fetch.
           if git diff --quiet -- scripts/backtestData/; then
-            echo "No data changes — skipping commit."
+            echo "No data changes — skipping commit (fixtures verified fresh above)."
             exit 0
           fi
           git add scripts/backtestData/

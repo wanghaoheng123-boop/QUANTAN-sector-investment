@@ -167,3 +167,76 @@ describe('LiveSignalsPanel — null-guard regression', () => {
     }
   })
 })
+
+describe('LiveSignalsPanel — data freshness disclosure (AL-2/DQ-7)', () => {
+  // The panel used to render "Live data refreshes every 60s" beside the as-of
+  // date. Nothing here refreshes every 60 seconds: the inputs are committed
+  // weekly fixtures, the 60s was a server-side memo TTL for recomputing the
+  // SAME frozen inputs, and this component fetches once on mount with no
+  // interval. Reading the widget correctly required disbelieving the sentence
+  // next to the date, which is worse than saying nothing.
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  function renderWithDates(lastDates: Array<string | null>) {
+    mockFetchOnce({
+      instruments: lastDates.map((lastDate, i) => ({
+        ticker: `T${i}`,
+        sector: 'Test',
+        price: 100,
+        changePct: 0,
+        zone: 'HEALTHY_BULL',
+        action: 'HOLD',
+        confidence: 50,
+        rsi14: 50,
+        atrPct: 1,
+        deviationPct: 1,
+        slopePct: 0.01,
+        KellyFraction: 0.1,
+        lastDate,
+      })),
+      summary: { buySignals: 0, holdSignals: lastDates.length, sellSignals: 0 },
+    })
+    return render(<LiveSignalsPanel />)
+  }
+
+  it('makes no claim that the data refreshes on a timer', async () => {
+    const { container } = renderWithDates(['2026-08-07'])
+    await waitFor(() => expect(screen.getByText('T0')).toBeInTheDocument())
+
+    const text = container.textContent ?? ''
+    expect(text).not.toMatch(/refreshes every 60s/)
+    expect(text).not.toMatch(/Live data refreshes/)
+    // Guards the weaker rewrite too: the panel does not poll, so no phrasing
+    // that implies a 60-second client cadence is true either.
+    expect(text).not.toMatch(/every 60\s*s(econds)?/i)
+  })
+
+  it('states the as-of date and the real (weekly) cadence', async () => {
+    const { container } = renderWithDates(['2026-08-07'])
+    await waitFor(() => expect(screen.getByText('T0')).toBeInTheDocument())
+
+    const text = container.textContent ?? ''
+    expect(text).toMatch(/Data through/)
+    expect(text).toMatch(/refreshed weekly/)
+    // The date also appears in the table's "Last Data" column, so scope the
+    // assertion to the disclosure line rather than matching document-wide.
+    const disclosure = Array.from(container.querySelectorAll('div')).find(d =>
+      d.textContent?.startsWith('Data through'),
+    )
+    expect(disclosure?.textContent).toContain('2026-08-07')
+  })
+
+  it('reports the NEWEST bar across instruments as the as-of date', async () => {
+    // Mixed staleness (equities lag BTC on a weekend) must not be summarised
+    // by whichever instrument happens to sort first.
+    const { container } = renderWithDates(['2026-08-07', '2026-08-09', null])
+    await waitFor(() => expect(screen.getByText('T0')).toBeInTheDocument())
+
+    const disclosure = Array.from(container.querySelectorAll('div')).find(d =>
+      d.textContent?.startsWith('Data through'),
+    )
+    expect(disclosure?.textContent).toContain('2026-08-09')
+  })
+})

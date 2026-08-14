@@ -230,26 +230,55 @@ export function ma200Regime(
       dipSignalExplained = `Price is ${dev.toFixed(1)}% below 200-day SMA. Insufficient history to confirm 200MA slope direction — treat as watch until confirmed.`
     }
   } else if (zone === 'DEEP_DIP') {
+    // AL-4/AL-5 (2026-08-15) — fail-closed on an UNKNOWN slope.
+    //
+    // These three deep zones were `if (slopePositive === true) … else
+    // FALLING_KNIFE`, which folded "slope is null" (fewer than the 221 closes
+    // sma200Slope() needs) into the same arm as "slope is negative". A caller
+    // with 200–220 bars was told, as fact and in the most alarming copy in the
+    // codebase, that the 200-day SMA is DECLINING — from a number the code
+    // never computed. `/api/ma-deviation` hit this on every row of the board.
+    //
+    // Unknown ≠ declining. Each deep zone now has an explicit `null` arm that
+    // says so, mirroring the FIRST_DIP branch above and the Q05-1 fail-closed
+    // in lib/backtest/regimeSignal.ts:153-161. WATCH_DIP is deliberate: it is
+    // the value regimeSignal emits for the same input, so the two surfaces
+    // agree on dipSignal instead of contradicting each other (AL-5).
+    // The true/false arms are untouched.
     if (slopePositive === true) {
       dipSignal = 'WATCH_DIP'
       dipSignalExplained = `Deep dip zone (${dev.toFixed(1)}% below 200MA) with a still-rising 200MA. Historical forward returns are positive, but volatility is elevated. Scale in cautiously — do NOT go all-in. ${rsi14 != null ? `RSI(14) at ${rsi14.toFixed(0)}${rsi14 < 30 ? ' — extreme oversold signal supports staged entry.' : '.'}` : ''}`
-    } else {
+    } else if (slopePositive === false) {
       dipSignal = 'FALLING_KNIFE'
       dipSignalExplained = `FALLING KNIFE RISK: Price is ${dev.toFixed(1)}% below a DECLINING 200-day SMA. This pattern (2000–2002, 2008, 2022) historically precedes further downside before stabilization. Avoid averaging down until 200MA slope turns positive.`
+    } else {
+      dipSignal = 'WATCH_DIP'
+      dipSignalExplained = `Deep dip zone (${dev.toFixed(1)}% below 200MA). Insufficient history to confirm 200MA slope direction — the trend is unknown, not confirmed declining. Treat as watch until the slope can be computed.`
     }
   } else if (zone === 'BEAR_ALERT') {
     if (slopePositive === true) {
       dipSignal = 'WATCH_DIP'
       dipSignalExplained = `Extreme deep dip (${dev.toFixed(1)}% below 200MA). 200MA is still rising — potential major low. Requires staged accumulation with strict risk management. Historical max-opportunity zone in swift corrections (2020-type).`
-    } else {
+    } else if (slopePositive === false) {
       dipSignal = 'FALLING_KNIFE'
       dipSignalExplained = `FALLING KNIFE — HIGH CONVICTION: ${dev.toFixed(1)}% below a DECLINING 200-day SMA. This matches historical bear market profiles (2001, 2008, 2022). Avoid long exposure until 200MA slope inflects positive.`
+    } else {
+      dipSignal = 'WATCH_DIP'
+      dipSignalExplained = `Extreme deep dip (${dev.toFixed(1)}% below 200MA). Insufficient history to confirm 200MA slope direction — the trend is unknown, not confirmed declining. Treat as watch until the slope can be computed.`
     }
   } else if (zone === 'CRASH_ZONE') {
-    dipSignal = slopePositive === true ? 'STRONG_DIP' : 'FALLING_KNIFE'
-    dipSignalExplained = slopePositive === true
-      ? `Capitulation zone (${dev.toFixed(1)}% below 200MA) with 200MA slope starting to flatten/rise — this mirrors post-crash bottoming patterns. Maximum long-term opportunity with disciplined staged buying.`
-      : `EXTREME FALLING KNIFE: ${dev.toFixed(1)}% below a still-declining 200-day SMA. Systemic bear market or structural breakdown. Only the most aggressive contrarian positioning is warranted, with full expectation of further short-term pain.`
+    // Restructured from a pair of ternaries to the same if/else-if/else shape
+    // as its sibling zones so the null arm is explicit rather than implied.
+    if (slopePositive === true) {
+      dipSignal = 'STRONG_DIP'
+      dipSignalExplained = `Capitulation zone (${dev.toFixed(1)}% below 200MA) with 200MA slope starting to flatten/rise — this mirrors post-crash bottoming patterns. Maximum long-term opportunity with disciplined staged buying.`
+    } else if (slopePositive === false) {
+      dipSignal = 'FALLING_KNIFE'
+      dipSignalExplained = `EXTREME FALLING KNIFE: ${dev.toFixed(1)}% below a still-declining 200-day SMA. Systemic bear market or structural breakdown. Only the most aggressive contrarian positioning is warranted, with full expectation of further short-term pain.`
+    } else {
+      dipSignal = 'WATCH_DIP'
+      dipSignalExplained = `Capitulation zone (${dev.toFixed(1)}% below 200MA). Insufficient history to confirm 200MA slope direction — the trend is unknown, not confirmed declining. Treat as watch until the slope can be computed.`
+    }
   } else {
     dipSignal = 'INSUFFICIENT_DATA'
     dipSignalExplained = 'Cannot classify.'

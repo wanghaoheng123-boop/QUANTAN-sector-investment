@@ -329,15 +329,29 @@ describe('ma200Regime — deviation-zone boundaries + full metadata (null slope)
     )
   })
 
-  it('null-slope dip zones → WATCH_DIP / FALLING_KNIFE per the unknown-slope branch', () => {
+  // AL-4 (2026-08-15): this test previously pinned `FALLING_KNIFE` at 220 bars
+  // as the golden — it was characterizing the bug. With fewer than 221 closes
+  // sma200Slope() returns null, so the slope is UNKNOWN, and the deep zones now
+  // fail closed to WATCH_DIP instead of asserting a DECLINING SMA as fact.
+  // Exact-string `toBe` is kept deliberately: these templates are what the
+  // quant-indicators mutation shard scores, and loosening them to
+  // toContain/regex would hand back the survived mutants Q-078 wave 4 killed.
+  it('null-slope dip zones → WATCH_DIP in every zone (unknown slope is never a falling knife)', () => {
     expect(ma200Regime(95, flat220).dipSignal).toBe('WATCH_DIP')
     expect(ma200Regime(95, flat220).dipSignalExplained).toBe(
       'Price is -5.0% below 200-day SMA. Insufficient history to confirm 200MA slope direction — treat as watch until confirmed.',
     )
-    // DEEP_DIP with slopePositive !== true (here null) → FALLING_KNIFE
-    expect(ma200Regime(85, flat220).dipSignal).toBe('FALLING_KNIFE')
+    expect(ma200Regime(85, flat220).dipSignal).toBe('WATCH_DIP')
     expect(ma200Regime(85, flat220).dipSignalExplained).toBe(
-      'FALLING KNIFE RISK: Price is -15.0% below a DECLINING 200-day SMA. This pattern (2000–2002, 2008, 2022) historically precedes further downside before stabilization. Avoid averaging down until 200MA slope turns positive.',
+      'Deep dip zone (-15.0% below 200MA). Insufficient history to confirm 200MA slope direction — the trend is unknown, not confirmed declining. Treat as watch until the slope can be computed.',
+    )
+    expect(ma200Regime(75, flat220).dipSignal).toBe('WATCH_DIP')
+    expect(ma200Regime(75, flat220).dipSignalExplained).toBe(
+      'Extreme deep dip (-25.0% below 200MA). Insufficient history to confirm 200MA slope direction — the trend is unknown, not confirmed declining. Treat as watch until the slope can be computed.',
+    )
+    expect(ma200Regime(60, flat220).dipSignal).toBe('WATCH_DIP')
+    expect(ma200Regime(60, flat220).dipSignalExplained).toBe(
+      'Capitulation zone (-40.0% below 200MA). Insufficient history to confirm 200MA slope direction — the trend is unknown, not confirmed declining. Treat as watch until the slope can be computed.',
     )
   })
 })

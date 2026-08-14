@@ -37,6 +37,7 @@
 import { isMarketOpen } from '@/lib/api/marketHours'
 import { applyRateLimit } from '@/lib/api/rateLimit'
 import YahooFinance from 'yahoo-finance2'
+import { normalizedChangePercent } from '@/lib/yahooQuoteFields'
 import { withRetry } from '@/lib/api/reliability'
 import { STREAM_AUTO_CLOSE_MS, STREAM_CLOSE_WARN_LEAD_MS } from '@/lib/api/streamBudget'
 import { parseTickerParam } from '@/lib/api/streamTickers'
@@ -124,7 +125,22 @@ async function fetchQuotes(symbols: readonly string[]): Promise<QuoteEvent[]> {
         ticker: symbol,
         price,
         change: finite(row.regularMarketChange) ?? 0,
-        changePct: finite(row.regularMarketChangePercent) ?? 0,
+        // SAME derivation as /api/prices (route.ts:146-150) — both surfaces
+        // render this number on the same dashboard, so it must be the same
+        // number. Yahoo occasionally serves the percent change in DECIMAL form
+        // (0.016 meaning 1.6%); normalizedChangePercent disambiguates against
+        // an independently implied (change/price)*100. Taking the field raw
+        // here made the streamed tile read +0.016% while the polled tile read
+        // +1.6% for the same symbol — a 100× understatement, directionally
+        // correct and therefore invisible to eyeballing (DQ-5/DQ-2). The
+        // normalizer is remediation the platform already paid for once; the
+        // multiplex route reintroduced the unguarded path on 2026-08-14.
+        // Cross-route parity is pinned by __tests__/api/changePctParity.test.ts.
+        changePct: normalizedChangePercent(
+          row.regularMarketChangePercent as number | null,
+          row.regularMarketChange as number | null,
+          price,
+        ),
         volume: finite(row.regularMarketVolume) ?? undefined,
         marketOpen,
         timestamp,
