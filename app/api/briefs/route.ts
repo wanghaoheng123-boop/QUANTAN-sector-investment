@@ -14,25 +14,37 @@ import { applyRateLimit } from '@/lib/api/rateLimit'
 import { sanitizeError } from '@/lib/api/sanitize'
 import { isSafeHttpUrl } from '@/lib/security/urlValidation'
 import { newsBriefId } from '@/lib/api/briefId'
+import { SECTOR_COLORS_BY_SLUG, DEFAULT_SECTOR_COLOR } from '@/lib/sectorColors'
 
 const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] })
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-// Map sector slugs to their primary ETF ticker + top holdings for news search
-const SECTOR_QUERY_MAP: Record<string, { name: string; tickers: string[]; color: string }> = {
-  'technology':        { name: 'Technology',        tickers: ['AAPL', 'MSFT', 'NVDA', 'AVGO', 'AMD'], color: '#3b82f6' },
-  'energy':            { name: 'Energy',             tickers: ['XOM', 'CVX', 'COP', 'EOG', 'SLB'], color: '#f59e0b' },
-  'financials':        { name: 'Financials',         tickers: ['JPM', 'BAC', 'WFC', 'GS', 'MS'], color: '#10b981' },
-  'healthcare':        { name: 'Healthcare',         tickers: ['LLY', 'UNH', 'JNJ', 'ABBV', 'MRK'], color: '#ec4899' },
-  'consumer-discretionary': { name: 'Consumer Disc.',  tickers: ['AMZN', 'TSLA', 'HD', 'MCD', 'NKE'], color: '#f97316' },
-  'industrials':       { name: 'Industrials',       tickers: ['GE', 'CAT', 'RTX', 'UNP', 'HON'], color: '#7c7ff5' },
-  'communication':     { name: 'Communication',     tickers: ['META', 'GOOGL', 'NFLX', 'DIS', 'T'], color: '#8b5cf6' },
-  'materials':         { name: 'Materials',          tickers: ['FCX', 'LIN', 'APD', 'NEM', 'DOW'], color: '#14b8a6' },
-  'utilities':         { name: 'Utilities',          tickers: ['NEE', 'SO', 'DUK', 'AEP', 'PCG'], color: '#22c55e' },
-  'real-estate':       { name: 'Real Estate',        tickers: ['PLD', 'AMT', 'EQIX', 'WELL', 'SPG'], color: '#f59e0b' },
-  'consumer-staples':  { name: 'Consumer Staples',  tickers: ['PG', 'COST', 'WMT', 'PEP', 'KO'], color: '#06b6d4' },
+// Map sector slugs to their primary ETF ticker + top holdings for news search.
+//
+// Colors are NOT stored here. Phase 14 (R5-M-2) created lib/sectorColors.ts as
+// the color SSOT precisely because this table and app/backtest/page.tsx had
+// drifted apart — and that module's own docstring names this route as a
+// consumer of SECTOR_COLORS_BY_SLUG. Only the backtest page was actually
+// migrated; this table kept its literals and kept drifting. By 2026-08-14 four
+// were wrong (Materials #14b8a6 vs #84cc16, Utilities #22c55e vs #06b6d4,
+// Consumer Staples #06b6d4 vs #34d399, Real Estate #f59e0b vs #a78bfa) — and
+// Real Estate had landed on Energy's exact amber, rendering two sectors
+// identically in the briefs list. Deriving from the SSOT ends the class:
+// there is now no second place for a sector color to live.
+const SECTOR_QUERY_MAP: Record<string, { name: string; tickers: string[] }> = {
+  'technology':        { name: 'Technology',        tickers: ['AAPL', 'MSFT', 'NVDA', 'AVGO', 'AMD'] },
+  'energy':            { name: 'Energy',             tickers: ['XOM', 'CVX', 'COP', 'EOG', 'SLB'] },
+  'financials':        { name: 'Financials',         tickers: ['JPM', 'BAC', 'WFC', 'GS', 'MS'] },
+  'healthcare':        { name: 'Healthcare',         tickers: ['LLY', 'UNH', 'JNJ', 'ABBV', 'MRK'] },
+  'consumer-discretionary': { name: 'Consumer Disc.',  tickers: ['AMZN', 'TSLA', 'HD', 'MCD', 'NKE'] },
+  'industrials':       { name: 'Industrials',       tickers: ['GE', 'CAT', 'RTX', 'UNP', 'HON'] },
+  'communication':     { name: 'Communication',     tickers: ['META', 'GOOGL', 'NFLX', 'DIS', 'T'] },
+  'materials':         { name: 'Materials',          tickers: ['FCX', 'LIN', 'APD', 'NEM', 'DOW'] },
+  'utilities':         { name: 'Utilities',          tickers: ['NEE', 'SO', 'DUK', 'AEP', 'PCG'] },
+  'real-estate':       { name: 'Real Estate',        tickers: ['PLD', 'AMT', 'EQIX', 'WELL', 'SPG'] },
+  'consumer-staples':  { name: 'Consumer Staples',  tickers: ['PG', 'COST', 'WMT', 'PEP', 'KO'] },
 }
 
 export interface NewsBrief {
@@ -176,7 +188,7 @@ export async function GET(request: Request): Promise<NextResponse<{
           ...brief,
           sector: slug,
           sectorName: config.name,
-          sectorColor: config.color,
+          sectorColor: SECTOR_COLORS_BY_SLUG[slug] ?? DEFAULT_SECTOR_COLOR,
         }))
       })
     )

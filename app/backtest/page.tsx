@@ -141,6 +141,14 @@ export default function BacktestPage() {
                   BT
                 </div>
                 <div>
+                  {/* This h1 is the page's only level-1 heading. The panel headings
+                      under it (OverviewTab, AnalysisTab, SectorHeatmap,
+                      WalkForwardPanel) are h2 and must STAY h2 — they read as small
+                      uppercase labels, so the temptation is to demote them to h3 for
+                      "visual hierarchy", but that reintroduces an h1 -> h3 skip and
+                      axe fails heading-order (observed 2026-08-14, right after this
+                      h1 was added to clear page-has-heading-one). Heading level is
+                      structure; the size comes from the classes. */}
                   <h1 className="text-xl font-bold text-white">Institutional Backtest</h1>
                   <p className="text-xs text-slate-400">5Y Walk-Forward · 56 Instruments · Long Only · Regime SSOT (200SMA zones)</p>
                 </div>
