@@ -18,8 +18,8 @@
  * `vi.mock` factory can reference it (the established pattern in this repo).
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, waitFor } from '@testing-library/react'
-import KLineChart from '@/components/KLineChart'
+import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react'
+import KLineChart, { legendChangePct } from '@/components/KLineChart'
 import { CHART_EMA_COLORS, allEmaOff } from '@/lib/chartEma'
 
 // ─── lightweight-charts mock ─────────────────────────────────────────────────
@@ -149,10 +149,10 @@ function flags(overrides: Flags = {}): Flags {
 }
 
 /** Renders the chart and resolves once the async init + first data effect ran. */
-async function mountChart(indicators: Flags) {
+async function mountChart(indicators: Flags, candles: typeof CANDLES = CANDLES) {
   const utils = render(
     <KLineChart
-      candles={CANDLES}
+      candles={candles}
       color="#3b82f6"
       ticker="TEST"
       showRSI={false}
@@ -313,5 +313,45 @@ describe('KLineChart render smoke (KL-10)', () => {
     const { candle } = await mountChart(flags({ fibonacci: false }))
     expect(candle.createPriceLine).not.toHaveBeenCalled()
     expect(candle.priceLines).toHaveLength(0)
+  })
+})
+
+// ─── UX-8: legend change % is the session change, not the candle body ────────
+
+/**
+ * A gap-DOWN bar whose body is UP: previous close 100, latest bar opens at 90
+ * and closes at 95. Body = (95 − 90) / 90 = +5.56 % (green ▲); session change
+ * vs the previous close = (95 − 100) / 100 = −5.00 % (red ▼). The two bases
+ * disagree in SIGN, which is exactly the header-vs-legend contradiction UX-8
+ * reported, so this fixture fails loudly if the basis ever reverts.
+ */
+const GAP_DOWN_CANDLES = [
+  { time: '2024-02-01', open: 98, high: 101, low: 97, close: 100, volume: 1_000_000 },
+  { time: '2024-02-02', open: 90, high: 96, low: 89, close: 95, volume: 2_400_000 },
+]
+
+describe('KLineChart legend change % (UX-8)', () => {
+  it('measures against the PREVIOUS bar close, not the latest candle body', () => {
+    expect(legendChangePct(GAP_DOWN_CANDLES)).toBeCloseTo(-5, 10)
+  })
+
+  it('falls back to the candle body when there is no previous bar', () => {
+    expect(legendChangePct([{ open: 90, close: 95 }])).toBeCloseTo(5.5555, 3)
+  })
+
+  it('returns null when there is no candle, or no usable basis', () => {
+    expect(legendChangePct([])).toBeNull()
+    expect(legendChangePct([{ open: 0, close: 95 }])).toBeNull()
+  })
+
+  it('renders the session change — sign, glyph and colour — in the legend', async () => {
+    const { getByText } = await mountChart(flags(), GAP_DOWN_CANDLES)
+
+    // −5.00 %, not the +5.56 % candle body the old formula produced.
+    const chg = getByText('-5.00%')
+    expect(chg).toBeInTheDocument()
+    expect(chg.className).toContain('text-red-400')
+    // The glyph reads from the same basis as the number it colours.
+    expect(getByText('▼ $95.00')).toBeInTheDocument()
   })
 })
