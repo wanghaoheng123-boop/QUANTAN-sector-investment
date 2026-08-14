@@ -75,6 +75,12 @@ function holidayBudget(calendarDays: number): number {
   return Math.ceil((calendarDays / 365) * 12)
 }
 
+/**
+ * The anchor is fixed rather than `Date.now()` so this stays deterministic. The
+ * weekday density of a ~400-day window varies by at most a day or two across
+ * anchors, and the assertion below keeps ~50 bars of margin, so the choice of
+ * anchor cannot flip the result.
+ */
 function estimatedTradingBars(calendarDays: number): number {
   const to = new Date(Date.UTC(2026, 7, 15))
   const from = new Date(to.getTime() - calendarDays * DAY_MS)

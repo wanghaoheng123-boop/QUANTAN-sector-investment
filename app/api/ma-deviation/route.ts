@@ -42,9 +42,10 @@ export async function GET(request: Request) {
     // `sma200Slope()` requires (lib/quant/indicators.ts) — so `slopePct` /
     // `slopePositive` came back null on EVERY row of this board, permanently.
     // 400 calendar days ≈ 275 trading bars, comfortable headroom over 221 even
-    // across a holiday-heavy stretch. Keep this ≥ ~330 calendar days: below
-    // that the slope silently goes null again and the whole board degrades to
-    // the unknown-slope arm of ma200Regime.
+    // across a holiday-heavy stretch. Keep this ≥ 360 calendar days — the floor
+    // __tests__/api/maDeviationWindow.test.ts enforces. Below it the slope
+    // silently goes null again and the whole board degrades to the
+    // unknown-slope arm of ma200Regime.
     period1.setDate(period1.getDate() - 400)
 
     const allTickers = TICKERS.map((t) => t.ticker)
