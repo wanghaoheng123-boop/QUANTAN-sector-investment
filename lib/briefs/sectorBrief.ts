@@ -134,16 +134,20 @@ function yahoo(): InstanceType<typeof YahooFinance> {
 }
 
 export function defaultBriefFetchers(): BriefFetchers {
+  // Bound to a local named `yf` on purpose: the repo's schema-drift class guard
+  // scans for `yf.search(` / `yahooFinance.search(` call sites, and a call
+  // spelled `yahoo().search(` would be invisible to it.
+  const yf = yahoo()
   return {
-    quote: (symbol) => yahoo().quote(symbol) as Promise<unknown>,
+    quote: (symbol) => yf.quote(symbol) as Promise<unknown>,
     quoteSummary: (symbol, options) =>
-      yahoo().quoteSummary(symbol, options as never) as Promise<unknown>,
+      yf.quoteSummary(symbol, options as never) as Promise<unknown>,
     // validateResult:false — Yahoo's SearchResult response has drifted from
     // yahoo-finance2 v3's schema, so validation throws (news silently dropped +
     // log spam). News is display-only and each field is null-guarded downstream,
     // so accept Yahoo's raw result instead of failing the whole news fetch.
     search: (symbol, options) =>
-      yahoo().search(symbol, options, { validateResult: false }) as Promise<unknown>,
+      yf.search(symbol, options, { validateResult: false }) as Promise<unknown>,
   }
 }
 

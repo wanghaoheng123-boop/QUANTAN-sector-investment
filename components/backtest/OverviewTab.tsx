@@ -36,7 +36,7 @@ import {
  * drift from the model again. No constant changed; only the sentence that
  * describes them.
  */
-const TX_COST_RULE =
+export const TX_COST_RULE =
   `${costBpsPerSide()} bps per side ` +
   `(${DEFAULT_EXECUTION_COSTS.spreadBpsPerSide} bps spread + ` +
   `${DEFAULT_EXECUTION_COSTS.slippageBpsPerSide} bps slippage + ` +
