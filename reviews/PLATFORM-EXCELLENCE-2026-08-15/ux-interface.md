@@ -107,6 +107,11 @@ static hero (`app/page.tsx:286-291`) plus the promotional backtest card
 (`app/page.tsx:295-316`) consume 424 px of a 720 px viewport and contain zero live numbers.
 Total page height 3033 px.
 
+**At 375×812 it is far worse** (measured, same method): the sector grid starts at
+**y = 2191 — 1379 px below the fold, nearly three full screens of scrolling** — and the page
+is 6381 px tall (7.9 screens). No horizontal overflow at either width, so the responsive
+layout itself is sound; the problem is purely what occupies the top.
+
 **Impact.** Every session starts with a scroll before a single sector price is visible; the
 24 px ticker is the only live data a trader sees on load.
 
@@ -199,6 +204,34 @@ Two more unlabelled synthetic surfaces:
 that does not exist, whose chart API 500s — still renders
 `DARK POOL SUMMARY · Total Block Vol 3M · Bullish Prints 9/12`.
 
+**Confirmed on the Dark Pool tab of `/stock/AAPL`, with AAPL trading at $305.40.** Captured
+live:
+
+```
+Off-Exchange Vol —   Short Interest 0.01% (141.61M shares)   Days to Cover 2.6   Float 14.59B   ← REAL (Yahoo)
+Source: Yahoo Finance aggregate off-exchange trading data. Fetched: 15/08/2026, 00:39:59.      ← REAL provenance
+BEARISH ── Off-Exchange Flow ── BULLISH    51% / 49%                                            ← from synthetic prints
+Block Prints — AAPL          [no ILLUSTRATIVE badge]                                            ← badge suppressed
+  14:58:00  334K  $100.07  +0.54%  BLOCK
+  14:30:00  114K  $100.59  +0.63%  SWEEP
+  14:15:00  517K  $100.85  +0.07%  CROSS
+  13:58:00  115K   $99.82  −0.27%  SWEEP        … 10 rows, all ≈ $100
+```
+
+Three things this settles:
+1. **The `ILLUSTRATIVE` badge is genuinely absent on AAPL** — real Yahoo short-interest/float
+   data loaded, so `hasRealData` is true and the label is suppressed. The headline claim is
+   confirmed, not inferred.
+2. **The fabricated prints are priced at ≈ $100 while AAPL trades at $305.40** — the
+   `SEED_PRICES[ticker] || 100` fallback, i.e. institutional blocks shown crossing **67 % below
+   market**, in a table that simultaneously reports them as within ±0.6 % of VWAP. The table is
+   internally impossible, and it sits directly beneath the real Yahoo provenance line.
+3. The `Signal` column renders **blank on every row**, yet the sidebar tile derived from it
+   reports `Bullish Prints 7/12` — so the sentiment that drives the summary is not even shown.
+
+Timestamps read `12:10`–`14:58`, from the hardcoded `2026-03-23T15:00:00` anchor, so they
+present as today's tape.
+
 **Impact.** The homepage sells "Dark Pool Intelligence — block prints, sweep orders,
 institutional flow sentiment, VWAP premium/discount". A professional trader reading
 "9/12 bullish prints" on AAPL is reading a hash of the letters A-A-P-L, unlabelled, next to a
@@ -233,20 +266,59 @@ empty space to the left    84.7 %
 At 0.5 CSS px per bar no candle body, wick, or EMA crossing is resolvable; the RSI, MACD and
 ATR sub-panes inherit the same compression (ATR renders visually empty).
 
-**Root cause.** `hooks/useKLineChart.ts:563-570` — the `ResizeObserver` pushes the new width
-into all four charts with `applyOptions({ width })` but **never re-runs `fitContent()`**.
+**The same measurement on `/crypto/btc` (92 candles, `1D`) makes the mechanism unambiguous:**
+
+```
+canvas 1608 device px · candle ink spans x = 1515 … 1607
+series occupies 5.7 % of the pane · 94.2 % empty
+```
+
+252 bars → 251 px, 92 bars → 92 px. **The rendered width of the series equals the bar count in
+device pixels on every page**, i.e. `barSpacing` is pinned at the library floor and is never
+recomputed for the pane width — `fitContent()` demonstrably never takes effect. The defect
+gets *worse* the shorter the series, so intraday timeframes are the least readable of all.
+
+**The defect is in the *initial fit only* — and forcing a re-fit demonstrably repairs it.**
+Two controls confirm this:
+
+* **At 375 px the same chart renders correctly.** Fresh mobile load of `/stock/AAPL` 1Y:
+  candles fill the pane, individual bodies and wicks are resolvable, EMA lines legible
+  (screenshotted). So the data, the series and the renderer are all fine.
+* **Resizing the viewport without reloading fixes the desktop chart.** After going
+  mobile → desktop with no navigation, the AAPL 1Y chart renders across the full pane with a
+  complete month axis (2026, Feb … Aug), visible volume histogram and legible EMAs — i.e.
+  exactly what it should have looked like on load. The repair is reproducible on demand.
+
+**Root cause (mechanism med-confidence; symptom and repair are high).** `fitContent()` is
+called only from the data effect, `hooks/useKLineChart.ts:827-829` (and `:817` for ATR), which
+runs before the chart's grid cell (`xl:col-span-3`, beside the indicator sidebar) has settled
+at its final width. Bar spacing is computed against that early, narrower width and is then
+**never recomputed**, because the `ResizeObserver` at `:563-570` pushes the new width in with
+`applyOptions({ width })` and does not re-run `fitContent()`:
+
+```ts
+resizeRef.current = new ResizeObserver((entries) => {
+  const { width } = entries[0].contentRect
+  main.applyOptions({ width })            // ← no fitContent()
+  rsiChartRef.current?.applyOptions({ width })
+  …
+})
+```
+
 lightweight-charts preserves `barSpacing` and the right anchor across a width change, so the
-series stays at whatever spacing it was fit to and the extra width becomes dead space on the
-left. `fitContent()` is only called in the data effect (`:827-829`, `:817`), which runs before
-the container reaches its final width.
+extra width becomes dead space on the left. At mobile the initial and final widths are the
+same, so no defect appears — which is why this has survived. (A related observation while
+resizing: the chart canvas did not track the container width at all until a re-render, so the
+RO path is worth checking end-to-end, not just for the missing re-fit.)
 
-**Impact.** The chart is the core of three of the platform's pages and it is unreadable at
-rest; every trader must manually zoom before doing any technical work.
+**Impact.** The chart is the core of three of the platform's pages and is unreadable at rest
+**on desktop — where professionals trade**; every trader must manually zoom or resize before
+doing any technical work.
 
-**Fix.** Call `fitContent()` on all four charts inside the `ResizeObserver` callback (or
-preserve the *visible time range* across the width change rather than the bar spacing), and
-guard the initial `createChart` against a zero/partial container width. One-line-ish change
-with an outsized payoff. **Effort** S · **Confidence** high
+**Fix.** Call `fitContent()` on all four charts inside the `ResizeObserver` callback, and/or
+defer the initial fit to a `requestAnimationFrame` after layout settles. The manual-resize
+repair above is direct evidence this is sufficient. **Effort** S · **Confidence** high
+(symptom + repair measured; exact trigger med)
 
 ---
 
@@ -348,12 +420,24 @@ quote effect. **Effort** S · **Confidence** high
 the whole ticker. Observed: the text spills out of both sides of the tile and collides with the
 `<h1>` beside it. Anchor: `app/stock/[ticker]/page.tsx` (avatar tile in the page header block).
 
-**Impact.** Cosmetic for 1–4-char tickers, broken for the 5-char (`GOOGL`, `BRK.B`) and
-crypto-pair symbols the search will happily route to.
+**It also breaks at four characters — measured, at desktop width.** On `/stock/AAPL`
+(1280×720), the tile div and its text node:
+
+```
+tile   48 × 48 px   (w-12 h-12, font-size 20px)
+text   54.4 px wide  → 6.4 px of overflow
+tile.scrollWidth 50 > tile.clientWidth 46
+```
+
+So this is not an edge case for long symbols or a mobile-only artefact — it is wrong for the
+most common ticker length, at every viewport, on the platform's most-visited page.
+
+**Impact.** Visible text overflow on the instrument header of every stock page at mobile
+width, and at any width for 5-char (`GOOGL`, `BRK.B`) or crypto-pair symbols.
 
 **Fix.** Truncate to 4 characters inside the tile with the full symbol on the `<h1>`, or size
 the tile with `min-w-12 px-2 w-auto` and scale the font down past 4 characters.
-**Effort** S · **Confidence** med (measured on an 11-char symbol; 5-char case inferred)
+**Effort** S · **Confidence** high (observed at 4 and 11 characters)
 
 ---
 
@@ -534,6 +618,9 @@ quote table starts       y = 585
 rows in table            28   ·  rows above the 720 px fold: 5
 ```
 
+**At 375×812 the quote table starts at y = 956 — the entire table is below the fold and the
+first screen contains no quotes at all.**
+
 `components/DashboardGuide.tsx:36-37` — `useState(true)`, "Default OPEN on first ever visit".
 The panel explains what a quote strip is, what 2s/5s/15s means, and what green and red mean —
 to an audience the page's own subtitle calls "floor-style monitoring".
@@ -617,4 +704,712 @@ and this page polls `/api/prices` every 15 s while the rest of the site is on SS
 **Fix.** Route the value through `safeFixed`, render `—` and a neutral tile when the quote is
 missing, and surface a fetch error instead of clearing `loading` silently.
 **Effort** S · **Confidence** high
+
+---
+
+### `/sector/[slug]` (technology) + the shared timeframe rail
+
+**Job:** "is this sector trending, is institutional flow with me, what's the level."
+Glance test: **fails** — 380 px of instructions first (UX-19), and the header, the chart legend
+and the signal card give three different session changes.
+
+---
+
+#### UX-22 · P1 · Selecting a 1-minute timeframe labels the chart "DAILY+ BARS"
+
+**Evidence.** Live on `/stock/AAPL`: clicking the `1m` pill and waiting for the reload leaves
+the chart badge reading **`DAILY+ BARS`**. Root cause is a hand-maintained list that drifted
+between the two pages that share the rail:
+
+* `app/stock/[ticker]/page.tsx:451` —
+  `activeRange === '1D' || '1W' || '5m' || '15m' || '1H' || '4H' ? 'INTRADAY' : 'DAILY+'`
+  — **omits `1m` and `3m`**.
+* `app/sector/[slug]/page.tsx:229` —
+  `['1m','3m','5m','15m','1H','4H','1D','1W'].includes(activeRange) ? 'INTRADAY' : 'DAILY+'`
+  — the complete set.
+* `lib/chartYahoo.ts:12-13` — `isStockIntradayPollRange()` already holds the correct 8-element
+  set as an SSOT that neither page's badge uses.
+
+**Impact.** The chart states the wrong bar granularity on the platform's most-used detail page.
+A trader reading "DAILY+" on a 1-minute chart will misjudge every level, every indicator
+period and every stop distance derived from it.
+
+**Fix.** Delete both inline lists and call `isStockIntradayPollRange(activeRange)` — the SSOT
+already exists two imports away. Add a test asserting the badge for all 15 tokens.
+**Effort** S · **Confidence** high
+
+---
+
+#### UX-23 · P1 · The timeframe rail is 15 identical pills conflating bar interval with lookback, including the `1m` / `1M` trap
+
+**Evidence.** `lib/chartYahoo.ts:5-7`:
+
+```ts
+export const STOCK_CHART_RANGES = [
+  '1m','3m','5m','15m','1H','4H','1D','1W','1M','3M','6M','1Y','2Y','5Y','ALL',
+] as const
+```
+
+Rendered as one flat, ungrouped row of visually identical `font-mono` pills
+(`app/stock/[ticker]/page.tsx:409`, `app/sector/[slug]/page.tsx:443`). Two orthogonal axes are
+mixed in one control: **bar interval** (`1m 3m 5m 15m 1H 4H`) and **lookback range**
+(`1D 1W 1M 3M 6M 1Y 2Y 5Y ALL`). `1m` (one minute) and `1M` (one month) sit eight positions
+apart and differ **only by letter case**, with no separator, no group label, and no tooltip.
+The constant's own name (`..._RANGES`) treats intervals as ranges.
+
+Defaults also differ between the two pages that share the rail: `/stock/[ticker]` opens on
+`1Y`, `/sector/[slug]` opens on `6M` (both observed live).
+
+**Impact.** Mis-clicking `1m` for `1M` silently swaps a one-month daily chart for a
+one-minute chart — and thanks to UX-22 the badge confirms the wrong one. This is the classic
+timeframe-control failure every professional platform designs around.
+
+**Fix.** Split into two controls — an **Interval** selector (1m/3m/5m/15m/1H/4H/1D) and a
+**Range** selector (1D/5D/1M/3M/6M/1Y/2Y/5Y/ALL) — or at minimum group them with a visible
+divider + group labels and disambiguate the labels (`1min` vs `1mo`). Align the default
+timeframe across `/stock`, `/sector` and `/crypto/btc`. **Effort** M · **Confidence** high
+
+---
+
+#### UX-24 · P2 · Three different sign conventions for change %, and the two detail-page headers strip the minus sign
+
+**Evidence.** Observed live on `/sector/technology`, header:
+**`▼ -0.99 (0.52%)`** — the dollar change carries its sign, the percentage in the same
+15-character string does not.
+
+```
+app/sector/[slug]/page.tsx:267   {isUp ? '▲' : '▼'} {formatSignedNumber(quote.change)} ({Math.abs(quote.changePct).toFixed(2)}%)
+app/stock/[ticker]/page.tsx:326  (identical line)
+```
+
+Across the platform the same quantity is rendered three ways:
+
+| Convention | Example | Anchor |
+|---|---|---|
+| signed % | `−0.52%` | `app/desk/page.tsx:225`, `components/SectorCard.tsx:101` |
+| arrow only, unsigned | `▼0.54%` | `components/PriceTicker.tsx:101` |
+| **mixed — signed $, unsigned %** | `▼ -0.99 (0.52%)` | `app/sector/[slug]:267`, `app/stock/[ticker]:326` |
+
+(The signed variants also mix U+2212 `−` with the ASCII hyphen, so copy-pasted values differ
+byte-wise between pages.)
+
+**Impact.** The two primary detail pages print a positive-looking percentage on a down day.
+Anyone reading, screenshotting or copying that number out of context gets the wrong sign.
+
+**Fix.** One `formatChange(quote)` helper in `lib/format.ts` returning the arrow, the signed
+value and the signed percent with a single minus-glyph convention; use it on all five
+surfaces. **Effort** S · **Confidence** high
+
+---
+
+#### UX-25 · P3 · `/sector/[slug]` shows a permanently-empty "Risk/Reward Ratio" field
+
+**Evidence.** `/sector/technology` right column: `Risk/Reward Ratio —`.
+`components/SignalCard.tsx:37-38` — `formatRiskReward()` returns `'—'` unconditionally when
+`signal.source === 'yahoo-session'`, and every sector signal is `yahoo-session`
+(`lib/sessionSignalsFromQuotes.ts`). The row can therefore never display a value on this page.
+
+**Impact.** A field that always reads `—` trains the user to ignore the panel, and implies a
+risk framework the session signal does not have.
+
+**Fix.** Hide the row when the signal source cannot produce it (or show an explicit
+"not applicable to session signals" note once, rather than a dash in a data slot).
+**Effort** S · **Confidence** high
+
+---
+
+### `/briefs` and `/briefs/sector/[sector]` — **BOTH BROKEN IN PRODUCTION RIGHT NOW**
+
+---
+
+#### UX-26 · P0 · An entire top-level nav section is down: `/briefs` renders empty and `/briefs/sector/technology` hard-errors — while the underlying API is healthy
+
+**Evidence, captured live 2026-08-15:**
+
+`https://quantan.vercel.app/briefs` →
+> **No briefs available. All Yahoo Finance requests failed.**
+
+…rendered directly beneath a green pulsing dot reading **"Live data from Yahoo Finance"**.
+
+`https://quantan.vercel.app/briefs/sector/technology` →
+> ⚠ **Failed to load brief** · ID: 2384324333
+> "An error occurred in the Server Components render. The specific message is omitted in
+> production builds to avoid leaking sensitive details. A digest property is included on this
+> error instance which may provide additional details about the nature of the error."
+
+**The API is not down.** Fetched from the same browser session, same origin:
+
+```
+GET /api/briefs/technology  → 200, 3351 bytes
+GET /api/briefs/energy      → 200, 3269 bytes
+GET /api/briefs             → 200, 11941 bytes   (the homepage news rail renders this fine)
+```
+
+**These are two distinct bugs and must be triaged separately.**
+
+**26a — `/briefs` renders empty.** `app/briefs/page.tsx:33-36` is a server component that fans
+out **11 self-fetches** over the network to `${appBaseUrl()}/api/briefs/${slug}` with
+`cache:'no-store'`. `:37` turns any non-ok response into `null`, `Promise.allSettled` swallows
+every throw, and `:42` filters them all out — so 11 failures collapse into one sentence that
+blames Yahoo. The self-fetch is failing while the endpoint it targets returns 200 to the
+browser. `lib/appUrl.ts:5-7` resolves the base from `NEXT_PUBLIC_APP_URL`, else `VERCEL_URL`
+(the *deployment-specific* host rather than the production alias) — the usual way this pattern
+breaks — but production env values are not visible from this audit, so treat that as the lead,
+not the confirmed trigger.
+
+**26b — `/briefs/sector/[sector]` throws.** This one **cannot** be the self-fetch:
+`app/briefs/sector/[sector]/page.tsx:19-21` wraps it in `try { … } catch { return null }`, and
+`LiveBriefClient` handles a null brief cleanly (`:94-101` "Sector not found" branch, `:108-121`
+loading skeleton, `:123-127` error banner, and every field guarded behind
+`{brief && !loading && …}` at `:123`). So a null brief renders a skeleton, not an exception —
+yet the segment's error boundary fires with digest **2384324333**. The throwing code is
+elsewhere in that segment and is **not identifiable from the client**; the fix wave should read
+the Vercel runtime log for that digest first. Filed as observable-only.
+
+Three separate UX failures stack on top of the outage:
+* **The copy blames Yahoo** (`app/briefs/page.tsx:69`) for a failure in the app's own
+  internal fetch. Whoever reads that message will debug the wrong system.
+* **The "Live data from Yahoo Finance" pill is hardcoded** (`app/briefs/page.tsx:61-64`) —
+  it renders unconditionally, so the page asserts it is live in the same viewport where it
+  says everything failed.
+* **The error boundary prints React's internal developer text verbatim.**
+  `app/briefs/sector/[sector]/error.tsx:28` renders `{error.message}`; in a production build
+  a server-component error message *is* that boilerplate paragraph. A professional trader is
+  shown a note about digest properties and production builds.
+
+Also: `app/briefs/sector/[sector]/page.tsx:27` computes `const sector = SECTORS.find(...)` and
+never uses it — an unknown sector slug is neither validated nor 404'd.
+
+**Impact.** The "Briefs" item in the main nav and the homepage's "View all briefs →" both lead
+to a dead end. Two of the seventeen audited routes are non-functional, and the interface
+insists it is live while showing nothing.
+
+**Fix.** (1) For **26a**: stop the server-side self-fetch entirely — import the brief builder
+from `app/api/briefs/[sector]/route.ts` into a shared `lib/` function and call it directly in
+the server component (removes 11 network round-trips per page view as well as this whole
+outage class). As an interim, make `appBaseUrl()` prefer `VERCEL_PROJECT_PRODUCTION_URL` over
+`VERCEL_URL`. (2) For **26b**: read the runtime log for digest 2384324333 before proposing a
+code change. (3) Distinguish "upstream provider failed" from "internal fetch failed" in the
+copy, and drive the live pill from actual result state. (4) Replace `{error.message}` with a
+written fallback and keep the digest as small diagnostic text. (5) 404 unknown sector slugs.
+**Effort** M · **Confidence** high on both outages (observed live, with the API returning 200
+alongside); the *cause* is med for 26a and unknown for 26b — deliberately not guessed.
+
+---
+
+### `/portfolio` and `/portfolio/factor-attribution`
+
+---
+
+#### UX-27 · P0 · Hardcoded constants render as personalised portfolio risk alerts — with specific hedging instructions and no "demo" label
+
+**Evidence.** `https://quantan.vercel.app/portfolio` renders two alert banners, styled amber
+and red:
+
+> **Realized skew is negative while volatility exceeds its mean — tail risk elevated.**
+> Suggestions: Consider protective puts · Put spreads on index hedge · VIX call calendars
+>
+> **Portfolio vega -600,000 USD — short vol exposure.**
+> Suggestions: Buy OTM puts · Reduce short vol premium positions · Add VIX hedge
+
+`components/risk/TailRiskBanner.tsx`:
+
+```tsx
+/** Demo banner — wire live skew/vol/vega in Phase 16. */
+export function TailRiskBanner() {
+  const alerts = evaluateTailRisk({
+    realizedSkew: -0.6, realizedVol: 0.22, volMean: 0.18, portfolioVegaUsd: -600_000,
+  })
+```
+
+All four inputs are **literals**. The word "Demo" exists **only in the source comment** — the
+rendered output carries no badge, no caveat, no qualifier. And there is no portfolio anywhere
+in the product: no positions, no upload, no account, no broker link. The page asserts a
+specific dollar vega for a book the user has never entered, and attaches four concrete
+options trades to it.
+
+**The correct pattern already exists two clicks away.** `/risk/scenarios` renders its subtitle
+as *"Six canned shocks (…). **Demo portfolio — wire live positions in Phase 16.**"* — same
+Phase-16 provenance, disclosed in the UI. `/portfolio` simply omits it.
+
+**Impact.** This is the most hazardous surface on the platform: fabricated, unlabelled,
+position-specific risk analysis carrying actionable hedging instructions, on a page reached
+from the main nav's Portfolio menu. It is materially worse than UX-6 because the output is
+phrased as advice.
+
+**Fix.** Immediately: label the banner in the rendered UI exactly as `/risk/scenarios` does,
+and strip the "Suggestions" line (or reframe it as "what this alert type would suggest") until
+real positions exist. Properly: gate `TailRiskBanner` behind actual portfolio input and render
+nothing when there is none. **Effort** S · **Confidence** high
+
+---
+
+#### UX-28 · P1 · The portfolio page tells the user to run an npm script, because it reads a file that does not exist in the deployment
+
+**Evidence.** `https://quantan.vercel.app/portfolio` renders, verbatim:
+
+> Run `npm run portfolio:backtest` to populate metrics.
+
+`app/portfolio/page.tsx:11-19` loads its data with
+`readFileSync(join(process.cwd(), 'scripts/portfolio-backtest-results.json'))` at request time,
+and `:34-37` falls back to that sentence when the file is absent. The file **does exist in the
+repo** (`scripts/portfolio-backtest-results.json`, 136 KB) — but `scripts/` is not imported by
+any module, so Next.js file tracing does not bundle it into the serverless function, and
+`existsSync` is false in production. The three metric tiles (Best config / Win rate / Max
+drawdown) at `:39-52` are therefore **unreachable in production**.
+
+**Impact.** A nav-reachable page shows a developer shell command to end users and never shows
+its actual content. Combined with UX-27, `/portfolio` presents fabricated risk alerts *and*
+no real metrics.
+
+**Fix.** Move the results JSON into a traced location (`import` it, or put it under `lib/` /
+`app/` so tracing picks it up), or serve it from an API route / `public/`. Replace the
+fallback copy with a user-facing empty state. Add `outputFileTracingIncludes` for the path if
+`readFileSync` must stay. **Effort** S · **Confidence** high
+
+---
+
+#### UX-29 · P2 · `/portfolio/factor-attribution` ships as five zeros in unstyled body text
+
+**Evidence.** Live: `MKT: 0.000 · SMB: 0.000 · HML: 0.000 · MOM: 0.000 · QMJ: 0.000`,
+`Alpha (daily): 0.00000 · R²: N/A (multivariate OLS deferred)`, labelled "5-factor loadings
+(demo series)". `app/portfolio/factor-attribution/page.tsx` is 31 lines. Every value is zero,
+the regression is explicitly deferred, and the page is the only route on the platform with no
+visual design at all — a bare `<p>` list, no cards, no table, no chart, while every sibling
+page uses the rounded-card system.
+
+**Impact.** A main-nav destination (Portfolio → Factor attribution) that a professional opens
+once, finds empty, and never returns to. It also breaks the visual system, which reads as
+"unfinished product" more loudly than a missing page would.
+
+**Fix.** Either hide the route from nav until the OLS lands, or render an explicit
+"Not yet available — planned for Phase 16" state using the standard card component. Do not
+ship a table of zeros. **Effort** S · **Confidence** high
+
+---
+
+### `/ma-deviation`
+
+Strongest page in the audit: real sortable table with `aria-sort`, a spectrum chart, an
+explicit methodology section and a disclaimer. Two defects hold it back.
+
+---
+
+#### UX-30 · P1 · The column the page calls "the Key Variable" is empty on every row
+
+**Evidence.** Live, all **13** rows render `—` in the **200MA Slope** column.
+`app/ma-deviation/page.tsx:100-101` — `SlopeChip` returns `—` whenever `positive === null`, so
+`regime.slopePositive` is null for every instrument in production.
+
+The page's own copy makes the slope the centre of its methodology:
+* `:219` — "Combines deviation%, **200MA slope**, and RSI to distinguish true dips from falling
+  knives."
+* `:557` — a highlighted callout headed "📐 **The 200MA Slope is the Key Variable**".
+* `:533` — the Strong Dip Buy checklist requires "The 200MA slope is **still positive**".
+* `:553` — the Watch Zone rule: "Only add if the 200MA slope shows signs of flattening."
+
+So the page teaches a decision rule, insists the slope is what separates a dip from a falling
+knife, and then shows a dash where the slope belongs — with no "unavailable" note. It also
+explains why the summary shows `0 Strong Dip Buy` and `0 Falling Knife`: both classifications
+require the slope.
+
+**Impact.** The page cannot deliver the judgement it promises, and gives no indication that
+the omission is a data gap rather than a genuine reading.
+
+**Fix.** Compute and populate `slopePositive`/`slopePct` in the regime provider (the field is
+already typed at `:13-14` and the detail-drawer renderer at `:426-428` is written and waiting);
+until then render an explicit "slope unavailable" state and suppress the two slope-dependent
+classifications rather than reporting them as zero counts.
+**Effort** M (data) / S (honest empty state) · **Confidence** high
+
+---
+
+#### UX-31 · P2 · Three different taxonomies for one classification on one page, and the summary chips contradict the table
+
+**Evidence.** The same 13 instruments are labelled three ways on `/ma-deviation`:
+
+| Surface | Vocabulary |
+|---|---|
+| Summary chips | Strong Dip Buy · Watch / Caution · Falling Knife · **In Uptrend** |
+| Dip Signal column | Watch — Caution · **In Uptrend** · **Overbought** |
+| Deviation Spectrum | First Dip Zone · Healthy Uptrend · Extended Bull Run · Extreme Overextension |
+
+The chip reads **"11 In Uptrend"**, but only **6** table rows say "In Uptrend"; the other 5 say
+"Overbought". Root cause `app/ma-deviation/page.tsx:199`:
+
+```ts
+const bullCount = data?.rows.filter(r => r.regime?.dipSignal === 'IN_TREND'
+                                      || r.regime?.dipSignal === 'OVERBOUGHT').length ?? 0
+```
+
+The chip deliberately merges the two, so the headline hides that **5 of 13 instruments —
+including SPY, QQQ and XLK at +20.5 % above its 200-day SMA — are flagged Overbought**, which
+on a dip-buying page is the most decision-relevant state there is. XLK is simultaneously
+"Overbought" (table), "Extreme Overextension" (spectrum) and counted as "In Uptrend" (chip).
+
+**Impact.** A trader who counts rows gets a different answer from the summary, and the summary
+suppresses the page's own warning signal.
+
+**Fix.** Give Overbought its own chip (5 states, matching the column), and unify the three
+vocabularies onto one enum used by chips, column and spectrum alike.
+**Effort** S · **Confidence** high
+
+---
+
+### Cross-cutting findings
+
+---
+
+#### UX-32 · P2 · Two independent freshness indicators sit side by side and can contradict each other
+
+**Evidence.** Observed live on `/stock/AAPL` and `/sector/technology`: the header renders
+`● LIVE` immediately followed by `● live` — two separate widgets:
+
+* `app/stock/[ticker]/page.tsx:360` — a pill driven by **stream state**:
+  `live.connected ? (live.marketOpen ? 'LIVE' : 'CLOSED') : 'RECONNECT'`.
+* `components/DataFreshnessIndicator.tsx:57-72` — driven by **quote-timestamp age**:
+  `<10s → "Live"`, `<120s → "~Ns ago"`, `≥120s → "Stale — refresh"`.
+
+They measure different things, so a connected stream delivering stale quotes renders
+**`LIVE` next to `Stale — refresh`**. At best the pair is redundant ("LIVE live"); at worst it
+is a direct contradiction about whether the price on screen can be traded on.
+
+Note that `DataFreshnessIndicator` is the *good* component — relative age, three graded states,
+proper `role="status"` + `aria-live` + a full `aria-label`. It is used on exactly **two** pages
+(`app/desk/page.tsx`, `app/sector/[slug]/page.tsx`); the homepage's bare
+`Updated {toLocaleTimeString()}` (UX-4), `/heatmap`'s `Poll · …`, `/backtest`'s
+`Last computed …` and `/ma-deviation`'s `Computed: …` each reinvent it worse.
+
+**Fix.** Make `DataFreshnessIndicator` the single freshness SSOT on every page; fold the
+connection state into it as a fourth variant (`RECONNECTING`) instead of a second widget.
+**Effort** S · **Confidence** high
+
+---
+
+#### UX-33 · P2 · Three of the six data tables cannot be sorted — including the two that most need it
+
+**Evidence.**
+
+| Table | Sortable | Anchor |
+|---|---|---|
+| `/ma-deviation` | ✅ `aria-sort` + 4 keys | `app/ma-deviation/page.tsx:151-171` |
+| Backtest → Instruments | ✅ | `components/backtest/InstrumentTable.tsx:29-55,94` |
+| Backtest → Signals | ✅ | `components/backtest/LiveSignalsPanel.tsx:24-25,244-246` |
+| **`/desk` quote strip (28 rows)** | ❌ | `app/desk/page.tsx` — no `sortKey` |
+| **`/commodities` (12+ rows)** | ❌ | `app/commodities/page.tsx` — no `sortKey` |
+| `/risk/scenarios` (6 rows) | ❌ | `app/risk/scenarios/page.tsx` |
+
+`/desk`'s stated purpose is "scan for outliers (large % moves vs sector average)" — the exact
+task a sort on `Chg %` performs — and it is the one table where sorting is missing. Both
+unsortable tables render in fixed declaration order.
+
+**Impact.** The trader must visually scan 28 rows to find the biggest mover on the page
+designed for exactly that, while the same interaction works two pages away.
+
+**Fix.** Extract the `SortTh` + sort-state pattern already written in
+`app/ma-deviation/page.tsx:123-146` into a shared hook/component and apply it to `/desk` and
+`/commodities`, defaulting `/desk` to `|Chg %|` descending. **Effort** S · **Confidence** high
+
+---
+
+#### UX-34 · P2 · Clicking "Sign in" shows end users a deployment runbook
+
+**Evidence.** `/auth/signin` — reachable from the "Sign in" button in the global header on
+every page — renders a panel headed "OAuth not configured" containing:
+`openssl rand -base64 32`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL=https://your-deployment.vercel.app`,
+`GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` with callback paths, the same for GitHub,
+"Copy variable names from `.env.example` in the repo", "See README → OAuth setup", and
+instructions to navigate Vercel → Project → Settings → Environment Variables and redeploy.
+
+**Explicitly not re-flagging the env state itself** — that is owner-gated and on the
+do-not-flag list. The finding is that the *fallback UI for that state* is written for the
+repo's maintainer and is shipped to the public.
+
+The page does get one thing right that no other route does: it is the **only** page with its
+own `metadata.title` (`app/auth/signin/page.tsx:7-8` → "Sign in · QUANTAN"), which is the
+pattern UX-10 asks for everywhere else.
+
+**Impact.** Any prospective user clicking the most prominent button in the header is shown
+secrets-management instructions and the project's internal file names.
+
+**Fix.** Show a user-facing message ("Accounts aren't enabled yet — everything on QUANTAN
+works without one; your watchlist is saved in this browser") and move the setup runbook behind
+a dev-only condition (`process.env.NODE_ENV !== 'production'`) or into the README.
+**Effort** S · **Confidence** high
+
+---
+
+#### UX-35 · P3 · The chart legend advertises "Dark Pool" and "News" series that carry no data
+
+**Evidence.** `components/KLineChart.tsx:390-397` renders the `● Dark Pool` and `▲ News` legend
+entries **unconditionally**, regardless of whether the marker arrays are populated.
+On `/crypto/btc` the page passes `EMPTY_DARK_POOL_MARKERS`
+(`components/crypto/BtcChartPanel.tsx:94`), so the BTC chart legends a dark-pool series that
+(a) has zero points and (b) does not exist as a concept for crypto — there is no FINRA
+off-exchange print reporting for Bitcoin. `newsMarkers` was empty on every chart response
+observed (`/api/chart/AAPL?range=1Y` → `newsMarkers: 0`), so the News entry is unpopulated
+everywhere too.
+
+**Fix.** Render each legend entry only when its marker array is non-empty. **Effort** S ·
+**Confidence** high
+
+---
+
+#### UX-36 · P3 · `/risk/scenarios` reports identical greeks under all six shocks
+
+**Evidence.** Live: every one of the six scenarios (Fed +100bps, S&P −10 %, VIX +50 %,
+2008-style, COVID crash, Flash crash) reports **Δ = 150.0** and **Vega = −1500**. Only P&L
+varies. A stress table whose greeks are invariant under the stress is showing the *unshocked*
+position repeated six times. Losses are also rendered in default slate rather than the red used
+for negative values everywhere else on the platform, so a −37 % row reads visually neutral.
+
+To its credit this page carries the disclosure the rest of the risk surface lacks —
+"Demo portfolio — wire live positions in Phase 16" — which is why this is P3 and UX-27 is P0.
+
+**Fix.** Either reprice greeks per scenario or drop the two columns until they are shocked;
+apply the standard negative-value colour to the P&L columns. **Effort** S ·
+**Confidence** high
+
+---
+
+### Mobile (375 × 812) — summary
+
+Good news first: **no page produced horizontal document scroll**, and wide tables correctly
+scroll inside their own `overflow-x-auto` containers (`/desk`: `scrollWidth 387 > clientWidth
+349` on an inner container, document `scrollWidth === 375`). The responsive plumbing is sound.
+What fails at mobile width is what the layout chooses to put first, plus two chart issues:
+
+* **UX-3 at mobile** — sector grid at y = 2191 on an 812 px viewport (≈3 screens down);
+  page 6381 px tall.
+* **UX-19 at mobile** — `/desk` quote table starts at y = 956: **zero quote rows on the first
+  screen**.
+* **UX-23 at mobile is materially more dangerous** — the 15-pill timeframe rail wraps to two
+  rows as `1m 3m 5m 15m 1H 4H 1D 1W` / `1M 3M 6M 1Y 2Y 5Y ALL`, which places **`1M` directly
+  beneath `1m`** as the first pill of consecutive rows. The two tokens that differ only by
+  letter case become vertically adjacent tap targets.
+* **Chart legend occludes the chart** — on `/stock/AAPL` at 375 px the floating legend
+  (`components/KLineChart.tsx:364`, `absolute … left-3 right-3 z-10`) wraps to four lines and
+  covers roughly the top third of an already-short plot, and gains its own internal horizontal
+  scrollbar. Combined with UX-7 the mobile chart is effectively unusable.
+  **Fix:** collapse the legend to price + change on narrow viewports and move the indicator
+  swatches below the plot. **Effort** S · **Confidence** high
+
+---
+
+### Trading view — table-stakes features, verified against the rendered control set
+
+Controls that **are** present and work (not deficiencies): 15-token timeframe rail; overlay
+chips EMA / VWAP / BB / Fib / All; a Chart Indicators panel offering **20 moving-average
+periods** (4…250) with multi-select; VWAP, BB(20,2), Fib and Vol SMA(20) toggles with ON/OFF
+state; RSI(14), MACD(12,26,9) and ATR(14) sub-panes; a `role="img"` + `aria-label` text
+alternative for the canvas; and an accessible chart-failure fallback. That is a genuinely
+strong indicator set. The gaps below were each verified against what the DOM actually renders.
+
+---
+
+#### UX-37 · P1 · The crosshair OHLCV readout is fully implemented and never rendered on any chart page — while the on-page guide promises it
+
+**Evidence.** `components/KLineChart.tsx:190`:
+
+```ts
+const showBuiltinTimeframes = hideTimeframeSelector !== true && onTimeframeChange != null
+```
+
+All three call sites pass `hideTimeframeSelector` (because each page owns its own range rail):
+`app/stock/[ticker]/page.tsx:479`, `app/sector/[slug]/page.tsx:501`,
+`components/crypto/BtcChartPanel.tsx:99`. The crosshair O/H/L/C/Vol readout lives at
+`components/KLineChart.tsx:336-353`, **inside** the `{showBuiltinTimeframes && (…)}` block
+opened at `:311`. It is therefore unreachable on every page in the product. The hook still
+subscribes to crosshair moves and maintains `crosshairData` on every mouse move — the value is
+computed and thrown away.
+
+**Verified live**: hovering the AAPL chart draws the crosshair and its axis labels, and shows
+**no OHLCV values anywhere**; the legend keeps displaying the *last* bar's numbers, not the
+hovered bar's.
+
+**And the interface promises this feature.** The `/sector/technology` DashboardGuide reads,
+verbatim: "*Hover crosshair shows OHLCV at any bar.*"
+
+**Impact.** Reading open/high/low/close/volume at a chosen bar is the single most-used chart
+interaction for a professional. It is documented on-page, invisible in practice, and the code
+to fix it already exists.
+
+**Fix.** Move the crosshair readout out of the `showBuiltinTimeframes` block — render it in
+the always-present legend row (replacing the last-bar summary while hovering, restoring it on
+mouse-out). Roughly a block move. **Effort** S · **Confidence** high
+
+---
+
+#### UX-38 · P2 · Daily charts stamp a meaningless time-of-day on the crosshair, in the viewer's timezone
+
+**Evidence.** Hovering the AAPL **1Y daily** chart shows the time-axis label
+**`21 Jul '26 03:30`** — a wall-clock time on a daily bar, rendered in the browser's local zone
+(`Asia/Singapore` here), i.e. a US daily close labelled 03:30. Root cause:
+`hooks/useKLineChart.ts:351` sets `timeScale: { … timeVisible: true, secondsVisible: false … }`
+unconditionally, for daily and intraday alike.
+
+**Impact.** Traders read the crosshair label to identify the bar; a spurious local-time
+component makes daily bars look intraday and misidentifies the session date near midnight
+boundaries.
+
+**Fix.** Set `timeVisible` from the active range (`isStockIntradayPollRange(range)` — the same
+SSOT that fixes UX-22), and format intraday labels in exchange time rather than browser-local.
+**Effort** S · **Confidence** high
+
+---
+
+#### UX-39 · P2 · VWAP / BB / Fib each have two separate controls on the same screen, and the 20 MA buttons are 20 × 21 px
+
+**Evidence** (measured live on `/stock/AAPL`, indicator controls audited for roles, state and
+keyboard):
+
+*The semantics are good* — every overlay switch is a real `<button>` with correct
+`aria-pressed` (`VWAP false`, `BB(20,2) false`, `Fib false`, `Vol SMA(20) true`), and all 20
+moving-average buttons carry `aria-pressed` **and** an action-phrased `aria-label`
+(`"Show EMA4"` / `"Hide EMA9"`), all keyboard-focusable. This is the best-instrumented control
+cluster in the product. Two problems remain:
+
+1. **Duplicated controls.** `VWAP`, `BB` and `Fib` appear **twice**: as chips in the row above
+   the chart (x = 487/543/582, y = 299) *and* as labelled ON/OFF switches in the sidebar
+   "Chart Indicators" panel. Same state, two widgets, two visual languages, no indication they
+   are linked. The chip row additionally offers `EMA` and `All`, which have no sidebar
+   equivalent, so neither control is a superset of the other.
+2. **Target size.** The MA period buttons measure **20 × 21 px** (and 26 × 21 / 33 × 21 for the
+   two- and three-digit periods) — below the 24 × 24 CSS px minimum for a pointer target, in a
+   grid of 20 packed into a narrow sidebar. On touch these are unhittable without zooming.
+   (Filed as a UX/target-size finding, not an axe result — axe does not check this rule by
+   default, so it is not covered by the closed #139 wave.)
+
+**Fix.** Pick one home for overlay toggles — keep the sidebar panel (it has labels and explicit
+ON/OFF) and reduce the chip row to a preset selector, or vice versa. Raise the MA buttons to a
+≥ 24 px hit area with padding while keeping the compact visual.
+**Effort** S · **Confidence** high
+
+---
+
+### Cross-page workflow: signal → evidence → action
+
+Traced end-to-end as a trader would: **home → sector card → sector page → chart → dark pool →
+stock page → back**.
+
+**What works.** Every sector card, heatmap tile, breadth chip and desk row is a real link to
+`/sector/[slug]`; the sector page cross-links to five sibling sectors; `/desk` has a per-row
+"Drill → chart" affordance; the ⌘K search resolves to `/stock/[ticker]` and keeps a recent-
+searches list with per-item removal; `Watchlist` buttons persist to `localStorage`; the
+breadcrumb trail is present on every deep route. There are **no navigational dead ends** in
+the sector→stock path, and the empty state for a failed search is well written
+("No Yahoo matches. Try a symbol (e.g. MSFT) and press Enter.").
+
+**Where the chain breaks — all already filed above, listed here as workflow consequences:**
+
+1. **Signal → evidence fails at the chart.** The trader arrives at `/sector/technology` or
+   `/stock/AAPL` to verify a move and the chart is 85–94 % dead space (UX-7), the change % on
+   it contradicts the header (UX-8), and they cannot read OHLCV at a bar (UX-37).
+2. **Evidence → conviction fails at the dark pool.** The "institutional flow" evidence the
+   guide sends them to is PRNG output (UX-6), unlabelled precisely when real data is present.
+3. **The briefs branch is severed.** "View all briefs →" on the home page and the "Briefs" nav
+   item both land on an empty page or a hard error (UX-26).
+4. **There is no action step.** The workflow terminates at analysis: no alert, no watchlist→
+   monitor view, no note, no export, no position sizing from the chart. `/portfolio` — the
+   only page that could close the loop — shows fabricated alerts (UX-27) and an npm command
+   (UX-28).
+5. **Vocabulary shifts at every hop**, so the trader re-learns the same concept three times:
+   BUY/SELL/HOLD vs UP/DOWN/NEUTRAL (UX-2), four labels for the session-move number (UX-1),
+   three taxonomies on `/ma-deviation` (UX-31), three sign conventions for change % (UX-24).
+
+**The highest-yield workflow addition** (new, not a defect fix): the watchlist is already
+persisted and has a button on every instrument page, but there is **no page that shows the
+watchlist**. `hooks/useWatchlist.ts` exists, `/desk` has a "Watchlist only" filter — surfacing
+a watchlist view would convert the existing storage into the missing "monitor" step for ~S
+effort.
+
+---
+
+### Coverage
+
+| Route | Audited | Data loaded | Mobile checked |
+|---|---|---|---|
+| `/` | ✅ | ✅ | ✅ |
+| `/backtest` | ✅ | ✅ (12.3 s wait) | — |
+| `/briefs` | ✅ | **broken** | — |
+| `/briefs/sector/technology` | ✅ | **hard error** | — |
+| `/commodities` | ✅ | ✅ | — |
+| `/crypto` → `/crypto/btc` | ✅ (redirect) | ✅ | — |
+| `/crypto/btc` | ✅ | ✅ | — |
+| `/desk` | ✅ | ✅ | ✅ |
+| `/heatmap` | ✅ | ✅ | — |
+| `/ma-deviation` | ✅ | ✅ | — |
+| `/portfolio` | ✅ | fallback state | — |
+| `/portfolio/factor-attribution` | ✅ | zeros | — |
+| `/risk/scenarios` | ✅ | ✅ (demo, labelled) | — |
+| `/sector/technology` | ✅ | ✅ | — |
+| `/stock/AAPL`, `/stock/MSFT` | ✅ | ✅ | ✅ |
+| `/stock/AAPL` → Dark Pool tab | ✅ | ✅ | — |
+| `/stock/AAPL` → Quant Lab tab | ✅ | ✅ | — |
+| `/stock/APPLEZZZQQQ` (invalid) | ✅ | error path | — |
+| `/auth/signin` | ✅ | n/a | — |
+
+**Controls exercised** (not just read): ⌘K search (typing, no-match empty state, Enter-to-
+navigate, direct-ticker route), the `/backtest` tablist (arrow keys — inert), the `/backtest`
+instrument filter, the `/stock` tablist (arrow keys + roving tabindex — correct), the
+chart timeframe rail (`1m` selection → wrong badge), the chart crosshair (hover — no OHLCV),
+the IndicatorPanel overlay switches and all 20 MA period buttons (roles, state, size), and the
+homepage sector filter chips.
+
+**Checked and clean — no finding:** `/stock/AAPL` → **Quant Lab** was scanned for the
+`NaN`/`Infinity` leakage UX-5 predicts (`TechnicalsTab.tsx` has 34 raw `.toFixed`,
+`SummaryTab.tsx` 14) — **zero bad tokens** in the rendered output on AAPL. Quant Lab is in fact
+the best-documented surface in the product: an explicit DATA LINEAGE block naming every Yahoo
+module used, an ISO-8601 fetch timestamp, a freshness indicator, a cache-window note, and a
+"transparent heuristics, not an unbiased oracle" caveat. UX-5 therefore stands as a
+maintainability/robustness finding, not an observed defect.
+
+---
+
+## Severity roll-up
+
+**39 findings — P0 = 5, P1 = 14, P2 = 15, P3 = 5.**
+
+| Sev | Count | IDs |
+|---|---|---|
+| **P0** | 5 | UX-6, UX-7, UX-8, UX-26, UX-27 |
+| **P1** | 14 | UX-1, UX-2, UX-3, UX-9, UX-13, UX-14, UX-15, UX-19, UX-20, UX-22, UX-23, UX-28, UX-30, UX-37 |
+| **P2** | 15 | UX-4, UX-5, UX-10, UX-11, UX-12, UX-16, UX-17, UX-24, UX-29, UX-31, UX-32, UX-33, UX-34, UX-38, UX-39 |
+| **P3** | 5 | UX-18, UX-21, UX-25, UX-35, UX-36 |
+
+Two of the P0s (UX-26, UX-27) and one P1 (UX-28) are **live production failures**, not design
+opinions: a nav section that errors, fabricated risk advice, and a page instructing users to
+run an npm script.
+
+---
+
+## TOP 10 BY YIELD
+
+Ranked by (trader impact × number of surfaces fixed) ÷ effort. Every entry has a file:line
+anchor and a live observation in its full write-up above.
+
+| # | ID | Sev | What | Effort | Why it ranks here |
+|---|---|---|---|---|---|
+| 1 | **UX-7** | P0 | Charts render the whole series in 5–15 % of the pane; re-fit on resize / after layout (`hooks/useKLineChart.ts:563-570`, `:827-829`) | **S** | One callback fixes the primary chart on `/stock`, `/sector` and `/crypto/btc`. Measured 84.7 % dead space on AAPL, 94.2 % on BTC — and **forcing a resize repairs it live**, so the fix is pre-validated. Largest visible-quality gain per line changed in the audit. |
+| 2 | **UX-6** | P0 | Dark-pool block prints are seeded PRNG output; the `ILLUSTRATIVE` badge is suppressed exactly when real data loads (`lib/mockData.ts:34-61`, `components/DarkPoolPanel.tsx:238-242`) | S | Verified on AAPL: **no badge, and every fabricated print priced ≈ $100 while AAPL trades $305.40**, under a "Source: Yahoo Finance" line. The badge condition is inverted against the trader's interest; two summary tiles and the flow gauge carry no label at all. |
+| 3 | **UX-26** | P0 | `/briefs` empty + `/briefs/sector/*` hard error while `/api/briefs/*` returns 200 (`app/briefs/page.tsx:33`, `lib/appUrl.ts:5-7`) | M | An entire top-level nav section is **down in production right now**. Killing the SSR self-fetch also removes 11 network round-trips per page view. Nothing else on the list is a live outage. |
+| 4 | **UX-27** | P0 | `/portfolio` renders hardcoded constants as personal tail-risk alerts *with hedging instructions*, no label (`components/risk/TailRiskBanner.tsx`) | **S** | Fabricated position-specific advice is the platform's biggest trust/compliance exposure. `/risk/scenarios` already ships the correct disclosure — copy it. Two-line fix. |
+| 5 | **UX-8** | P0 | Chart legend % is `(close−open)/open`, not vs prior close — shows red ▼ beside the header's green ▲ (`components/KLineChart.tsx:269-274`) | **S** | Two contradictory directional colours for one instrument on one screen, on three pages. A handful of lines. |
+| 6 | **UX-37** | P1 | Crosshair OHLCV readout is written but gated off on every page (`components/KLineChart.tsx:311` vs `:336-353`) | **S** | The most-used chart interaction there is, already implemented, promised verbatim by the on-page guide, unlocked by moving one block out of a conditional. |
+| 7 | **UX-1 + UX-2** | P1 | One session-move number under four labels (incl. "Avg Confidence" and no label at all), and BUY/SELL/HOLD filter chips over UP/DOWN/NEUTRAL cards (`app/page.tsx:348,451`, `components/SignalCard.tsx:62,88-96`) | **S** | Both are the homepage telling a trader a normalised move size is a probability and a direction is a recommendation. Pure copy/SSOT work, no logic risk. |
+| 8 | **UX-3 + UX-19** | P1 | Nothing decision-relevant above the fold: sector grid 506 px (desktop) / 1379 px (mobile) below it; `/desk` opens with a 387 px instruction panel | M / S | Measured, not taste. Fixes the first five seconds of the two pages traders open most, and `/desk` is a one-line default flip. |
+| 9 | **UX-22 + UX-23** | P1 | `1m` labelled "DAILY+ BARS" (`app/stock/[ticker]/page.tsx:451`), and one flat rail mixes interval with range so `1m`/`1M` sit adjacent — vertically stacked on mobile | S / M | UX-22 is a wrong factual claim about the chart and the SSOT to fix it already exists (`lib/chartYahoo.ts:12-13`). Ship UX-22 first, UX-23 next. |
+| 10 | **UX-13 + UX-14** | P1 | `/backtest` blocks 12 s on a blank spinner, and states its transaction cost as both "≈22 bps" and "~11bps round-trip" (`components/backtest/OverviewTab.tsx:37` vs `lib/backtest/executionModel.ts:26`) | M / **S** | UX-14 is a one-string fix on the row professionals check first, and it contradicts the engine's own SSOT — highest credibility-per-byte on the list. |
+
+**Suggested wave-1 edit slice (all S, disjoint files, ~1 day):**
+UX-7 (`hooks/useKLineChart.ts`) · UX-8 + UX-37 + UX-35 (`components/KLineChart.tsx`) ·
+UX-27 (`components/risk/TailRiskBanner.tsx`) · UX-14 (`components/backtest/OverviewTab.tsx`) ·
+UX-22 (`app/stock/[ticker]/page.tsx`) · UX-1 + UX-2 (`app/page.tsx`, `components/SignalCard.tsx`) ·
+UX-6 (`components/DarkPoolPanel.tsx`) · UX-19 (`components/DashboardGuide.tsx`).
+UX-26 and UX-28 are their own slice (deployment/data-path, not styling).
+
+**Deliberately not proposed:** any change to a published performance figure (WR, alpha, the
+42-point floor on the session-move scale) — those are owner-gated; the findings above change
+only labels, colours, ranks and units.
+
 

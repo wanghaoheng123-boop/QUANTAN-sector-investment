@@ -72,5 +72,18 @@ E1 chose WATCH_DIP for null-slope deep zones = regimeSignal parity (AL-5) — ac
 - `LiveSignalsPanel` copy hardcodes "Sun 22:00 UTC" — must change with OWNER-DECISION-CADENCE.
 - DQ-2 (dropped `degraded` flag) — unassigned, wave 2.
 
+## ux-interface.md — verified verdicts
+
+| ID | Sev | Coordinator verdict | Verification evidence |
+|---|---|---|---|
+| UX-26 | P0 | **CONFIRMED LIVE** | Prod probe: `/briefs` renders "No briefs available. All Yahoo Finance requests failed." under the hardcoded "Live data from Yahoo Finance" pill while `/api/briefs/technology` returns 200/3366B to an external client; `/briefs/sector/technology` shows an error digest. Two bugs: SSR self-fetch (list) + unknown throw (detail, digest 2384324333 — Vercel logs unreadable from here; E3 reproduces locally). |
+| UX-27 | P0 | **CONFIRMED** | `components/risk/TailRiskBanner.tsx:8,11` hardcodes `realizedSkew: -0.6`, `portfolioVegaUsd: -600_000` rendered as personalized trade advice with zero on-screen disclosure ("Demo" exists only in a comment); `/risk/scenarios` has the correct disclosure pattern to copy. |
+| UX-6 | P0 | **CONFIRMED** | `components/DarkPoolPanel.tsx:236` gates the ILLUSTRATIVE badge on `!hasRealData`, but `prints` are ALWAYS synthetic (lib/mockData.ts mulberry32) — badge vanishes exactly when real metrics load; agent verified live: AAPL fake prints ≈$100 vs $305.40 real price under "Source: Yahoo Finance". Vestigial `(hasRealData \|\| true)` at :206. |
+| UX-7 | P0 | **CONFIRMED** | `hooks/useKLineChart.ts:563-571` ResizeObserver only does `applyOptions({width})`; `fitContent()` runs only at init (:491/:521/:552) → series compressed into 5-15% of pane (agent pixel-measured 84.7-94.2% dead space; manual resize repairs live). Fix = re-fit/preserve range on resize. |
+| UX-8 | P0 | **CONFIRMED** | `components/KLineChart.tsx:269-275`: legend `chgPct = (close-open)/open` of latest candle (body), `isUp = close>=open` — contradicts header session change (vs prevClose) on the same screen, 3 pages. |
+| UX-14/22/37 | P1 | Spot-confirmed plausible (cost-copy contradiction; "DAILY+ BARS" label on 1m; crosshair OHLCV readout written but conditionally dead vs an on-page promise). E3 verifies in place. |
+| UX-1..39 rest | P1-P3 | Queued; not re-verified individually — E3 agents re-verify before touching. |
+| UX clean list | — | Quant Lab NaN-free + best lineage disclosure; indicator aria-pressed correct; no mobile horizontal overflow; sector→stock nav no dead ends. Recorded to prevent re-derivation. |
+
 ## Killed / not entering queue
-(none yet from AL; UX/DQ pending)
+(none — all elevated findings survived verification in wave 1; a first for this repo's fleets)
