@@ -13,6 +13,31 @@ export function isStockIntradayPollRange(range: string): boolean {
   return new Set(['1m', '3m', '5m', '15m', '1H', '4H', '1D', '1W']).has(range)
 }
 
+/**
+ * UX-22: does this range token render INTRADAY bars? SSOT for the chart's
+ * "INTRADAY / DAILY+ BARS" badge.
+ *
+ * Deliberately NOT `isStockIntradayPollRange`. That predicate answers a
+ * different question — "should this range poll?" — and so includes `1D` and
+ * `1W`, which app/api/chart/[ticker]/route.ts serves as `interval: '1d'`:
+ * daily bars over a short lookback, polled because they track the live
+ * session. Labelling those "INTRADAY" would trade one wrong badge for another.
+ *
+ * Mirrors the interval switch in app/api/chart/[ticker]/route.ts, which stays
+ * the authority on what is actually fetched (1m→1m, 3m→3m aggregated from 1m,
+ * 5m→5m, 15m→15m, 1H/4H→1h, 1D/1W/1M/3M/6M/1Y→1d, 2Y/5Y→1wk, ALL→1mo).
+ * Keep the two in sync; an unknown token falls through to DAILY+, matching the
+ * route's `default: interval = '1d'`.
+ */
+export function isIntradayBarRange(range: string): boolean {
+  return new Set(['1m', '3m', '5m', '15m', '1H', '4H']).has(range)
+}
+
+/** Badge text for the chart's bar granularity — rendered as "{label} BARS". */
+export function chartBarKindLabel(range: string): 'INTRADAY' | 'DAILY+' {
+  return isIntradayBarRange(range) ? 'INTRADAY' : 'DAILY+'
+}
+
 type YahooQuote = {
   date: Date
   open: number | null
