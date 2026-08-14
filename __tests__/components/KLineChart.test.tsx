@@ -212,10 +212,16 @@ const vwapSeries = (chart: ChartStub) => {
   return matches[matches.length - 1]
 }
 
+/** ResizeObserver callbacks registered by the hook — invoked to simulate a resize. */
+type ResizeEntryStub = { contentRect: { width: number; height: number } }
+let resizeCallbacks: Array<(entries: ResizeEntryStub[]) => void> = []
+
 beforeEach(() => {
   lwc.charts.length = 0
   lwc.createChart.mockClear()
+  resizeCallbacks = []
   vi.stubGlobal('ResizeObserver', class {
+    constructor(cb: (entries: ResizeEntryStub[]) => void) { resizeCallbacks.push(cb) }
     observe() {}
     unobserve() {}
     disconnect() {}
@@ -335,6 +341,58 @@ describe('KLineChart render smoke (KL-10)', () => {
     const { candle } = await mountChart(flags({ fibonacci: false }))
     expect(candle.createPriceLine).not.toHaveBeenCalled()
     expect(candle.priceLines).toHaveLength(0)
+  })
+})
+
+// ─── UX-7: the series must be re-fitted when the container resizes ───────────
+
+describe('KLineChart resize re-fit (UX-7)', () => {
+  /** Fires the hook's ResizeObserver callback with a new container width. */
+  function resizeTo(width: number) {
+    expect(resizeCallbacks.length).toBeGreaterThan(0)
+    act(() => { resizeCallbacks[0]([{ contentRect: { width, height: 300 } }]) })
+  }
+
+  it('re-fits the time scale on resize while the user has not scaled it', async () => {
+    const { chart } = await mountChart(flags())
+    const timeScale = chart.timeScale()
+    // Clear the init/data-effect fits so the assertion is about THIS resize.
+    timeScale.fitContent.mockClear()
+    chart.applyOptions.mockClear()
+
+    resizeTo(900)
+
+    expect(chart.applyOptions).toHaveBeenCalledWith({ width: 900 })
+    // Pushing the width alone leaves barSpacing (and so the compressed series)
+    // untouched — the fit is the part that repairs the pane.
+    expect(timeScale.fitContent).toHaveBeenCalled()
+  })
+
+  it('leaves the view alone on resize once the user has zoomed or panned', async () => {
+    const { chart, getByRole } = await mountChart(flags())
+    const timeScale = chart.timeScale()
+
+    // Wheel-zoom over the chart canvas container = user-owned view from here on.
+    fireEvent.wheel(getByRole('img'))
+    timeScale.fitContent.mockClear()
+    chart.applyOptions.mockClear()
+
+    resizeTo(900)
+
+    expect(chart.applyOptions).toHaveBeenCalledWith({ width: 900 }) // still tracks width
+    expect(timeScale.fitContent).not.toHaveBeenCalled()             // but never re-fits
+  })
+
+  it('a drag on the pane also counts as user scaling', async () => {
+    const { chart, getByRole } = await mountChart(flags())
+    const timeScale = chart.timeScale()
+
+    fireEvent.mouseDown(getByRole('img'))
+    timeScale.fitContent.mockClear()
+
+    resizeTo(900)
+
+    expect(timeScale.fitContent).not.toHaveBeenCalled()
   })
 })
 

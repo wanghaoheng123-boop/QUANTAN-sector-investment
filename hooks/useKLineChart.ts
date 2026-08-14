@@ -238,6 +238,22 @@ export function useKLineChart({
   const prevCandlesLenRef = useRef(0)
   const firstBarTimeRef = useRef<string | number | null>(null)
 
+  /**
+   * UX-7: true while the chart is in a programmatically-fitted state, i.e. the
+   * user has not zoomed or panned the time scale since the last fitContent().
+   * A container resize re-fits only while this holds — so a chart initialised
+   * before its grid cell settled at its final width gets repaired, and a chart
+   * the user has scaled themselves is left alone.
+   *
+   * The interaction signal is pointer/wheel/touch input rather than the
+   * visible-range subscription, because fitContent() itself moves the visible
+   * range: mistaking that for user input would suppress the re-fit and leave
+   * the chart compressed, which is the very defect being fixed. Failing the
+   * other way (a click that didn't actually scale anything stops auto-fit)
+   * only ever means "don't touch the user's view".
+   */
+  const autoFitRef = useRef(true)
+
   /** Bumped when async chart init() finishes so the data effect runs after candleRef exists. */
   const [chartReadyGen, setChartReadyGen] = useState(0)
 
@@ -315,6 +331,37 @@ export function useKLineChart({
       })
       fibLinesRef.current.push(pl)
     }
+  }, [])
+
+  // ── A0. User scale/pan detection (UX-7) ───────────────────────────────────
+  // Standalone mount effect: it only flips a ref, so it must not ride along
+  // with the async init() — a chunk-load failure there would leave the
+  // listeners unattached (or unremovable), and this has nothing to do with the
+  // chart instances. Every pane is its own IChartApi with its own scroll/scale,
+  // so all four containers are observed.
+  useEffect(() => {
+    const els = [containerRef.current, rsiRef.current, macdRef.current, atrRef.current]
+      .filter((el): el is HTMLDivElement => el != null)
+    if (els.length === 0) return
+
+    const markScaled = () => { autoFitRef.current = false }
+    // Capture phase: the events land on the lightweight-charts canvas inside
+    // the container, so the signal must not depend on them bubbling out.
+    const opts = { capture: true, passive: true } as const
+
+    for (const el of els) {
+      el.addEventListener('mousedown', markScaled, opts)
+      el.addEventListener('wheel', markScaled, opts)
+      el.addEventListener('touchstart', markScaled, opts)
+    }
+    return () => {
+      for (const el of els) {
+        el.removeEventListener('mousedown', markScaled, opts)
+        el.removeEventListener('wheel', markScaled, opts)
+        el.removeEventListener('touchstart', markScaled, opts)
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // ── A. Mount: create chart once ───────────────────────────────────────────
@@ -567,6 +614,24 @@ export function useKLineChart({
         rsiChartRef.current?.applyOptions({ width })
         macdChartRef.current?.applyOptions({ width })
         atrChartRef.current?.applyOptions({ width })
+
+        // UX-7: pushing the new width in is not enough. lightweight-charts
+        // preserves barSpacing and the right anchor across a width change, so a
+        // chart fitted against an early, narrower width (this container is a
+        // grid cell beside the indicator sidebar and settles after init) keeps
+        // that spacing forever — the series ends up drawn into 5-15% of the
+        // pane with the rest dead space, until something forces a re-fit.
+        // Re-fit here, but only while the user hasn't scaled the time scale
+        // themselves; their zoom/pan must survive a resize.
+        if (!autoFitRef.current) return
+        try {
+          main.timeScale().fitContent()
+          rsiChartRef.current?.timeScale().fitContent()
+          macdChartRef.current?.timeScale().fitContent()
+          atrChartRef.current?.timeScale().fitContent()
+        } catch {
+          /* ignore */
+        }
       })
       resizeRef.current.observe(containerRef.current)
 
@@ -827,6 +892,11 @@ export function useKLineChart({
         chart.timeScale().fitContent()
         rsiChartRef.current?.timeScale().fitContent()
         macdChartRef.current?.timeScale().fitContent()
+        // UX-7: the view is programmatically fitted again (a new timeframe, or
+        // a fresh series), so resize-driven re-fits resume until the user
+        // scales the time scale. Deliberately NOT set in the else-branch below,
+        // which exists precisely to restore a range the user may have chosen.
+        autoFitRef.current = true
       } catch {
         /* ignore */
       }
