@@ -83,7 +83,11 @@ reason (false positive / won't-fix / owner-gated) so no future wave re-flags the
 
 | Wave | Phase | State | Notes |
 |---|---|---|---|
-| 1 | R (review) | **RUNNING** 2026-08-15 | 3 Opus experts dispatched |
-| 1 | J/E/A/V | pending | — |
+| 1 | R (review) | DONE | 3 reports: 12+17+39 findings; ALL elevated findings survived coordinator verification |
+| 1 | J (judge) | DONE | TRIAGE.md; E1/E2/E3a/E3b cut |
+| 1 | E1+E2 | DONE | 8 commits, disjoint worktrees, cherry-picked |
+| 1 | A (audit) | DONE | tsc clean; vitest 1449/17; **PR #142 merged → main 2f72d49** |
+| 1 | V (verify) | **DONE 2026-08-15** | Prod live-verified during market hours: search "bank" returns results (was `{"quotes":[]}`); ma-deviation `regime.slopePositive:true, slopePct:0.0245, tradingDays:277` (slope was permanently null); stream vs prices changePct both percent-form (−0.598 vs −0.566, 11s quote skew, was 100× risk); no "refreshes every 60s" in served /backtest; /api/backtest/live 200. DQ-1 close-transition pinned by 17 hook tests (observing the real 20:00 UTC close = optional follow-up). Vercel runtime-errors sweep NOT run (MCP unauthenticated) — next session with access should sweep. |
+| 1 | E3a/E3b | RUNNING | charts (UX-7/8/22/37); briefs outage + honesty (UX-6/14/26/27) → PR #143 off new main |
 
 Findings ledger for this program lives in the three report files + `TRIAGE.md` (written at J).
