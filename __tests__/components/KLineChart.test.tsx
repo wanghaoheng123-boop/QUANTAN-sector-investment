@@ -18,8 +18,8 @@
  * `vi.mock` factory can reference it (the established pattern in this repo).
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, waitFor } from '@testing-library/react'
-import KLineChart from '@/components/KLineChart'
+import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react'
+import KLineChart, { legendChangePct } from '@/components/KLineChart'
 import { CHART_EMA_COLORS, allEmaOff } from '@/lib/chartEma'
 
 // ─── lightweight-charts mock ─────────────────────────────────────────────────
@@ -39,11 +39,29 @@ interface SeriesStub {
   removePriceLine: ReturnType<typeof vi.fn>
 }
 
+/** Shape of the `subscribeCrosshairMove` payload the hook reads. */
+interface CrosshairParam {
+  time?: string | number
+  seriesData: Map<unknown, Record<string, number>>
+  point?: { x: number; y: number }
+}
+
+interface TimeScaleStub {
+  fitContent: ReturnType<typeof vi.fn>
+  getVisibleLogicalRange: ReturnType<typeof vi.fn>
+  setVisibleLogicalRange: ReturnType<typeof vi.fn>
+  subscribeVisibleLogicalRangeChange: ReturnType<typeof vi.fn>
+}
+
 interface ChartStub {
   series: SeriesStub[]
+  /** Handlers registered via subscribeCrosshairMove — invoked to simulate hover. */
+  crosshairHandlers: Array<(p: CrosshairParam) => void>
   addCandlestickSeries: ReturnType<typeof vi.fn>
   addHistogramSeries: ReturnType<typeof vi.fn>
   addLineSeries: ReturnType<typeof vi.fn>
+  applyOptions: ReturnType<typeof vi.fn>
+  timeScale: () => TimeScaleStub
   remove: ReturnType<typeof vi.fn>
 }
 
@@ -79,6 +97,7 @@ const lwc = vi.hoisted(() => {
 
   function makeChart(): ChartStub {
     const series: SeriesStub[] = []
+    const crosshairHandlers: Array<(p: CrosshairParam) => void> = []
     const timeScale = {
       fitContent: vi.fn(),
       getVisibleLogicalRange: vi.fn(() => ({ from: 0, to: 1000 })),
@@ -87,6 +106,7 @@ const lwc = vi.hoisted(() => {
     }
     return {
       series,
+      crosshairHandlers,
       addCandlestickSeries: vi.fn((o: Record<string, unknown>) => {
         const s = makeSeries('candle', o); series.push(s); return s
       }),
@@ -96,7 +116,9 @@ const lwc = vi.hoisted(() => {
       addLineSeries: vi.fn((o: Record<string, unknown>) => {
         const s = makeSeries('line', o); series.push(s); return s
       }),
-      subscribeCrosshairMove: vi.fn(),
+      subscribeCrosshairMove: vi.fn((cb: (p: CrosshairParam) => void) => {
+        crosshairHandlers.push(cb)
+      }),
       setCrosshairPosition: vi.fn(),
       timeScale: vi.fn(() => timeScale),
       applyOptions: vi.fn(),
@@ -149,10 +171,10 @@ function flags(overrides: Flags = {}): Flags {
 }
 
 /** Renders the chart and resolves once the async init + first data effect ran. */
-async function mountChart(indicators: Flags) {
+async function mountChart(indicators: Flags, candles: typeof CANDLES = CANDLES) {
   const utils = render(
     <KLineChart
-      candles={CANDLES}
+      candles={candles}
       color="#3b82f6"
       ticker="TEST"
       showRSI={false}
@@ -190,10 +212,16 @@ const vwapSeries = (chart: ChartStub) => {
   return matches[matches.length - 1]
 }
 
+/** ResizeObserver callbacks registered by the hook — invoked to simulate a resize. */
+type ResizeEntryStub = { contentRect: { width: number; height: number } }
+let resizeCallbacks: Array<(entries: ResizeEntryStub[]) => void> = []
+
 beforeEach(() => {
   lwc.charts.length = 0
   lwc.createChart.mockClear()
+  resizeCallbacks = []
   vi.stubGlobal('ResizeObserver', class {
+    constructor(cb: (entries: ResizeEntryStub[]) => void) { resizeCallbacks.push(cb) }
     observe() {}
     unobserve() {}
     disconnect() {}
@@ -313,5 +341,142 @@ describe('KLineChart render smoke (KL-10)', () => {
     const { candle } = await mountChart(flags({ fibonacci: false }))
     expect(candle.createPriceLine).not.toHaveBeenCalled()
     expect(candle.priceLines).toHaveLength(0)
+  })
+})
+
+// ─── UX-7: the series must be re-fitted when the container resizes ───────────
+
+describe('KLineChart resize re-fit (UX-7)', () => {
+  /** Fires the hook's ResizeObserver callback with a new container width. */
+  function resizeTo(width: number) {
+    expect(resizeCallbacks.length).toBeGreaterThan(0)
+    act(() => { resizeCallbacks[0]([{ contentRect: { width, height: 300 } }]) })
+  }
+
+  it('re-fits the time scale on resize while the user has not scaled it', async () => {
+    const { chart } = await mountChart(flags())
+    const timeScale = chart.timeScale()
+    // Clear the init/data-effect fits so the assertion is about THIS resize.
+    timeScale.fitContent.mockClear()
+    chart.applyOptions.mockClear()
+
+    resizeTo(900)
+
+    expect(chart.applyOptions).toHaveBeenCalledWith({ width: 900 })
+    // Pushing the width alone leaves barSpacing (and so the compressed series)
+    // untouched — the fit is the part that repairs the pane.
+    expect(timeScale.fitContent).toHaveBeenCalled()
+  })
+
+  it('leaves the view alone on resize once the user has zoomed or panned', async () => {
+    const { chart, getByRole } = await mountChart(flags())
+    const timeScale = chart.timeScale()
+
+    // Wheel-zoom over the chart canvas container = user-owned view from here on.
+    fireEvent.wheel(getByRole('img'))
+    timeScale.fitContent.mockClear()
+    chart.applyOptions.mockClear()
+
+    resizeTo(900)
+
+    expect(chart.applyOptions).toHaveBeenCalledWith({ width: 900 }) // still tracks width
+    expect(timeScale.fitContent).not.toHaveBeenCalled()             // but never re-fits
+  })
+
+  it('a drag on the pane also counts as user scaling', async () => {
+    const { chart, getByRole } = await mountChart(flags())
+    const timeScale = chart.timeScale()
+
+    fireEvent.mouseDown(getByRole('img'))
+    timeScale.fitContent.mockClear()
+
+    resizeTo(900)
+
+    expect(timeScale.fitContent).not.toHaveBeenCalled()
+  })
+})
+
+// ─── UX-8: legend change % is the session change, not the candle body ────────
+
+/**
+ * A gap-DOWN bar whose body is UP: previous close 100, latest bar opens at 90
+ * and closes at 95. Body = (95 − 90) / 90 = +5.56 % (green ▲); session change
+ * vs the previous close = (95 − 100) / 100 = −5.00 % (red ▼). The two bases
+ * disagree in SIGN, which is exactly the header-vs-legend contradiction UX-8
+ * reported, so this fixture fails loudly if the basis ever reverts.
+ */
+const GAP_DOWN_CANDLES = [
+  { time: '2024-02-01', open: 98, high: 101, low: 97, close: 100, volume: 1_000_000 },
+  { time: '2024-02-02', open: 90, high: 96, low: 89, close: 95, volume: 2_400_000 },
+]
+
+describe('KLineChart legend change % (UX-8)', () => {
+  it('measures against the PREVIOUS bar close, not the latest candle body', () => {
+    expect(legendChangePct(GAP_DOWN_CANDLES)).toBeCloseTo(-5, 10)
+  })
+
+  it('falls back to the candle body when there is no previous bar', () => {
+    expect(legendChangePct([{ open: 90, close: 95 }])).toBeCloseTo(5.5555, 3)
+  })
+
+  it('returns null when there is no candle, or no usable basis', () => {
+    expect(legendChangePct([])).toBeNull()
+    expect(legendChangePct([{ open: 0, close: 95 }])).toBeNull()
+  })
+
+  it('renders the session change — sign, glyph and colour — in the legend', async () => {
+    const { getByText } = await mountChart(flags(), GAP_DOWN_CANDLES)
+
+    // −5.00 %, not the +5.56 % candle body the old formula produced.
+    const chg = getByText('-5.00%')
+    expect(chg).toBeInTheDocument()
+    expect(chg.className).toContain('text-red-400')
+    // The glyph reads from the same basis as the number it colours.
+    expect(getByText('▼ $95.00')).toBeInTheDocument()
+  })
+})
+
+// ─── UX-37: crosshair OHLCV readout reaches the page ─────────────────────────
+
+describe('KLineChart crosshair OHLCV readout (UX-37)', () => {
+  /** Simulates a crosshair move over a bar of the main chart. */
+  function hover(chart: ChartStub, candle: SeriesStub, bar: Record<string, number>, volume: number) {
+    const volSeries = chart.series.find((s) => s.kind === 'histogram')!
+    const seriesData = new Map<unknown, Record<string, number>>([
+      [candle, bar],
+      [volSeries, { value: volume }],
+    ])
+    act(() => { chart.crosshairHandlers[0]({ time: '2024-01-10', seriesData }) })
+  }
+
+  it('shows the hovered bar OHLCV in the legend the pages actually render', async () => {
+    const { chart, candle, getByText, queryByRole } = await mountChart(flags())
+
+    // Every call site passes `hideTimeframeSelector`, so the built-in timeframe
+    // row — where this readout used to live, unreachable — is absent here too.
+    expect(queryByRole('button', { name: 'Timeframe 1D' })).toBeNull()
+
+    hover(chart, candle, { open: 109, high: 115, low: 105, close: 111 }, 2_500_000)
+
+    expect(getByText('109.00')).toBeInTheDocument() // O
+    expect(getByText('115.00')).toBeInTheDocument() // H
+    expect(getByText('105.00')).toBeInTheDocument() // L
+    expect(getByText('111.00')).toBeInTheDocument() // C
+    expect(getByText('2.50M')).toBeInTheDocument()  // Vol
+  })
+
+  it('replaces the last-bar summary while hovering and restores it on mouse-out', async () => {
+    const { chart, candle, getByText, queryByText } = await mountChart(flags())
+    const summary = () => queryByText(/^[▲▼] \$/)
+
+    expect(summary()).toBeInTheDocument()
+
+    hover(chart, candle, { open: 109, high: 115, low: 105, close: 111 }, 2_500_000)
+    expect(summary()).toBeNull()
+
+    // Mouse-out: lightweight-charts fires with no time / no series data.
+    act(() => { chart.crosshairHandlers[0]({ seriesData: new Map() }) })
+    expect(summary()).toBeInTheDocument()
+    expect(getByText('Vol 1.29M')).toBeInTheDocument() // last bar volume is back
   })
 })

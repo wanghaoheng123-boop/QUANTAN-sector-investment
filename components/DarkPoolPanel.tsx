@@ -191,40 +191,53 @@ export default function DarkPoolPanel({
             </div>
           )}
 
-          {/* Data source line */}
+          {/* Data source line.
+              UX-6: this said "Source: Yahoo Finance …" and then the illustrative
+              flow gauge and the illustrative prints table rendered directly
+              beneath it, with nothing marking where the attribution stopped. It
+              now names the metrics it actually covers and disclaims the rest. */}
           <div className="text-[10px] text-slate-400 leading-relaxed">
-            Source: Yahoo Finance aggregate off-exchange trading data.{' '}
+            Source for the metrics above: Yahoo Finance aggregate off-exchange trading data.{' '}
             {apiData.fetchedAt && (
               <>Fetched: {new Date(apiData.fetchedAt).toLocaleString()}. </>
             )}
-            Off-exchange % = Finra BATS/OTCQX/OTCBB volume ÷ total volume.
+            Off-exchange % = Finra BATS/OTCQX/OTCBB volume ÷ total volume. This source does not
+            cover the flow gauge or the block prints below.
           </div>
         </>
       )}
 
-      {/* ── Short interest / off-exchange bar (real or synthetic) ─── */}
-      {(hasRealData || true) && (
-        <div className="bg-slate-900/60 rounded-xl p-4 border border-slate-800" role="region" aria-label="Off-exchange flow sentiment">
-          <div className="flex items-center justify-between text-xs text-slate-400 mb-2">
-            <span aria-label="Bearish sentiment">BEARISH</span>
-            <span className="text-slate-300 font-medium">Off-Exchange Flow</span>
-            <span aria-label="Bullish sentiment">BULLISH</span>
-          </div>
-          <div className="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden" role="progressbar" aria-valuenow={Math.round(bullishPct)} aria-valuemin={0} aria-valuemax={100} aria-label={`${bullishPct.toFixed(0)}% bullish flow`}>
-            <div
-              className="h-full rounded-full transition-all duration-700"
-              style={{
-                width: `${bullishPct}%`,
-                background: `linear-gradient(90deg, #ff6b7a 0%, ${color} 100%)`,
-              }}
-            />
-          </div>
-          <div className="flex justify-between text-xs mt-1.5">
-            <span className="text-red-400">{(100 - bullishPct).toFixed(0)}%</span>
-            <span style={{ color }}>{bullishPct.toFixed(0)}%</span>
-          </div>
+      {/* ── Off-exchange flow gauge (ILLUSTRATIVE) ────────────────────
+          UX-6: `bullishPct` is derived from `prints`, which are always
+          synthetic, so this gauge is synthetic too — it was gated on the
+          tautology `(hasRealData || true)`, i.e. always rendered, immediately
+          under the real Yahoo provenance line and with no label of its own. The
+          dead conditional is gone and the badge is now part of the header. */}
+      <div className="bg-slate-900/60 rounded-xl p-4 border border-slate-800" role="region" aria-label="Off-exchange flow sentiment (illustrative)">
+        <div className="flex items-center justify-between text-xs text-slate-400 mb-2">
+          <span aria-label="Bearish sentiment">BEARISH</span>
+          <span className="text-slate-300 font-medium flex items-center gap-2">
+            Off-Exchange Flow
+            <span className="px-2 py-0.5 rounded bg-amber-900/30 text-amber-400 border border-amber-500/30 text-[10px]">
+              ILLUSTRATIVE
+            </span>
+          </span>
+          <span aria-label="Bullish sentiment">BULLISH</span>
         </div>
-      )}
+        <div className="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden" role="progressbar" aria-valuenow={Math.round(bullishPct)} aria-valuemin={0} aria-valuemax={100} aria-label={`${bullishPct.toFixed(0)}% bullish flow (illustrative)`}>
+          <div
+            className="h-full rounded-full transition-all duration-700"
+            style={{
+              width: `${bullishPct}%`,
+              background: `linear-gradient(90deg, #ff6b7a 0%, ${color} 100%)`,
+            }}
+          />
+        </div>
+        <div className="flex justify-between text-xs mt-1.5">
+          <span className="text-red-400">{(100 - bullishPct).toFixed(0)}%</span>
+          <span style={{ color }}>{bullishPct.toFixed(0)}%</span>
+        </div>
+      </div>
 
       {/* ── Block prints table (illustrative demo) ───────────────── */}
       <div className="bg-slate-900/60 rounded-xl border border-slate-800 overflow-hidden">
@@ -233,11 +246,15 @@ export default function DarkPoolPanel({
             Block Prints — {ticker}
           </span>
           <div className="flex items-center gap-2 text-xs text-slate-400">
-            {!hasRealData && (
-              <span className="px-2 py-0.5 rounded bg-amber-900/30 text-amber-400 border border-amber-500/30 text-[10px]">
-                ILLUSTRATIVE
-              </span>
-            )}
+            {/* UX-6: unconditional. `prints` come from lib/mockData.ts's
+                mulberry32 generator on EVERY render path — `hasRealData`
+                describes the Yahoo METRICS above, not this table, so gating the
+                badge on `!hasRealData` hid the label exactly on the liquid
+                tickers a professional trades (AAPL: fabricated prints at ≈$100
+                while the real quote was $305.40, badge absent). */}
+            <span className="px-2 py-0.5 rounded bg-amber-900/30 text-amber-400 border border-amber-500/30 text-[10px]">
+              ILLUSTRATIVE
+            </span>
             <span className="w-2 h-2 rounded-full bg-blue-400 inline-block" /> Bullish
             <span className="w-2 h-2 rounded-full bg-purple-400 inline-block ml-1" /> Bearish
           </div>
@@ -307,14 +324,15 @@ export default function DarkPoolPanel({
           </table>
         </div>
 
-        {!hasRealData && (
-          <div className="px-4 py-2.5 text-xs text-slate-400 text-center border-t border-slate-800">
-            <span className="text-amber-400/80">
-              ⚠ Illustrative block prints — not from a proprietary data feed.
-            </span>
-            {' '}Individual print data requires a subscription service (e.g. Finra ADF, CBOE UQDF, or Bloomberg LP).
-          </div>
-        )}
+        {/* UX-6: same reasoning as the badge — the footnote was suppressed by
+            the success of an unrelated call. It describes this table, so it
+            renders whenever this table does. */}
+        <div className="px-4 py-2.5 text-xs text-slate-400 text-center border-t border-slate-800">
+          <span className="text-amber-400/80">
+            ⚠ Illustrative block prints — not from a proprietary data feed.
+          </span>
+          {' '}Individual print data requires a subscription service (e.g. Finra ADF, CBOE UQDF, or Bloomberg LP).
+        </div>
       </div>
     </div>
   )

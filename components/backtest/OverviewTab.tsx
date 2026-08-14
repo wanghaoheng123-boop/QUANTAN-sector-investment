@@ -18,6 +18,31 @@ import EquityCurveChart from '@/components/backtest/EquityCurveChart'
 import { ChartErrorBoundary } from '@/components/ChartErrorBoundary'
 import SectorHeatmap from '@/components/backtest/SectorHeatmap'
 import type { BacktestResult } from '@/lib/backtest/engine'
+import {
+  DEFAULT_EXECUTION_COSTS,
+  costBpsPerSide,
+  roundTripCostPct,
+} from '@/lib/backtest/executionModel'
+
+/**
+ * UX-14. The Transaction Costs row was the hardcoded string
+ * "~11bps round-trip (IBKR: $0.005/sh + 0.05% spread + 0.5bps slippage)".
+ * 11 bps is the PER-SIDE cost, so that row halved the modelled friction — and
+ * it contradicted app/backtest/page.tsx, which states "≈22 bps (11 bps/side)"
+ * correctly, on the same screen. The itemisation was wrong too (0.5 bps
+ * slippage vs the model's 2).
+ *
+ * Derived from lib/backtest/executionModel.ts — the SSOT — so the copy cannot
+ * drift from the model again. No constant changed; only the sentence that
+ * describes them.
+ */
+export const TX_COST_RULE =
+  `${costBpsPerSide()} bps per side ` +
+  `(${DEFAULT_EXECUTION_COSTS.spreadBpsPerSide} bps spread + ` +
+  `${DEFAULT_EXECUTION_COSTS.slippageBpsPerSide} bps slippage + ` +
+  `${DEFAULT_EXECUTION_COSTS.commissionBpsPerSide} bps commission/fees), ` +
+  `charged at entry AND exit — ` +
+  `≈${Math.round(roundTripCostPct() * 10_000)} bps round-trip.`
 
 interface OverviewTabProps {
   results: BacktestResult[]
@@ -26,7 +51,8 @@ interface OverviewTabProps {
   initialCapital: number
 }
 
-const STRATEGY_RULES: ReadonlyArray<readonly [string, string]> = [
+/** Exported so the cost-copy spec asserts what actually RENDERS, not a helper. */
+export const STRATEGY_RULES: ReadonlyArray<readonly [string, string]> = [
   ['BUY Signal', '200EMA deviation dip zone + 200SMA rising (>0.5%/20bars) + price near SMA + ≥2 of: RSI<35, MACD hist>0, ATR%>2, BB%<0.20 → BUY with Half-Kelly (10-25%)'],
   ['HOLD', 'Confidence <55% or HEALTHY_BULL / EXTENDED_BULL → No action. Slope insufficient or price not near SMA = no buy.'],
   ['SELL Signal', 'FALLING_KNIFE (dip zone + declining SMA) or HEALTHY_BULL + RSI>70 → Exit full position'],
@@ -34,7 +60,7 @@ const STRATEGY_RULES: ReadonlyArray<readonly [string, string]> = [
   ['Trailing Stop', '2× ATR profit → stop rises to break-even. 4× ATR profit → stop locks at 1× ATR above entry.'],
   ['Max DD Cap', 'Portfolio equity drawdown >25% → circuit breaker, close all positions immediately'],
   ['Position Sizing', 'Half-Kelly: STRONG_DIP+3 confirms → 25%, STRONG_DIP → 15%, normal BUY → 10%. 55% confidence minimum.'],
-  ['Transaction Costs', '~11bps round-trip (IBKR: $0.005/sh + 0.05% spread + 0.5bps slippage). Applied at both entry and exit.'],
+  ['Transaction Costs', TX_COST_RULE],
 ] as const
 
 export function OverviewTab({ results, sectorSummary, sectorColors, initialCapital }: OverviewTabProps) {

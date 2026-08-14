@@ -147,6 +147,40 @@ function calcATRForDisplay(candles: Candle[], period = 14): number[] {
   return atrArray(bars, period)
 }
 
+/**
+ * UX-8: the legend's change % is the SESSION change — latest close measured
+ * against the PREVIOUS bar's close — which is the basis the page header, every
+ * other surface on the site and every trading platform use.
+ *
+ * The old basis was the latest candle's own `open`, i.e. the candle *body*. On
+ * a shared component rendered by /stock, /sector and /crypto/btc that put a
+ * second, differently-anchored change % on the same screen as the header: a
+ * different magnitude on every bar, and the opposite SIGN (hence the opposite
+ * ▲/▼ glyph and green/red colour) on any gap day.
+ *
+ * Falls back to the candle body only when there is no previous bar — a
+ * single-candle series has nothing else to measure against. Returns null when
+ * neither basis is usable, so callers keep the pre-existing "no data"
+ * rendering rather than printing NaN%.
+ */
+export function legendChangePct(
+  candles: ReadonlyArray<{ open: number; close: number }>
+): number | null {
+  const last = candles[candles.length - 1]
+  if (!last) return null
+  const prev = candles[candles.length - 2]
+  const basis = prev && prev.close > 0 ? prev.close : last.open
+  if (!(basis > 0)) return null
+  return ((last.close - basis) / basis) * 100
+}
+
+/** Compact volume for the legend (1.23M / 45.6K / 987). */
+function formatLegendVolume(v: number): string {
+  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(2)}M`
+  if (v >= 1_000) return `${(v / 1_000).toFixed(1)}K`
+  return v.toFixed(0)
+}
+
 // ─────────────────────────────────────────────────────────────────
 // Chart component
 // ─────────────────────────────────────────────────────────────────
@@ -266,20 +300,16 @@ export default function KLineChart({
   }, [onTimeframeChange])
 
   const latestCandle = sortedCandlesPreview[sortedCandlesPreview.length - 1]
-  const isUp = latestCandle ? latestCandle.close >= latestCandle.open : true
+  // UX-8: session change (vs the previous bar's close), not the candle body —
+  // see legendChangePct. `isUp` drives the ▲/▼ glyph and the green/red colour,
+  // so it must read from the same basis as the number it colours.
+  const chgPctNum = legendChangePct(sortedCandlesPreview)
+  const isUp = chgPctNum == null ? true : chgPctNum >= 0
   const priceStr = latestCandle
     ? `$${latestCandle.close.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
     : ''
-  const chgPct = latestCandle && latestCandle.open > 0
-    ? (((latestCandle.close - latestCandle.open) / latestCandle.open) * 100).toFixed(2)
-    : '0.00'
-  const volStr = latestCandle
-    ? latestCandle.volume >= 1_000_000
-      ? `${(latestCandle.volume / 1_000_000).toFixed(2)}M`
-      : latestCandle.volume >= 1_000
-        ? `${(latestCandle.volume / 1_000).toFixed(1)}K`
-        : String(latestCandle.volume.toFixed(0))
-    : ''
+  const chgPct = chgPctNum == null ? '0.00' : chgPctNum.toFixed(2)
+  const volStr = latestCandle ? formatLegendVolume(latestCandle.volume) : ''
   const rangeStr = latestCandle
     ? `H $${latestCandle.high.toLocaleString('en-US', { maximumFractionDigits: 0 })} L $${latestCandle.low.toLocaleString('en-US', { maximumFractionDigits: 0 })}`
     : ''
@@ -332,52 +362,64 @@ export default function KLineChart({
           {/* VP hint */}
           <span className="text-[10px] text-slate-400 font-mono">VP</span>
           <span className="text-[10px] text-slate-700" aria-hidden="true">|</span>
-          {/* Crosshair OHLCV display */}
-          {crosshairData ? (
-            <div className="flex items-center gap-3 text-[10px] font-mono">
-              <span className="text-slate-400">
-                O <span className="text-slate-300">{crosshairData.open.toFixed(2)}</span>
-              </span>
-              <span className="text-slate-400">
-                H <span className="text-green-400">{crosshairData.high.toFixed(2)}</span>
-              </span>
-              <span className="text-slate-400">
-                L <span className="text-red-400">{crosshairData.low.toFixed(2)}</span>
-              </span>
-              <span className="text-slate-400">
-                C <span className={crosshairData.close >= crosshairData.open ? 'text-green-400' : 'text-red-400'}>{crosshairData.close.toFixed(2)}</span>
-              </span>
-              <span className="text-slate-400">
-                Vol <span className="text-slate-300">{crosshairData.volume >= 1000000 ? (crosshairData.volume / 1000000).toFixed(2) + 'M' : crosshairData.volume >= 1000 ? (crosshairData.volume / 1000).toFixed(1) + 'K' : crosshairData.volume.toFixed(0)}</span>
-              </span>
-            </div>
-          ) : (
-            <div className="text-[10px] font-mono text-slate-400">
-              {priceStr} {isUp ? '+' : ''}{chgPct}%
-            </div>
-          )}
+          {/* UX-37: the crosshair OHLCV readout used to live here — inside a row
+              every page suppresses. It now renders in the always-present legend
+              below, so it must NOT be duplicated here. */}
+          <div className="text-[10px] font-mono text-slate-400">
+            {priceStr} {isUp ? '+' : ''}{chgPct}%
+          </div>
         </div>
       </div>
       )}
 
       {/* ── Enhanced legend with price / change / volume ── */}
       <div className={`absolute ${showBuiltinTimeframes ? 'top-[52px]' : 'top-2'} left-3 right-3 z-10 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs bg-slate-950/80 backdrop-blur-sm px-3 py-2 rounded-lg border border-slate-800/50 max-h-[min(40vh,220px)] overflow-y-auto`}>
-        {/* Live price summary */}
-        <span className={`text-sm font-mono font-bold mr-1 ${isUp ? 'text-green-400' : 'text-red-400'}`}>
-          {isUp ? '▲' : '▼'} {priceStr}
-        </span>
-        <span className={`text-xs font-mono ${isUp ? 'text-green-400/80' : 'text-red-400/80'}`}>
-          {isUp ? '+' : ''}{chgPct}%
-        </span>
-        {volStr && (
-          <span className="text-xs font-mono text-slate-400 border-l border-slate-700 pl-2">
-            Vol {volStr}
+        {/* UX-37: hovering a bar swaps the last-bar summary for that bar's
+            OHLCV — the interaction the on-page guide promises ("Hover crosshair
+            shows OHLCV at any bar"). The hook has always computed this on every
+            crosshair move; the readout was just rendered inside the built-in
+            timeframe row, which all three chart pages suppress, so it was
+            unreachable in the product. Mouse-out clears crosshairData and the
+            summary returns. Deliberately not aria-live — announcing every mouse
+            move is an AT anti-pattern. */}
+        {crosshairData ? (
+          <span className="flex items-center gap-3 text-xs font-mono">
+            <span className="text-slate-400">
+              O <span className="text-slate-300">{crosshairData.open.toFixed(2)}</span>
+            </span>
+            <span className="text-slate-400">
+              H <span className="text-green-400">{crosshairData.high.toFixed(2)}</span>
+            </span>
+            <span className="text-slate-400">
+              L <span className="text-red-400">{crosshairData.low.toFixed(2)}</span>
+            </span>
+            <span className="text-slate-400">
+              C <span className={crosshairData.close >= crosshairData.open ? 'text-green-400' : 'text-red-400'}>{crosshairData.close.toFixed(2)}</span>
+            </span>
+            <span className="text-slate-400">
+              Vol <span className="text-slate-300">{formatLegendVolume(crosshairData.volume)}</span>
+            </span>
           </span>
-        )}
-        {rangeStr && (
-          <span className="text-[10px] font-mono text-slate-400">
-            {rangeStr}
-          </span>
+        ) : (
+          <>
+            {/* Live price summary */}
+            <span className={`text-sm font-mono font-bold mr-1 ${isUp ? 'text-green-400' : 'text-red-400'}`}>
+              {isUp ? '▲' : '▼'} {priceStr}
+            </span>
+            <span className={`text-xs font-mono ${isUp ? 'text-green-400/80' : 'text-red-400/80'}`}>
+              {isUp ? '+' : ''}{chgPct}%
+            </span>
+            {volStr && (
+              <span className="text-xs font-mono text-slate-400 border-l border-slate-700 pl-2">
+                Vol {volStr}
+              </span>
+            )}
+            {rangeStr && (
+              <span className="text-[10px] font-mono text-slate-400">
+                {rangeStr}
+              </span>
+            )}
+          </>
         )}
         <span className="border-l border-slate-700 pl-2 flex items-center gap-1.5">
           {activeIndicators.map((d) => (

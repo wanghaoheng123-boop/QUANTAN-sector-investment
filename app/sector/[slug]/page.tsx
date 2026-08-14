@@ -14,7 +14,7 @@ import { DarkPoolPrint } from '@/lib/sectors'
 import type { DarkPoolAnalysis } from '@/lib/darkpool'
 import { buildSingleSessionSignal } from '@/lib/sessionSignalsFromQuotes'
 import { tradingDefaultEmaFlags } from '@/lib/chartEma'
-import { STOCK_CHART_RANGES, isStockIntradayPollRange } from '@/lib/chartYahoo'
+import { STOCK_CHART_RANGES, isStockIntradayPollRange, chartBarKindLabel } from '@/lib/chartYahoo'
 import { formatCompactNumber, formatCurrency, formatFreshness, formatSignedNumber } from '@/lib/format'
 import { ChartErrorBoundary } from '@/components/ChartErrorBoundary'
 import { DashboardGuide } from '@/components/DashboardGuide'
@@ -225,8 +225,7 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
     []
   )
 
-  const barKind =
-    ['1m', '3m', '5m', '15m', '1H', '4H', '1D', '1W'].includes(activeRange) ? 'INTRADAY' : 'DAILY+'
+  const barKind = chartBarKindLabel(activeRange)
 
   // newsMarkers removed — live news headlines now shown in NewsFeed panel below chart
 
