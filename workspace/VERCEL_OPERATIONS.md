@@ -116,6 +116,49 @@ creates a second, redundant deployment of the same commit.
 
 Set in **Vercel Dashboard → Project (`quantan`) → Settings → Environment Variables**. Never commit values. Mark secrets as **Sensitive**.
 
+### 4.0 Enabling sign-in — exact runbook (verified 2026-08-14)
+
+Production currently reports **zero OAuth providers** (`/api/auth/providers` → `{}`), so
+`GOOGLE_*`/`GITHUB_*` are unset in addition to `NEXTAUTH_SECRET`. Auth is optional — the app
+works signed-out — so this is a feature-enable, not an outage.
+
+**Use the `CLIENT_` names.** `lib/auth.ts` gates on `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET`.
+`GITHUB_ID` / `GITHUB_SECRET` (NextAuth's older convention) are read by nothing — the sign-in
+panel wrongly advertised those until #140.
+
+| Name | Scope | Notes |
+|------|-------|-------|
+| `NEXTAUTH_SECRET` | Production + Preview | `openssl rand -base64 32`. Without it every cold start signs with a new random key, so sessions die constantly. |
+| `NEXTAUTH_URL` | Production | `https://quantan.vercel.app` — this is what the callback URLs are derived from. |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Production | Google Cloud → Credentials → OAuth 2.0 Client ID (Web). |
+| `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | Production | GitHub → Settings → Developer settings → OAuth Apps. |
+
+At least one provider pair is required; both is fine. Register these redirect/callback URLs
+**exactly** with the provider:
+
+```
+https://quantan.vercel.app/api/auth/callback/google
+https://quantan.vercel.app/api/auth/callback/github
+```
+
+**Then redeploy** — env var changes do not apply to existing deployments.
+
+**Then verify in one command:**
+
+```bash
+npm run verify:auth
+```
+
+It reports which providers are live, checks each callback URL against `NEXTAUTH_URL` (the
+usual cause of `redirect_uri_mismatch`), and confirms the setup panel still names the
+variables the code reads. Exit 0 = configured.
+
+`NEXTAUTH_SECRET` is deliberately **not** asserted by that script: `/api/auth/session`
+answers 200 to a valid cookie, a garbage cookie and no cookie alike, so any external check
+of it is a guaranteed pass. The authoritative signal is server-side — **Vercel → Project →
+Logs, filter `auth.secret_missing`** (logged by `lib/auth.ts` at severity `critical` on each
+cold start while the secret is unset).
+
 ### P0 — owner action (Q-004)
 
 | Name | Value shape | Scope | Purpose |
