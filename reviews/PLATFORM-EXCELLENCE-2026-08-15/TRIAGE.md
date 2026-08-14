@@ -50,5 +50,27 @@ search route (mirror 72f42fc pattern); DQ-2 changePct unit parity between /api/p
 E1/E2 file sets are disjoint → can run as two parallel Opus coders in isolated worktrees,
 cherry-picked onto the integration branch. E3 (UX) cut after ux-interface.md lands.
 
+## E1/E2 AUDIT RESULT (2026-08-15): LANDED
+
+8 commits cherry-picked onto `claude/investment-platform-overhaul-cc514b` (4f8908d..67ed3ca).
+Coordinator re-reviewed every source diff; both agents implemented to spec. Integration gates:
+tsc clean; vitest **1449 passed / 17 skipped** (baseline 1395). Notable audit confirmations:
+server emits `market_state{open:false}` on transition (stream/route.ts:240) and stops quote
+polling when closed (:242) — the DQ-1 fold is sound; E1's copy deviation (dropping "60s"
+entirely — the panel fetches once on mount, no interval) verified correct and accepted;
+E1 chose WATCH_DIP for null-slope deep zones = regimeSignal parity (AL-5) — accepted.
+
+**Residuals queued for wave 2 (from agent follow-up notes, none user-harmful now):**
+- `lib/quant/buildFundamentalsPayload.ts:350` gate `>= 220` should be `>= 221` (one-bar-early
+  slope gate; harm neutralized by the fail-closed arm). Touches a mutation-hardened file —
+  do inside a mutation-aware change.
+- `app/api/stream/[ticker]/route.ts:68` same raw `changePct` pattern (no same-surface
+  divergence today; unit bug latent).
+- `lib/data/bloomberg/bridgeClient.ts:119-124` same class, dormant until bridge configured.
+- `vitest.config.ts` coverage exclude for `hooks/useLiveQuotes.ts` now removable (harness
+  exists) — moves global coverage numbers, do deliberately.
+- `LiveSignalsPanel` copy hardcodes "Sun 22:00 UTC" — must change with OWNER-DECISION-CADENCE.
+- DQ-2 (dropped `degraded` flag) — unassigned, wave 2.
+
 ## Killed / not entering queue
 (none yet from AL; UX/DQ pending)
