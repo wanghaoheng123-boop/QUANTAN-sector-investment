@@ -39,11 +39,29 @@ interface SeriesStub {
   removePriceLine: ReturnType<typeof vi.fn>
 }
 
+/** Shape of the `subscribeCrosshairMove` payload the hook reads. */
+interface CrosshairParam {
+  time?: string | number
+  seriesData: Map<unknown, Record<string, number>>
+  point?: { x: number; y: number }
+}
+
+interface TimeScaleStub {
+  fitContent: ReturnType<typeof vi.fn>
+  getVisibleLogicalRange: ReturnType<typeof vi.fn>
+  setVisibleLogicalRange: ReturnType<typeof vi.fn>
+  subscribeVisibleLogicalRangeChange: ReturnType<typeof vi.fn>
+}
+
 interface ChartStub {
   series: SeriesStub[]
+  /** Handlers registered via subscribeCrosshairMove — invoked to simulate hover. */
+  crosshairHandlers: Array<(p: CrosshairParam) => void>
   addCandlestickSeries: ReturnType<typeof vi.fn>
   addHistogramSeries: ReturnType<typeof vi.fn>
   addLineSeries: ReturnType<typeof vi.fn>
+  applyOptions: ReturnType<typeof vi.fn>
+  timeScale: () => TimeScaleStub
   remove: ReturnType<typeof vi.fn>
 }
 
@@ -79,6 +97,7 @@ const lwc = vi.hoisted(() => {
 
   function makeChart(): ChartStub {
     const series: SeriesStub[] = []
+    const crosshairHandlers: Array<(p: CrosshairParam) => void> = []
     const timeScale = {
       fitContent: vi.fn(),
       getVisibleLogicalRange: vi.fn(() => ({ from: 0, to: 1000 })),
@@ -87,6 +106,7 @@ const lwc = vi.hoisted(() => {
     }
     return {
       series,
+      crosshairHandlers,
       addCandlestickSeries: vi.fn((o: Record<string, unknown>) => {
         const s = makeSeries('candle', o); series.push(s); return s
       }),
@@ -96,7 +116,9 @@ const lwc = vi.hoisted(() => {
       addLineSeries: vi.fn((o: Record<string, unknown>) => {
         const s = makeSeries('line', o); series.push(s); return s
       }),
-      subscribeCrosshairMove: vi.fn(),
+      subscribeCrosshairMove: vi.fn((cb: (p: CrosshairParam) => void) => {
+        crosshairHandlers.push(cb)
+      }),
       setCrosshairPosition: vi.fn(),
       timeScale: vi.fn(() => timeScale),
       applyOptions: vi.fn(),
@@ -353,5 +375,50 @@ describe('KLineChart legend change % (UX-8)', () => {
     expect(chg.className).toContain('text-red-400')
     // The glyph reads from the same basis as the number it colours.
     expect(getByText('▼ $95.00')).toBeInTheDocument()
+  })
+})
+
+// ─── UX-37: crosshair OHLCV readout reaches the page ─────────────────────────
+
+describe('KLineChart crosshair OHLCV readout (UX-37)', () => {
+  /** Simulates a crosshair move over a bar of the main chart. */
+  function hover(chart: ChartStub, candle: SeriesStub, bar: Record<string, number>, volume: number) {
+    const volSeries = chart.series.find((s) => s.kind === 'histogram')!
+    const seriesData = new Map<unknown, Record<string, number>>([
+      [candle, bar],
+      [volSeries, { value: volume }],
+    ])
+    act(() => { chart.crosshairHandlers[0]({ time: '2024-01-10', seriesData }) })
+  }
+
+  it('shows the hovered bar OHLCV in the legend the pages actually render', async () => {
+    const { chart, candle, getByText, queryByRole } = await mountChart(flags())
+
+    // Every call site passes `hideTimeframeSelector`, so the built-in timeframe
+    // row — where this readout used to live, unreachable — is absent here too.
+    expect(queryByRole('button', { name: 'Timeframe 1D' })).toBeNull()
+
+    hover(chart, candle, { open: 109, high: 115, low: 105, close: 111 }, 2_500_000)
+
+    expect(getByText('109.00')).toBeInTheDocument() // O
+    expect(getByText('115.00')).toBeInTheDocument() // H
+    expect(getByText('105.00')).toBeInTheDocument() // L
+    expect(getByText('111.00')).toBeInTheDocument() // C
+    expect(getByText('2.50M')).toBeInTheDocument()  // Vol
+  })
+
+  it('replaces the last-bar summary while hovering and restores it on mouse-out', async () => {
+    const { chart, candle, getByText, queryByText } = await mountChart(flags())
+    const summary = () => queryByText(/^[▲▼] \$/)
+
+    expect(summary()).toBeInTheDocument()
+
+    hover(chart, candle, { open: 109, high: 115, low: 105, close: 111 }, 2_500_000)
+    expect(summary()).toBeNull()
+
+    // Mouse-out: lightweight-charts fires with no time / no series data.
+    act(() => { chart.crosshairHandlers[0]({ seriesData: new Map() }) })
+    expect(summary()).toBeInTheDocument()
+    expect(getByText('Vol 1.29M')).toBeInTheDocument() // last bar volume is back
   })
 })

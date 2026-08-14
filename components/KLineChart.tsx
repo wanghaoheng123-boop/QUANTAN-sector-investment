@@ -362,52 +362,64 @@ export default function KLineChart({
           {/* VP hint */}
           <span className="text-[10px] text-slate-400 font-mono">VP</span>
           <span className="text-[10px] text-slate-700" aria-hidden="true">|</span>
-          {/* Crosshair OHLCV display */}
-          {crosshairData ? (
-            <div className="flex items-center gap-3 text-[10px] font-mono">
-              <span className="text-slate-400">
-                O <span className="text-slate-300">{crosshairData.open.toFixed(2)}</span>
-              </span>
-              <span className="text-slate-400">
-                H <span className="text-green-400">{crosshairData.high.toFixed(2)}</span>
-              </span>
-              <span className="text-slate-400">
-                L <span className="text-red-400">{crosshairData.low.toFixed(2)}</span>
-              </span>
-              <span className="text-slate-400">
-                C <span className={crosshairData.close >= crosshairData.open ? 'text-green-400' : 'text-red-400'}>{crosshairData.close.toFixed(2)}</span>
-              </span>
-              <span className="text-slate-400">
-                Vol <span className="text-slate-300">{crosshairData.volume >= 1000000 ? (crosshairData.volume / 1000000).toFixed(2) + 'M' : crosshairData.volume >= 1000 ? (crosshairData.volume / 1000).toFixed(1) + 'K' : crosshairData.volume.toFixed(0)}</span>
-              </span>
-            </div>
-          ) : (
-            <div className="text-[10px] font-mono text-slate-400">
-              {priceStr} {isUp ? '+' : ''}{chgPct}%
-            </div>
-          )}
+          {/* UX-37: the crosshair OHLCV readout used to live here — inside a row
+              every page suppresses. It now renders in the always-present legend
+              below, so it must NOT be duplicated here. */}
+          <div className="text-[10px] font-mono text-slate-400">
+            {priceStr} {isUp ? '+' : ''}{chgPct}%
+          </div>
         </div>
       </div>
       )}
 
       {/* ── Enhanced legend with price / change / volume ── */}
       <div className={`absolute ${showBuiltinTimeframes ? 'top-[52px]' : 'top-2'} left-3 right-3 z-10 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs bg-slate-950/80 backdrop-blur-sm px-3 py-2 rounded-lg border border-slate-800/50 max-h-[min(40vh,220px)] overflow-y-auto`}>
-        {/* Live price summary */}
-        <span className={`text-sm font-mono font-bold mr-1 ${isUp ? 'text-green-400' : 'text-red-400'}`}>
-          {isUp ? '▲' : '▼'} {priceStr}
-        </span>
-        <span className={`text-xs font-mono ${isUp ? 'text-green-400/80' : 'text-red-400/80'}`}>
-          {isUp ? '+' : ''}{chgPct}%
-        </span>
-        {volStr && (
-          <span className="text-xs font-mono text-slate-400 border-l border-slate-700 pl-2">
-            Vol {volStr}
+        {/* UX-37: hovering a bar swaps the last-bar summary for that bar's
+            OHLCV — the interaction the on-page guide promises ("Hover crosshair
+            shows OHLCV at any bar"). The hook has always computed this on every
+            crosshair move; the readout was just rendered inside the built-in
+            timeframe row, which all three chart pages suppress, so it was
+            unreachable in the product. Mouse-out clears crosshairData and the
+            summary returns. Deliberately not aria-live — announcing every mouse
+            move is an AT anti-pattern. */}
+        {crosshairData ? (
+          <span className="flex items-center gap-3 text-xs font-mono">
+            <span className="text-slate-400">
+              O <span className="text-slate-300">{crosshairData.open.toFixed(2)}</span>
+            </span>
+            <span className="text-slate-400">
+              H <span className="text-green-400">{crosshairData.high.toFixed(2)}</span>
+            </span>
+            <span className="text-slate-400">
+              L <span className="text-red-400">{crosshairData.low.toFixed(2)}</span>
+            </span>
+            <span className="text-slate-400">
+              C <span className={crosshairData.close >= crosshairData.open ? 'text-green-400' : 'text-red-400'}>{crosshairData.close.toFixed(2)}</span>
+            </span>
+            <span className="text-slate-400">
+              Vol <span className="text-slate-300">{formatLegendVolume(crosshairData.volume)}</span>
+            </span>
           </span>
-        )}
-        {rangeStr && (
-          <span className="text-[10px] font-mono text-slate-400">
-            {rangeStr}
-          </span>
+        ) : (
+          <>
+            {/* Live price summary */}
+            <span className={`text-sm font-mono font-bold mr-1 ${isUp ? 'text-green-400' : 'text-red-400'}`}>
+              {isUp ? '▲' : '▼'} {priceStr}
+            </span>
+            <span className={`text-xs font-mono ${isUp ? 'text-green-400/80' : 'text-red-400/80'}`}>
+              {isUp ? '+' : ''}{chgPct}%
+            </span>
+            {volStr && (
+              <span className="text-xs font-mono text-slate-400 border-l border-slate-700 pl-2">
+                Vol {volStr}
+              </span>
+            )}
+            {rangeStr && (
+              <span className="text-[10px] font-mono text-slate-400">
+                {rangeStr}
+              </span>
+            )}
+          </>
         )}
         <span className="border-l border-slate-700 pl-2 flex items-center gap-1.5">
           {activeIndicators.map((d) => (
