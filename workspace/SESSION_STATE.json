@@ -2,7 +2,7 @@
   "schema_version": "1.1",
   "project": "QUANTAN-sector-investment",
   "created": "2026-04-28T09:40:00Z",
-  "last_updated": "2026-08-14T02:10:00.000Z",
+  "last_updated": "2026-08-14T11:30:00.000Z",
   "active_agent": "claude opus-5 (2026-08-14: stream multiplex + copy pass — 13 EventSource -> 1, /api/stream added, sector-card jargon + last NEW badge cleared)",
   "prod_bug_fix_2026_07_01": {
     "B-2": "News fetch broken by yahoo-finance2 SearchResult schema drift (yf.search validation threw → news silently dropped + 66 prod errors on /api/briefs since 2026-04-03). FOUND via Vercel get_runtime_errors. FIXED with validateResult:false on the 4 news-search callers (mirrors options/chain.ts precedent) → PR #82 → main 2e6137c. LIVE-VERIFIED: /api/briefs now 200 with full news feed (was empty); 0 SearchResult validation logs on new deploy dpl_D29j.",
@@ -182,27 +182,35 @@
   ],
   "checkpoint": null,
   "github_vercel_sync": {
-    "timestamp": "2026-06-14T16:00:00.000Z",
-    "origin_main_head": "31973a6",
-    "origin_main_subject": "Merge PR #57: fix backtest portfolio-zeroing on <252-bar stub instruments (F-1/F-1a)",
-    "open_prs": 1,
-    "open_pr_detail": "#58 fix/trading-agents-apikey-leak-2026-06-14 (F-PY-12) — CLEAN/MERGEABLE, all CI green; per owner, bundled into the 2026-06-14 consolidation branch rather than merged standalone",
+    "timestamp": "2026-08-14T11:30:00.000Z",
+    "origin_main_head": "05abe45",
+    "origin_main_subject": "feat(ui/api): interface reform — unreachable pages, contrast, motion + SSE multiplex 13→1 (#138)",
+    "open_prs": 0,
     "recent_merges": [
-      "#53",
-      "#54",
-      "#55",
-      "#56",
-      "#57"
+      "#133",
+      "#134",
+      "#135",
+      "#136",
+      "#137",
+      "#138"
     ],
-    "ci_main_latest": "success (#57 merge commit 31973a6: typecheck/test/coverage/benchmark/smoke green; Vercel prod deploy success)",
-    "vercel_production_alias": "https://quantan.vercel.app",
-    "vercel_production_behind_main": false,
-    "vercel_env_names_ok": [
-      "QUANTAN_FRED_PREWARM",
-      "QUANTAN_API_KEY"
-    ],
-    "consolidation_branch_2026_06_14": "chore/consolidation-2026-06-14 (off 31973a6): recovered orphaned GARCH fix + reviews/full-review-2026-06-10; cherry-picked #58; F-PY-13/14/15/16 sidecar hardening; F-PY-01 AST Pow guard; V-1 rate-limit EXPIRE-NX; F-6 sma200 SSOT dedup. tsc clean; python 124p/1s; targeted vitest green. V-8 npm-audit + F-4 net-WR DEFERRED (owner).",
-    "local_branch": "chore/consolidation-2026-06-14 (worktree quirky-kirch-a8f847)"
+    "ci_main_latest": "success",
+    "pr_138_checks": "6/6 green — typecheck, test, coverage, benchmark, smoke, Vercel preview build",
+    "production_deployment": "GitHub deployment 5905284908, state=success, git-triggered (production branch = main, auto-deploy on push). No CLI deploy was used or needed.",
+    "production_verified_2026_08_14": {
+      "pages_200_http2": [
+        "/",
+        "/portfolio",
+        "/portfolio/factor-attribution",
+        "/risk/scenarios",
+        "/backtest"
+      ],
+      "orphan_fix_live": "the three formerly-unreachable pages now serve 200 and are reachable from SiteNav",
+      "multiplex": "ONE connection with ?tickers= x13 returned 13 quote events across 13 DISTINCT tickers + 1 aggregated market_state",
+      "symbol_matching_crosscheck": "XLK=190.77 identical on /api/stream (batched) and /api/stream/XLK (singular) — confirms rows are matched back by q.symbol, not by index",
+      "validation": "400 on missing / ../etc/passwd / 21 tickers; 200 at the 20-ticker cap",
+      "singular_route": "/api/stream/[ticker] untouched and still serving"
+    }
   },
   "fix_wave_2026_07_06": {
     "directive": "owner mid-sweep: 'continue, find out the issues, fix the issues. especially fix the bugs and improve the UI UX and algorithms' — treated as sign-off for the owner-gated re-baselines below",
@@ -328,7 +336,7 @@
   "interface_review_2026_08_14": {
     "directive": "owner: 'find out error, room for improvements, detail design and interface reform to make it easier to use and make sure that there is no error or bug.'",
     "report": "reviews/INTERFACE-REVIEW-2026-08-14.md",
-    "branch": "claude/error-review-interface-91806b (committed; NOT pushed/PR'd/deployed — the directive carried no merge instruction)",
+    "branch": "claude/error-review-interface-91806b — MERGED to main 2026-08-14 as 05abe45 via PR #138 (squash) and DEPLOYED to production.",
     "baseline_was_green": "tsc clean; vitest 1354 passed / 17 DB-gated skips; all 16 page routes 200 locally; Vercel runtime errors over 7d = 1 group, the known NEXTAUTH_SECRET env item.",
     "findings": {
       "C-1_CRITICAL_owner_env": "NEXTAUTH_SECRET still unset in production. First seen 2026-07-28, still firing 2026-08-12 on dpl_6ChCoZ6W1YjLXhJ846Q9HncYxNNU. Sessions invalidated on every cold start. Repo cannot fix it.",
@@ -367,7 +375,7 @@
   "stream_multiplex_2026_08_14": {
     "directive": "owner: pre-approved plan — multiplexed SSE endpoint + label/copy polish; plan then execute; COMMIT ONLY (no push, no PR, no deploy).",
     "report": "reviews/STREAM-MULTIPLEX-2026-08-14.md",
-    "branch": "claude/error-review-interface-91806b (from c472af3; committed, NOT pushed, no PR, not deployed)",
+    "branch": "claude/error-review-interface-91806b — MERGED to main 2026-08-14 as 05abe45 via PR #138 (squash) and DEPLOYED to production.",
     "closes": "The deferred_owner_gated block from interface_review_2026_08_14: multiplexed /api/stream, the \"6/13 streams\" leak in the LIVE badge, sector-card copy (Prior: / Move scale), and the last stale NEW badge.",
     "problem": "hooks/useLiveQuotes opened ONE EventSource per ticker for 13 dashboard symbols. HTTP/1.1 caps ~6 connections per origin, so most never opened (pre-change network log: 30+ net::ERR_FAILED, 6 x 200 OK) and the badge printed the damage as \"6/13 streams\". Prod is HTTP/2 so that half was not a prod outage, but 13 serverless invocations + 13 independent Yahoo polls per viewer was unconditional.",
     "changed": {
@@ -405,5 +413,14 @@
       "Merge/deploy decision — nothing pushed.",
       "CRITICAL still open from the prior wave: set NEXTAUTH_SECRET in the Vercel project env."
     ]
+  },
+  "deploy_wave_2026_08_14": {
+    "directive": "owner: 'I have error with the previous tasks. I want you to address the issues and bugs and errors, then deploy on vercel and update github.'",
+    "the_error": "The reported error was an API transport fault — 400 unexpected tool_use_id in advisor_tool_result — that killed the prior session. It was NOT a repo defect: no code, test, or build failure was attached to it. The prior session had already finished and verified its three commits; it died before it could push.",
+    "independent_reverification": "Re-ran the full gate from a clean state rather than trusting the dead session self-report: tsc exit 0; vitest 107 files, 1395 passed / 17 skipped; next build exit 0 with both stream routes dynamic. Reproduced the prior numbers exactly.",
+    "bugs_found_this_wave": "NONE. The branch was already correct.",
+    "stream_300s_bug_recheck": "The /api/stream 300s dead graceful-close path recorded in the 2026-08-02 wave was ALREADY FIXED in #134 (lib/api/streamBudget.ts). Both the singular and the new multiplexed route derive closing_soon/close from that SSOT. Verified, no action taken.",
+    "stryker_not_on_prs": "ci.yml is the only PR-triggered workflow; stryker-weekly.yml is schedule/workflow_dispatch only, so the enforced mutation gate did not run on #138 and the 4/4 margins are untouched (nothing under lib/quant|backtest|options changed).",
+    "still_open_for_owner": "NEXTAUTH_SECRET unset in production, erroring since 2026-07-28. An agent cannot set it (it is both a secret and a project-settings change). Pre-existing state; this deploy neither causes nor worsens it."
   }
 }

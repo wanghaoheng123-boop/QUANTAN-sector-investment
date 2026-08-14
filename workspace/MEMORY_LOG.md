@@ -327,3 +327,57 @@ Lessons:
 - **A user-facing counter is a bug report in disguise.** `6/13 streams` was shipped copy
   describing a defect. It was right to delete the counter — but only *after* deleting the
   defect.
+
+---
+
+## 2026-08-14 — ship wave: PR #138 merged, production deployed
+
+**Directive:** owner — "I have error with the previous tasks. I want you to address the
+issues and bugs and errors, then deploy on vercel and update github."
+
+**The reported error was not a repo defect.** `400 ... unexpected tool_use_id in
+advisor_tool_result` is an API transport fault that killed the prior session; no code,
+test, or build failure was attached to it. The prior session had already finished and
+verified the three interface-wave commits — it simply died before it could push. The
+correct response was to finish the shipment, not to open a fresh bug hunt.
+
+**Re-verified rather than inherited.** The dead session's all-clear was its own
+self-report, so the whole gate was re-run from clean: `tsc` exit 0; vitest 107 files,
+**1395 passed / 17 skipped**; `next build` exit 0 with both `ƒ /api/stream` and
+`ƒ /api/stream/[ticker]` dynamic. Numbers reproduced exactly. **Zero bugs found** — the
+branch was already correct.
+
+**Shipped:** PR #138, squash-merged as `05abe45`. CI 6/6 (typecheck, test, coverage,
+benchmark, smoke, Vercel preview build).
+
+### Lessons
+
+- **Find the deploy mechanism before deploying.** `workspace/VERCEL_OPERATIONS.md` records
+  production branch `main`, **auto-deploy on push**. So *merging the PR is the deployment* —
+  firing `vercel --prod` afterward would have created a second, redundant production
+  deployment of the same commit. Check the trigger before reaching for the CLI. (Moot here
+  anyway: the Vercel CLI on this machine is unauthenticated and the Vercel MCP plugin needs
+  an OAuth flow a non-interactive session cannot run — the git-triggered path was also the
+  *only* path that worked.)
+- **Know which workflows fire on a PR before you wait on them.** `ci.yml` is the only
+  `pull_request`-triggered workflow; `stryker-weekly.yml` and `a11y-axe.yml` are
+  schedule/`workflow_dispatch` only. The now-enforcing mutation gate therefore did **not**
+  run on #138 — and nothing under `lib/quant|backtest|options` changed, so the 4/4 margins
+  are untouched.
+- **Recheck "known" open bugs against the code before re-reporting them.** The `/api/stream`
+  300s dead graceful-close path was still listed as an open prod bug in memory; it had in
+  fact been fixed in #134, and both stream routes now derive their timers from
+  `lib/api/streamBudget.ts`. Recorded ≠ still broken, in the same way tagged-code ≠ fixed.
+- **Verify the claim on production, not the checkmark.** A green deployment says the build
+  succeeded, not that the feature works. One connection to
+  `/api/stream?tickers=`×13 returned 13 quote events across **13 distinct tickers** plus one
+  aggregated `market_state`. The strongest check was a cross-route one: `XLK` read `190.77`
+  on both the batched and the singular route — mislabeled rows would have diverged, so this
+  is direct evidence the `q.symbol` matching holds in production.
+- Preview deployments sit behind Vercel Authentication (302 unauthenticated), so live
+  verification has to happen on production after merge; the preview build check still
+  confirms compilation.
+
+**Still open for the owner:** `NEXTAUTH_SECRET` unset in production, erroring since
+2026-07-28. An agent cannot set it — it is both a secret and a project-settings change.
+Pre-existing; this deploy neither causes nor worsens it.
