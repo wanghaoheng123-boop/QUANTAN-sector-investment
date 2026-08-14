@@ -2,7 +2,7 @@
   "schema_version": "1.1",
   "project": "QUANTAN-sector-investment",
   "created": "2026-04-28T09:40:00Z",
-  "last_updated": "2026-08-14T11:30:00.000Z",
+  "last_updated": "2026-08-14T11:55:00.000Z",
   "active_agent": "claude opus-5 (2026-08-14: stream multiplex + copy pass — 13 EventSource -> 1, /api/stream added, sector-card jargon + last NEW badge cleared)",
   "prod_bug_fix_2026_07_01": {
     "B-2": "News fetch broken by yahoo-finance2 SearchResult schema drift (yf.search validation threw → news silently dropped + 66 prod errors on /api/briefs since 2026-04-03). FOUND via Vercel get_runtime_errors. FIXED with validateResult:false on the 4 news-search callers (mirrors options/chain.ts precedent) → PR #82 → main 2e6137c. LIVE-VERIFIED: /api/briefs now 200 with full news feed (was empty); 0 SearchResult validation logs on new deploy dpl_D29j.",
@@ -183,16 +183,16 @@
   "checkpoint": null,
   "github_vercel_sync": {
     "timestamp": "2026-08-14T11:30:00.000Z",
-    "origin_main_head": "05abe45",
-    "origin_main_subject": "feat(ui/api): interface reform — unreachable pages, contrast, motion + SSE multiplex 13→1 (#138)",
+    "origin_main_head": "02840ec",
+    "origin_main_subject": "fix(a11y): clear the 2 remaining axe violations + the sector-color SSOT drift behind one (#139)",
     "open_prs": 0,
     "recent_merges": [
-      "#133",
       "#134",
       "#135",
       "#136",
       "#137",
-      "#138"
+      "#138",
+      "#139"
     ],
     "ci_main_latest": "success",
     "pr_138_checks": "6/6 green — typecheck, test, coverage, benchmark, smoke, Vercel preview build",
@@ -210,7 +210,8 @@
       "symbol_matching_crosscheck": "XLK=190.77 identical on /api/stream (batched) and /api/stream/XLK (singular) — confirms rows are matched back by q.symbol, not by index",
       "validation": "400 on missing / ../etc/passwd / 21 tickers; 200 at the 20-ticker cap",
       "singular_route": "/api/stream/[ticker] untouched and still serving"
-    }
+    },
+    "a11y_gate_status": "ZERO violations on / and /backtest as of 2026-08-14 (run 31797781070). Gate remains ADVISORY (continue-on-error) — read the log, not the check."
   },
   "fix_wave_2026_07_06": {
     "directive": "owner mid-sweep: 'continue, find out the issues, fix the issues. especially fix the bugs and improve the UI UX and algorithms' — treated as sign-off for the owner-gated re-baselines below",
@@ -422,5 +423,19 @@
     "stream_300s_bug_recheck": "The /api/stream 300s dead graceful-close path recorded in the 2026-08-02 wave was ALREADY FIXED in #134 (lib/api/streamBudget.ts). Both the singular and the new multiplexed route derive closing_soon/close from that SSOT. Verified, no action taken.",
     "stryker_not_on_prs": "ci.yml is the only PR-triggered workflow; stryker-weekly.yml is schedule/workflow_dispatch only, so the enforced mutation gate did not run on #138 and the 4/4 margins are untouched (nothing under lib/quant|backtest|options changed).",
     "still_open_for_owner": "NEXTAUTH_SECRET unset in production, erroring since 2026-07-28. An agent cannot set it (it is both a secret and a project-settings change). Pre-existing state; this deploy neither causes nor worsens it."
+  },
+  "a11y_residuals_2026_08_14": {
+    "directive": "Same owner directive as deploy_wave_2026_08_14 — the advisor flagged that the contrast claim had been inherited, not verified, because a11y-axe.yml never runs on PRs.",
+    "discovery": "a11y-axe.yml is schedule/workflow_dispatch ONLY, so #138 shipped its headline contrast claim with the repo a11y gate never having run on it. Dispatching it on main measured the truth.",
+    "trajectory": "33 violations before #138 (0c25245: / had color-contrast x31; /backtest had color-contrast x1 + page-has-heading-one x1) -> 2 after #138 -> 0 after #139.",
+    "note_on_the_gate": "The workflow concludes SUCCESS even when axe exits 1 — continue-on-error: true is intentional and documented in the file header (ADVISORY). Read the job LOG, not the check mark; a green a11y check does not mean zero violations.",
+    "fixes": {
+      "contrast": "components/SignalCard.tsx renders the text-xs confidence figure in the sector color. Communication #8b5cf6 measured 4.05:1 over the composite card bg #0c1f18 (< 4.5 AA). Now #b57bff = 5.94:1 measured in-browser. Same defect class already fixed for industrials (#6366f1 -> #7c7ff5) and missed here.",
+      "heading_order": "#138 added the /backtest h1, clearing page-has-heading-one and immediately exposing an h1 -> h3 skip. Six panel headings h3 -> h2. A comment at the h1 warns against demoting them back for visual hierarchy.",
+      "ssot_drift": "app/api/briefs/route.ts had NEVER been migrated to lib/sectorColors, even though that SSOT docstring already names it as a consumer of SECTOR_COLORS_BY_SLUG. Four sectors had drifted (Materials #14b8a6 vs #84cc16, Utilities #22c55e vs #06b6d4, Consumer Staples #06b6d4 vs #34d399, Real Estate #f59e0b vs #a78bfa) and Real Estate had landed on Energy exact amber — two sectors rendering identically in the briefs list. Route now derives from the SSOT."
+    },
+    "guard_added": "__tests__/architecture/module-ssot.test.ts asserts the CONSUMERS, not the SSOT: both color consumers must import from lib/sectorColors and carry no assigned hex literal; the palette must contain no duplicate color; slug and name views must agree with lib/sectors.",
+    "verification": "tsc clean; vitest 1399 passed / 17 skipped (1395 + 4 new); next build 0; PR #139 CI 6/6; a11y-axe re-run on main = ZERO violations on both routes; production serves #b57bff with 0 occurrences of #8b5cf6.",
+    "shipped": "PR #139 squash-merged as 02840ec, production deployment 5905585596 success."
   }
 }

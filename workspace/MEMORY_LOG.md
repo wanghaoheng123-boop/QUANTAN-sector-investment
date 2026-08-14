@@ -381,3 +381,55 @@ benchmark, smoke, Vercel preview build).
 **Still open for the owner:** `NEXTAUTH_SECRET` unset in production, erroring since
 2026-07-28. An agent cannot set it — it is both a secret and a project-settings change.
 Pre-existing; this deploy neither causes nor worsens it.
+
+---
+
+## 2026-08-14 — a11y residuals: the claim the gate never checked (#139)
+
+#138 shipped with "contrast 136 → 0 failing text nodes" as its headline. The repo has a
+gate for exactly that claim — and it had never run on it: **`a11y-axe.yml` is
+`schedule`/`workflow_dispatch` only, not `pull_request`.** Dispatching it on `main`
+measured the truth.
+
+| | `/` | `/backtest` |
+|---|---|---|
+| before #138 | color-contrast ×31 | color-contrast ×1, page-has-heading-one ×1 |
+| after #138 | color-contrast ×1 | heading-order ×1 |
+| after #139 | **0** | **0** |
+
+So #138 was a large, real improvement (**33 → 2**) — and its "0" was still wrong. Both
+statements are true at once; that is the whole lesson.
+
+### Lessons
+
+- **A green a11y check does not mean zero violations.** The workflow sets
+  `continue-on-error: true` — intentional and documented in its header as ADVISORY — so the
+  job concludes **success** while the axe step exits 1. The violations live in the job
+  **log**. Read the log, not the check mark. (Distinct from the #137 Stryker case: there the
+  masking was removed; here it is a deliberate advisory posture.)
+- **Fixing one a11y rule can arm the next.** #138 added the `/backtest` `h1`, which cleared
+  `page-has-heading-one` and in the same move created an `h1 → h3` skip, because every panel
+  heading was `h3`. The violation count stayed at 1 and the *rule changed underneath it* —
+  worth checking rule names, not just totals.
+- **Heading level is structure; size comes from classes.** The panel headings look like small
+  uppercase labels, so the instinct is to demote them to `h3`. That instinct is what
+  reintroduces the skip; a comment at the `h1` now says so.
+- **Writing an SSOT does not make it true — assert the CONSUMERS.** `lib/sectorColors.ts` was
+  created in Phase 14 (R5-M-2) to end sector-color duplication, and its own docstring names
+  `app/api/briefs/route.ts` as a consumer of `SECTOR_COLORS_BY_SLUG`. Only the backtest page
+  was ever migrated. The briefs route kept its literals and kept drifting — four sectors
+  wrong by 2026-08-14, with **Real Estate on Energy's exact amber**, rendering two sectors
+  identically. This is [[inspection-2026-06-30]]'s "tagged-code ≠ fixed-effect" again, in a
+  new costume: the module existed, the docstring described the migration, the migration was
+  half-done. The new `__tests__/architecture/module-ssot.test.ts` block asserts consumers
+  carry no assigned hex literal and the palette holds no duplicate color.
+- **A changed color needs a neighbour check, not just a ratio check.** `#b57bff` passes at
+  5.94:1, but the violet band already held industrials `#7c7ff5` and real-estate `#a78bfa`.
+  Measuring perceptual distance (dE 19.0 / 14.9, vs the 11.3 those two already sit at) is
+  what made it a defensible pick rather than a guess.
+- **When the local tool is broken, measure the thing directly.** Local axe CLI could not run
+  (chromedriver 152 vs Chrome 151). Rather than skip verification, the actual rendered colors
+  were read out of the page on a `next start` build: `rgb(181,123,255)` on `rgb(12,31,24)` =
+  5.94:1, and a full sweep found 0 failures across 301 meaningful text nodes. Excluding
+  `aria-hidden` subtrees and punctuation-only nodes is required to match axe's own scoping —
+  a naive sweep reports ~23 false positives from `|` and `•` separators.
