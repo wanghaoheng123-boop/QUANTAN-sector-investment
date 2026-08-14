@@ -433,3 +433,65 @@ statements are true at once; that is the whole lesson.
   5.94:1, and a full sweep found 0 failures across 301 meaningful text nodes. Excluding
   `aria-hidden` subtrees and punctuation-only nodes is required to match axe's own scoping —
   a naive sweep reports ~23 false positives from `|` and `•` separators.
+
+---
+
+## 2026-08-14 — sync audit: GitHub ↔ Vercel, and the env-name bug it turned up
+
+Directive: "Continue with the remaining tasks to make sure all progress is in sync
+especially vercel and github."
+
+**Sync verdict: already in sync.** `origin/main` (`e421902`) and the latest Production
+deployment are the same commit; no open PRs; every local commit exists on a remote.
+
+### The audit trap worth remembering
+
+`git branch --no-merged main` lists ~30 branches on this repo and **nearly all of it is
+noise**: squash-merging makes a branch's original commits unreachable, so the branch is
+reported unmerged forever even though its content is in `main`. Same for
+`git rev-list --not --remotes`, which flagged 13 branches with "unpushed" commits dating to
+April.
+
+Verify by **content**, not by the commit graph:
+
+| branch | evidence it shipped |
+|---|---|
+| `fix/api-resilience` | `allSettled` ×4 in main's briefs route |
+| `refactor/signals-split` | `regimeSignal.ts` / `signalHelpers.ts` / `signalTypes.ts` all in main |
+| `refactor/klinechart-hook` | `hooks/useKLineChart.ts` in main |
+| `fix/ssot-dedup` | `calcMVRV` in main's `btc-indicators.ts` |
+| `fix/a11y-sweep`, `chore/cleanup-dead-files`, `fix/dead-ema-and-progress-audit` | merged PRs #32, #6, #7 |
+
+The four without PRs were bundled into a consolidation branch rather than merged standalone
+— consistent with the #58 note. **No unshipped work exists.** Don't re-audit this list.
+
+### Re-verifying blockers instead of repeating them
+
+All 5 ledger tasks are DONE; the 3 blockers are all owner-gated. Checking them against
+production rather than trusting the ledger:
+
+- **CSP is still report-only** (`content-security-policy-report-only` header) — the blocker
+  is still live.
+- **`/api/auth/providers` returns `{}`** — zero providers. So `GOOGLE_CLIENT_ID/SECRET` and
+  `GITHUB_CLIENT_ID/SECRET` are unset in production too, not just `NEXTAUTH_SECRET`. This is
+  a *gracefully handled* state, not an outage: auth is optional by design, the app works
+  signed-out, and the sign-in page renders a correct setup panel.
+
+### The bug that only surfaced by reading that panel
+
+The panel told the operator to set **`GITHUB_ID` / `GITHUB_SECRET`**, while `lib/auth.ts`
+gates on **`GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET`** — as does `.env.example`, which the
+same panel says to copy names from. An owner following that screen to clear
+BLOCKER-OWNER-ENV would have set two variables nothing reads, then watched "OAuth not
+configured" persist with no feedback pointing at the typo.
+
+**Lesson: instructions are untested code.** Prose naming an env var, a flag, or a path is
+load-bearing but nothing type-checks it; it drifts silently and the failure lands on the
+operator, not on CI. `__tests__/components/signinEnvNames.test.tsx` now reads all three
+sources and asserts they agree, and it strips comments first — a comment explaining the old
+name is not an instruction. Validated in both directions: 11/11 on the fix, and it fails on
+the original with "GITHUB_ID is shown to the operator but nothing reads it".
+
+Corollary to [[a11y-gate-quantan]]'s "read the log, not the check mark": a gracefully
+degraded state can hide a real defect precisely *because* the graceful handling looks
+intentional and reads as correct.
