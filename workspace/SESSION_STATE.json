@@ -2,8 +2,8 @@
   "schema_version": "1.1",
   "project": "QUANTAN-sector-investment",
   "created": "2026-04-28T09:40:00Z",
-  "last_updated": "2026-08-14T13:40:00.000Z",
-  "active_agent": "claude opus-5 (2026-08-14: stream multiplex + copy pass — 13 EventSource -> 1, /api/stream added, sector-card jargon + last NEW badge cleared)",
+  "last_updated": "2026-08-15T19:57:26.628Z",
+  "active_agent": "claude opus-5 (2026-08-16 MAP-REPAIR-2026-08-16: recorded Platform Excellence wave 1 (#142/#143) and the orchestration install, both of which had shipped without reaching SESSION_STATE. Branch claude/quantlab-orchestration-setup-8816ac IS NOW PUSHED with upstream set — an earlier version of this key claimed the push before it happened, which the red-team cold-boot pass caught; see blockers BLOCKER-OWNER-MERGE.)",
   "prod_bug_fix_2026_07_01": {
     "B-2": "News fetch broken by yahoo-finance2 SearchResult schema drift (yf.search validation threw → news silently dropped + 66 prod errors on /api/briefs since 2026-04-03). FOUND via Vercel get_runtime_errors. FIXED with validateResult:false on the 4 news-search callers (mirrors options/chain.ts precedent) → PR #82 → main 2e6137c. LIVE-VERIFIED: /api/briefs now 200 with full news feed (was empty); 0 SearchResult validation logs on new deploy dpl_D29j.",
     "method_note": "Empirical bug-finding via Vercel runtime-errors/logs is high-signal — surfaced a real 3-month-old LIVE issue the static inspection didn't (it was a caught-and-logged error, invisible to tsc/tests/benchmark). Consider a runtime-errors sweep as a standing step."
@@ -178,6 +178,24 @@
       "id": "DECISION-D7-DATA",
       "summary": "D7 recommendation: Sharadar Core US bundle ~$49 for ONE month to run the point-in-time re-benchmark (delisted-inclusive). See reviews/RETHINK-2026-07-11/D7-POINT-IN-TIME-UNIVERSE.md",
       "resolution": "Owner approves/declines the one-month data purchase; fetch-adapter is ~1 session once credentials exist."
+    },
+    {
+      "id": "BLOCKER-OWNER-MERGE",
+      "summary": "Branch claude/quantlab-orchestration-setup-8816ac is pushed with a PR open, and carries CLAUDE.md, the 17-agent roster, .quantlab/TRIAL_REGISTRY.jsonl and the MAP-REPAIR records. Merging IS the production deploy. Diff is docs/config only — no application code.",
+      "resolution": "OWNER DECISION. Making CLAUDE.md and the roster governing is not an agent call. Until merged, the constitution is branch-local and a cold session at the repo root will not see it.",
+      "opened": "2026-08-16"
+    },
+    {
+      "id": "BLOCKER-OWNER-Q087-SCOPE",
+      "summary": "Q-087 — does QUANTAN intend to support issuer-level credit and structural analysis at all? The five gate agents (accountant, forensic-auditor, actuary, underwriter, credit-analyst) default to refusal because the platform holds no disclosure layer.",
+      "resolution": "OWNER DECISION, needs no licence and no vendor confirmation. NOTE: this is NOT a request to make the gates produce grades — their refusal defaults are the safety property.",
+      "opened": "2026-08-16"
+    },
+    {
+      "id": "BLOCKER-OWNER-WAVE2-CADENCE",
+      "summary": "Platform Excellence wave-2 queue is staged on branch claude/platform-excellence-wave2 (62c7d50, pushed, 1 doc commit ahead of main). Its queue lives in reviews/PLATFORM-EXCELLENCE-2026-08-15/MASTER-PLAN.md and is NOT represented in IMPROVEMENT_BACKLOG.json — so it is a second work queue outside the SSOT.",
+      "resolution": "OWNER DECISION on cadence. Whichever way it goes, the queue should be folded into IMPROVEMENT_BACKLOG.json as Q-### rows or explicitly retired, per the CLAUDE.md one-home rule.",
+      "opened": "2026-08-16"
     }
   ],
   "checkpoint": null,
@@ -449,5 +467,52 @@
       "auth": "/api/auth/providers returns {} — ZERO providers configured. GOOGLE_CLIENT_ID/SECRET and GITHUB_CLIENT_ID/SECRET are unset in production in addition to NEXTAUTH_SECRET. This is a GRACEFULLY handled state, not an outage: auth is optional by design, the app works signed-out, and /auth/signin renders a correct setup panel."
     },
     "bug_found_and_fixed": "The /auth/signin setup panel instructed the operator to set GITHUB_ID / GITHUB_SECRET, while lib/auth.ts gates on GITHUB_CLIENT_ID / GITHUB_CLIENT_SECRET (as does .env.example). An owner following that screen to clear BLOCKER-OWNER-ENV would have set two variables nothing reads and seen OAuth not configured persist with no feedback. Fixed; __tests__/components/signinEnvNames.test.tsx now pins page text, lib/auth.ts and .env.example together (validated both ways: 11/11 on the fix, fails on the original with a clear message)."
+  },
+  "platform_excellence_2026_08_15": {
+    "directive": "owner: Platform Excellence program — R-J-E-A-V loop (Review, Judge, Execute, Adversarial, Verify) across algorithms, data/API and UX.",
+    "status": "WAVE 1 CLOSED and prod-verified. Shipped as PR #142 (2f72d49) and PR #143 (b0fc60f), both merged to main. Merging IS the deploy.",
+    "scope": "reviews/PLATFORM-EXCELLENCE-2026-08-15/TRIAGE.md marks TEN rows P0: AL-2, AL-4, DQ-1, DQ-7, DQ-8, UX-6, UX-7, UX-8, UX-26, UX-27. The commit subjects say nine (\"four verified P0s\" in #142, \"all five UX P0s\" in #143) because TRIAGE records DQ-7 as \"= AL-1/AL-2 corroborated independently by prod probe ... Single fix serves both reports\" — so ten P0 rows resolve to nine distinct fixes. Other finding IDs touched across both PRs, not all P0: UX-14, UX-22, UX-37, AL-5. Corrected 2026-08-16: an earlier version of this key sourced the count from the commit subjects rather than from TRIAGE.md, which is the primary source.",
+    "headline_fixes": [
+      "DQ-8 /api/search — the LAST unvalidated yf.search() call. yahoo-finance2 validates Yahoo SearchResult against its own schema, Yahoo drifted, search() THREW, and the route caught it and returned a well-formed {\"quotes\":[]} with HTTP 200. Indistinguishable from \"no match\" to both the UI and any status-code monitor. Free-text search resolved only exact tickers plus 7 hardcoded mega-cap hints. SAME FAILURE CLASS as the 3-month news outage (B-2, fixed 2026-07-01), in the one route that fix deliberately skipped.",
+      "UX-26 /briefs — an SSR self-fetch took the page down in production.",
+      "UX-8 chart legend — change % measured the CANDLE BODY (close-open)/open while the page header on the same screen measured session change vs previous close. Different magnitude every bar, OPPOSITE SIGN and colour on any gap day, on /stock, /sector and /crypto/btc. legendChangePct() extracted as a pure exported helper so the basis is testable.",
+      "UX-37 crosshair OHLCV readout was rendered inside a block gated on showBuiltinTimeframes, and all three call sites pass hideTimeframeSelector — so it was unreachable in the product while the hook computed crosshairData on every mouse move and discarded it. DashboardGuide promised the feature.",
+      "DQ-1 marketOpen was a one-way latch; now derived per symbol.",
+      "DQ-5 one changePct derivation for both dashboard surfaces.",
+      "AL-4/AL-5 the MA-deviation board called every deep dip a falling knife.",
+      "AL-2/DQ-7 \"Live data refreshes every 60s\" was true of nothing.",
+      "Honest data labeling — the three synthetic surfaces are labeled and the contradictory cost copy is un-contradicted. Directly serves design invariants I1/I2/I3."
+    ],
+    "artifacts": "reviews/PLATFORM-EXCELLENCE-2026-08-15/ — MASTER-PLAN.md, TRIAGE.md, algorithms-live.md, data-api.md, ux-interface.md (~180KB of expert reports).",
+    "diff_size": "38 files, +6414 / -584 across #142 + #143 (b3773b6..b0fc60f).",
+    "wave_2": "STAGED, NOT MERGED. Branch claude/platform-excellence-wave2 at 62c7d50 (\"wave 1 CLOSED — E3 live-verified in prod; wave-2 queue staged\"), one doc commit ahead of main. Cadence decision is OWNER-GATED.",
+    "recorded_retroactively": "This key was written 2026-08-16 during MAP-REPAIR-2026-08-16. The wave shipped 2026-08-15 but was never recorded in SESSION_STATE — the file sat at last_updated 2026-08-14 with no mention of 142, 143, or the program. Reconstructed from git history and reviews/, not from memory."
+  },
+  "orchestration_install_2026_08_16": {
+    "directive": "owner: install the QuantLab Claude Code orchestration package (constitution + agent roster + sprint loop), then extend it with accountant / auditor / actuary / underwriter / credit-grading roles as extra safety walls on asset risk and value.",
+    "status": "INSTALLED, COMMITTED AND PUSHED on branch claude/quantlab-orchestration-setup-8816ac. Install commits: 4a3baf7, d03ae18, e00b859, dc931c2. Plus record commits from MAP-REPAIR-2026-08-16 (af746a1 onward) — the branch carries more than the 4 install commits. NOT MERGED; merging is owner-gated.",
+    "what_landed": {
+      "CLAUDE.md": "NEW at repo root — none existed before. Claude Code auto-loads it, which makes it strictly stronger than the AGENT.md hook (convention only). Holds the boot sequence, the SSOT routing table, house style, deploy protocol, the RISK & VALUATION GATES section, and design invariants I1-I8.",
+      ".claude/agents/": "17 specialists. Routing: opus for coordinator, quant-validator, red-team, security-compliance, platform-architect, forensic-auditor, actuary, credit-analyst; sonnet for the other 9. LOADING EVIDENCE (2026-08-16): after restart, all 17 were listed as available agent types by the harness, and coordinator + red-team were both dispatched successfully in the MAP-REPAIR sprint. SCOPE OF THAT EVIDENCE: it is worktree-local — .claude/agents/ exists only on this branch, so the roster loads nowhere else until this merges to main.",
+      ".claude/commands/": "sprint.md (with a §4b publication gate) and handoff.md.",
+      ".quantlab/": "TRIAL_REGISTRY.jsonl (9 backfilled rows T-0001..T-0009, real verdicts, sourced), TRIAL_REGISTRY_SCHEMA.json, README.md explaining why no forked STATE/BACKLOG lives there.",
+      ".gitignore": "CRITICAL FIX. Line 60 was `.claude/`, which ignored the entire directory — the agent roster could NEVER have been committed and the whole install would have evaporated on merge. Narrowed to `.claude/*` with negations for agents/ and commands/ (git cannot re-include a path whose parent dir is excluded). worktrees/, settings.local.json and launch.json stay ignored."
+    },
+    "deliberate_deviation": "The package prescribes .quantlab/STATE.md, BACKLOG.yaml, RISK_REGISTER.md, DECISIONS.md and sessions/. QUANTAN already has all five live (workspace/SESSION_STATE.json, workspace/IMPROVEMENT_BACKLOG.json, reviews/findings-ledger.csv, workspace/MEMORY_LOG.md, reviews/). Installing them verbatim would have FORKED THE SSOT. The protocol was installed and pointed at the existing files instead. Rationale in .quantlab/README.md. Reversible — but migrate, do not duplicate.",
+    "five_gate_agents": "accountant, forensic-auditor, actuary, underwriter, credit-analyst — built as REFUSAL GATES, not analysts. Each has a required-inputs manifest; a missing input yields INSUFFICIENT DATA / NOT RATEABLE / CANNOT ASSESS / DECLINE, never a grade with a caveat attached (caveats get dropped when a figure is quoted onward). Calibrated to real data: accountant has genuine work (accruals, dilution, DuPont, DCF terminal-value dominance); forensic-auditor and credit-analyst default to refusal because the platform holds NO disclosure layer — no footnotes, segments, subsidiary lists, related-party transactions, covenants, debt schedules, credit spreads, ratings or actuarial data. Those defaults are the safety property, not unfinished work.",
+    "findings_during_install": [
+      "DSR IS implemented (lib/quant/deflatedSharpe.ts, Bailey & Lopez de Prado, Q-065-NEW/PR #97) but scripts/benchmark-signals.ts calls it with a HARDCODED nTrials of 10 and 100. Both are guesses. The backfilled registry accounts for ~45 configurations at minimum (1053 if the Loop-1 declared grid is the right denominator), so the published DSR under-corrects for multiplicity. -> Q-081.",
+      "PBO/CSCV is absent entirely from lib/ and scripts/. -> Q-085.",
+      "LOOP1_GRID declares 4x4x4x4x4 = 1024 combinations but the run reports totalCombinations=16 (13 valid) per instrument. LOOP2_GRID matches its own docstring exactly (288), so this is specific to Loop 1. Denominator differs by ~64x. -> Q-084.",
+      "The rotation experiment headline \"+71%\" (total return, K=10/H=40/deepest) has circulated without its comparison: buy-and-hold returned 93.8% over the same bars at a higher Sharpe (1.07 vs 0.903), and rotation beat BnH in only 1 OOS segment. Verdict on file is REJECTED. Now pinned with both numbers in TRIAL_REGISTRY T-0003.",
+      "runDcf netDebt defaults to 0 and the docstring says this silently inflates equity 10-200% for levered names. buildFundamentalsPayload DOES supply it when balanceSheetHistory is present. UNVERIFIED whether the fallback ever fires in the live 56-name universe or whether the UI flags it — that is the I2 question. -> Q-086. May be a no-op."
+    ],
+    "backlog_added": "Q-079 (audit I1-I8 tiers), Q-080 (PIT/bitemporal/survivorship), Q-081 (wire nTrials + auto-append), Q-082 (yahoo-finance2 licence), Q-083 (MAS/FAA, P0-legal), Q-084 (Loop-1 grid reconciliation), Q-085 (PBO/CSCV), Q-086 (netDebt fallback), Q-087 (data-gap scope decision). Backlog 78 -> 87 items; all pre-existing rows byte-identical.",
+    "invariant_tiers_are_unaudited": "IMPORTANT. The ENFORCED/PARTIAL/ASPIRATIONAL/UNVERIFIED tiers on I1-I8 in CLAUDE.md are an INITIAL ASSESSMENT inferred from repo state on 2026-08-15, NOT an audit. One was already found wrong mid-install (I5 originally claimed DSR was not computed). Assume the others may be off. Confirming them is Q-079.",
+    "owner_gates": [
+      "MERGING THIS BRANCH IS THE PRODUCTION DEPLOY. The diff is docs/config only (no application code), but making CLAUDE.md and the 17-agent roster governing is an owner decision.",
+      "Q-087 needs an owner scope decision: does QUANTAN intend to support issuer-level credit/structural analysis at all?"
+    ],
+    "durability_caveat": "Until this branch merges, CLAUDE.md, .claude/agents/, .quantlab/ and the repaired SESSION_STATE exist ONLY on this branch. The main worktree at the repo root is still at the pre-repair state (30 keys, no CLAUDE.md). The branch is pushed, so the work survives loss of this worktree — but a session booting at the repo root on main still will not see the constitution until merge."
   }
 }

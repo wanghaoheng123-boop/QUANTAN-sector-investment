@@ -495,3 +495,142 @@ the original with "GITHUB_ID is shown to the operator but nothing reads it".
 Corollary to [[a11y-gate-quantan]]'s "read the log, not the check mark": a gracefully
 degraded state can hide a real defect precisely *because* the graceful handling looks
 intentional and reads as correct.
+
+---
+
+## 2026-08-16 — MAP-REPAIR-2026-08-16: two shipped waves that never reached the map
+
+**Sprint type:** map repair (`/sprint` rule 3 — the map disagreed with reality).
+**Branch:** `claude/quantlab-orchestration-setup-8816ac`.
+
+### Why this was the package
+
+`SESSION_STATE.json` sat at `last_updated 2026-08-14T13:40Z` with 30 keys and **zero
+mentions** of `142`, `143`, `quantlab`, `orchestration`, or `CLAUDE.md`. `MEMORY_LOG.md`
+had no entries after 2026-08-14. Meanwhile two full waves had shipped.
+
+A cold session booting per `CLAUDE.md` would have concluded the last work was the 08-14
+stream multiplex, and would not have known that `CLAUDE.md` itself existed.
+
+The decisive argument was not "rule 3 says so". It was that **`Q-079`'s entire deliverable
+is editing `CLAUDE.md` — a file not on `main`.** Running any queued item first would write
+audit corrections into a file no other session can read, stacking a second unpushed wave on
+an already-unpushed branch. Map repair was a prerequisite, not a queue-jump.
+
+### What was unrecorded
+
+**1. Platform Excellence wave 1 (2026-08-15)** — PRs #142 (`2f72d49`) and #143 (`b0fc60f`),
+both merged and prod-verified. 9 P0s on the live decision path. 38 files, +6414/−584.
+~180KB of expert reports in `reviews/PLATFORM-EXCELLENCE-2026-08-15/`.
+
+The one worth re-reading: **DQ-8**. `/api/search` was the last unvalidated `yf.search()`
+call. Yahoo's schema drifted, `search()` threw, and the route's catch returned a
+well-formed `{"quotes":[]}` with **HTTP 200** — indistinguishable to both the UI and any
+status-code monitor from "no securities match". Free-text search resolved only exact
+tickers plus 7 hardcoded mega-cap hints. Same failure class as the 3-month news outage
+(B-2), in the one route that fix had deliberately skipped.
+
+**UX-8** is the other one to remember: the chart legend measured the *candle body*
+`(close−open)/open` while the header on the same screen measured session change vs previous
+close — different magnitude on every bar, **opposite sign and colour on any gap day**,
+across three pages.
+
+**2. The orchestration install (2026-08-15/16)** — 4 commits. `CLAUDE.md` (new; none
+existed), 17 agents, `/sprint` + `/handoff`, `.quantlab/TRIAL_REGISTRY.jsonl`.
+
+### The trap that would have voided the install
+
+`.gitignore:60` was `.claude/` — ignoring the entire directory. **The 12 agent files could
+never have been committed**; the install would have evaporated on merge with no error
+anywhere. Narrowed to `.claude/*` plus negations for `agents/` and `commands/`; git cannot
+re-include a path whose parent directory is excluded, so the trailing-slash form would have
+silently swallowed the negations.
+
+Generalisable: *an install whose artifacts are gitignored fails silently and looks
+successful locally.* Check `git check-ignore` before writing config, not after.
+
+### Findings that came out of the install
+
+- **The published Deflated Sharpe under-corrects.** `lib/quant/deflatedSharpe.ts` is real
+  and correctly cites Bailey & López de Prado — but `benchmark-signals.ts` calls it with a
+  **hardcoded** `nTrials` of 10 and 100. The backfilled trial registry accounts for ~45
+  configurations minimum (1053 if the Loop-1 declared grid is the denominator). → `Q-081`.
+- **PBO/CSCV is absent entirely.** → `Q-085`.
+- **The rotation "+71%" was circulating without its comparison.** Buy-and-hold returned
+  93.8% over the same bars at a higher Sharpe (1.07 vs 0.903); rotation beat BnH in 1 OOS
+  segment; verdict on file is REJECTED. Both numbers are now pinned in `TRIAL_REGISTRY`
+  T-0003. This is precisely why the registry exists.
+
+### On the five new gate agents
+
+`accountant`, `forensic-auditor`, `actuary`, `underwriter`, `credit-analyst` are **refusal
+gates, not analysts**. The platform holds annual statements plus summary ratios and *none*
+of the disclosure layer — no footnotes, segments, subsidiary lists, related-party
+transactions, covenants, debt schedules, credit spreads, ratings, or actuarial data.
+
+So `forensic-auditor` defaults to `CANNOT ASSESS`, `credit-analyst` to `NOT RATEABLE`.
+**Those defaults are the safety property, not unfinished work.** A future session must not
+"fix" them into producing grades — that is the decoration failure mode `CLAUDE.md` exists
+to prevent. `Q-087` is the scope decision, and it is explicitly *not* a request to make
+them grade.
+
+### Standing caution
+
+**The I1–I8 enforcement tiers in `CLAUDE.md` are inferred, not audited.** One was already
+wrong mid-install (I5 claimed DSR was not computed; it is). Assume others are off until
+`Q-079` runs.
+
+### Next action
+
+Owner decision on merging this branch — **merging IS the production deploy**, and it is
+what makes `CLAUDE.md` and the roster governing rather than local to one worktree.
+
+### Adversarial pass on the repair (same session)
+
+`red-team` ran a strict cold-boot simulation against `af746a1` and the map **passed its
+own stated test** — all five orientation questions answerable from the boot files alone.
+Then it found the test was the wrong test:
+
+> Every self-check validated the *content* of the map. Not one validated its
+> *reachability*. A map that is correct and unreachable scores 100% on that suite.
+
+Two one-line checks would have failed and neither was run:
+
+```bash
+git ls-remote --heads origin | grep quantlab          # empty
+ls "$(git rev-parse --show-toplevel)/CLAUDE.md"        # No such file
+```
+
+**The defect I introduced:** `active_agent` said *"pushed the orchestration branch"* when
+nothing was pushed — a false claim in the first key a cold session reads. Corrected, and
+the branch is now genuinely pushed with upstream set.
+
+Also corrected: the "9 P0s" figure was sourced from the commit subjects when
+`TRIAGE.md` was in-repo and authoritative (it marks **ten** P0 rows; nine distinct fixes
+because DQ-7 is recorded as AL-1/AL-2 corroborated, "single fix serves both"); the
+"VERIFIED LOADING" all-clear now records what was observed and that it is worktree-scoped;
+`blockers[]` now carries the three live owner gates instead of leaving them as prose in a
+wave key, since the boot sequence promises that array holds current blockers.
+
+**Lesson, generalisable:** *a records sprint can pass every integrity check and still fail,
+because integrity and reachability are different properties.* The natural check set for
+"did I write the file correctly" is blind to "can anyone else read it."
+
+### P0 found outside scope — filed, not fixed
+
+`Q-088` — **I3 violation.** `lib/mockData.ts` is production code (not under `__tests__/`)
+and `generateDarkPoolMarkers` is imported directly by `app/api/chart/[ticker]/route.ts`, a
+**chart route**; `generateDarkPoolPrints`/`getNewsForSector` reach `/stock` and `/sector`
+pages. `__SYNTHETIC__` appears **zero times repo-wide**.
+
+CLAUDE.md I3 verbatim: *"Any code path that could route synthetic data into a backtest, a
+chart, or a signal is a P0 defect. Add a runtime assertion, not just a comment."*
+
+The sharp edge: the 08-15 wave booked *"honest data labeling — the three synthetic surfaces
+are labeled"* as a headline win serving I1/I2/I3. **Labeling is not containment.** The
+labeling was real and valuable for I1/I2; it does not discharge I3, and Q-088 must not be
+closed by adding another label. Tagged code is not a fixed effect — again.
+
+This also makes the standing caution concrete: the I1–I8 tiers in CLAUDE.md are inferred.
+I3 was tiered PARTIAL on the strength of that labeling work. On this evidence it is closer
+to VIOLATED. `Q-079` should not be treated as bookkeeping.

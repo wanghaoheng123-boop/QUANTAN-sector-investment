@@ -1724,5 +1724,221 @@
     "notes_2026_07_22": "WAVE 3 (#129) + WAVE 4 (#131), both verified via LOCAL targeted Stryker (components-excluded config): quant-rest — constants 5.56->100 (dynamic-import-in-test re-runs the RFR env IIFE inside the coverage window; #123's static import could never reach those 13 no-cov mutants), frameworks 54.55->100, relativeStrength 64.67->91.02, riskFreeRate 62.35->89.41, intermarket 55->83.33, sectorRotation 69.07->78.35; yahooSymbol wrapped in `Stryker disable all` (ALL 26 mutants proven EQUIVALENT — normalizeTicker SSOT re-applies the identical transform downstream; that is why #123's yahoo pins killed nothing). quant-indicators — btc-indicators 39.34->73.07 (generateSignals/btcRegime/on-chain exact pins), technicals 47.79->84.56 (ma200Regime full zone-metadata + dipSignal templates). Validates on run 29930833563.",
     "notes_2026_08_02": "VERIFIED on the 07-22 + 07-26 pair: quant-rest 75.05 on BOTH runs and options 71.25/71.38 — both PASS and both stable. Q-078's acceptance criteria are met. quant-indicators also passes in both modes (86.83 dispatch / 74.29 schedule) thanks to the stable #131 btc-indicators (73.77) + technicals (85.29) pins, but see mutation_gate_verification_2026_07_26 in SESSION_STATE for the UNRESOLVED bimodal swing in indicators.ts/multiTimeframe.ts.",
     "notes_2026_08_02_VERIFIED": "CLOSED. Both acceptance criteria met and stable across two consecutive runs: quant-rest 75.14/75.14 and options 71.38/71.25. quant-indicators 86.83/86.83. All four shards >= 70 — first-ever 4/4 green; the workflow's continue-on-error escape hatch has been removed."
+  },
+  {
+    "id": "Q-079",
+    "title": "Audit design invariants I1-I8 and correct the enforcement tiers in CLAUDE.md",
+    "domain": "Quant/Research",
+    "priority": "P1",
+    "status": "pending",
+    "files": [
+      "CLAUDE.md"
+    ],
+    "acceptance_criteria": [
+      "Each of I1-I8 is marked ENFORCED / PARTIAL / ASPIRATIONAL / UNVERIFIED with at least one file:line of evidence",
+      "Any tier that the audit finds wrong is corrected in CLAUDE.md in the same PR",
+      "Findings that are not being fixed are logged as rows in reviews/findings-ledger.csv"
+    ],
+    "verify_commands": [
+      "npm run typecheck",
+      "npm run test"
+    ],
+    "notes_2026_08_15": "The tiers currently in CLAUDE.md are an INITIAL ASSESSMENT made while installing the orchestration package on 2026-08-15, inferred from repo state rather than audited. One was already found wrong during install: I5 originally said DSR was not computed, but lib/quant/deflatedSharpe.ts exists (Q-065-NEW, PR #97). Assume the others may be similarly off. Delegate per invariant to data-integrity / quant-validator / security-compliance / red-team."
+  },
+  {
+    "id": "Q-080",
+    "title": "Point-in-time correctness: bitemporal store, survivorship-free universe, permanent security IDs",
+    "domain": "Data/Infrastructure",
+    "priority": "P1",
+    "status": "pending",
+    "files": [
+      "lib/data/warehouse.ts",
+      "lib/data/providers/",
+      "lib/backtest/dataLoader.ts",
+      "scripts/optimize-grid.ts"
+    ],
+    "acceptance_criteria": [
+      "Research data carries both valid_time (when it was true) and knowledge_time (when we learned it)",
+      "Delisted and acquired securities are retained in the backtest universe",
+      "Securities are keyed by a permanent surrogate ID with a bitemporal ticker mapping, not by ticker",
+      "The survivorship inflation on the canonical benchmark is MEASURED and published, not just disclosed"
+    ],
+    "verify_commands": [
+      "npm run verify:integrity",
+      "npm run benchmark"
+    ],
+    "blocked_by": [
+      "Q-079"
+    ],
+    "notes_2026_08_15": "Covers design invariants I4 and I6, both ASPIRATIONAL today. The 56-instrument universe is a hard-coded list of TODAY's large-cap survivors — scripts/optimize-grid.ts documents this inline as affecting EVERY metric it reports. Until this lands, every historical win rate, return and Sharpe in the platform is inflated by an unmeasured amount. Large; expect to slice it. Measuring the inflation is the highest-value first slice and is independently shippable."
+  },
+  {
+    "id": "Q-081",
+    "title": "Wire Deflated Sharpe nTrials to the trial registry and auto-append experiment rows",
+    "domain": "Quant/Research",
+    "priority": "P1",
+    "status": "pending",
+    "files": [
+      "scripts/benchmark-signals.ts",
+      "lib/quant/deflatedSharpe.ts",
+      ".quantlab/TRIAL_REGISTRY.jsonl",
+      ".quantlab/TRIAL_REGISTRY_SCHEMA.json"
+    ],
+    "acceptance_criteria": [
+      "benchmark-signals.ts derives nTrials from .quantlab/TRIAL_REGISTRY.jsonl instead of the hardcoded 10 / 100",
+      "Every experiment:* and benchmark:* script appends a registry row on completion, including on failure or abandonment",
+      "The reported DSR states the trial count used and that it is a lower bound"
+    ],
+    "verify_commands": [
+      "npm run benchmark",
+      "npm run test"
+    ],
+    "notes_2026_08_15": "The registry was created 2026-08-15 with 9 backfilled rows (T-0001..T-0009). scripts/benchmark-signals.ts currently calls deflatedSharpe(netRets, 10) and (netRets, 100) — both are GUESSES. The backfill alone accounts for ~45 configurations at minimum, and over 1000 if the Loop-1 declared grid is the right denominator (see Q-084), so the published DSR is deflated against too small a number. Auto-append matters more than the wiring: a registry nobody appends to decays immediately, which is the tagged-code-is-not-a-fixed-effect lesson again."
+  },
+  {
+    "id": "Q-082",
+    "title": "Vendor licence review for yahoo-finance2 redistribution",
+    "domain": "Security/Compliance",
+    "priority": "P1",
+    "status": "pending",
+    "files": [
+      "lib/data/providers/"
+    ],
+    "acceptance_criteria": [
+      "The redistribution terms for every live feed are read and the finding is written down with a date and a link",
+      "Each user-facing surface that exposes vendor data is listed against whether the licence permits it",
+      "If any surface is not permitted, it is filed as a P0 with a remediation"
+    ],
+    "owner_role": "Owner (PM)",
+    "human_blocker": "Requires the owner to confirm which vendor plan/tier the deployment is actually on",
+    "notes_2026_08_15": "Design invariant I8, currently UNVERIFIED — the position has never been recorded anywhere in the repo. Market data licences almost universally prohibit redistribution, and the platform serves data to end users. This is a business-ending risk rather than a detail, which is why it is filed even though no code is broken."
+  },
+  {
+    "id": "Q-083",
+    "title": "MAS/FAA regulatory posture: research tooling vs regulated financial advice",
+    "domain": "Security/Compliance",
+    "priority": "P0",
+    "status": "pending",
+    "files": [
+      "app/",
+      "components/"
+    ],
+    "acceptance_criteria": [
+      "Every user-facing output that could read as a personal recommendation is enumerated with its exact copy",
+      "A written position states where the product sits relative to the FAA/SFA licensing line",
+      "Disclaimers are present and reviewed on every such surface",
+      "A real legal opinion is obtained before any retail launch"
+    ],
+    "owner_role": "Owner (PM)",
+    "human_blocker": "Needs a qualified Singapore legal opinion — cannot be closed by an agent",
+    "notes_2026_08_15": "P0-legal. Research tooling and regulated financial advisory are a bright line in Singapore. The agent deliverable here is a precise inventory of what the product currently tells users and where that sits relative to the line — NOT a legal conclusion. Filed 2026-08-15 during the orchestration install; flagged as P0 because a retail tier would make it urgent and it has never been assessed."
+  },
+  {
+    "id": "Q-084",
+    "title": "Reconcile the Loop-1 grid size: 1024 declared vs 16 reported",
+    "domain": "Quant/Research",
+    "priority": "P2",
+    "status": "pending",
+    "files": [
+      "lib/optimize/parameterSets.ts",
+      "scripts/optimize-grid.ts",
+      "scripts/optimization-results-loop1.json"
+    ],
+    "acceptance_criteria": [
+      "The true number of configurations evaluated per instrument in the Loop-1 run is established",
+      "Trial row T-0001 in .quantlab/TRIAL_REGISTRY.jsonl is updated with the reconciled count and uncertain is set to false"
+    ],
+    "verify_commands": [
+      "npm run optimize:grid"
+    ],
+    "blocked_by": [],
+    "notes_2026_08_15": "LOOP1_GRID declares slopeThreshold(4) x buyWScoreThreshold(4) x sellWScoreThreshold(4) x confidenceThreshold(4) x atrStopMultiplier(4) = 1024 combinations, but the run output reports totalCombinations=16 (13 valid) per instrument. LOOP2_GRID by contrast matches its own docstring exactly (4x4x3x2x3=288), so this is specific to Loop 1. Until resolved, any multiplicity correction using T-0001 is provisional — the denominator differs by ~64x, which is not a rounding question."
+  },
+  {
+    "id": "Q-085",
+    "title": "Implement Probability of Backtest Overfitting (PBO) via CSCV",
+    "domain": "Quant/Research",
+    "priority": "P2",
+    "status": "pending",
+    "files": [
+      "lib/quant/"
+    ],
+    "acceptance_criteria": [
+      "CSCV-based PBO is implemented as a library function with a docstring citing Bailey, Borwein, Lopez de Prado & Zhu",
+      "Known-answer tests plus a degenerate-input test",
+      "PBO is reported alongside DSR wherever a strategy result is published, and PBO > 0.5 is treated as a rejection"
+    ],
+    "verify_commands": [
+      "npm run test",
+      "npm run benchmark"
+    ],
+    "blocked_by": [
+      "Q-081"
+    ],
+    "notes_2026_08_15": "Confirmed absent 2026-08-15: no pbo/cscv implementation anywhere in lib/ or scripts/. DSR exists (lib/quant/deflatedSharpe.ts) but is only half the multiplicity story — DSR deflates a Sharpe, PBO estimates the probability that the selected configuration is overfit relative to the alternatives. Blocked on Q-081 because both need an honest trial count to mean anything."
+  },
+  {
+    "id": "Q-086",
+    "title": "DCF netDebt fallback to 0: is the inflated equity value flagged to the user?",
+    "domain": "Quant/Research",
+    "priority": "P2",
+    "status": "pending",
+    "files": [
+      "lib/quant/dcf.ts",
+      "lib/quant/buildFundamentalsPayload.ts"
+    ],
+    "acceptance_criteria": [
+      "Establish whether any ticker in the live universe currently hits the netDebt=undefined fallback path",
+      "If it does, the DCF output for that ticker is visibly marked as assuming a debt-free capital structure, or is suppressed",
+      "A test covers the fallback path and asserts the flag/suppression, not just the arithmetic"
+    ],
+    "verify_commands": [
+      "npm run test",
+      "npm run typecheck"
+    ],
+    "notes_2026_08_16": "CANDIDATE FINDING, not a confirmed defect — filed for the accountant agent to own. lib/quant/dcf.ts documents that netDebt defaults to 0 and that this \"silently inflates\" equity value for levered companies (10-200% overstatement per its own docstring). buildFundamentalsPayload.ts DOES compute netDebt = ltd + std - cash whenever balanceSheetHistory is present, so the fallback only triggers when the balance-sheet module is unavailable for a ticker. UNVERIFIED: whether that ever happens in the live 56-name universe, and if so whether the UI marks the result. That is the I2 (fail-closed) question — a silently inflated per-share value rendering as if fully supported is exactly what I2 forbids. Establish the frequency BEFORE deciding on a fix; this may be a no-op."
+  },
+  {
+    "id": "Q-087",
+    "title": "Fundamental/credit data gap: 4 of 5 risk-valuation gates default to refusal",
+    "domain": "Data/Infrastructure",
+    "priority": "P2",
+    "status": "pending",
+    "files": [
+      "lib/data/providers/",
+      "lib/quant/buildFundamentalsPayload.ts"
+    ],
+    "acceptance_criteria": [
+      "Decide, as an owner-level scope question, whether QUANTAN intends to support issuer-level credit and structural analysis at all",
+      "If yes: identify a data source providing debt schedules, covenants, segment reporting and related-party disclosure, and record licence terms per Q-082",
+      "If no: record the decision so the gate agents stay as refusal walls by design rather than looking like unfinished work"
+    ],
+    "notes_2026_08_16": "Filed 2026-08-16 when the accountant/forensic-auditor/actuary/underwriter/credit-analyst roster was added. The platform holds annual income/balance/cashflow rows plus summary ratios from yahoo-finance2 and NOTHING of the disclosure layer — no footnotes, segments, subsidiary lists, related-party transactions, covenants, debt schedules, credit spreads, ratings, or actuarial data. Consequence: forensic-auditor defaults to CANNOT ASSESS, credit-analyst to NOT RATEABLE, actuary to INSUFFICIENT DATA for reserving. Those defaults are CORRECT and are the safety property the agents were added for — this item is NOT a request to make them produce grades. It is a decision about scope. Note that ingesting credit data would move the product closer to the FAA/SFA line, so Q-083 gates any user-visible use of it. DEPENDENCY NOTE: Q-082 (vendor licence) gates only the SOURCING criterion — you cannot licence-check a feed before the owner confirms the vendor plan. The first criterion, the scope decision on whether QUANTAN intends to support issuer-level credit analysis at all, needs no licence and is actionable now. blocked_by was removed so the coordinator does not skip the whole item behind an owner-gated dependency it only partly depends on."
+  },
+  {
+    "id": "Q-088",
+    "title": "I3 VIOLATION: synthetic dark-pool data reaches a chart API route, and __SYNTHETIC__ exists nowhere",
+    "domain": "Data/Infrastructure",
+    "priority": "P0",
+    "status": "pending",
+    "files": [
+      "lib/mockData.ts",
+      "app/api/chart/[ticker]/route.ts",
+      "app/stock/[ticker]/page.tsx",
+      "app/sector/[slug]/page.tsx",
+      "components/DarkPoolPanel.tsx"
+    ],
+    "acceptance_criteria": [
+      "No synthetic generator is importable from a route, page, or component that renders a chart, a signal, or a backtest",
+      "Any remaining permitted synthetic path is tagged __SYNTHETIC__ at the type level AND carries a runtime assertion at the boundary, not just a comment",
+      "A test fails if a synthetic value can reach a chart/signal/backtest path",
+      "The UI distinguishes synthetic dark-pool prints from real data at the point of display, or the surface is removed"
+    ],
+    "verify_commands": [
+      "npm run typecheck",
+      "npm run test"
+    ],
+    "notes_2026_08_16": "FOUND 2026-08-16 by the red-team cold-boot pass during MAP-REPAIR, OUTSIDE that sprint scope, and filed rather than fixed per /sprint step 3. VERIFIED INDEPENDENTLY: (1) grep for __SYNTHETIC__ across app components lib hooks scripts __tests__ tests returns ZERO hits repo-wide; (2) lib/mockData.ts is production code, NOT under __tests__/ or tests/; (3) it is imported by app/api/chart/[ticker]/route.ts (generateDarkPoolMarkers — a CHART ROUTE), app/stock/[ticker]/page.tsx and app/sector/[slug]/page.tsx (generateDarkPoolPrints, getNewsForSector). CLAUDE.md I3 states verbatim: \"Any code path that could route synthetic data into a backtest, a chart, or a signal is a P0 defect. Add a runtime assertion, not just a comment.\" So this is a P0 by the constitution's own definition. SHARP EDGE: the 2026-08-15 wave recorded \"honest data labeling — the three synthetic surfaces are labeled\" as a headline win serving I1/I2/I3. LABELING IS NOT CONTAINMENT — I3 asks for the path not to exist plus a type-level tag and a runtime assertion. Tagged code is not a fixed effect. Do NOT close this by adding a label. Note the labeling work was still genuinely valuable for I1/I2; it just does not discharge I3.",
+    "notes_2026_08_16b": "LIVE-PATH CONFIRMED (not dead code): generateDarkPoolMarkers is CALLED at app/api/chart/[ticker]/route.ts:111 and :236 — two executing call sites on the chart route, both fed real candle data and the ticker. Synthetic markers are therefore computed and returned alongside genuine OHLC on every chart request reaching either branch. This is not an unused import. The Phase 14 wave 29 comments at :112 and :237 show the call sites were ACTIVELY MAINTAINED (an \"as any\" cast was removed there) without the I3 question ever being raised — the code was improved while the invariant violation went unnoticed. That is why the fix must be a type-level __SYNTHETIC__ tag plus a runtime assertion at the boundary, not a comment and not a lint rule: a reviewer already looked straight at these lines and did not see it."
   }
 ]

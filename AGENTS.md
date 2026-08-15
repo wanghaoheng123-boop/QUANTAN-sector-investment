@@ -1,7 +1,14 @@
 # QUANTAN — Agent Context & Project Memory
 
 > **For any AI agent (Claude Code, Cursor, Windsurf, Copilot, etc.) picking up this project.**
-> Read this file first. It contains everything needed to continue development without re-analysing the codebase.
+> This file is the **project map and history** — stack, phase record, standing
+> notes. It contains everything needed to continue development without
+> re-analysing the codebase.
+>
+> The **constitution, boot sequence, and source-of-truth routing** live in
+> [`CLAUDE.md`](CLAUDE.md) at the repo root. Read that first; it points back
+> here. Where the two disagree about *process*, `CLAUDE.md` wins; this file
+> remains authoritative on *what was built and when*.
 
 ---
 

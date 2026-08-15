@@ -1,5 +1,14 @@
 # QUANTAN — Agent boot (single entry)
 
+> **SUPERSEDED by [`CLAUDE.md`](../CLAUDE.md)** (repo root), which holds the
+> canonical boot sequence and constitution. Two things below are known stale
+> and kept only for history:
+> - the **canonical tree** path — worktrees rotate; use the one you are in
+> - the **Expert roster** table — that is the legacy Cursor roster, replaced by
+>   the 17 specialists in [`.claude/agents/`](../.claude/agents/)
+>
+> The verify gate and production notes below are still accurate.
+
 Read this file first, then [`AGENT.md`](../AGENT.md) hook rules.
 
 ## Canonical tree
