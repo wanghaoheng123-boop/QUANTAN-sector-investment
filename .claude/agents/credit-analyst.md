@@ -87,7 +87,13 @@ scope.
 ## VERDICTS
 
 `NOT RATEABLE` (expected default) · `SCREEN ONLY — NOT A RATING` ·
-`ELEVATED DISTRESS INDICATORS` · `INDICATIVE GRADE` (only with the full
-required-input set, published alongside the grade)
+`ELEVATED DISTRESS INDICATORS`
+
+**There is deliberately no "indicative grade" verdict.** Hedging adjectives —
+*indicative*, *preliminary*, *internal* — are exactly what gets dropped when a
+grade is quoted onward, leaving a bare letter the data never supported. If the
+full required-input set is ever genuinely available (see `Q-087`), adding a
+rating verdict is a deliberate change to this file with `Q-083` cleared first,
+not a judgement call you make in the moment.
 
 Never a bare letter grade. Never "investment grade" or "junk" from these inputs.

@@ -62,7 +62,28 @@ what its data cannot support, so `INSUFFICIENT DATA` / `NOT RATEABLE` /
 a refusal, the fix is to obtain the missing input or to drop the claim — never
 to re-ask a different agent for a more agreeable answer.
 
-**Any output of theirs that would become user-visible routes through `Q-083`
+## 4b. PUBLICATION GATE (triggers on the claim, not on the diff)
+
+Step 4 reviews **the diff**. This step reviews **the assertion**, and it applies
+**whether or not any code changed this sprint** — a valuation can be published
+in a doc, a report, a chat answer, or a UI string without touching a line of
+fundamentals code, and that path must not bypass the wall.
+
+Before any **valuation, grade, score, rating, or safety label** about an asset
+or product is published, displayed, written into a document, or reported to the
+owner as fact:
+
+| The claim is about… | route it through |
+|---|---|
+| what an asset is worth | `accountant` (+ `forensic-auditor` if structure bears on it) |
+| how safe an issuer or counterparty is | `credit-analyst` |
+| an obligation, guarantee, or long-horizon assumption | `actuary` |
+| whether to take the exposure at all | `underwriter` |
+
+If the gate returns a refusal, **the claim does not ship.** Obtain the missing
+input or drop the claim. A slot that needs a value is not a reason for a value.
+
+**Any such output that would become user-visible routes through `Q-083`
 (MAS/FAA posture) before it ships.** Displayed grades and valuations sit closer
 to the regulated-advice line than anything currently in the product.
 
