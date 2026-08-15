@@ -206,6 +206,13 @@ it currently records a different constraint than a stock Pro plan. If a
 budgeting rule here conflicts with that key, the key wins — and say so rather
 than silently following either.
 
+**The lever is the frontmatter, not this prose.** What a specialist actually
+runs on is the `model:` field in `.claude/agents/<name>.md`. The roster is
+currently routed by fitness-for-task (Opus for adversarial/architecture/
+security, Sonnet for implementation), *not* by cost. To make the live model
+policy govern the roster, edit those fields — no amount of guidance here
+changes which model is dispatched.
+
 ---
 
 ## DEPLOY PROTOCOL
