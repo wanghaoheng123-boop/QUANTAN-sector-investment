@@ -634,3 +634,36 @@ closed by adding another label. Tagged code is not a fixed effect — again.
 This also makes the standing caution concrete: the I1–I8 tiers in CLAUDE.md are inferred.
 I3 was tiered PARTIAL on the strength of that labeling work. On this evidence it is closer
 to VIOLATED. `Q-079` should not be treated as bookkeeping.
+
+### Post-merge: two process errors worth keeping (2026-08-16)
+
+#144 merged clean — CI green on main (5/5), production root 200, `npm run check:smoke`
+20/20 including `/api/search`. `CLAUDE.md` and all 17 agents are on `main`; no local
+settings leaked past the `.gitignore` negations.
+
+Then two errors on the *follow-up* PR, neither reaching production:
+
+**1. A monitor reported "settled" on a PR whose CI never ran.** The exit condition was
+"all existing checks are non-pending" — satisfied while only the two Vercel checks had
+registered, because the CI workflow had not yet posted its own. So "all pass" meant "the
+two checks that happened to exist passed."
+
+This is the *exact* rule already written into `.claude/agents/sre-devops.md` — *"before
+reporting any check as passing, confirm it is enforcing rather than advisory"* — failed
+within hours of writing it. **Generalisation: an all-checks-passed predicate must assert
+the checks it EXPECTS are present, not just that whatever showed up is green.** Absence of
+a check is indistinguishable from a passing check under a naive predicate. The corrected
+monitor requires `count >= 5` AND the four named CI jobs present AND zero pending.
+
+**2. Branch cut from a pre-squash HEAD re-proposed 31 files.** `main` was squash-merged to
+`047ae57`; branching from the old branch tip left a merge-base of `b0fc60f` (pre-#144), so
+the PR re-proposed all of #144 on top of its one real change. Closed as #145, redone as
+#146 from `origin/main` — 1 file.
+
+This is the [[branch-audit-trap]] from 2026-08-14 seen from the *other* side: that audit
+was about squash residue making merged branches look unmerged; this is squash residue
+making a new branch carry work that is already on main. **After any squash merge, cut new
+branches from `origin/main`, never from the merged branch tip.**
+
+Both errors were caught by verification, not by review — which is the argument for keeping
+the verification step even when the change is "just records".
