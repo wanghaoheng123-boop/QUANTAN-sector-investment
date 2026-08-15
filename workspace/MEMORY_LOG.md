@@ -584,3 +584,53 @@ wrong mid-install (I5 claimed DSR was not computed; it is). Assume others are of
 
 Owner decision on merging this branch — **merging IS the production deploy**, and it is
 what makes `CLAUDE.md` and the roster governing rather than local to one worktree.
+
+### Adversarial pass on the repair (same session)
+
+`red-team` ran a strict cold-boot simulation against `af746a1` and the map **passed its
+own stated test** — all five orientation questions answerable from the boot files alone.
+Then it found the test was the wrong test:
+
+> Every self-check validated the *content* of the map. Not one validated its
+> *reachability*. A map that is correct and unreachable scores 100% on that suite.
+
+Two one-line checks would have failed and neither was run:
+
+```bash
+git ls-remote --heads origin | grep quantlab          # empty
+ls "$(git rev-parse --show-toplevel)/CLAUDE.md"        # No such file
+```
+
+**The defect I introduced:** `active_agent` said *"pushed the orchestration branch"* when
+nothing was pushed — a false claim in the first key a cold session reads. Corrected, and
+the branch is now genuinely pushed with upstream set.
+
+Also corrected: the "9 P0s" figure was sourced from the commit subjects when
+`TRIAGE.md` was in-repo and authoritative (it marks **ten** P0 rows; nine distinct fixes
+because DQ-7 is recorded as AL-1/AL-2 corroborated, "single fix serves both"); the
+"VERIFIED LOADING" all-clear now records what was observed and that it is worktree-scoped;
+`blockers[]` now carries the three live owner gates instead of leaving them as prose in a
+wave key, since the boot sequence promises that array holds current blockers.
+
+**Lesson, generalisable:** *a records sprint can pass every integrity check and still fail,
+because integrity and reachability are different properties.* The natural check set for
+"did I write the file correctly" is blind to "can anyone else read it."
+
+### P0 found outside scope — filed, not fixed
+
+`Q-088` — **I3 violation.** `lib/mockData.ts` is production code (not under `__tests__/`)
+and `generateDarkPoolMarkers` is imported directly by `app/api/chart/[ticker]/route.ts`, a
+**chart route**; `generateDarkPoolPrints`/`getNewsForSector` reach `/stock` and `/sector`
+pages. `__SYNTHETIC__` appears **zero times repo-wide**.
+
+CLAUDE.md I3 verbatim: *"Any code path that could route synthetic data into a backtest, a
+chart, or a signal is a P0 defect. Add a runtime assertion, not just a comment."*
+
+The sharp edge: the 08-15 wave booked *"honest data labeling — the three synthetic surfaces
+are labeled"* as a headline win serving I1/I2/I3. **Labeling is not containment.** The
+labeling was real and valuable for I1/I2; it does not discharge I3, and Q-088 must not be
+closed by adding another label. Tagged code is not a fixed effect — again.
+
+This also makes the standing caution concrete: the I1–I8 tiers in CLAUDE.md are inferred.
+I3 was tiered PARTIAL on the strength of that labeling work. On this evidence it is closer
+to VIOLATED. `Q-079` should not be treated as bookkeeping.

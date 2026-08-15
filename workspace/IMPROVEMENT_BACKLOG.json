@@ -1914,5 +1914,30 @@
       "If no: record the decision so the gate agents stay as refusal walls by design rather than looking like unfinished work"
     ],
     "notes_2026_08_16": "Filed 2026-08-16 when the accountant/forensic-auditor/actuary/underwriter/credit-analyst roster was added. The platform holds annual income/balance/cashflow rows plus summary ratios from yahoo-finance2 and NOTHING of the disclosure layer — no footnotes, segments, subsidiary lists, related-party transactions, covenants, debt schedules, credit spreads, ratings, or actuarial data. Consequence: forensic-auditor defaults to CANNOT ASSESS, credit-analyst to NOT RATEABLE, actuary to INSUFFICIENT DATA for reserving. Those defaults are CORRECT and are the safety property the agents were added for — this item is NOT a request to make them produce grades. It is a decision about scope. Note that ingesting credit data would move the product closer to the FAA/SFA line, so Q-083 gates any user-visible use of it. DEPENDENCY NOTE: Q-082 (vendor licence) gates only the SOURCING criterion — you cannot licence-check a feed before the owner confirms the vendor plan. The first criterion, the scope decision on whether QUANTAN intends to support issuer-level credit analysis at all, needs no licence and is actionable now. blocked_by was removed so the coordinator does not skip the whole item behind an owner-gated dependency it only partly depends on."
+  },
+  {
+    "id": "Q-088",
+    "title": "I3 VIOLATION: synthetic dark-pool data reaches a chart API route, and __SYNTHETIC__ exists nowhere",
+    "domain": "Data/Infrastructure",
+    "priority": "P0",
+    "status": "pending",
+    "files": [
+      "lib/mockData.ts",
+      "app/api/chart/[ticker]/route.ts",
+      "app/stock/[ticker]/page.tsx",
+      "app/sector/[slug]/page.tsx",
+      "components/DarkPoolPanel.tsx"
+    ],
+    "acceptance_criteria": [
+      "No synthetic generator is importable from a route, page, or component that renders a chart, a signal, or a backtest",
+      "Any remaining permitted synthetic path is tagged __SYNTHETIC__ at the type level AND carries a runtime assertion at the boundary, not just a comment",
+      "A test fails if a synthetic value can reach a chart/signal/backtest path",
+      "The UI distinguishes synthetic dark-pool prints from real data at the point of display, or the surface is removed"
+    ],
+    "verify_commands": [
+      "npm run typecheck",
+      "npm run test"
+    ],
+    "notes_2026_08_16": "FOUND 2026-08-16 by the red-team cold-boot pass during MAP-REPAIR, OUTSIDE that sprint scope, and filed rather than fixed per /sprint step 3. VERIFIED INDEPENDENTLY: (1) grep for __SYNTHETIC__ across app components lib hooks scripts __tests__ tests returns ZERO hits repo-wide; (2) lib/mockData.ts is production code, NOT under __tests__/ or tests/; (3) it is imported by app/api/chart/[ticker]/route.ts (generateDarkPoolMarkers — a CHART ROUTE), app/stock/[ticker]/page.tsx and app/sector/[slug]/page.tsx (generateDarkPoolPrints, getNewsForSector). CLAUDE.md I3 states verbatim: \"Any code path that could route synthetic data into a backtest, a chart, or a signal is a P0 defect. Add a runtime assertion, not just a comment.\" So this is a P0 by the constitution's own definition. SHARP EDGE: the 2026-08-15 wave recorded \"honest data labeling — the three synthetic surfaces are labeled\" as a headline win serving I1/I2/I3. LABELING IS NOT CONTAINMENT — I3 asks for the path not to exist plus a type-level tag and a runtime assertion. Tagged code is not a fixed effect. Do NOT close this by adding a label. Note the labeling work was still genuinely valuable for I1/I2; it just does not discharge I3."
   }
 ]
