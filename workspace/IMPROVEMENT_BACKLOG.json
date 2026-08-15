@@ -1797,7 +1797,7 @@
   },
   {
     "id": "Q-082",
-    "title": "Vendor licence review for yahoo-finance2 redistribution",
+    "title": "Vendor licence (I8): market data is consumed with NO licence or account at all",
     "domain": "Security/Compliance",
     "priority": "P1",
     "status": "pending",
@@ -1805,13 +1805,14 @@
       "lib/data/providers/"
     ],
     "acceptance_criteria": [
-      "The redistribution terms for every live feed are read and the finding is written down with a date and a link",
-      "Each user-facing surface that exposes vendor data is listed against whether the licence permits it",
-      "If any surface is not permitted, it is filed as a P0 with a remediation"
+      "Record the factual position: which endpoints are consumed, by which library, under what agreement (currently: none)",
+      "Enumerate every user-facing surface that displays vendor-derived data",
+      "Obtain a legal view on whether unlicensed consumption AND redistribution to end users is acceptable for the intended launch posture",
+      "If it is not, decide between a licensed vendor, a data-use restriction, or not launching that surface"
     ],
     "owner_role": "Owner (PM)",
-    "human_blocker": "Requires the owner to confirm which vendor plan/tier the deployment is actually on",
-    "notes_2026_08_15": "Design invariant I8, currently UNVERIFIED — the position has never been recorded anywhere in the repo. Market data licences almost universally prohibit redistribution, and the platform serves data to end users. This is a business-ending risk rather than a detail, which is why it is filed even though no code is broken."
+    "notes_2026_08_15": "Design invariant I8, currently UNVERIFIED — the position has never been recorded anywhere in the repo. Market data licences almost universally prohibit redistribution, and the platform serves data to end users. This is a business-ending risk rather than a detail, which is why it is filed even though no code is broken.",
+    "notes_2026_08_16_REFRAMED": "REFRAMED 2026-08-16. As originally filed this asked the owner to \"confirm which yahoo-finance2 plan/tier production is on\". That question is malformed and the answer is now established without them: THERE IS NO PLAN AND NO ACCOUNT. Verified — package.json depends on yahoo-finance2 ^3.13.2, and .env.example contains no Yahoo API key, token or credential of any kind. yahoo-finance2 is an unofficial community library consuming Yahoo Finance endpoints that are undocumented and unauthenticated; there is no commercial agreement between this project and Yahoo. CONSEQUENCE: the I8 position is not \"we may be on the wrong tier\", it is \"there is no licence to be within the terms of\", which is a strictly worse starting point and RAISES the severity rather than lowering it. What an agent CANNOT do here is conclude whether that is acceptable — that is a legal question, it is not answerable from the repo, and it is tightly coupled to Q-083 (MAS/FAA) because both turn on what the product shows end users. Do not close this by reading Yahoo ToS and forming a view; route it with Q-083."
   },
   {
     "id": "Q-083",
@@ -1903,7 +1904,7 @@
     "title": "Fundamental/credit data gap: 4 of 5 risk-valuation gates default to refusal",
     "domain": "Data/Infrastructure",
     "priority": "P2",
-    "status": "pending",
+    "status": "deferred",
     "files": [
       "lib/data/providers/",
       "lib/quant/buildFundamentalsPayload.ts"
@@ -1913,7 +1914,8 @@
       "If yes: identify a data source providing debt schedules, covenants, segment reporting and related-party disclosure, and record licence terms per Q-082",
       "If no: record the decision so the gate agents stay as refusal walls by design rather than looking like unfinished work"
     ],
-    "notes_2026_08_16": "Filed 2026-08-16 when the accountant/forensic-auditor/actuary/underwriter/credit-analyst roster was added. The platform holds annual income/balance/cashflow rows plus summary ratios from yahoo-finance2 and NOTHING of the disclosure layer — no footnotes, segments, subsidiary lists, related-party transactions, covenants, debt schedules, credit spreads, ratings, or actuarial data. Consequence: forensic-auditor defaults to CANNOT ASSESS, credit-analyst to NOT RATEABLE, actuary to INSUFFICIENT DATA for reserving. Those defaults are CORRECT and are the safety property the agents were added for — this item is NOT a request to make them produce grades. It is a decision about scope. Note that ingesting credit data would move the product closer to the FAA/SFA line, so Q-083 gates any user-visible use of it. DEPENDENCY NOTE: Q-082 (vendor licence) gates only the SOURCING criterion — you cannot licence-check a feed before the owner confirms the vendor plan. The first criterion, the scope decision on whether QUANTAN intends to support issuer-level credit analysis at all, needs no licence and is actionable now. blocked_by was removed so the coordinator does not skip the whole item behind an owner-gated dependency it only partly depends on."
+    "notes_2026_08_16": "Filed 2026-08-16 when the accountant/forensic-auditor/actuary/underwriter/credit-analyst roster was added. The platform holds annual income/balance/cashflow rows plus summary ratios from yahoo-finance2 and NOTHING of the disclosure layer — no footnotes, segments, subsidiary lists, related-party transactions, covenants, debt schedules, credit spreads, ratings, or actuarial data. Consequence: forensic-auditor defaults to CANNOT ASSESS, credit-analyst to NOT RATEABLE, actuary to INSUFFICIENT DATA for reserving. Those defaults are CORRECT and are the safety property the agents were added for — this item is NOT a request to make them produce grades. It is a decision about scope. Note that ingesting credit data would move the product closer to the FAA/SFA line, so Q-083 gates any user-visible use of it. DEPENDENCY NOTE: Q-082 (vendor licence) gates only the SOURCING criterion — you cannot licence-check a feed before the owner confirms the vendor plan. The first criterion, the scope decision on whether QUANTAN intends to support issuer-level credit analysis at all, needs no licence and is actionable now. blocked_by was removed so the coordinator does not skip the whole item behind an owner-gated dependency it only partly depends on.",
+    "notes_2026_08_16_DECISION": "DECISION 2026-08-16 (owner delegated the call): NO — do not ingest issuer-level credit or structural data now. Deferred, not cancelled; revisit only after Q-083 has a real legal answer. Reasoning: (1) Credit grades and issuer safety labels are the single closest thing this product could ship to the FAA/SFA regulated-advice line, and Q-083 is an OPEN P0 with no legal opinion yet — buying the data first would widen the exposure at exactly the point it is least understood. (2) Q-082 now shows the platform consumes its EXISTING market data with no licence at all; acquiring a second, more sensitive data class before resolving the first vendor position compounds an unresolved risk rather than adding capability. (3) The refusal defaults are not a gap to be closed — forensic-auditor returning CANNOT ASSESS and credit-analyst returning NOT RATEABLE is the platform correctly declining to grade what it cannot see, which is the PRIME DIRECTIVE working as designed. (4) Nothing currently in the product needs an issuer rating to function; no user-facing slot is blocked on this. REVISIT TRIGGER: a Q-083 legal opinion that clarifies what may be shown to users, OR a concrete product requirement that cannot be met without issuer-level data. If revisited, the sequence is legal opinion -> licensed source -> gate agents -> UI, never the reverse."
   },
   {
     "id": "Q-088",
