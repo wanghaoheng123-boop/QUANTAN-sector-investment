@@ -1724,5 +1724,157 @@
     "notes_2026_07_22": "WAVE 3 (#129) + WAVE 4 (#131), both verified via LOCAL targeted Stryker (components-excluded config): quant-rest — constants 5.56->100 (dynamic-import-in-test re-runs the RFR env IIFE inside the coverage window; #123's static import could never reach those 13 no-cov mutants), frameworks 54.55->100, relativeStrength 64.67->91.02, riskFreeRate 62.35->89.41, intermarket 55->83.33, sectorRotation 69.07->78.35; yahooSymbol wrapped in `Stryker disable all` (ALL 26 mutants proven EQUIVALENT — normalizeTicker SSOT re-applies the identical transform downstream; that is why #123's yahoo pins killed nothing). quant-indicators — btc-indicators 39.34->73.07 (generateSignals/btcRegime/on-chain exact pins), technicals 47.79->84.56 (ma200Regime full zone-metadata + dipSignal templates). Validates on run 29930833563.",
     "notes_2026_08_02": "VERIFIED on the 07-22 + 07-26 pair: quant-rest 75.05 on BOTH runs and options 71.25/71.38 — both PASS and both stable. Q-078's acceptance criteria are met. quant-indicators also passes in both modes (86.83 dispatch / 74.29 schedule) thanks to the stable #131 btc-indicators (73.77) + technicals (85.29) pins, but see mutation_gate_verification_2026_07_26 in SESSION_STATE for the UNRESOLVED bimodal swing in indicators.ts/multiTimeframe.ts.",
     "notes_2026_08_02_VERIFIED": "CLOSED. Both acceptance criteria met and stable across two consecutive runs: quant-rest 75.14/75.14 and options 71.38/71.25. quant-indicators 86.83/86.83. All four shards >= 70 — first-ever 4/4 green; the workflow's continue-on-error escape hatch has been removed."
+  },
+  {
+    "id": "Q-079",
+    "title": "Audit design invariants I1-I8 and correct the enforcement tiers in CLAUDE.md",
+    "domain": "Quant/Research",
+    "priority": "P1",
+    "status": "pending",
+    "files": [
+      "CLAUDE.md"
+    ],
+    "acceptance_criteria": [
+      "Each of I1-I8 is marked ENFORCED / PARTIAL / ASPIRATIONAL / UNVERIFIED with at least one file:line of evidence",
+      "Any tier that the audit finds wrong is corrected in CLAUDE.md in the same PR",
+      "Findings that are not being fixed are logged as rows in reviews/findings-ledger.csv"
+    ],
+    "verify_commands": [
+      "npm run typecheck",
+      "npm run test"
+    ],
+    "notes_2026_08_15": "The tiers currently in CLAUDE.md are an INITIAL ASSESSMENT made while installing the orchestration package on 2026-08-15, inferred from repo state rather than audited. One was already found wrong during install: I5 originally said DSR was not computed, but lib/quant/deflatedSharpe.ts exists (Q-065-NEW, PR #97). Assume the others may be similarly off. Delegate per invariant to data-integrity / quant-validator / security-compliance / red-team."
+  },
+  {
+    "id": "Q-080",
+    "title": "Point-in-time correctness: bitemporal store, survivorship-free universe, permanent security IDs",
+    "domain": "Data/Infrastructure",
+    "priority": "P1",
+    "status": "pending",
+    "files": [
+      "lib/data/warehouse.ts",
+      "lib/data/providers/",
+      "lib/backtest/dataLoader.ts",
+      "scripts/optimize-grid.ts"
+    ],
+    "acceptance_criteria": [
+      "Research data carries both valid_time (when it was true) and knowledge_time (when we learned it)",
+      "Delisted and acquired securities are retained in the backtest universe",
+      "Securities are keyed by a permanent surrogate ID with a bitemporal ticker mapping, not by ticker",
+      "The survivorship inflation on the canonical benchmark is MEASURED and published, not just disclosed"
+    ],
+    "verify_commands": [
+      "npm run verify:integrity",
+      "npm run benchmark"
+    ],
+    "blocked_by": [
+      "Q-079"
+    ],
+    "notes_2026_08_15": "Covers design invariants I4 and I6, both ASPIRATIONAL today. The 56-instrument universe is a hard-coded list of TODAY's large-cap survivors — scripts/optimize-grid.ts documents this inline as affecting EVERY metric it reports. Until this lands, every historical win rate, return and Sharpe in the platform is inflated by an unmeasured amount. Large; expect to slice it. Measuring the inflation is the highest-value first slice and is independently shippable."
+  },
+  {
+    "id": "Q-081",
+    "title": "Wire Deflated Sharpe nTrials to the trial registry and auto-append experiment rows",
+    "domain": "Quant/Research",
+    "priority": "P1",
+    "status": "pending",
+    "files": [
+      "scripts/benchmark-signals.ts",
+      "lib/quant/deflatedSharpe.ts",
+      ".quantlab/TRIAL_REGISTRY.jsonl",
+      ".quantlab/TRIAL_REGISTRY_SCHEMA.json"
+    ],
+    "acceptance_criteria": [
+      "benchmark-signals.ts derives nTrials from .quantlab/TRIAL_REGISTRY.jsonl instead of the hardcoded 10 / 100",
+      "Every experiment:* and benchmark:* script appends a registry row on completion, including on failure or abandonment",
+      "The reported DSR states the trial count used and that it is a lower bound"
+    ],
+    "verify_commands": [
+      "npm run benchmark",
+      "npm run test"
+    ],
+    "notes_2026_08_15": "The registry was created 2026-08-15 with 9 backfilled rows (T-0001..T-0009). scripts/benchmark-signals.ts currently calls deflatedSharpe(netRets, 10) and (netRets, 100) — both are GUESSES. The backfill alone accounts for ~45 configurations at minimum, and over 1000 if the Loop-1 declared grid is the right denominator (see Q-084), so the published DSR is deflated against too small a number. Auto-append matters more than the wiring: a registry nobody appends to decays immediately, which is the tagged-code-is-not-a-fixed-effect lesson again."
+  },
+  {
+    "id": "Q-082",
+    "title": "Vendor licence review for yahoo-finance2 redistribution",
+    "domain": "Security/Compliance",
+    "priority": "P1",
+    "status": "pending",
+    "files": [
+      "lib/data/providers/"
+    ],
+    "acceptance_criteria": [
+      "The redistribution terms for every live feed are read and the finding is written down with a date and a link",
+      "Each user-facing surface that exposes vendor data is listed against whether the licence permits it",
+      "If any surface is not permitted, it is filed as a P0 with a remediation"
+    ],
+    "owner_role": "Owner (PM)",
+    "human_blocker": "Requires the owner to confirm which vendor plan/tier the deployment is actually on",
+    "notes_2026_08_15": "Design invariant I8, currently UNVERIFIED — the position has never been recorded anywhere in the repo. Market data licences almost universally prohibit redistribution, and the platform serves data to end users. This is a business-ending risk rather than a detail, which is why it is filed even though no code is broken."
+  },
+  {
+    "id": "Q-083",
+    "title": "MAS/FAA regulatory posture: research tooling vs regulated financial advice",
+    "domain": "Security/Compliance",
+    "priority": "P0",
+    "status": "pending",
+    "files": [
+      "app/",
+      "components/"
+    ],
+    "acceptance_criteria": [
+      "Every user-facing output that could read as a personal recommendation is enumerated with its exact copy",
+      "A written position states where the product sits relative to the FAA/SFA licensing line",
+      "Disclaimers are present and reviewed on every such surface",
+      "A real legal opinion is obtained before any retail launch"
+    ],
+    "owner_role": "Owner (PM)",
+    "human_blocker": "Needs a qualified Singapore legal opinion — cannot be closed by an agent",
+    "notes_2026_08_15": "P0-legal. Research tooling and regulated financial advisory are a bright line in Singapore. The agent deliverable here is a precise inventory of what the product currently tells users and where that sits relative to the line — NOT a legal conclusion. Filed 2026-08-15 during the orchestration install; flagged as P0 because a retail tier would make it urgent and it has never been assessed."
+  },
+  {
+    "id": "Q-084",
+    "title": "Reconcile the Loop-1 grid size: 1024 declared vs 16 reported",
+    "domain": "Quant/Research",
+    "priority": "P2",
+    "status": "pending",
+    "files": [
+      "lib/optimize/parameterSets.ts",
+      "scripts/optimize-grid.ts",
+      "scripts/optimization-results-loop1.json"
+    ],
+    "acceptance_criteria": [
+      "The true number of configurations evaluated per instrument in the Loop-1 run is established",
+      "Trial row T-0001 in .quantlab/TRIAL_REGISTRY.jsonl is updated with the reconciled count and uncertain is set to false"
+    ],
+    "verify_commands": [
+      "npm run optimize:grid"
+    ],
+    "blocked_by": [],
+    "notes_2026_08_15": "LOOP1_GRID declares slopeThreshold(4) x buyWScoreThreshold(4) x sellWScoreThreshold(4) x confidenceThreshold(4) x atrStopMultiplier(4) = 1024 combinations, but the run output reports totalCombinations=16 (13 valid) per instrument. LOOP2_GRID by contrast matches its own docstring exactly (4x4x3x2x3=288), so this is specific to Loop 1. Until resolved, any multiplicity correction using T-0001 is provisional — the denominator differs by ~64x, which is not a rounding question."
+  },
+  {
+    "id": "Q-085",
+    "title": "Implement Probability of Backtest Overfitting (PBO) via CSCV",
+    "domain": "Quant/Research",
+    "priority": "P2",
+    "status": "pending",
+    "files": [
+      "lib/quant/"
+    ],
+    "acceptance_criteria": [
+      "CSCV-based PBO is implemented as a library function with a docstring citing Bailey, Borwein, Lopez de Prado & Zhu",
+      "Known-answer tests plus a degenerate-input test",
+      "PBO is reported alongside DSR wherever a strategy result is published, and PBO > 0.5 is treated as a rejection"
+    ],
+    "verify_commands": [
+      "npm run test",
+      "npm run benchmark"
+    ],
+    "blocked_by": [
+      "Q-081"
+    ],
+    "notes_2026_08_15": "Confirmed absent 2026-08-15: no pbo/cscv implementation anywhere in lib/ or scripts/. DSR exists (lib/quant/deflatedSharpe.ts) but is only half the multiplicity story — DSR deflates a Sharpe, PBO estimates the probability that the selected configuration is overfit relative to the alternatives. Blocked on Q-081 because both need an honest trial count to mean anything."
   }
 ]

@@ -57,7 +57,17 @@ __pycache__/
 *.db-journal
 
 # ─── Claude / Cursor agent artifacts ─────────────────────────────────────────
-.claude/
+# `.claude/agents/` and `.claude/commands/` ARE committed: they are shared,
+# reviewable config that every future session boots from, not artifacts. The
+# rest of `.claude/` stays ignored — `worktrees/` holds entire checked-out
+# trees, `settings.local.json` and `launch.json` are per-machine.
+#
+# The pattern must be `.claude/*`, NOT `.claude/`: git cannot re-include a path
+# whose parent directory is excluded, so a trailing-slash ignore would silently
+# swallow the negations below and the agent roster would never reach a commit.
+.claude/*
+!.claude/agents/
+!.claude/commands/
 .cursor/
 
 # ─── Phase 14 wave 30: parallel-worktree leak directory ──────────────────────

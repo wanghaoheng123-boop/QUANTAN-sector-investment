@@ -1,0 +1,56 @@
+{
+  "schema_version": "1.0",
+  "file": ".quantlab/TRIAL_REGISTRY.jsonl",
+  "format": "JSON Lines — one self-contained JSON object per line, append-only. Never rewrite or delete a row; supersede it with a new row and set the old row's verdict to SUPERSEDED.",
+  "purpose": "Records the TRUE number of configurations ever tried, so that Deflated Sharpe Ratio and Probability of Backtest Overfitting can be computed honestly. A registry that only contains successes makes deflation meaningless — failures and abandoned runs are the whole point.",
+
+  "required_fields": [
+    "trial_id",
+    "logged_at",
+    "run_timestamp",
+    "family",
+    "experiment",
+    "design",
+    "configs_tried",
+    "verdict",
+    "shipped",
+    "source"
+  ],
+
+  "field_notes": {
+    "trial_id": "T-####, monotonic, never reused.",
+    "logged_at": "YYYY-MM-DD the row was written (may be much later than the run for backfilled rows).",
+    "run_timestamp": "When the experiment actually ran.",
+    "backfilled": "true if reconstructed after the fact from an artifact rather than logged by the run itself. Backfilled rows are incomplete by construction.",
+    "family": "Grouping key for multiplicity. Trials in the same family are testing the same underlying hypothesis and their configs_tried should be SUMMED when deflating.",
+    "configs_tried": "Object, not a bare integer. { declared_grid: int, uncertain: bool, note: string }. If the true count is unknown, set uncertain=true and say why — an honest lower bound beats a confident wrong number.",
+    "selection_metric": "What was optimised or what the acceptance rule was. Pre-registered rules should be quoted verbatim.",
+    "headline": "Free-form object of the measured numbers. Prefer NET of costs; if gross, say so in the field name.",
+    "verdict": "One of the enum below. Never 'validated' — nothing is validated.",
+    "shipped": "Did this change production behaviour? Most rows should be false.",
+    "source": "Array of repo paths backing every number in the row. A row with no source is not evidence."
+  },
+
+  "verdict_values": [
+    "REJECTED",
+    "NOT PROVEN",
+    "PROVISIONALLY SUPPORTED",
+    "PASS",
+    "CONFIRMED",
+    "ADOPT",
+    "SUPERSEDED"
+  ],
+
+  "known_limitations": [
+    "BACKFILL IS INCOMPLETE. Rows T-0001..T-0009 were reconstructed on 2026-08-15 from workspace/optimization-runs/ and reviews/. Configurations tried informally, in abandoned sessions, or in ad-hoc scripts are NOT represented. The true trial count is strictly higher than what this file shows.",
+    "Therefore any Deflated Sharpe or PBO computed from this registry today is OPTIMISTIC — it under-corrects for multiplicity. State that caveat wherever such a number is reported.",
+    "Nothing appends to this file automatically yet. Until the experiment harness writes its own rows, the registry decays the moment someone forgets. Tracked as Q-081.",
+    "The universe is NOT survivorship-free (56 present-day large-cap survivors, hard-coded). Every win rate, return, and Sharpe in this file is inflated by an unmeasured amount. scripts/optimize-grid.ts documents this in-line."
+  ],
+
+  "usage": {
+    "before_reporting_any_result": "Sum configs_tried across every row in the same family, add the configurations tried in the current session, and deflate using that total.",
+    "on_every_experiment": "Append a row — including failures, including runs you abandoned halfway. This is enforced by .claude/commands/handoff.md step 5.",
+    "owner": ".claude/agents/quant-validator.md"
+  }
+}
