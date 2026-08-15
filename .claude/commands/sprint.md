@@ -50,6 +50,21 @@ validator:
 | news, sentiment, scraped or LLM-processed text | `disinformation-analyst` |
 | UI, charts, a11y | `frontend-engineer` |
 | CI, deploys, env plumbing | `sre-devops` |
+| financial statements, earnings quality, DCF or valuation inputs | `accountant` |
+| corporate structure, consolidation, manipulation risk, "is this figure real" | `forensic-auditor` |
+| long-horizon assumptions, holding periods, guarantees, small-sample credibility | `actuary` |
+| adding an instrument/strategy to the tradeable set, exposure limits | `underwriter` |
+| solvency, leverage, default risk, or ANY rating-like label or score | `credit-analyst` |
+
+**The last five are refusal gates.** They exist to stop the platform asserting
+what its data cannot support, so `INSUFFICIENT DATA` / `NOT RATEABLE` /
+`DECLINE` are successful outcomes, not failures to route around. If one returns
+a refusal, the fix is to obtain the missing input or to drop the claim — never
+to re-ask a different agent for a more agreeable answer.
+
+**Any output of theirs that would become user-visible routes through `Q-083`
+(MAS/FAA posture) before it ships.** Displayed grades and valuations sit closer
+to the regulated-advice line than anything currently in the product.
 
 Give them the diff and this instruction: *"Find the reason this is wrong.
 Assume it is broken. What input breaks it? What did the author not consider?"*

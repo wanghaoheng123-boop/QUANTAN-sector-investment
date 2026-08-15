@@ -142,6 +142,41 @@ down. See `Q-082`.
 
 ---
 
+## RISK & VALUATION GATES
+
+Five specialists sit between the platform and any claim about what an asset is
+worth or how safe it is: `accountant`, `forensic-auditor`, `actuary`,
+`underwriter`, `credit-analyst`.
+
+They are **refusal gates, not analysts.** Each has a required-inputs manifest,
+and when an input is missing the verdict is `INSUFFICIENT DATA` /
+`NOT RATEABLE` / `DECLINE` — never a grade with a caveat attached. Caveats get
+dropped when a figure is quoted onward; the refusal is the safety property.
+
+This follows directly from the PRIME DIRECTIVE. Refusing to grade what we cannot
+see *is* the product working.
+
+**Know what this platform actually holds.** Annual income, balance-sheet and
+cash-flow rows from yahoo-finance2, plus summary ratios. It holds **no**
+footnotes, segment data, subsidiary lists, related-party disclosures, covenants,
+debt schedules, credit spreads, ratings, or insurance/actuarial data. So:
+
+- `accountant` can do real accrual, dilution and DCF-assumption work
+- `forensic-auditor` defaults to `CANNOT ASSESS — STRUCTURE NOT VISIBLE`
+- `actuary` defaults to `INSUFFICIENT DATA` for reserving, but its method
+  (credibility, censoring, assumption governance) applies to existing problems
+- `credit-analyst` defaults to `NOT RATEABLE` and may emit screens, never ratings
+- `underwriter` may decline, and declining is a successful outcome
+
+A slot in the UI that needs a value is not a reason to produce one.
+
+**Regulatory boundary:** these agents review *the platform's own logic*. Any
+output that would become user-visible as a grade or valuation routes through
+`Q-083` (MAS/FAA) before shipping — that is the surface closest to the
+regulated-advice line.
+
+---
+
 ## HOUSE STYLE
 
 - Strong typing everywhere. Runtime validation at every I/O boundary (zod).

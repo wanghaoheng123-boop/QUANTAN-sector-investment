@@ -1876,5 +1876,46 @@
       "Q-081"
     ],
     "notes_2026_08_15": "Confirmed absent 2026-08-15: no pbo/cscv implementation anywhere in lib/ or scripts/. DSR exists (lib/quant/deflatedSharpe.ts) but is only half the multiplicity story — DSR deflates a Sharpe, PBO estimates the probability that the selected configuration is overfit relative to the alternatives. Blocked on Q-081 because both need an honest trial count to mean anything."
+  },
+  {
+    "id": "Q-086",
+    "title": "DCF netDebt fallback to 0: is the inflated equity value flagged to the user?",
+    "domain": "Quant/Research",
+    "priority": "P2",
+    "status": "pending",
+    "files": [
+      "lib/quant/dcf.ts",
+      "lib/quant/buildFundamentalsPayload.ts"
+    ],
+    "acceptance_criteria": [
+      "Establish whether any ticker in the live universe currently hits the netDebt=undefined fallback path",
+      "If it does, the DCF output for that ticker is visibly marked as assuming a debt-free capital structure, or is suppressed",
+      "A test covers the fallback path and asserts the flag/suppression, not just the arithmetic"
+    ],
+    "verify_commands": [
+      "npm run test",
+      "npm run typecheck"
+    ],
+    "notes_2026_08_16": "CANDIDATE FINDING, not a confirmed defect — filed for the accountant agent to own. lib/quant/dcf.ts documents that netDebt defaults to 0 and that this \"silently inflates\" equity value for levered companies (10-200% overstatement per its own docstring). buildFundamentalsPayload.ts DOES compute netDebt = ltd + std - cash whenever balanceSheetHistory is present, so the fallback only triggers when the balance-sheet module is unavailable for a ticker. UNVERIFIED: whether that ever happens in the live 56-name universe, and if so whether the UI marks the result. That is the I2 (fail-closed) question — a silently inflated per-share value rendering as if fully supported is exactly what I2 forbids. Establish the frequency BEFORE deciding on a fix; this may be a no-op."
+  },
+  {
+    "id": "Q-087",
+    "title": "Fundamental/credit data gap: 4 of 5 risk-valuation gates default to refusal",
+    "domain": "Data/Infrastructure",
+    "priority": "P2",
+    "status": "pending",
+    "files": [
+      "lib/data/providers/",
+      "lib/quant/buildFundamentalsPayload.ts"
+    ],
+    "acceptance_criteria": [
+      "Decide, as an owner-level scope question, whether QUANTAN intends to support issuer-level credit and structural analysis at all",
+      "If yes: identify a data source providing debt schedules, covenants, segment reporting and related-party disclosure, and record licence terms per Q-082",
+      "If no: record the decision so the gate agents stay as refusal walls by design rather than looking like unfinished work"
+    ],
+    "blocked_by": [
+      "Q-082"
+    ],
+    "notes_2026_08_16": "Filed 2026-08-16 when the accountant/forensic-auditor/actuary/underwriter/credit-analyst roster was added. The platform holds annual income/balance/cashflow rows plus summary ratios from yahoo-finance2 and NOTHING of the disclosure layer — no footnotes, segments, subsidiary lists, related-party transactions, covenants, debt schedules, credit spreads, ratings, or actuarial data. Consequence: forensic-auditor defaults to CANNOT ASSESS, credit-analyst to NOT RATEABLE, actuary to INSUFFICIENT DATA for reserving. Those defaults are CORRECT and are the safety property the agents were added for — this item is NOT a request to make them produce grades. It is a decision about scope. Note that ingesting credit data would move the product closer to the FAA/SFA line, so Q-083 gates any user-visible use of it."
   }
 ]

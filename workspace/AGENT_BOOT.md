@@ -5,7 +5,7 @@
 > and kept only for history:
 > - the **canonical tree** path — worktrees rotate; use the one you are in
 > - the **Expert roster** table — that is the legacy Cursor roster, replaced by
->   the 12 specialists in [`.claude/agents/`](../.claude/agents/)
+>   the 17 specialists in [`.claude/agents/`](../.claude/agents/)
 >
 > The verify gate and production notes below are still accurate.
 

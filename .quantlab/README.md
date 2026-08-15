@@ -60,5 +60,5 @@ forgets, which is why `.claude/commands/handoff.md` makes it a session-close ste
 ## Related installed pieces
 
 - `CLAUDE.md` — the constitution, boot sequence, and SSOT routing table
-- `.claude/agents/` — 12 specialists (`quant-validator` owns this registry)
+- `.claude/agents/` — 17 specialists (`quant-validator` owns this registry)
 - `.claude/commands/sprint.md` · `handoff.md` — the session loop
