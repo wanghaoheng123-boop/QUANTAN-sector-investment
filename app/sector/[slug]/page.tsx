@@ -9,7 +9,7 @@ import DarkPoolPanel from '@/components/DarkPoolPanel'
 import NewsFeed from '@/components/NewsFeed'
 import WatchlistButton from '@/components/WatchlistButton'
 import { SECTORS, getSectorBySlug } from '@/lib/sectors'
-import { generateDarkPoolPrints } from '@/lib/mockData'
+import { generateDarkPoolPrints, type Synthetic } from '@/lib/mockData'
 import { DarkPoolPrint } from '@/lib/sectors'
 import type { DarkPoolAnalysis } from '@/lib/darkpool'
 import { buildSingleSessionSignal } from '@/lib/sessionSignalsFromQuotes'
@@ -30,9 +30,6 @@ const KLineChart = dynamic(() => import('@/components/KLineChart'), { ssr: false
 interface Candle {
   time: string; open: number; high: number; low: number; close: number; volume: number;
 }
-interface DpMarker {
-  time: string; price: number; size: number; sentiment: 'BULLISH' | 'BEARISH';
-}
 
 const SECTOR_MAIN_TABS = [
   ['chart', 'Chart'],
@@ -46,7 +43,6 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
   if (!sector) notFound()
 
   const [candles, setCandles] = useState<Candle[]>([])
-  const [darkPoolMarkers, setDarkPoolMarkers] = useState<DpMarker[]>([])
   const [quote, setQuote] = useState<{
     price: number
     change: number
@@ -57,7 +53,7 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
     pe: number
     quoteTime?: string | null
   } | null>(null)
-  const [darkPoolPrints, setDarkPoolPrints] = useState<DarkPoolPrint[]>([])
+  const [darkPoolPrints, setDarkPoolPrints] = useState<Synthetic<DarkPoolPrint>[]>([])
   const [darkPoolApiData, setDarkPoolApiData] = useState<DarkPoolAnalysis | null>(null)
   const [darkPoolApiLoading, setDarkPoolApiLoading] = useState(false)
   const [activeTab, setActiveTab] = useState('chart')
@@ -87,12 +83,10 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
           const next = data.candles ?? []
           if (next.length === 0) {
             setCandles([])
-            setDarkPoolMarkers([])
-            setChartError('No historical data returned for this range')
+              setChartError('No historical data returned for this range')
             return
           }
           setCandles(next)
-          setDarkPoolMarkers(data.darkPoolMarkers ?? [])
         })
         .catch((err) => {
           if (signal?.aborted || (err instanceof DOMException && err.name === 'AbortError')) return
@@ -100,7 +94,6 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
           console.warn('[sector] chart fetch failed for', sector.etf, err)
           setChartError(msg)
           setCandles([])
-          setDarkPoolMarkers([])
         })
         .finally(() => {
           if (!signal?.aborted) setChartLoading(false)
@@ -493,7 +486,6 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
                   <ChartErrorBoundary label={sector.etf} fallbackHeight={480}>
                     <KLineChart
                       candles={candles}
-                      darkPoolMarkers={darkPoolMarkers}
                       color={sector.color}
                       ticker={sector.etf}
                       range={activeRange}

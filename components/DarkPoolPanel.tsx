@@ -2,12 +2,22 @@
 
 import { DarkPoolPrint } from '@/lib/sectors'
 import type { DarkPoolAnalysis } from '@/lib/darkpool'
+import { assertSyntheticAccepted, type Synthetic } from '@/lib/mockData'
 import { formatFreshness } from '@/lib/format'
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 interface DarkPoolPanelProps {
-  prints: DarkPoolPrint[]      // illustrative block prints (unchanged)
+  /**
+   * Illustrative block prints — SYNTHETIC (design invariant I3, Q-088).
+   *
+   * The type is branded, so this prop can only be fed by
+   * `generateDarkPoolPrints()`; real market data will not typecheck into it,
+   * and conversely this value cannot be passed to a chart or signal prop.
+   * There is no real per-print data source in the current stack — whether this
+   * surface should exist at all is a product decision tracked as Q-089.
+   */
+  prints: Synthetic<DarkPoolPrint>[]
   ticker: string
   color: string
   /** Real off-exchange analytics loaded from /api/darkpool/[ticker] */
@@ -40,6 +50,14 @@ export default function DarkPoolPanel({
   apiData,
   apiLoading = false,
 }: DarkPoolPanelProps) {
+  // Runtime half of the I3 guard. Types are erased at runtime, so this is what
+  // survives a JS-side rewire: this surface explicitly declares it accepts
+  // synthetic input, and the prints table/gauge below label it ILLUSTRATIVE.
+  // If this component is ever repurposed to render real data, flip the flag
+  // rather than deleting the call — a silent mix of real and synthetic prints
+  // in one table is the failure this exists to prevent.
+  assertSyntheticAccepted(true, 'DarkPoolPanel.prints')
+
   const { metrics, hasRealData, statusNote } = apiData ?? {
     metrics: {},
     hasRealData: false,
