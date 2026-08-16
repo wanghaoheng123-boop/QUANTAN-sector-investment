@@ -1,8 +1,8 @@
 /**
  * Architecture guard — design invariant I3 (synthetic data containment).
  *
- * Q-088. The first version of this guard was defeated by three mutations that
- * all reintroduced the original defect while it stayed green:
+ * Q-088. The FIRST version of this guard was defeated by three mutations that
+ * each reintroduced the original defect while it stayed green:
  *
  *   M1  dynamic import  — `await import('@/lib/mockData')`  (regex required `from`)
  *   M2b relative path   — `from '../../../../lib/mockData'` (regex required the @ alias)
@@ -13,13 +13,22 @@
  *
  * This version is an ALLOWLIST over every production directory: a file either
  * appears in SYNTHETIC_CONSUMERS or it must not reference the fixture module by
- * any specifier form. That is a property, not a pattern match, so it survives
- * import syntax the author never thought of.
+ * any specifier form. That is a property rather than a pattern match, so it
+ * survives import syntax the author never anticipated.
  *
- * KNOWN LIMIT, stated rather than papered over: an import guard cannot catch
- * fabricated content authored inline in a new file (M4). The heuristic in the
- * final block narrows that gap for the specific shape — article objects with
- * publisher/source and url literals — but it is a heuristic, not a proof.
+ * All five mutations are now caught (M1, M2b, M4, plus M5 restoring the
+ * inverted brand and M6 a type-level leak probe). M4 was NOT caught on the
+ * first retry, for an instructive reason: the fabrication heuristic was
+ * consulting SYNTHETIC_CONSUMERS, so planting fabricated content inside an
+ * allowlisted page was exempt. Those are two different rules — the allowlist
+ * governs who may IMPORT the fixture module, and must never excuse a file from
+ * fabricating content in place. The final block therefore scans EVERYTHING.
+ *
+ * RESIDUAL LIMIT, stated rather than papered over: the fabrication check is a
+ * shape heuristic (a long title literal plus a capitalised source/publisher
+ * literal in the same file). It is not a proof, and content that avoids that
+ * shape would pass. An import guard fundamentally cannot decide whether prose
+ * is true.
  */
 import { describe, it, expect } from 'vitest'
 import { readFileSync, readdirSync, statSync, existsSync } from 'fs'
@@ -173,6 +182,19 @@ describe('I3 — the brand is a wrapper, not an intersection', () => {
     expect(src).toMatch(/export\s+function\s+markSynthetic/)
     expect(src).toMatch(/export\s+function\s+unwrapSynthetic/)
     expect(src).toMatch(/export\s+function\s+assertNotSynthetic/)
+  })
+
+  it('nothing launders a plain value into the brand with a cast', () => {
+    // The wrapper makes honest construction impossible outside markSynthetic(),
+    // which makes a cast the natural bypass — `xs as unknown as Synthetic<T>`
+    // or `as never`. markSynthetic is the one sanctioned constructor, so no
+    // production file should be casting into the type at all.
+    const offenders = allFiles
+      .filter((f) => rel(f) !== 'lib/synthetic.ts')
+      .filter((f) => /as\s+(unknown\s+as\s+)?Synthetic\s*</.test(readCode(f)))
+      .map(rel)
+
+    expect(offenders).toEqual([])
   })
 
   it('the synthetic surface unwraps by inspecting the value, not a literal flag', () => {

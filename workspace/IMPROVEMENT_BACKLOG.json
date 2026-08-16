@@ -2028,5 +2028,87 @@
       "Record the finding either way, per CLAUDE.md I3/disinformation-analyst prompt-injection rules"
     ],
     "notes_2026_08_16": "Filed by the disinformation-analyst review of Q-088 as ADJACENT SURFACE, explicitly not a defect in that PR. The TradingAgents sidecar is the one LLM-integrated feature in the repo: a separate, pre-existing, opt-in proxy to an external self-hosted Python service that fetches its own data (data_vendor param). It is NOT wired to /api/news/ticker/[ticker] or /api/news/[sector], so Q-088's news text does not reach it. Worth a dedicated review because scraped/vendor text reaching a model is the platform's standing injection vector."
+  },
+  {
+    "id": "Q-093",
+    "title": "CLAUDE.md requires \"lint clean\" but no lint script or eslint config exists",
+    "domain": "DevOps/CI",
+    "priority": "P2",
+    "status": "pending",
+    "files": [
+      "package.json",
+      ".github/workflows/ci.yml"
+    ],
+    "acceptance_criteria": [
+      "Either a working `npm run lint` exists and passes, or the \"lint clean\" clause is removed from CLAUDE.md WHAT DONE MEANS",
+      "If lint is adopted, it runs in CI as an enforcing job (not continue-on-error)",
+      "The rule and the reality agree — whichever direction that is resolved"
+    ],
+    "verify_commands": [
+      "npm run lint"
+    ],
+    "notes_2026_08_16": "Found by the red-team review of Q-088 (finding Q088-11). CLAUDE.md WHAT DONE MEANS lists \"lint clean\" as a gate. There is no `lint` script in package.json and no eslint config; `npx next lint` drops into an interactive setup wizard. So that gate has NEVER been run, on any PR, by any agent — while every session has been reporting \"done\" against a definition that includes it. This is the instructions-are-untested-code lesson (#140) applied to the constitution itself: a rule nothing executes drifts silently and everyone believes it holds. Visible artefact in the Q-088 diff: app/sector/[slug]/page.tsx has a line indented 14 spaces inside a 12-space block, left by a deletion — exactly what a linter catches. RESOLVE IN EITHER DIRECTION, but resolve it: an unenforceable clause in the definition of done is worse than no clause, because it manufactures false confidence."
+  },
+  {
+    "id": "Q-094",
+    "title": "No runtime validation at the news fetch boundary (house style requires zod)",
+    "domain": "Frontend/UX",
+    "priority": "P3",
+    "status": "pending",
+    "files": [
+      "components/NewsFeed.tsx",
+      "app/api/news/ticker/[ticker]/route.ts",
+      "app/api/news/[sector]/route.ts"
+    ],
+    "acceptance_criteria": [
+      "The news payload is parsed with zod at the client boundary, not spread untyped into state",
+      "A malformed item is dropped or rendered as MISSING rather than producing an empty card",
+      "A test covers a 200 response carrying a malformed item"
+    ],
+    "verify_commands": [
+      "npm run typecheck",
+      "npm run test"
+    ],
+    "notes_2026_08_16": "Found by the red-team review of Q-088 (finding Q088-7). components/NewsFeed.tsx does `setNews(data.news ?? [])` with no parse, against the CLAUDE.md house rule \"Runtime validation at every I/O boundary (zod). Parse, don't validate.\" A 200 carrying {news:[{}]} renders a card with an empty headline, publisher \"Unknown\" and href=\"#\" beneath the Live badge. NOT a security hole — safeHref prevents scheme injection and React escapes the text — this is display fail-open. Low priority because the shape comes from our own route, which now fails closed on schema drift (Q088-5, fixed in PR #147); this is the remaining defence-in-depth layer."
+  },
+  {
+    "id": "Q-095",
+    "title": "findings-ledger.csv is corruption-prone: concurrent appends and 7 malformed rows",
+    "domain": "DevOps/CI",
+    "priority": "P2",
+    "status": "pending",
+    "files": [
+      "reviews/findings-ledger.csv"
+    ],
+    "acceptance_criteria": [
+      "Appends go through a script that validates column count and guarantees a trailing newline",
+      "The 7 pre-existing malformed rows are repaired or explicitly annotated as unparseable",
+      "A test (or CI step) fails when the ledger has a row whose column count differs from the header"
+    ],
+    "verify_commands": [
+      "npm run test"
+    ],
+    "notes_2026_08_16": "Found by the red-team review of Q-088 (finding Q088-12), and it hit during that very review. Two agents appended concurrently; one write left no trailing newline, so the next row glued onto the previous last field and produced a single 23-column row that SWALLOWED AN ENTIRE CRITICAL FINDING — invisible to any CSV reader. It was caught and repaired by hand, and the current file is verified (all 28 Q088-*/MR-* rows well-formed). Separately, a column-count audit shows 7 malformed rows at lines 42, 52, 57, 60, 61, 62, 113 that are PRE-EXISTING on origin/main, not caused by this work. CLAUDE.md calls this file \"the risk register\" and \"this IS the risk register\". A register that silently loses a CRITICAL row under normal multi-agent operation is not one. Consider append-only JSONL, which has no quoting/newline ambiguity, matching .quantlab/TRIAL_REGISTRY.jsonl."
+  },
+  {
+    "id": "Q-096",
+    "title": "KLineChart still accepts darkPoolMarkers/newsMarkers props with no guard",
+    "domain": "Frontend/UX",
+    "priority": "P3",
+    "status": "pending",
+    "files": [
+      "components/KLineChart.tsx",
+      "hooks/useKLineChart.ts",
+      "components/crypto/BtcChartPanel.tsx"
+    ],
+    "acceptance_criteria": [
+      "Either the marker props and their drawing code are removed, or they carry an assertNotSynthetic() guard at the prop boundary",
+      "If retained, a real data source is named for what they would plot"
+    ],
+    "verify_commands": [
+      "npm run typecheck",
+      "npm run test"
+    ],
+    "notes_2026_08_16": "Found by the red-team review of Q-088 (finding Q088-10). Nothing is broken today: Q-088 removed every producer, BtcChartPanel passes EMPTY_DARK_POOL_MARKERS, and KLineChart still accepts the props so no consumer breaks. But the rendering affordance is fully wired — hooks/useKLineChart.ts still draws both marker layers — so re-plotting fabricated markers is a one-line change. lib/synthetic.ts now exports assertNotSynthetic() precisely for boundaries like this. Low priority: the architecture allowlist already blocks the import path that fed them, and this is the belt-and-braces layer."
   }
 ]
