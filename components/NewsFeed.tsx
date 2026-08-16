@@ -75,6 +75,12 @@ export default function NewsFeed({ sector, ticker, color }: NewsFeedProps) {
     }
 
     let cancelled = false
+    // Clear before fetching: without this the previous ticker's headlines stay
+    // committed under the new ticker's header until the fetch resolves. Even if
+    // React usually flushes before paint, showing AAPL news under MSFT for any
+    // frame is an I1 provenance error, and the fix is one line (Q088-6).
+    setNews([])
+    setFetchedAt(null)
     setLoading(true)
     setApiError(false)
 

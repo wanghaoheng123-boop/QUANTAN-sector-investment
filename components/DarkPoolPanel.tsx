@@ -2,7 +2,7 @@
 
 import { DarkPoolPrint } from '@/lib/sectors'
 import type { DarkPoolAnalysis } from '@/lib/darkpool'
-import { assertSyntheticAccepted, type Synthetic } from '@/lib/mockData'
+import { unwrapSynthetic, type Synthetic } from '@/lib/synthetic'
 import { formatFreshness } from '@/lib/format'
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -17,7 +17,7 @@ interface DarkPoolPanelProps {
    * There is no real per-print data source in the current stack — whether this
    * surface should exist at all is a product decision tracked as Q-089.
    */
-  prints: Synthetic<DarkPoolPrint>[]
+  prints: Synthetic<DarkPoolPrint[]>
   ticker: string
   color: string
   /** Real off-exchange analytics loaded from /api/darkpool/[ticker] */
@@ -44,19 +44,17 @@ function fmtPct(n: number | null | undefined, decimals = 2): string {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function DarkPoolPanel({
-  prints,
+  prints: printsWrapped,
   ticker,
   color,
   apiData,
   apiLoading = false,
 }: DarkPoolPanelProps) {
-  // Runtime half of the I3 guard. Types are erased at runtime, so this is what
-  // survives a JS-side rewire: this surface explicitly declares it accepts
-  // synthetic input, and the prints table/gauge below label it ILLUSTRATIVE.
-  // If this component is ever repurposed to render real data, flip the flag
-  // rather than deleting the call — a silent mix of real and synthetic prints
-  // in one table is the failure this exists to prevent.
-  assertSyntheticAccepted(true, 'DarkPoolPanel.prints')
+  // Runtime half of the I3 guard. This INSPECTS THE VALUE rather than taking a
+  // caller-supplied boolean: if real data is ever rewired into this prop the
+  // __SYNTHETIC__ marker is absent and this throws, which a hardcoded
+  // `assert(true, …)` could never do.
+  const prints = unwrapSynthetic(printsWrapped, 'DarkPoolPanel.prints')
 
   const { metrics, hasRealData, statusNote } = apiData ?? {
     metrics: {},

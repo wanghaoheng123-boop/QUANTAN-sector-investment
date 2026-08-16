@@ -63,7 +63,14 @@ export async function GET(
           title: String(item.title ?? '').slice(0, 300),
           publisher: String(item.publisher ?? 'Unknown').slice(0, 100),
           link,
-          publishedAt: (item.publishedAt as string) || null,
+          // Yahoo's SearchNews carries providerPublishTime (a Date), NOT publishedAt.
+          // Reading the wrong key silently nulled every date, so the UI showed a
+          // 'Live' badge over undated headlines and the only timestamp on screen
+          // was our own fetch time — a three-year-old article looked identical to
+          // one ten minutes old (Q088-4).
+          publishedAt: item.providerPublishTime
+            ? new Date(item.providerPublishTime as string | number | Date).toISOString()
+            : null,
           snippet: item.summary ? String(item.summary).slice(0, 300) : null,
           ticker,
         }

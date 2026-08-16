@@ -9,7 +9,8 @@ import DarkPoolPanel from '@/components/DarkPoolPanel'
 import NewsFeed from '@/components/NewsFeed'
 import WatchlistButton from '@/components/WatchlistButton'
 import { SECTORS, getSectorBySlug } from '@/lib/sectors'
-import { generateDarkPoolPrints, type Synthetic } from '@/lib/mockData'
+import { generateDarkPoolPrints } from '@/lib/mockData'
+import { markSynthetic, unwrapSynthetic, type Synthetic } from '@/lib/synthetic'
 import { DarkPoolPrint } from '@/lib/sectors'
 import type { DarkPoolAnalysis } from '@/lib/darkpool'
 import { buildSingleSessionSignal } from '@/lib/sessionSignalsFromQuotes'
@@ -53,7 +54,13 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
     pe: number
     quoteTime?: string | null
   } | null>(null)
-  const [darkPoolPrints, setDarkPoolPrints] = useState<Synthetic<DarkPoolPrint>[]>([])
+  const [darkPoolPrints, setDarkPoolPrints] = useState<Synthetic<DarkPoolPrint[]>>(() => markSynthetic([]))
+
+  // The aggregate tiles below read the synthetic prints directly, so they
+  // unwrap explicitly and name themselves. Q-089 tracks whether this
+  // surface should exist; while it does, the tiles carry NO disclosure
+  // today (unlike the table and gauge) — see that ticket.
+  const darkPoolPrintRows = unwrapSynthetic(darkPoolPrints, 'SectorPage.darkPoolAggregateTiles')
   const [darkPoolApiData, setDarkPoolApiData] = useState<DarkPoolAnalysis | null>(null)
   const [darkPoolApiLoading, setDarkPoolApiLoading] = useState(false)
   const [activeTab, setActiveTab] = useState('chart')
@@ -545,21 +552,21 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
             )}
 
             {/* Dark Pool Summary (always visible) */}
-            {darkPoolPrints.length > 0 && (
+            {darkPoolPrintRows.length > 0 && (
               <div>
                 <h3 className="text-xs font-medium text-slate-400 uppercase tracking-widest mb-3">Dark Pool Summary</h3>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="bg-slate-900/60 rounded-xl p-3.5 border border-slate-800">
                     <div className="text-xs text-slate-400 mb-1">Total Block Vol</div>
                     <div className="text-lg font-bold text-white font-mono">
-                      {(darkPoolPrints.reduce((s, p) => s + p.size, 0) / 1e6).toFixed(2)}M
+                      {(darkPoolPrintRows.reduce((s, p) => s + p.size, 0) / 1e6).toFixed(2)}M
                     </div>
                   </div>
                   <div className="bg-slate-900/60 rounded-xl p-3.5 border border-slate-800">
                     <div className="text-xs text-slate-400 mb-1">Bullish Prints</div>
                     <div className="text-lg font-bold text-green-400 font-mono">
-                      {darkPoolPrints.filter(p => p.sentiment === 'BULLISH').length}
-                      <span className="text-slate-400 text-sm font-normal">/{darkPoolPrints.length}</span>
+                      {darkPoolPrintRows.filter(p => p.sentiment === 'BULLISH').length}
+                      <span className="text-slate-400 text-sm font-normal">/{darkPoolPrintRows.length}</span>
                     </div>
                   </div>
                 </div>

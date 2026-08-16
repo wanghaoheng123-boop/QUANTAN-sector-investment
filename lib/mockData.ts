@@ -32,6 +32,7 @@
 
 
 import { DarkPoolPrint } from './sectors'
+import { markSynthetic, type Synthetic } from './synthetic'
 
 // ─── Seeded PRNG (Mulberry32) — deterministic, no hydration mismatch ─────────
 function mulberry32(seed: number) {
@@ -61,13 +62,13 @@ const SEED_PRICES: Record<string, number> = {
 }
 
 // ─── Dark Pool Print Generator ──────────────────────────────────────────────
-export function generateDarkPoolPrints(ticker: string, count: number = 12): Synthetic<DarkPoolPrint>[] {
+export function generateDarkPoolPrints(ticker: string, count: number = 12): Synthetic<DarkPoolPrint[]> {
   const rng = mulberry32(ticker.split('').reduce((a, c) => a + c.charCodeAt(0), 0) + 777)
   const base = SEED_PRICES[ticker] || 100
   const types: DarkPoolPrint['type'][] = ['BLOCK', 'SWEEP', 'CROSS']
   const now = new Date('2026-03-23T15:00:00')
 
-  return Array.from({ length: count }, (_, i) => {
+  const rows = Array.from({ length: count }, (_, i) => {
     const minutesAgo = i * 18 + Math.round(rng() * 15)
     const time = new Date(now.getTime() - minutesAgo * 60000)
     const size = Math.round((50000 + rng() * 500000) / 100) * 100
@@ -87,41 +88,11 @@ export function generateDarkPoolPrints(ticker: string, count: number = 12): Synt
       type,
       sentiment
     }
-    // The ONLY sanctioned place in the codebase where the `__SYNTHETIC__` brand
-    // is conferred. `Synthetic<T>` carries a `never` property precisely so that
-    // no other site can produce one by accident — a second cast anywhere else
-    // is a review red flag, and the architecture test asserts this file is the
-    // sole definition site.
-  }).sort((a, b) => b.time.localeCompare(a.time)) as Synthetic<DarkPoolPrint>[]
-}
+  }).sort((a, b) => b.time.localeCompare(a.time))
 
-
-/**
- * Nominal brand marking a value as synthetic (design invariant I3).
- *
- * The property is `never`, so no real value can satisfy it and nothing can be
- * cast into the brand accidentally. Its purpose is to make `tsc` reject
- * assignment of synthetic data to any prop or response type that expects real
- * market data — the chart route's response type and `KLineChart`'s marker
- * props in particular. That is the enforcement I3 asks for: reintroducing the
- * removed path becomes a compile error, not a review question.
- */
-export type Synthetic<T> = T & { readonly __SYNTHETIC__: never }
-
-/**
- * Runtime half of the guard, for the one boundary a branded value still
- * crosses (`DarkPoolPanel`'s props). Types vanish at runtime; this asserts the
- * caller genuinely intended to accept synthetic data, so an accidental rewire
- * fails loudly instead of rendering fabricated numbers as real ones.
- *
- * @throws if `accepted` is false — I2 (fail closed), never fail silent.
- */
-export function assertSyntheticAccepted(accepted: boolean, surface: string): void {
-  if (!accepted) {
-    throw new Error(
-      `[I3] Synthetic data reached "${surface}", which does not declare that it accepts ` +
-      `synthetic input. Synthetic data must not reach a backtest, chart, or signal. ` +
-      `See design invariant I3 in CLAUDE.md and Q-088.`
-    )
-  }
+  // Wrapped, not cast. `markSynthetic` is the one sanctioned constructor, and
+  // the wrapper is NOT assignable to DarkPoolPrint[] — so this value cannot
+  // reach a chart, signal or backtest without an explicit unwrapSynthetic()
+  // call naming the surface that accepted it.
+  return markSynthetic(rows)
 }
