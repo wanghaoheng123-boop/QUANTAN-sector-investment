@@ -667,3 +667,90 @@ branches from `origin/main`, never from the merged branch tip.**
 
 Both errors were caught by verification, not by review — which is the argument for keeping
 the verification step even when the change is "just records".
+
+---
+
+## 2026-08-16 — Q-088: synthetic containment, and a fix that was mostly theatre
+
+**Sprint:** Q-088 (P0, I3 violation). **Branch:** `fix/q-088-synthetic-containment`, PR #147.
+
+### What the scoping found (worse than the ticket said)
+
+The filed title was "synthetic dark-pool data reaches a chart route". True, but the
+news path was the sharper exposure: `lib/mockData.ts` carried **fabricated headlines
+making specific factual claims about real, named, publicly-traded issuers**,
+attributed to real publishers and government agencies — Bloomberg, Reuters, CNBC, FT,
+NEJM, Goldman Sachs, Barclays, Argus, EIA, DOE, CMS — each linking to that
+organisation's genuine domain. They rendered **unlabeled** in the news feed and were
+plotted on the real price chart at **arbitrary candle indices**
+(`length - 15 - i*10`), so the marker timestamps were not even a claim about when
+anything happened.
+
+Meanwhile `/api/news/ticker/[ticker]` — hardened, deployed, rate-limited,
+URL-validated — had **zero consumers**.
+
+### The real lesson: I shipped a label where containment was asked for
+
+The deletions were real. Everything built on top of them was broken, and `red-team`
+found all of it:
+
+**The brand was directionally INVERTED.** I wrote
+`type Synthetic<T> = T & { __SYNTHETIC__: never }`. An intersection makes
+`Synthetic<T>` a **subtype** of `T`, so synthetic data flowed into real-data
+positions freely — the exact failure class I3 exists to prevent. It blocked only
+the harmless direction.
+
+Worse is *how I convinced myself it worked*: the `DarkPoolPanel` test failed because
+real data could not be assigned to a synthetic-typed prop, and I reported that as
+proof of containment. **I read the evidence backwards.** A probe assigning
+`generateDarkPoolPrints()` straight to `DarkPoolPrint[]` compiled clean.
+
+**The runtime assertion could never fire.** `assertSyntheticAccepted(true, …)` took a
+hardcoded boolean and never inspected the data, over a type-only brand that did not
+exist at runtime (`Object.keys()` on the output had no marker). A comment with a
+stack trace attached. Its test exercised a `false` branch no call site produced.
+
+**The architecture guard passed on the original defect, three ways** — dynamic
+import, relative path, and inline fabrication with no import at all — and scanned
+only `app/api/**`, leaving `scripts/` invisible, where every backtest lives and
+which I3 names *first*. My two mutations had been the two easy ones.
+
+Fixed: wrapper brand (`{ __SYNTHETIC__: true; value: T }`, not assignable to `T`),
+runtime guard that inspects the value, allowlist guard across all production dirs.
+**Five mutations now caught**, including a tsc leak probe (TS2740 + TS2345).
+
+### The generalisable failures
+
+1. **A brand's direction is the whole design.** Intersection = subtype = flows the
+   wrong way. If you cannot state which assignment you are blocking, you have not
+   designed a guard.
+2. **A test failing is not evidence your mechanism works** — check *which* direction
+   failed. This is the same class as [[a11y-gate-quantan]]'s read-the-log lesson.
+3. **Mutation-test the guard with the mutations an adversary would pick**, not the
+   two you thought of. Dynamic import and relative paths defeat any `from '@/…'`
+   regex.
+4. **An allowlist for one rule must not silently exempt files from another.** The
+   inline-fabrication mutation slipped through on retry purely because the page it
+   was planted in was on the *import* allowlist.
+
+### Other findings
+
+- **`providerPublishTime`, not `publishedAt`.** Every news item came back dateless,
+  so the page showed a pulsing "Live" badge over headlines whose only timestamp was
+  *our fetch time*. I had a screenshot of exactly this and did not see it.
+- **The register ate its own CRITICAL row.** Two agents appended concurrently, one
+  left no trailing newline, and the next row glued on — producing a 23-column row
+  that swallowed the Q088-1 finding entirely. I then **reproduced the same
+  corruption while filing the ticket for it.** Repaired, and
+  `__tests__/architecture/findings-ledger-integrity.test.ts` now makes it
+  executable. Mutation-verified.
+- **`Q-093`: there is no lint.** CLAUDE.md's WHAT DONE MEANS requires "lint clean";
+  no script, no eslint config, `npx next lint` opens a wizard. That gate has never
+  run on any PR while every session reported done against it. The
+  instructions-are-untested-code lesson, applied to the constitution itself.
+
+### Standing
+
+`Q-089` (product decision on the prints surface), `Q-090`–`Q-096` filed.
+I1–I8 tiers remain **inferred, not audited** — I3 was tiered PARTIAL and this work
+shows it was closer to VIOLATED. `Q-079` is not bookkeeping.
