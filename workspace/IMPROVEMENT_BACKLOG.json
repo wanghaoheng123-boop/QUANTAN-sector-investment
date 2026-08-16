@@ -1967,5 +1967,66 @@
       "npm run test"
     ],
     "notes_2026_08_16": "Filed by Q-088. That work removed every synthetic path reaching a CHART (design invariant I3 is discharged). What remains is generateDarkPoolPrints feeding the dark-pool prints TABLE, the flow gauge and the aggregate tiles — a display surface, not a chart or signal, so it is outside I3's literal clause. It is branded Synthetic<DarkPoolPrint> and guarded by assertSyntheticAccepted at the DarkPoolPanel props boundary, so it cannot leak into chart or signal paths. RECOMMENDATION: DELETE. There is no real per-print dark-pool data source in the current stack and none is purchasable within it — off-exchange PERCENTAGE from /api/darkpool/[ticker] is real and already renders, so the panel retains genuine content without the fabricated per-print rows. An illustrative table of invented prints priced from a 13-entry seed table (unknown tickers default to ~$100) sitting beside a real quote is the exact confusion UX-6 already had to patch once: prints showed ~$100 against a real $305.40 AAPL quote. KNOWN GAP EITHER WAY: the aggregate tiles at stock:651-665 and sector:557-571 derive from these synthetic prints and carry NO disclosure today, unlike the table and gauge which got ILLUSTRATIVE badges on 2026-08-15. So \"keep\" is not a no-op — it requires labeling work."
+  },
+  {
+    "id": "Q-090",
+    "title": "News publisher badge launders source tier — Tier-2 aggregator items render identically to Tier-0/1 wires",
+    "domain": "Data/Infrastructure",
+    "priority": "P2",
+    "status": "pending",
+    "files": [
+      "components/NewsFeed.tsx",
+      "app/api/news/ticker/[ticker]/route.ts",
+      "app/api/news/[sector]/route.ts"
+    ],
+    "acceptance_criteria": [
+      "Source tier is derived from the validated link HOSTNAME against an explicit allow-list, NOT from the free-text publisher string (Yahoo does not constrain that field)",
+      "Issuer/press-release wires (globenewswire.com, prnewswire.com, businesswire.com) are visibly labeled as such",
+      "Anything not on the allow-list defaults to unrated/Tier-3 rather than silently rendering as equivalent to a named wire",
+      "A test asserts an unknown hostname does NOT render at the same tier as an allow-listed one"
+    ],
+    "verify_commands": [
+      "npm run typecheck",
+      "npm run test"
+    ],
+    "notes_2026_08_16": "Filed by the disinformation-analyst review of Q-088 (PR #147). Yahoo Finance news is an AGGREGATOR republishing other outlets — Tier 2 under the platform's own source-tier model, regardless of which wire originally wrote a story. components/NewsFeed.tsx renders the raw item.publisher string in a plain badge with identical styling for every source, so Reuters and an SEO content mill are visually indistinguishable. Live smoke on /stock/AAPL returned TheStreet, Simply Wall St., Motley Fool and 24/7 Wall St. — all commentary/aggregator tier — each rendered exactly as a named wire would be. CLAUDE.md's own rule is that a Tier-2+ source may never independently move a signal and may only corroborate or flag; the display currently treats all publishers as equivalent with no flag at all. NOT a Q-088 regression — Q-088 replaced fabricated content with real content, which is strictly better; this is the next layer of honesty on the replacement."
+  },
+  {
+    "id": "Q-091",
+    "title": "Zero news items degrades sector brief dataQuality to PARTIAL with a wrong explanation",
+    "domain": "Data/Infrastructure",
+    "priority": "P2",
+    "status": "pending",
+    "files": [
+      "lib/briefs/sectorBrief.ts",
+      "app/briefs/BriefCard.tsx",
+      "app/briefs/sector/[sector]/LiveBriefClient.tsx"
+    ],
+    "acceptance_criteria": [
+      "An empty news list no longer contributes to the missing-field count that drives dataQuality",
+      "If news absence is still surfaced, it says so plainly (\"no news today\") rather than attributing it to a pre/post-market phase",
+      "A test covers the zero-news case and asserts the dataQuality label and note"
+    ],
+    "verify_commands": [
+      "npm run test"
+    ],
+    "notes_2026_08_16": "Filed by the disinformation-analyst review of Q-088. PRE-EXISTING, not introduced by that diff. lib/briefs/sectorBrief.ts:399 counts `news.length === 0` among the missing-data conditions, so a sector with no Yahoo news items for the day is labeled dataQuality \"partial\" with the note \"Some data points unavailable (N field(s) missing). Market may be in pre/post-market phase.\" aggregateDataQuality/briefsHealth take the WORST case across all 11 sectors (:539-546, :564-570), so one quiet sector degrades the whole /briefs header pill from LIVE to PARTIAL. User-visible in app/briefs/BriefCard.tsx:63-68 and LiveBriefClient.tsx:148-157. This is an I2 framing defect: a routine \"no news today\" is reported as a specific and wrong explanation about market phase. No returns claim is involved, so no event study is needed."
+  },
+  {
+    "id": "Q-092",
+    "title": "Prompt-injection review of the TradingAgents LLM sidecar",
+    "domain": "Security/Compliance",
+    "priority": "P2",
+    "status": "pending",
+    "files": [
+      "app/api/trading-agents/[ticker]/route.ts",
+      "lib/trading-agents-config.ts"
+    ],
+    "acceptance_criteria": [
+      "Establish what untrusted text the sidecar ingests and whether any of it originates from this platform",
+      "Confirm the sidecar cannot reach a tool-enabled path with write permissions",
+      "Record the finding either way, per CLAUDE.md I3/disinformation-analyst prompt-injection rules"
+    ],
+    "notes_2026_08_16": "Filed by the disinformation-analyst review of Q-088 as ADJACENT SURFACE, explicitly not a defect in that PR. The TradingAgents sidecar is the one LLM-integrated feature in the repo: a separate, pre-existing, opt-in proxy to an external self-hosted Python service that fetches its own data (data_vendor param). It is NOT wired to /api/news/ticker/[ticker] or /api/news/[sector], so Q-088's news text does not reach it. Worth a dedicated review because scraped/vendor text reaching a model is the platform's standing injection vector."
   }
 ]

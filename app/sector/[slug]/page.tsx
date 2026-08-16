@@ -355,7 +355,7 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
               body: (
                 <p>
                   Top panel = price (candlesticks). Below: <strong>RSI</strong> (overbought/oversold), <strong>MACD</strong> (trend momentum), <strong>ATR</strong> (volatility).
-                  Dark pool prints (blue ●) and news (green ▲) overlay on the chart. Hover crosshair shows OHLCV at any bar.
+                  Hover crosshair shows OHLCV at any bar.
                 </p>
               ),
             },
@@ -391,7 +391,6 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
             { color: '#00d084', label: 'Bullish bar / signal', meaning: 'price up vs prior close, or BUY signal' },
             { color: '#ff6b7a', label: 'Bearish bar / signal', meaning: 'price down vs prior close, or SELL signal' },
             { color: '#fbbf24', label: 'Indicator overlay', meaning: 'EMA, MACD, ATR overlays on chart' },
-            { color: '#3b82f6', label: 'Dark pool print', meaning: 'institutional block trade off-exchange' },
           ]}
         />
 
