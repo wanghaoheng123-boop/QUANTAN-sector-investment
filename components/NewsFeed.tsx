@@ -3,29 +3,40 @@
 import { useState, useEffect } from 'react'
 import { safeHref } from '@/lib/security/urlValidation'
 
-// Compatible with both mock news (source/url/summary) and live news
+/**
+ * Live news only (Q-088, design invariant I3).
+ *
+ * This component previously accepted a `news` array prop and carried
+ * mock-compatible aliases (`source`/`url`/`summary`) alongside the live
+ * fields. The stock page used that path to render `getNewsForSector()` from
+ * `lib/mockData` — fabricated headlines about real, named issuers, attributed
+ * to real publishers and government agencies, with links to their genuine
+ * domains, displayed with no indication they were synthetic.
+ *
+ * Both the static prop and the mock aliases are removed rather than labeled:
+ * I3 requires that the path not exist, not that it be annotated. With no
+ * `news` prop there is no way to hand this component fabricated content, and
+ * every item it renders came from an API route on this deployment.
+ */
 interface NewsItem {
   title: string
-  source?: string     // mock
-  publisher?: string  // live
-  url?: string        // mock
-  link?: string       // live
-  summary?: string    // mock
-  snippet?: string    // live
+  publisher?: string
+  link?: string
+  snippet?: string
   publishedAt?: string | null
   tickers?: string[]
 }
 
 interface NewsFeedProps {
-  /** Sector slug — fetches live news when provided */
+  /** Sector slug — fetches live sector news. Mutually exclusive with `ticker`. */
   sector?: string
-  /** Static news array (mock or pre-fetched) */
-  news?: NewsItem[]
+  /** Ticker symbol — fetches live per-issuer news. Takes precedence over `sector`. */
+  ticker?: string
   color: string
 }
 
 function getPublisher(item: NewsItem): string {
-  return item.publisher ?? item.source ?? 'Unknown'
+  return item.publisher ?? 'Unknown'
 }
 /**
  * Returns the safe http(s) link for a news item, or '#' when the URL
@@ -36,29 +47,44 @@ function getPublisher(item: NewsItem): string {
  * misuse) can't inject `javascript:`/`data:` into the DOM via <a href>.
  */
 function getLink(item: NewsItem): string {
-  return safeHref(item.link ?? item.url)
+  return safeHref(item.link)
 }
 function getSnippet(item: NewsItem): string | undefined {
-  return item.snippet ?? item.summary
+  return item.snippet
 }
 
-export default function NewsFeed({ sector, news: staticNews, color }: NewsFeedProps) {
-  const [news, setNews] = useState<NewsItem[]>(staticNews ?? [])
-  const [loading, setLoading] = useState(!staticNews && !!sector)
+export default function NewsFeed({ sector, ticker, color }: NewsFeedProps) {
+  const [news, setNews] = useState<NewsItem[]>([])
+  const [loading, setLoading] = useState(!!ticker || !!sector)
   const [fetchedAt, setFetchedAt] = useState<string | null>(null)
   const [apiError, setApiError] = useState(false)
 
   useEffect(() => {
-    if (!sector) {
-      setNews(staticNews ?? [])
+    // `ticker` wins when both are supplied — per-issuer news is the more
+    // specific request.
+    const endpoint = ticker
+      ? `/api/news/ticker/${encodeURIComponent(ticker)}`
+      : sector
+        ? `/api/news/${encodeURIComponent(sector)}`
+        : null
+
+    if (!endpoint) {
+      setNews([])
+      setLoading(false)
       return
     }
 
     let cancelled = false
+    // Clear before fetching: without this the previous ticker's headlines stay
+    // committed under the new ticker's header until the fetch resolves. Even if
+    // React usually flushes before paint, showing AAPL news under MSFT for any
+    // frame is an I1 provenance error, and the fix is one line (Q088-6).
+    setNews([])
+    setFetchedAt(null)
     setLoading(true)
     setApiError(false)
 
-    fetch(`/api/news/${encodeURIComponent(sector)}`)
+    fetch(endpoint)
       .then(r => {
         if (!r.ok) throw new Error(String(r.status))
         return r.json()
@@ -72,13 +98,16 @@ export default function NewsFeed({ sector, news: staticNews, color }: NewsFeedPr
       .catch((err) => {
         if (cancelled) return
         // Phase 13 S2 fix (F5.4): preserve UI behavior, add operator-visible diagnostic.
-        console.warn('[NewsFeed] news fetch failed for sector', sector, err)
+        // I2 (fail closed): on failure this renders the error state below. It must
+        // never fall back to a canned or cached article set — a fabricated story
+        // shown as news is worse than an empty feed.
+        console.warn('[NewsFeed] news fetch failed for', ticker ?? sector, err)
         setApiError(true)
         setLoading(false)
       })
 
     return () => { cancelled = true }
-  }, [sector, staticNews])
+  }, [sector, ticker])
 
   if (loading) {
     return (
@@ -110,7 +139,7 @@ export default function NewsFeed({ sector, news: staticNews, color }: NewsFeedPr
   if (news.length === 0) {
     return (
       <div className="rounded-xl border border-slate-800 p-6 text-center text-xs text-slate-400">
-        No recent news found for this {sector ? 'sector' : 'topic'} on Yahoo Finance.
+        No recent news found for this {ticker ? 'ticker' : sector ? 'sector' : 'topic'} on Yahoo Finance.
       </div>
     )
   }

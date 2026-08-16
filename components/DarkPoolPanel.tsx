@@ -2,12 +2,22 @@
 
 import { DarkPoolPrint } from '@/lib/sectors'
 import type { DarkPoolAnalysis } from '@/lib/darkpool'
+import { unwrapSynthetic, type Synthetic } from '@/lib/synthetic'
 import { formatFreshness } from '@/lib/format'
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 interface DarkPoolPanelProps {
-  prints: DarkPoolPrint[]      // illustrative block prints (unchanged)
+  /**
+   * Illustrative block prints — SYNTHETIC (design invariant I3, Q-088).
+   *
+   * The type is branded, so this prop can only be fed by
+   * `generateDarkPoolPrints()`; real market data will not typecheck into it,
+   * and conversely this value cannot be passed to a chart or signal prop.
+   * There is no real per-print data source in the current stack — whether this
+   * surface should exist at all is a product decision tracked as Q-089.
+   */
+  prints: Synthetic<DarkPoolPrint[]>
   ticker: string
   color: string
   /** Real off-exchange analytics loaded from /api/darkpool/[ticker] */
@@ -34,12 +44,18 @@ function fmtPct(n: number | null | undefined, decimals = 2): string {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function DarkPoolPanel({
-  prints,
+  prints: printsWrapped,
   ticker,
   color,
   apiData,
   apiLoading = false,
 }: DarkPoolPanelProps) {
+  // Runtime half of the I3 guard. This INSPECTS THE VALUE rather than taking a
+  // caller-supplied boolean: if real data is ever rewired into this prop the
+  // __SYNTHETIC__ marker is absent and this throws, which a hardcoded
+  // `assert(true, …)` could never do.
+  const prints = unwrapSynthetic(printsWrapped, 'DarkPoolPanel.prints')
+
   const { metrics, hasRealData, statusNote } = apiData ?? {
     metrics: {},
     hasRealData: false,

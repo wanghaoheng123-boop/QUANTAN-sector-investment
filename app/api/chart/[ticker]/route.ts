@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import YahooFinance from 'yahoo-finance2'
-import { generateDarkPoolMarkers } from '@/lib/mockData'
 import { aggregateMinuteQuotesToN } from '@/lib/chartYahoo'
 import { sortChartCandles } from '@/lib/sortChartCandles'
 import { applyRateLimit } from '@/lib/api/rateLimit'
@@ -11,7 +10,7 @@ const yahooFinance = new YahooFinance()
 
 const _chartCache = new Map<
   string,
-  { candles: any[]; darkPoolMarkers: any[]; expiresAt: number; range: string; interval: string }
+  { candles: any[]; expiresAt: number; range: string; interval: string }
 >()
 const CHART_CACHE_TTL_MS = 30_000
 const CHART_CACHE_MAX_SIZE = 500
@@ -56,7 +55,6 @@ export async function GET(
       {
         ticker,
         candles: cached.candles,
-        darkPoolMarkers: cached.darkPoolMarkers,
         range: cached.range,
         interval: cached.interval,
         _cached: true,
@@ -108,22 +106,15 @@ export async function GET(
             volume: c.volume,
           })),
         )
-        const darkPoolMarkers = generateDarkPoolMarkers(
-          // Phase 14 wave 29: `as any` removed after generateDarkPoolMarkers
-          // accepted `time: string | number`.
-          candles.map((c) => ({ time: c.time, close: c.close })),
-          ticker
-        )
         evictCacheIfNeeded()
         _chartCache.set(cacheKey, {
           candles,
-          darkPoolMarkers,
           expiresAt: now + CHART_CACHE_TTL_MS,
           range,
           interval: '3m (from 1m)',
         })
         return NextResponse.json(
-          { ticker, candles, darkPoolMarkers, range, interval: '3m (from 1m)', _cached: false },
+          { ticker, candles, range, interval: '3m (from 1m)', _cached: false },
           {
             headers: {
               'Cache-Control': 'public, max-age=30, stale-while-revalidate=60',
@@ -233,23 +224,16 @@ export async function GET(
         }),
     )
 
-    const darkPoolMarkers = generateDarkPoolMarkers(
-      // Phase 14 wave 29: `as any` removed — generateDarkPoolMarkers accepts string | number.
-      candles.map((c: { time: string | number; close: number }) => ({ time: c.time, close: c.close })),
-      ticker
-    )
-
     evictCacheIfNeeded()
     _chartCache.set(cacheKey, {
       candles,
-      darkPoolMarkers,
       expiresAt: now + CHART_CACHE_TTL_MS,
       range,
       interval,
     })
 
     return NextResponse.json(
-      { ticker, candles, darkPoolMarkers, range, interval, _cached: false },
+      { ticker, candles, range, interval, _cached: false },
       {
         headers: {
           'Cache-Control': 'public, max-age=30, stale-while-revalidate=60',

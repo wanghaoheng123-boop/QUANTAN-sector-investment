@@ -54,16 +54,43 @@ export async function GET(
       newsCount: 15,
     }, { validateResult: false })
 
-    const news: NewsItem[] = (
-      ((result as Record<string, unknown>)?.news as Array<Record<string, unknown>> | undefined) ?? []
-    )
+    // I2 (fail closed): distinguish "the vendor returned no stories" from "the
+    // vendor's shape changed and we can no longer find the stories". Under
+    // validateResult:false — which exists BECAUSE Yahoo's SearchResult schema has
+    // already drifted once — a moved `news` key would otherwise coalesce to []
+    // and the UI would tell the user "No recent news found for this ticker on
+    // Yahoo Finance", a false factual claim about the vendor (Q088-5).
+    const rawNews = (result as Record<string, unknown>)?.news
+    if (rawNews !== undefined && !Array.isArray(rawNews)) {
+      console.error(`[News API] ticker=${ticker}: 'news' key present but not an array — vendor schema drift`)
+      return NextResponse.json(
+        { error: 'news_schema_drift', details: 'Upstream news payload had an unexpected shape.' },
+        { status: 502 },
+      )
+    }
+    if (rawNews === undefined) {
+      console.error(`[News API] ticker=${ticker}: 'news' key absent from the search response — vendor schema drift`)
+      return NextResponse.json(
+        { error: 'news_schema_drift', details: 'Upstream news payload was missing the expected field.' },
+        { status: 502 },
+      )
+    }
+
+    const news: NewsItem[] = (rawNews as Array<Record<string, unknown>>)
       .map(item => {
         const link = String(item.link ?? '')
         return {
           title: String(item.title ?? '').slice(0, 300),
           publisher: String(item.publisher ?? 'Unknown').slice(0, 100),
           link,
-          publishedAt: (item.publishedAt as string) || null,
+          // Yahoo's SearchNews carries providerPublishTime (a Date), NOT publishedAt.
+          // Reading the wrong key silently nulled every date, so the UI showed a
+          // 'Live' badge over undated headlines and the only timestamp on screen
+          // was our own fetch time — a three-year-old article looked identical to
+          // one ten minutes old (Q088-4).
+          publishedAt: item.providerPublishTime
+            ? new Date(item.providerPublishTime as string | number | Date).toISOString()
+            : null,
           snippet: item.summary ? String(item.summary).slice(0, 300) : null,
           ticker,
         }

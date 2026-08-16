@@ -23,11 +23,15 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import DarkPoolPanel from '@/components/DarkPoolPanel'
 import type { DarkPoolAnalysis, DarkPoolMetric } from '@/lib/darkpool'
 import type { DarkPoolPrint } from '@/lib/sectors'
+import { markSynthetic } from '@/lib/synthetic'
 
-const PRINTS: DarkPoolPrint[] = [
+// Q-088: `prints` is a `Synthetic<DarkPoolPrint[]>` wrapper, so real market
+// data cannot be assigned to it. A fixture is synthetic by definition, so it
+// goes through the sanctioned constructor rather than a cast.
+const PRINTS = markSynthetic<DarkPoolPrint[]>([
   { time: '14:58:00', ticker: 'AAPL', size: 334_000, price: 100.07, premium: 0.54, type: 'BLOCK', sentiment: 'BULLISH' },
   { time: '14:30:00', ticker: 'AAPL', size: 114_000, price: 100.59, premium: 0.63, type: 'SWEEP', sentiment: 'BEARISH' },
-]
+])
 
 const METRICS: DarkPoolMetric = {
   offExchangePct: 42.1,

@@ -2,8 +2,8 @@
   "schema_version": "1.1",
   "project": "QUANTAN-sector-investment",
   "created": "2026-04-28T09:40:00Z",
-  "last_updated": "2026-08-15T19:57:26.628Z",
-  "active_agent": "claude opus-5 (2026-08-16 MAP-REPAIR-2026-08-16: recorded Platform Excellence wave 1 (#142/#143) and the orchestration install, both of which had shipped without reaching SESSION_STATE. Branch claude/quantlab-orchestration-setup-8816ac IS NOW PUSHED with upstream set — an earlier version of this key claimed the push before it happened, which the red-team cold-boot pass caught; see blockers BLOCKER-OWNER-MERGE.)",
+  "last_updated": "2026-08-16T15:18:01.844Z",
+  "active_agent": "claude opus-5 (2026-08-16 Q-088 synthetic containment: deleted the fabricated-news and synthetic-marker paths, then REBUILT the containment after red-team showed the first brand/guard/assertion were all broken; PR #147 open, not merged)",
   "prod_bug_fix_2026_07_01": {
     "B-2": "News fetch broken by yahoo-finance2 SearchResult schema drift (yf.search validation threw → news silently dropped + 66 prod errors on /api/briefs since 2026-04-03). FOUND via Vercel get_runtime_errors. FIXED with validateResult:false on the 4 news-search callers (mirrors options/chain.ts precedent) → PR #82 → main 2e6137c. LIVE-VERIFIED: /api/briefs now 200 with full news feed (was empty); 0 SearchResult validation logs on new deploy dpl_D29j.",
     "method_note": "Empirical bug-finding via Vercel runtime-errors/logs is high-signal — surfaced a real 3-month-old LIVE issue the static inspection didn't (it was a caught-and-logged error, invisible to tsc/tests/benchmark). Consider a runtime-errors sweep as a standing step."
@@ -178,12 +178,6 @@
       "id": "DECISION-D7-DATA",
       "summary": "D7 recommendation: Sharadar Core US bundle ~$49 for ONE month to run the point-in-time re-benchmark (delisted-inclusive). See reviews/RETHINK-2026-07-11/D7-POINT-IN-TIME-UNIVERSE.md",
       "resolution": "Owner approves/declines the one-month data purchase; fetch-adapter is ~1 session once credentials exist."
-    },
-    {
-      "id": "BLOCKER-OWNER-MERGE",
-      "summary": "Branch claude/quantlab-orchestration-setup-8816ac is pushed with a PR open, and carries CLAUDE.md, the 17-agent roster, .quantlab/TRIAL_REGISTRY.jsonl and the MAP-REPAIR records. Merging IS the production deploy. Diff is docs/config only — no application code.",
-      "resolution": "OWNER DECISION. Making CLAUDE.md and the roster governing is not an agent call. Until merged, the constitution is branch-local and a cold session at the repo root will not see it.",
-      "opened": "2026-08-16"
     },
     {
       "id": "BLOCKER-OWNER-Q087-SCOPE",
@@ -490,7 +484,7 @@
   },
   "orchestration_install_2026_08_16": {
     "directive": "owner: install the QuantLab Claude Code orchestration package (constitution + agent roster + sprint loop), then extend it with accountant / auditor / actuary / underwriter / credit-grading roles as extra safety walls on asset risk and value.",
-    "status": "INSTALLED, COMMITTED AND PUSHED on branch claude/quantlab-orchestration-setup-8816ac. Install commits: 4a3baf7, d03ae18, e00b859, dc931c2. Plus record commits from MAP-REPAIR-2026-08-16 (af746a1 onward) — the branch carries more than the 4 install commits. NOT MERGED; merging is owner-gated.",
+    "status": "MERGED as PR #144 (squash 047ae57) on 2026-08-16, plus PR #146 (f7d369e). CLAUDE.md, the 17-agent roster, .claude/commands/ and .quantlab/ are on main and reachable. Main CI green; production smoke 20/20.",
     "what_landed": {
       "CLAUDE.md": "NEW at repo root — none existed before. Claude Code auto-loads it, which makes it strictly stronger than the AGENT.md hook (convention only). Holds the boot sequence, the SSOT routing table, house style, deploy protocol, the RISK & VALUATION GATES section, and design invariants I1-I8.",
       ".claude/agents/": "17 specialists. Routing: opus for coordinator, quant-validator, red-team, security-compliance, platform-architect, forensic-auditor, actuary, credit-analyst; sonnet for the other 9. LOADING EVIDENCE (2026-08-16): after restart, all 17 were listed as available agent types by the harness, and coordinator + red-team were both dispatched successfully in the MAP-REPAIR sprint. SCOPE OF THAT EVIDENCE: it is worktree-local — .claude/agents/ exists only on this branch, so the roster loads nowhere else until this merges to main.",
@@ -514,5 +508,24 @@
       "Q-087 needs an owner scope decision: does QUANTAN intend to support issuer-level credit/structural analysis at all?"
     ],
     "durability_caveat": "Until this branch merges, CLAUDE.md, .claude/agents/, .quantlab/ and the repaired SESSION_STATE exist ONLY on this branch. The main worktree at the repo root is still at the pre-repair state (30 keys, no CLAUDE.md). The branch is pushed, so the work survives loss of this worktree — but a session booting at the repo root on main still will not see the constitution until merge."
+  },
+  "q088_synthetic_containment_2026_08_16": {
+    "directive": "Q-088 (P0, design invariant I3): synthetic data reaching a chart route. Selected by /sprint rule (a) — the only agent-actionable open P0, both others being owner-gated.",
+    "status": "PR #147 open on fix/q-088-synthetic-containment. NOT MERGED — awaiting CI on the rebuild.",
+    "scoping_found_worse_than_filed": "The filed title said synthetic dark-pool markers on a chart. The news path was sharper: lib/mockData.ts held FABRICATED HEADLINES making specific factual claims about real, named, publicly-traded issuers, attributed to real publishers and government agencies (Bloomberg, Reuters, CNBC, FT, NEJM, Goldman Sachs, Barclays, Argus, EIA, DOE, CMS), each linking to that organisation's genuine domain. Rendered UNLABELED in the feed and plotted on the real price chart at ARBITRARY candle indices (length - 15 - i*10). Meanwhile /api/news/ticker/[ticker] — hardened, deployed, URL-validated — had ZERO consumers.",
+    "what_shipped": [
+      "getNewsForSector() + the SECTOR_NEWS corpus DELETED. Stock page uses <NewsFeed ticker> against the live route; on failure it renders the error state and never a canned fallback (I2).",
+      "generateDarkPoolMarkers() DELETED, plus both chart-route call sites, the cache entry type, the response field, and dead marker state in two pages.",
+      "NewsFeed's static `news` prop and mock-shape aliases removed, so the component structurally cannot be handed fabricated content.",
+      "Synthetic<T> WRAPPER brand in lib/synthetic.ts + unwrapSynthetic + assertNotSynthetic + isSynthetic.",
+      "Architecture allowlist guard across app/components/lib/hooks/scripts, plus a ledger-integrity guard.",
+      "providerPublishTime fix; news route fails closed on vendor schema drift; NewsFeed clears state on source change."
+    ],
+    "THE_IMPORTANT_LESSON": "THE FIRST ATTEMPT AT CONTAINMENT WAS THEATRE AND SHIPPED GREEN. (1) The brand was DIRECTIONALLY INVERTED — `type Synthetic<T> = T & {…}` makes it a SUBTYPE of T, so synthetic flowed into real-data positions freely; it blocked only the harmless direction. (2) I READ THE EVIDENCE BACKWARDS: the DarkPoolPanel test failing on real->synthetic was reported as proof of containment. (3) The runtime assertion took a hardcoded `true` and could never fire, over a type-only brand erased at build time. (4) The architecture guard passed on the defect reintroduced via dynamic import, relative path, and inline authoring, and never scanned scripts/ where every backtest lives. GENERALISE: a brand's DIRECTION is its design; a failing test is not evidence your mechanism works until you check WHICH direction failed; mutation-test with an adversary's mutations, not your own two; and an allowlist for one rule must not exempt files from another.",
+    "mutations_now_caught": "M1 dynamic import (2 fail), M2b relative path (2 fail), M4 inline fabrication (1 fail — only after decoupling the fabrication heuristic from the import allowlist), M5 inverted brand restored (1 fail), M6 type-level leak probe (tsc TS2740 + TS2345). All run and reverted.",
+    "risk_register_incident": "The findings ledger SWALLOWED ITS OWN CRITICAL ROW. Two agents appended concurrently; one write left no trailing newline and the next row glued onto it, producing a 23-column row that consumed the Q088-1 CRITICAL finding entirely — invisible to any CSV reader. Repaired, and I then REPRODUCED THE SAME CORRUPTION while filing the ticket for it. Now guarded executably by __tests__/architecture/findings-ledger-integrity.test.ts (mutation-verified). 7 malformed rows predate this and are pinned by id so the debt cannot grow: F4.5, F5.4, F5.9, F6.2, F6.3, F6.4, WSA-FG.",
+    "verification": "typecheck clean; 1578 tests pass; verify:data clean. Vercel PREVIEW could not be smoked — deployment protection returns 302 — so the API shape change was verified against a LOCAL dev server: /api/chart/AAPL keys are _cached/candles/interval/range/ticker with darkPoolMarkers absent and 250 candles intact, and the stock page News tab renders live Yahoo items with zero fabricated publishers. NOTE: CI smoke hits PRODUCTION, not the branch, so it did not validate this change.",
+    "filed_not_fixed": "Q-089 (product decision: keep or delete the synthetic prints surface; recommendation DELETE), Q-090 (publisher badge launders source tier — Yahoo is Tier-2 and TheStreet/Motley Fool render like a named wire), Q-091 (news.length===0 mislabels a brief PARTIAL with a wrong pre/post-market explanation; pre-existing), Q-092 (prompt-injection review of the TradingAgents sidecar), Q-093 (CLAUDE.md requires \"lint clean\" and NO LINT EXISTS — never run on any PR), Q-094 (no zod at the news boundary), Q-095 (ledger fragility), Q-096 (KLineChart marker props still wired ungated).",
+    "invariant_tier_evidence": "I3 was tiered PARTIAL in CLAUDE.md on the strength of the 2026-08-15 labeling wave. This sprint shows it was closer to VIOLATED — labeling is not containment. That is the SECOND inferred tier to fail on contact after I5 (which claimed DSR was not computed; it is). Q-079 is not bookkeeping."
   }
 }

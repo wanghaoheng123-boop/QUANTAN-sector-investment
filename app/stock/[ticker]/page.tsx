@@ -18,7 +18,8 @@ import GexChart from '@/components/options/GexChart'
 import { useLiveQuote } from '@/hooks/useLiveQuote'
 import MaxPainGauge from '@/components/options/MaxPainGauge'
 import FlowScanner from '@/components/options/FlowScanner'
-import { getNewsForSector, generateDarkPoolPrints } from '@/lib/mockData'
+import { generateDarkPoolPrints } from '@/lib/mockData'
+import { markSynthetic, unwrapSynthetic, type Synthetic } from '@/lib/synthetic'
 import { DarkPoolPrint, SECTORS } from '@/lib/sectors'
 import type { DarkPoolAnalysis } from '@/lib/darkpool'
 import { buildVisFromIndicatorPreset, type ChartEmaKey } from '@/lib/chartEma'
@@ -35,9 +36,6 @@ const KLineChart = dynamic(() => import('@/components/KLineChart'), { ssr: false
 
 interface Candle {
   time: string; open: number; high: number; low: number; close: number; volume: number;
-}
-interface DpMarker {
-  time: string; price: number; size: number; sentiment: 'BULLISH' | 'BEARISH'
 }
 
 const CHART_POLL_MS = (range: string) =>
@@ -64,10 +62,9 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
   const ticker = tickerRaw.toUpperCase()
 
   const [candles, setCandles]           = useState<Candle[]>([])
-  const [darkPoolMarkers, setDarkPoolMarkers] = useState<DpMarker[]>([])
   const [quote, setQuote]               = useState<{ price: number; change: number; changePct: number; marketCap: string; quoteTime?: string | null } | null>(null)
   const [quoteError, setQuoteError] = useState<string | null>(null)
-  const [darkPoolPrints, setDarkPoolPrints] = useState<DarkPoolPrint[]>([])
+  const [darkPoolPrints, setDarkPoolPrints] = useState<Synthetic<DarkPoolPrint[]>>(() => markSynthetic([]))
   const [darkPoolApiData, setDarkPoolApiData] = useState<DarkPoolAnalysis | null>(null)
   const [darkPoolApiLoading, setDarkPoolApiLoading] = useState(false)
   const [optionsChain, setOptionsChain] = useState<EnrichedChain | null>(null)
@@ -117,10 +114,8 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
         }
         if (data.candles?.length) {
           setCandles(data.candles)
-          setDarkPoolMarkers(data.darkPoolMarkers ?? [])
         } else {
           setCandles([])
-          setDarkPoolMarkers([])
           setChartError('No historical data returned for this range')
         }
       })
@@ -130,7 +125,6 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
         console.error('[Chart] Error:', e)
         setChartError(msg)
         setCandles([])
-        setDarkPoolMarkers([])
       })
       .finally(() => { if (!signal?.aborted) setLoading(false) })
   }, [ticker])
@@ -284,12 +278,19 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
     return () => { cancelled = true }
   }, [ticker, activeTab, optionsChain])
 
-  const news = getNewsForSector(tickerSector?.slug ?? 'technology')
-  const newsMarkers = news.slice(0, 3).map((n, i) => {
-    if (candles.length === 0) return null
-    const idx = Math.max(0, candles.length - 15 - i * 10)
-    return { time: candles[idx]?.time ?? '', headline: n.title, impact: 'neutral' as const }
-  }).filter(Boolean) as { time: string; headline: string; impact: 'positive' | 'negative' | 'neutral' }[]
+  // Q-088 (design invariant I3): `getNewsForSector()` returned fabricated
+  // headlines about real, named issuers attributed to real publishers, and
+  // `newsMarkers` plotted them on the real price chart at ARBITRARY candle
+  // indices (`length - 15 - i*10`) — the timestamps were not even a claim
+  // about when anything happened. Both are removed; <NewsFeed ticker> below
+  // renders live Yahoo items from /api/news/ticker/[ticker] instead.
+
+
+  // The aggregate tiles below read the synthetic prints directly, so they
+  // unwrap explicitly and name themselves. Q-089 tracks whether this
+  // surface should exist; while it does, the tiles carry NO disclosure
+  // today (unlike the table and gauge) — see that ticket.
+  const darkPoolPrintRows = unwrapSynthetic(darkPoolPrints, 'StockPage.darkPoolAggregateTiles')
 
   const isUp = (quote?.changePct ?? 0) >= 0
 
@@ -471,8 +472,6 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
                     <ChartErrorBoundary label={ticker} fallbackHeight={480}>
                       <KLineChart
                         candles={candles}
-                        darkPoolMarkers={darkPoolMarkers}
-                        newsMarkers={newsMarkers}
                         color={color}
                         ticker={ticker}
                         range={activeRange}
@@ -616,7 +615,7 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
 
               {activeTab === 'news' && (
                 <div role="tabpanel" id="panel-news" aria-labelledby="tab-news">
-                  <NewsFeed news={news} color={color} />
+                  <NewsFeed ticker={ticker} color={color} />
                 </div>
               )}
             </div>
@@ -648,21 +647,21 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
                 </div>
               </div>
 
-              {darkPoolPrints.length > 0 && (
+              {darkPoolPrintRows.length > 0 && (
                 <div>
                   <h3 className="text-xs font-medium text-slate-400 uppercase tracking-widest mb-3">Dark Pool Summary</h3>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="bg-slate-900/60 rounded-xl p-3.5 border border-slate-800">
                       <div className="text-xs text-slate-400 mb-1">Total Block Vol</div>
                       <div className="text-lg font-bold text-white font-mono">
-                        {formatCompactNumber(darkPoolPrints.reduce((s, p) => s + p.size, 0))}
+                        {formatCompactNumber(darkPoolPrintRows.reduce((s, p) => s + p.size, 0))}
                       </div>
                     </div>
                     <div className="bg-slate-900/60 rounded-xl p-3.5 border border-slate-800">
                       <div className="text-xs text-slate-400 mb-1">Bullish Prints</div>
                       <div className="text-lg font-bold text-green-400 font-mono">
-                        {darkPoolPrints.filter(p => p.sentiment === 'BULLISH').length}
-                        <span className="text-slate-400 text-sm font-normal">/{darkPoolPrints.length}</span>
+                        {darkPoolPrintRows.filter(p => p.sentiment === 'BULLISH').length}
+                        <span className="text-slate-400 text-sm font-normal">/{darkPoolPrintRows.length}</span>
                       </div>
                     </div>
                   </div>

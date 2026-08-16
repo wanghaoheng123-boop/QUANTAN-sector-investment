@@ -10,6 +10,7 @@ import NewsFeed from '@/components/NewsFeed'
 import WatchlistButton from '@/components/WatchlistButton'
 import { SECTORS, getSectorBySlug } from '@/lib/sectors'
 import { generateDarkPoolPrints } from '@/lib/mockData'
+import { markSynthetic, unwrapSynthetic, type Synthetic } from '@/lib/synthetic'
 import { DarkPoolPrint } from '@/lib/sectors'
 import type { DarkPoolAnalysis } from '@/lib/darkpool'
 import { buildSingleSessionSignal } from '@/lib/sessionSignalsFromQuotes'
@@ -30,9 +31,6 @@ const KLineChart = dynamic(() => import('@/components/KLineChart'), { ssr: false
 interface Candle {
   time: string; open: number; high: number; low: number; close: number; volume: number;
 }
-interface DpMarker {
-  time: string; price: number; size: number; sentiment: 'BULLISH' | 'BEARISH';
-}
 
 const SECTOR_MAIN_TABS = [
   ['chart', 'Chart'],
@@ -46,7 +44,6 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
   if (!sector) notFound()
 
   const [candles, setCandles] = useState<Candle[]>([])
-  const [darkPoolMarkers, setDarkPoolMarkers] = useState<DpMarker[]>([])
   const [quote, setQuote] = useState<{
     price: number
     change: number
@@ -57,7 +54,13 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
     pe: number
     quoteTime?: string | null
   } | null>(null)
-  const [darkPoolPrints, setDarkPoolPrints] = useState<DarkPoolPrint[]>([])
+  const [darkPoolPrints, setDarkPoolPrints] = useState<Synthetic<DarkPoolPrint[]>>(() => markSynthetic([]))
+
+  // The aggregate tiles below read the synthetic prints directly, so they
+  // unwrap explicitly and name themselves. Q-089 tracks whether this
+  // surface should exist; while it does, the tiles carry NO disclosure
+  // today (unlike the table and gauge) — see that ticket.
+  const darkPoolPrintRows = unwrapSynthetic(darkPoolPrints, 'SectorPage.darkPoolAggregateTiles')
   const [darkPoolApiData, setDarkPoolApiData] = useState<DarkPoolAnalysis | null>(null)
   const [darkPoolApiLoading, setDarkPoolApiLoading] = useState(false)
   const [activeTab, setActiveTab] = useState('chart')
@@ -87,12 +90,10 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
           const next = data.candles ?? []
           if (next.length === 0) {
             setCandles([])
-            setDarkPoolMarkers([])
-            setChartError('No historical data returned for this range')
+              setChartError('No historical data returned for this range')
             return
           }
           setCandles(next)
-          setDarkPoolMarkers(data.darkPoolMarkers ?? [])
         })
         .catch((err) => {
           if (signal?.aborted || (err instanceof DOMException && err.name === 'AbortError')) return
@@ -100,7 +101,6 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
           console.warn('[sector] chart fetch failed for', sector.etf, err)
           setChartError(msg)
           setCandles([])
-          setDarkPoolMarkers([])
         })
         .finally(() => {
           if (!signal?.aborted) setChartLoading(false)
@@ -362,7 +362,7 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
               body: (
                 <p>
                   Top panel = price (candlesticks). Below: <strong>RSI</strong> (overbought/oversold), <strong>MACD</strong> (trend momentum), <strong>ATR</strong> (volatility).
-                  Dark pool prints (blue ●) and news (green ▲) overlay on the chart. Hover crosshair shows OHLCV at any bar.
+                  Hover crosshair shows OHLCV at any bar.
                 </p>
               ),
             },
@@ -398,7 +398,6 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
             { color: '#00d084', label: 'Bullish bar / signal', meaning: 'price up vs prior close, or BUY signal' },
             { color: '#ff6b7a', label: 'Bearish bar / signal', meaning: 'price down vs prior close, or SELL signal' },
             { color: '#fbbf24', label: 'Indicator overlay', meaning: 'EMA, MACD, ATR overlays on chart' },
-            { color: '#3b82f6', label: 'Dark pool print', meaning: 'institutional block trade off-exchange' },
           ]}
         />
 
@@ -493,7 +492,6 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
                   <ChartErrorBoundary label={sector.etf} fallbackHeight={480}>
                     <KLineChart
                       candles={candles}
-                      darkPoolMarkers={darkPoolMarkers}
                       color={sector.color}
                       ticker={sector.etf}
                       range={activeRange}
@@ -554,21 +552,21 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
             )}
 
             {/* Dark Pool Summary (always visible) */}
-            {darkPoolPrints.length > 0 && (
+            {darkPoolPrintRows.length > 0 && (
               <div>
                 <h3 className="text-xs font-medium text-slate-400 uppercase tracking-widest mb-3">Dark Pool Summary</h3>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="bg-slate-900/60 rounded-xl p-3.5 border border-slate-800">
                     <div className="text-xs text-slate-400 mb-1">Total Block Vol</div>
                     <div className="text-lg font-bold text-white font-mono">
-                      {(darkPoolPrints.reduce((s, p) => s + p.size, 0) / 1e6).toFixed(2)}M
+                      {(darkPoolPrintRows.reduce((s, p) => s + p.size, 0) / 1e6).toFixed(2)}M
                     </div>
                   </div>
                   <div className="bg-slate-900/60 rounded-xl p-3.5 border border-slate-800">
                     <div className="text-xs text-slate-400 mb-1">Bullish Prints</div>
                     <div className="text-lg font-bold text-green-400 font-mono">
-                      {darkPoolPrints.filter(p => p.sentiment === 'BULLISH').length}
-                      <span className="text-slate-400 text-sm font-normal">/{darkPoolPrints.length}</span>
+                      {darkPoolPrintRows.filter(p => p.sentiment === 'BULLISH').length}
+                      <span className="text-slate-400 text-sm font-normal">/{darkPoolPrintRows.length}</span>
                     </div>
                   </div>
                 </div>

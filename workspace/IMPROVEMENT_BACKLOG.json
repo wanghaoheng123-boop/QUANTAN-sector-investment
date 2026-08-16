@@ -1942,5 +1942,173 @@
     ],
     "notes_2026_08_16": "FOUND 2026-08-16 by the red-team cold-boot pass during MAP-REPAIR, OUTSIDE that sprint scope, and filed rather than fixed per /sprint step 3. VERIFIED INDEPENDENTLY: (1) grep for __SYNTHETIC__ across app components lib hooks scripts __tests__ tests returns ZERO hits repo-wide; (2) lib/mockData.ts is production code, NOT under __tests__/ or tests/; (3) it is imported by app/api/chart/[ticker]/route.ts (generateDarkPoolMarkers — a CHART ROUTE), app/stock/[ticker]/page.tsx and app/sector/[slug]/page.tsx (generateDarkPoolPrints, getNewsForSector). CLAUDE.md I3 states verbatim: \"Any code path that could route synthetic data into a backtest, a chart, or a signal is a P0 defect. Add a runtime assertion, not just a comment.\" So this is a P0 by the constitution's own definition. SHARP EDGE: the 2026-08-15 wave recorded \"honest data labeling — the three synthetic surfaces are labeled\" as a headline win serving I1/I2/I3. LABELING IS NOT CONTAINMENT — I3 asks for the path not to exist plus a type-level tag and a runtime assertion. Tagged code is not a fixed effect. Do NOT close this by adding a label. Note the labeling work was still genuinely valuable for I1/I2; it just does not discharge I3.",
     "notes_2026_08_16b": "LIVE-PATH CONFIRMED (not dead code): generateDarkPoolMarkers is CALLED at app/api/chart/[ticker]/route.ts:111 and :236 — two executing call sites on the chart route, both fed real candle data and the ticker. Synthetic markers are therefore computed and returned alongside genuine OHLC on every chart request reaching either branch. This is not an unused import. The Phase 14 wave 29 comments at :112 and :237 show the call sites were ACTIVELY MAINTAINED (an \"as any\" cast was removed there) without the I3 question ever being raised — the code was improved while the invariant violation went unnoticed. That is why the fix must be a type-level __SYNTHETIC__ tag plus a runtime assertion at the boundary, not a comment and not a lint rule: a reviewer already looked straight at these lines and did not see it."
+  },
+  {
+    "id": "Q-089",
+    "title": "Product decision: keep or delete the synthetic dark-pool prints table, flow gauge and aggregate tiles",
+    "domain": "Frontend/UX",
+    "priority": "P2",
+    "status": "pending",
+    "files": [
+      "lib/mockData.ts",
+      "components/DarkPoolPanel.tsx",
+      "app/stock/[ticker]/page.tsx",
+      "app/sector/[slug]/page.tsx"
+    ],
+    "owner_role": "Owner (PM)",
+    "human_blocker": "Product call — whether an illustrative-only surface should exist at all. An agent can implement either outcome but should not decide which.",
+    "acceptance_criteria": [
+      "Decide: delete the synthetic prints surface, or keep it as explicitly illustrative",
+      "If DELETE: generateDarkPoolPrints, the prints table, the flow gauge and the aggregate tiles are removed, and lib/mockData.ts ceases to exist as production code",
+      "If KEEP: the aggregate tiles carry the same ILLUSTRATIVE disclosure the table and gauge already have, and the sector-page caption at app/sector/[slug]/page.tsx (which tells users \"Dark pool prints (blue ●) ... overlay on the chart\") is corrected — those chart markers were deleted in Q-088"
+    ],
+    "verify_commands": [
+      "npm run typecheck",
+      "npm run test"
+    ],
+    "notes_2026_08_16": "Filed by Q-088. That work removed every synthetic path reaching a CHART (design invariant I3 is discharged). What remains is generateDarkPoolPrints feeding the dark-pool prints TABLE, the flow gauge and the aggregate tiles — a display surface, not a chart or signal, so it is outside I3's literal clause. It is branded Synthetic<DarkPoolPrint> and guarded by assertSyntheticAccepted at the DarkPoolPanel props boundary, so it cannot leak into chart or signal paths. RECOMMENDATION: DELETE. There is no real per-print dark-pool data source in the current stack and none is purchasable within it — off-exchange PERCENTAGE from /api/darkpool/[ticker] is real and already renders, so the panel retains genuine content without the fabricated per-print rows. An illustrative table of invented prints priced from a 13-entry seed table (unknown tickers default to ~$100) sitting beside a real quote is the exact confusion UX-6 already had to patch once: prints showed ~$100 against a real $305.40 AAPL quote. KNOWN GAP EITHER WAY: the aggregate tiles at stock:651-665 and sector:557-571 derive from these synthetic prints and carry NO disclosure today, unlike the table and gauge which got ILLUSTRATIVE badges on 2026-08-15. So \"keep\" is not a no-op — it requires labeling work."
+  },
+  {
+    "id": "Q-090",
+    "title": "News publisher badge launders source tier — Tier-2 aggregator items render identically to Tier-0/1 wires",
+    "domain": "Data/Infrastructure",
+    "priority": "P2",
+    "status": "pending",
+    "files": [
+      "components/NewsFeed.tsx",
+      "app/api/news/ticker/[ticker]/route.ts",
+      "app/api/news/[sector]/route.ts"
+    ],
+    "acceptance_criteria": [
+      "Source tier is derived from the validated link HOSTNAME against an explicit allow-list, NOT from the free-text publisher string (Yahoo does not constrain that field)",
+      "Issuer/press-release wires (globenewswire.com, prnewswire.com, businesswire.com) are visibly labeled as such",
+      "Anything not on the allow-list defaults to unrated/Tier-3 rather than silently rendering as equivalent to a named wire",
+      "A test asserts an unknown hostname does NOT render at the same tier as an allow-listed one"
+    ],
+    "verify_commands": [
+      "npm run typecheck",
+      "npm run test"
+    ],
+    "notes_2026_08_16": "Filed by the disinformation-analyst review of Q-088 (PR #147). Yahoo Finance news is an AGGREGATOR republishing other outlets — Tier 2 under the platform's own source-tier model, regardless of which wire originally wrote a story. components/NewsFeed.tsx renders the raw item.publisher string in a plain badge with identical styling for every source, so Reuters and an SEO content mill are visually indistinguishable. Live smoke on /stock/AAPL returned TheStreet, Simply Wall St., Motley Fool and 24/7 Wall St. — all commentary/aggregator tier — each rendered exactly as a named wire would be. CLAUDE.md's own rule is that a Tier-2+ source may never independently move a signal and may only corroborate or flag; the display currently treats all publishers as equivalent with no flag at all. NOT a Q-088 regression — Q-088 replaced fabricated content with real content, which is strictly better; this is the next layer of honesty on the replacement."
+  },
+  {
+    "id": "Q-091",
+    "title": "Zero news items degrades sector brief dataQuality to PARTIAL with a wrong explanation",
+    "domain": "Data/Infrastructure",
+    "priority": "P2",
+    "status": "pending",
+    "files": [
+      "lib/briefs/sectorBrief.ts",
+      "app/briefs/BriefCard.tsx",
+      "app/briefs/sector/[sector]/LiveBriefClient.tsx"
+    ],
+    "acceptance_criteria": [
+      "An empty news list no longer contributes to the missing-field count that drives dataQuality",
+      "If news absence is still surfaced, it says so plainly (\"no news today\") rather than attributing it to a pre/post-market phase",
+      "A test covers the zero-news case and asserts the dataQuality label and note"
+    ],
+    "verify_commands": [
+      "npm run test"
+    ],
+    "notes_2026_08_16": "Filed by the disinformation-analyst review of Q-088. PRE-EXISTING, not introduced by that diff. lib/briefs/sectorBrief.ts:399 counts `news.length === 0` among the missing-data conditions, so a sector with no Yahoo news items for the day is labeled dataQuality \"partial\" with the note \"Some data points unavailable (N field(s) missing). Market may be in pre/post-market phase.\" aggregateDataQuality/briefsHealth take the WORST case across all 11 sectors (:539-546, :564-570), so one quiet sector degrades the whole /briefs header pill from LIVE to PARTIAL. User-visible in app/briefs/BriefCard.tsx:63-68 and LiveBriefClient.tsx:148-157. This is an I2 framing defect: a routine \"no news today\" is reported as a specific and wrong explanation about market phase. No returns claim is involved, so no event study is needed."
+  },
+  {
+    "id": "Q-092",
+    "title": "Prompt-injection review of the TradingAgents LLM sidecar",
+    "domain": "Security/Compliance",
+    "priority": "P2",
+    "status": "pending",
+    "files": [
+      "app/api/trading-agents/[ticker]/route.ts",
+      "lib/trading-agents-config.ts"
+    ],
+    "acceptance_criteria": [
+      "Establish what untrusted text the sidecar ingests and whether any of it originates from this platform",
+      "Confirm the sidecar cannot reach a tool-enabled path with write permissions",
+      "Record the finding either way, per CLAUDE.md I3/disinformation-analyst prompt-injection rules"
+    ],
+    "notes_2026_08_16": "Filed by the disinformation-analyst review of Q-088 as ADJACENT SURFACE, explicitly not a defect in that PR. The TradingAgents sidecar is the one LLM-integrated feature in the repo: a separate, pre-existing, opt-in proxy to an external self-hosted Python service that fetches its own data (data_vendor param). It is NOT wired to /api/news/ticker/[ticker] or /api/news/[sector], so Q-088's news text does not reach it. Worth a dedicated review because scraped/vendor text reaching a model is the platform's standing injection vector."
+  },
+  {
+    "id": "Q-093",
+    "title": "CLAUDE.md requires \"lint clean\" but no lint script or eslint config exists",
+    "domain": "DevOps/CI",
+    "priority": "P2",
+    "status": "pending",
+    "files": [
+      "package.json",
+      ".github/workflows/ci.yml"
+    ],
+    "acceptance_criteria": [
+      "Either a working `npm run lint` exists and passes, or the \"lint clean\" clause is removed from CLAUDE.md WHAT DONE MEANS",
+      "If lint is adopted, it runs in CI as an enforcing job (not continue-on-error)",
+      "The rule and the reality agree — whichever direction that is resolved"
+    ],
+    "verify_commands": [
+      "npm run lint"
+    ],
+    "notes_2026_08_16": "Found by the red-team review of Q-088 (finding Q088-11). CLAUDE.md WHAT DONE MEANS lists \"lint clean\" as a gate. There is no `lint` script in package.json and no eslint config; `npx next lint` drops into an interactive setup wizard. So that gate has NEVER been run, on any PR, by any agent — while every session has been reporting \"done\" against a definition that includes it. This is the instructions-are-untested-code lesson (#140) applied to the constitution itself: a rule nothing executes drifts silently and everyone believes it holds. Visible artefact in the Q-088 diff: app/sector/[slug]/page.tsx has a line indented 14 spaces inside a 12-space block, left by a deletion — exactly what a linter catches. RESOLVE IN EITHER DIRECTION, but resolve it: an unenforceable clause in the definition of done is worse than no clause, because it manufactures false confidence."
+  },
+  {
+    "id": "Q-094",
+    "title": "No runtime validation at the news fetch boundary (house style requires zod)",
+    "domain": "Frontend/UX",
+    "priority": "P3",
+    "status": "pending",
+    "files": [
+      "components/NewsFeed.tsx",
+      "app/api/news/ticker/[ticker]/route.ts",
+      "app/api/news/[sector]/route.ts"
+    ],
+    "acceptance_criteria": [
+      "The news payload is parsed with zod at the client boundary, not spread untyped into state",
+      "A malformed item is dropped or rendered as MISSING rather than producing an empty card",
+      "A test covers a 200 response carrying a malformed item"
+    ],
+    "verify_commands": [
+      "npm run typecheck",
+      "npm run test"
+    ],
+    "notes_2026_08_16": "Found by the red-team review of Q-088 (finding Q088-7). components/NewsFeed.tsx does `setNews(data.news ?? [])` with no parse, against the CLAUDE.md house rule \"Runtime validation at every I/O boundary (zod). Parse, don't validate.\" A 200 carrying {news:[{}]} renders a card with an empty headline, publisher \"Unknown\" and href=\"#\" beneath the Live badge. NOT a security hole — safeHref prevents scheme injection and React escapes the text — this is display fail-open. Low priority because the shape comes from our own route, which now fails closed on schema drift (Q088-5, fixed in PR #147); this is the remaining defence-in-depth layer."
+  },
+  {
+    "id": "Q-095",
+    "title": "findings-ledger.csv is corruption-prone: concurrent appends and 7 malformed rows",
+    "domain": "DevOps/CI",
+    "priority": "P2",
+    "status": "pending",
+    "files": [
+      "reviews/findings-ledger.csv"
+    ],
+    "acceptance_criteria": [
+      "Appends go through a script that validates column count and guarantees a trailing newline",
+      "The 7 pre-existing malformed rows are repaired or explicitly annotated as unparseable",
+      "A test (or CI step) fails when the ledger has a row whose column count differs from the header"
+    ],
+    "verify_commands": [
+      "npm run test"
+    ],
+    "notes_2026_08_16": "Found by the red-team review of Q-088 (finding Q088-12), and it hit during that very review. Two agents appended concurrently; one write left no trailing newline, so the next row glued onto the previous last field and produced a single 23-column row that SWALLOWED AN ENTIRE CRITICAL FINDING — invisible to any CSV reader. It was caught and repaired by hand, and the current file is verified (all 28 Q088-*/MR-* rows well-formed). Separately, a column-count audit shows 7 malformed rows at lines 42, 52, 57, 60, 61, 62, 113 that are PRE-EXISTING on origin/main, not caused by this work. CLAUDE.md calls this file \"the risk register\" and \"this IS the risk register\". A register that silently loses a CRITICAL row under normal multi-agent operation is not one. Consider append-only JSONL, which has no quoting/newline ambiguity, matching .quantlab/TRIAL_REGISTRY.jsonl."
+  },
+  {
+    "id": "Q-096",
+    "title": "KLineChart still accepts darkPoolMarkers/newsMarkers props with no guard",
+    "domain": "Frontend/UX",
+    "priority": "P3",
+    "status": "pending",
+    "files": [
+      "components/KLineChart.tsx",
+      "hooks/useKLineChart.ts",
+      "components/crypto/BtcChartPanel.tsx"
+    ],
+    "acceptance_criteria": [
+      "Either the marker props and their drawing code are removed, or they carry an assertNotSynthetic() guard at the prop boundary",
+      "If retained, a real data source is named for what they would plot"
+    ],
+    "verify_commands": [
+      "npm run typecheck",
+      "npm run test"
+    ],
+    "notes_2026_08_16": "Found by the red-team review of Q-088 (finding Q088-10). Nothing is broken today: Q-088 removed every producer, BtcChartPanel passes EMPTY_DARK_POOL_MARKERS, and KLineChart still accepts the props so no consumer breaks. But the rendering affordance is fully wired — hooks/useKLineChart.ts still draws both marker layers — so re-plotting fabricated markers is a one-line change. lib/synthetic.ts now exports assertNotSynthetic() precisely for boundaries like this. Low priority: the architecture allowlist already blocks the import path that fed them, and this is the belt-and-braces layer."
   }
 ]
