@@ -20,7 +20,7 @@
       "npm run benchmark",
       "npm run check:ci"
     ],
-    "notes_2026_05_23": "DONE. ci.yml expanded from typecheck-only to 4 parallel jobs: typecheck + test + benchmark (with inline WR floor check at 55.85% per invariants-baseline) + smoke. Validated YAML structure. Live verification still requires GitHub Actions run on a real PR \u2014 commit + push when user approves."
+    "notes_2026_05_23": "DONE. ci.yml expanded from typecheck-only to 4 parallel jobs: typecheck + test + benchmark (with inline WR floor check at 55.85% per invariants-baseline) + smoke. Validated YAML structure. Live verification still requires GitHub Actions run on a real PR — commit + push when user approves."
   },
   {
     "id": "Q-026",
@@ -48,7 +48,7 @@
       "npm run typecheck",
       "npm run test"
     ],
-    "notes_2026_05_23": "RESOLVED. All deleted files exist on the worktree+main: lib/portfolio/{tracker,var,riskParity,diversification,stressTest}.ts present; lib/data/providers/{alphavantage,fred,polygon,yahoo,types,index}.ts present; components/SectorRotationPanel.tsx present (143 LOC); AuthNav intentionally replaced by SafeAuth.tsx. PR #16 merged worktree \u2192 main on 2026-05-23."
+    "notes_2026_05_23": "RESOLVED. All deleted files exist on the worktree+main: lib/portfolio/{tracker,var,riskParity,diversification,stressTest}.ts present; lib/data/providers/{alphavantage,fred,polygon,yahoo,types,index}.ts present; components/SectorRotationPanel.tsx present (143 LOC); AuthNav intentionally replaced by SafeAuth.tsx. PR #16 merged worktree → main on 2026-05-23."
   },
   {
     "id": "Q-009",
@@ -73,7 +73,7 @@
     ],
     "notes_2026_05_23": "Current enhanced WR = 52.63%, vsBaseline.improvement = -3.72pp. Still well below 56.35% floor. C2 must feature-flag enhanced path off in production until improvement >= 0.",
     "completed_at": "2026-05-24",
-    "notes_2026_05_24": "Current enhanced WR = 52.63%, vsBaseline.improvement = -3.72pp. Still well below 56.35% floor. C2 must feature-flag enhanced path off in production until improvement >= 0. | 2026-05-24 Cursor Phase 15 completion batch \u2014 see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
+    "notes_2026_05_24": "Current enhanced WR = 52.63%, vsBaseline.improvement = -3.72pp. Still well below 56.35% floor. C2 must feature-flag enhanced path off in production until improvement >= 0. | 2026-05-24 Cursor Phase 15 completion batch — see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
   },
   {
     "id": "Q-003",
@@ -120,10 +120,10 @@
     ],
     "notes_2026_05_23": "Confirmed open. lib/api/rateLimit.ts:13 still uses per-process Map. Migrate to Vercel KV with Lua atomic update in S2.",
     "completed_at": "2026-05-24",
-    "notes_2026_05_24": "Confirmed open. lib/api/rateLimit.ts:13 still uses per-process Map. Migrate to Vercel KV with Lua atomic update in S2. | 2026-05-24 Cursor Phase 15 completion batch \u2014 see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md",
+    "notes_2026_05_24": "Confirmed open. lib/api/rateLimit.ts:13 still uses per-process Map. Migrate to Vercel KV with Lua atomic update in S2. | 2026-05-24 Cursor Phase 15 completion batch — see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md",
     "notes_2026_06_02_reconcile": "Reconciled 2026-06-02 handover: default remains per-process Map; KV path is opt-in via env (documented in lib/api/rateLimit.ts). Status flipped to partial until KV deployed in production.",
     "notes_2026_06_03": ".env.example documents Vercel KV setup; code path already in applyRateLimit().",
-    "notes_2026_07_16": "Still owner-gated on env provisioning (BLOCKER-OWNER-ENV). NOTE: Vercel KV is no longer offered as a product \u2014 the equivalent path is marketplace Redis (Upstash) via the Vercel Marketplace; the code path in lib/api/rateLimit.ts stays opt-in via env and unchanged."
+    "notes_2026_07_16": "Still owner-gated on env provisioning (BLOCKER-OWNER-ENV). NOTE: Vercel KV is no longer offered as a product — the equivalent path is marketplace Redis (Upstash) via the Vercel Marketplace; the code path in lib/api/rateLimit.ts stays opt-in via env and unchanged."
   },
   {
     "id": "Q-002",
@@ -146,7 +146,7 @@
       "npm run portfolio:backtest",
       "test -f scripts/portfolio-backtest-results.json"
     ],
-    "notes_2026_05_23": "DONE (Cursor subagent). Re-ran portfolio:backtest 2026-05-23 (124.9s, 56 instruments). Best hold25_pt10_trail6_panic4: WR 54.66%, maxDD 14.24%. invariants-baseline.md \u00a72 updated with reader note (ranking[0].metrics)."
+    "notes_2026_05_23": "DONE (Cursor subagent). Re-ran portfolio:backtest 2026-05-23 (124.9s, 56 instruments). Best hold25_pt10_trail6_panic4: WR 54.66%, maxDD 14.24%. invariants-baseline.md §2 updated with reader note (ranking[0].metrics)."
   },
   {
     "id": "Q-004",
@@ -172,11 +172,11 @@
       "npm run test",
       "npm run typecheck"
     ],
-    "notes_2026_05_23": "Open. FRED provider exists (lib/data/providers/fred.ts) but not wired to RFR consumers. Phase 15 S2 priority \u2014 triggers WR baseline re-freeze.",
+    "notes_2026_05_23": "Open. FRED provider exists (lib/data/providers/fred.ts) but not wired to RFR consumers. Phase 15 S2 priority — triggers WR baseline re-freeze.",
     "completed_at": "2026-06-02",
-    "notes_2026_05_24": "PARTIAL. lib/quant/riskFreeRate.ts exists with sync + async + FRED CSV. engine.ts:434/445/591/671 calls getRiskFreeRateSync. BUT (a) the cache is never hydrated (no module-init async warm-up), so sync calls return the static fallback BACKTEST_RFR_ANNUAL=0.045 verbatim \u2014 Q-004 is functionally inert for the benchmark; (b) lib/options/chain.ts:56 still imports the static OPTIONS_RFR_ANNUAL constant directly; (c) lib/backtest/portfolioBacktest.ts:529 still uses BACKTEST_RFR_ANNUAL directly. Continuation: Q-052-NEW. | 2026-05-24 Claude-Code review: Cursor's HANDOFF + PENDING_TASKS_AUDIT honestly described this as partial, but the JSON status field was set to 'done'. Flipped to 'partial' to match physical reality. See workspace/REVIEW_2026-05-24.md.",
+    "notes_2026_05_24": "PARTIAL. lib/quant/riskFreeRate.ts exists with sync + async + FRED CSV. engine.ts:434/445/591/671 calls getRiskFreeRateSync. BUT (a) the cache is never hydrated (no module-init async warm-up), so sync calls return the static fallback BACKTEST_RFR_ANNUAL=0.045 verbatim — Q-004 is functionally inert for the benchmark; (b) lib/options/chain.ts:56 still imports the static OPTIONS_RFR_ANNUAL constant directly; (c) lib/backtest/portfolioBacktest.ts:529 still uses BACKTEST_RFR_ANNUAL directly. Continuation: Q-052-NEW. | 2026-05-24 Claude-Code review: Cursor's HANDOFF + PENDING_TASKS_AUDIT honestly described this as partial, but the JSON status field was set to 'done'. Flipped to 'partial' to match physical reality. See workspace/REVIEW_2026-05-24.md.",
     "notes_2026_06_02": "PROD ACTIVE. Owner set QUANTAN_FRED_PREWARM=1 on quantan Production (deploy dpl_6huKCcxVyL11rkAJ8TzoQX7aCz5t). Code: lib/quant/riskFreeRate.ts module-init prewarm; chain.ts + portfolioBacktest.ts on getRiskFreeRateSync. Benchmark WR unchanged in CI (cold cache by design); prod Sharpe/Sortino/Greeks FRED-backed.",
-    "prior_closure_note": "Open. FRED provider exists (lib/data/providers/fred.ts) but not wired to RFR consumers. Phase 15 S2 priority \u2014 triggers WR baseline re-freeze. | 2026-05-24 Cursor Phase 15 completion batch \u2014 see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
+    "prior_closure_note": "Open. FRED provider exists (lib/data/providers/fred.ts) but not wired to RFR consumers. Phase 15 S2 priority — triggers WR baseline re-freeze. | 2026-05-24 Cursor Phase 15 completion batch — see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
   },
   {
     "id": "Q-006",
@@ -243,12 +243,12 @@
       "npm run typecheck",
       "npm run check:smoke:local"
     ],
-    "notes_2026_05_23": "Confirmed 1,684 LOC (grew from 1,653). Phase 15 S3 decomposes to \u2264 5 sub-tabs each \u2264 400 LOC.",
+    "notes_2026_05_23": "Confirmed 1,684 LOC (grew from 1,653). Phase 15 S3 decomposes to ≤ 5 sub-tabs each ≤ 400 LOC.",
     "completed_at": null,
     "notes_2026_05_24": "PARTIAL. components/stock/QuantLabMarketCards.tsx extracted, but components/stock/QuantLabPanel.tsx is still 1,684 LOC (no change from baseline). Continuation: Q-053-NEW. | 2026-05-24 Claude-Code review: Cursor's HANDOFF + PENDING_TASKS_AUDIT honestly described this as partial, but the JSON status field was set to 'done'. Flipped to 'partial' to match physical reality. See workspace/REVIEW_2026-05-24.md.",
-    "notes_2026_06_01": "CLOSED. Verified components/stock/QuantLabPanel.tsx is now 148 LOC (decomposed via Q-053-NEW; was 1,684). Meets the \u2264600 LOC criterion. Evidence: inspection INSPECTION_PROGRAM_2026-05-30.md D3 (CONTRADICTS Q-008) + direct wc -l on main @ 8d56955.",
-    "partial": "Extracted submodule only; parent file still >600 LOC \u2014 Phase 16 full decompose",
-    "prior_closure_note": "Confirmed 1,684 LOC (grew from 1,653). Phase 15 S3 decomposes to \u2264 5 sub-tabs each \u2264 400 LOC. | 2026-05-24 Cursor Phase 15 completion batch \u2014 see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
+    "notes_2026_06_01": "CLOSED. Verified components/stock/QuantLabPanel.tsx is now 148 LOC (decomposed via Q-053-NEW; was 1,684). Meets the ≤600 LOC criterion. Evidence: inspection INSPECTION_PROGRAM_2026-05-30.md D3 (CONTRADICTS Q-008) + direct wc -l on main @ 8d56955.",
+    "partial": "Extracted submodule only; parent file still >600 LOC — Phase 16 full decompose",
+    "prior_closure_note": "Confirmed 1,684 LOC (grew from 1,653). Phase 15 S3 decomposes to ≤ 5 sub-tabs each ≤ 400 LOC. | 2026-05-24 Cursor Phase 15 completion batch — see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
   },
   {
     "id": "Q-010",
@@ -270,7 +270,7 @@
       "npm run test",
       "npm run benchmark"
     ],
-    "notes_2026_05_23": "RESOLVED. Worktree commits merged via PR #16 (commit 7321b54) on 2026-05-23. Main now contains waves 35\u201341 (SSE real-time + options audit + Phase 14 S1 sweep)."
+    "notes_2026_05_23": "RESOLVED. Worktree commits merged via PR #16 (commit 7321b54) on 2026-05-23. Main now contains waves 35–41 (SSE real-time + options audit + Phase 14 S1 sweep)."
   },
   {
     "id": "Q-011",
@@ -298,7 +298,7 @@
     "depends_on": [
       "Q-026"
     ],
-    "notes_2026_05_23": "RESOLVED. All 5 portfolio modules present on disk. Portfolio dashboard page (Q-028) still missing \u2014 moved to S4."
+    "notes_2026_05_23": "RESOLVED. All 5 portfolio modules present on disk. Portfolio dashboard page (Q-028) still missing — moved to S4."
   },
   {
     "id": "Q-014",
@@ -318,7 +318,7 @@
     "verify_commands": [
       "npm run test"
     ],
-    "notes_2026_05_23": "DONE. invariants-baseline.md rewritten with Phase 15 amendment block: \u00a73 test floor 279\u2192798, files 21\u219248; \u00a71 WR re-measured 57.05%; \u00a74 LOC drift recorded; \u00a77 security baseline NEW (incl. Q-029 closed + Q-039-NEW false-positive note). Historical Phase 13 values preserved at \u00a7H for audit continuity. Pending C2 sign-off \u2014 flag for PM."
+    "notes_2026_05_23": "DONE. invariants-baseline.md rewritten with Phase 15 amendment block: §3 test floor 279→798, files 21→48; §1 WR re-measured 57.05%; §4 LOC drift recorded; §7 security baseline NEW (incl. Q-029 closed + Q-039-NEW false-positive note). Historical Phase 13 values preserved at §H for audit continuity. Pending C2 sign-off — flag for PM."
   },
   {
     "id": "Q-015",
@@ -385,12 +385,12 @@
       "npm run typecheck",
       "npm run check:smoke:local"
     ],
-    "notes_2026_05_23": "Confirmed 887 LOC. S3 target \u2264 200 (page) + presentational components.",
+    "notes_2026_05_23": "Confirmed 887 LOC. S3 target ≤ 200 (page) + presentational components.",
     "completed_at": null,
     "notes_2026_05_24": "PARTIAL. components/backtest/BacktestMetricsGrid.tsx extracted, but app/backtest/page.tsx is still 887 LOC (no change). Continuation: Q-054-NEW. | 2026-05-24 Claude-Code review: Cursor's HANDOFF + PENDING_TASKS_AUDIT honestly described this as partial, but the JSON status field was set to 'done'. Flipped to 'partial' to match physical reality. See workspace/REVIEW_2026-05-24.md.",
     "notes_2026_06_01": "CLOSED. Verified app/backtest/page.tsx is now 268 LOC (decomposed via Q-054-NEW; was 887). Meets the <400 LOC criterion. Evidence: inspection INSPECTION_PROGRAM_2026-05-30.md D3 (Q-019) + direct wc -l on main @ 8d56955.",
-    "partial": "Extracted submodule only; parent file still >600 LOC \u2014 Phase 16 full decompose",
-    "prior_closure_note": "Confirmed 887 LOC. S3 target \u2264 200 (page) + presentational components. | 2026-05-24 Cursor Phase 15 completion batch \u2014 see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
+    "partial": "Extracted submodule only; parent file still >600 LOC — Phase 16 full decompose",
+    "prior_closure_note": "Confirmed 887 LOC. S3 target ≤ 200 (page) + presentational components. | 2026-05-24 Cursor Phase 15 completion batch — see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
   },
   {
     "id": "Q-020",
@@ -411,7 +411,7 @@
     "verify_commands": [
       "npm run test -- __tests__/api/prices.test.ts"
     ],
-    "notes_2026_05_24": "DONE. __tests__/api/prices.test.ts \u2014 400 invalid/too_many, 200 shape, 500 error envelope (mocked Yahoo)."
+    "notes_2026_05_24": "DONE. __tests__/api/prices.test.ts — 400 invalid/too_many, 200 shape, 500 error envelope (mocked Yahoo)."
   },
   {
     "id": "Q-021",
@@ -433,7 +433,7 @@
     ],
     "notes_2026_05_23": "Open per ledger. Yahoo historical() includes dividends array; load and apply to B&H equity curve. Triggers WR baseline re-freeze.",
     "completed_at": "2026-05-24",
-    "notes_2026_05_24": "Open per ledger. Yahoo historical() includes dividends array; load and apply to B&H equity curve. Triggers WR baseline re-freeze. | 2026-05-24 Cursor Phase 15 completion batch \u2014 see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
+    "notes_2026_05_24": "Open per ledger. Yahoo historical() includes dividends array; load and apply to B&H equity curve. Triggers WR baseline re-freeze. | 2026-05-24 Cursor Phase 15 completion batch — see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
   },
   {
     "id": "Q-022",
@@ -458,7 +458,7 @@
     "depends_on": [
       "Q-001"
     ],
-    "notes_2026_05_23": "DONE. vitest.config.ts include[] expanded to lib/api, lib/data, lib/portfolio, lib/optimize, lib/ml, hooks. Expanded run measured 62.43% global (below 80% floor) \u2192 Q-051-NEW filed; coverage.exclude[] temporarily omits hooks, lib/ml, lib/optimize, lib/portfolio, lib/data/{providers,bloomberg}. With excludes: 82.25% stmts / 70.54% branches / 86.76% funcs / 84.08% lines \u2014 PASS. ci.yml coverage job added (Q-022)."
+    "notes_2026_05_23": "DONE. vitest.config.ts include[] expanded to lib/api, lib/data, lib/portfolio, lib/optimize, lib/ml, hooks. Expanded run measured 62.43% global (below 80% floor) → Q-051-NEW filed; coverage.exclude[] temporarily omits hooks, lib/ml, lib/optimize, lib/portfolio, lib/data/{providers,bloomberg}. With excludes: 82.25% stmts / 70.54% branches / 86.76% funcs / 84.08% lines — PASS. ci.yml coverage job added (Q-022)."
   },
   {
     "id": "Q-023",
@@ -482,7 +482,7 @@
       "npm run test -- __tests__/api/reliability.test.ts",
       "npm run typecheck"
     ],
-    "notes_2026_05_23": "DONE. (1) lib/api/reliability.ts: extracted buildErrorBody SSOT; spread-guard means undefined details no longer leaks as 'details: null' (per Phase 14 \u00a7S2.10 finding). (2) app/api/prices/route.ts: inline NODE_ENV sanitization replaced with sanitizeError() import from lib/api/sanitize. All 15 reliability tests pass; full suite 798/798 pass. Typecheck clean."
+    "notes_2026_05_23": "DONE. (1) lib/api/reliability.ts: extracted buildErrorBody SSOT; spread-guard means undefined details no longer leaks as 'details: null' (per Phase 14 §S2.10 finding). (2) app/api/prices/route.ts: inline NODE_ENV sanitization replaced with sanitizeError() import from lib/api/sanitize. All 15 reliability tests pass; full suite 798/798 pass. Typecheck clean."
   },
   {
     "id": "Q-024",
@@ -614,9 +614,9 @@
       "npm run test -- __tests__/backtest/signals.test.ts",
       "npm run benchmark"
     ],
-    "notes_2026_05_23": "Open per ledger. Wilder (1978) p65 piecewise: RSI<30 \u2192 +1.0; 30-70 linear; >70 \u2192 -1.0.",
+    "notes_2026_05_23": "Open per ledger. Wilder (1978) p65 piecewise: RSI<30 → +1.0; 30-70 linear; >70 → -1.0.",
     "completed_at": "2026-05-24",
-    "notes_2026_05_24": "Open per ledger. Wilder (1978) p65 piecewise: RSI<30 \u2192 +1.0; 30-70 linear; >70 \u2192 -1.0. | 2026-05-24 Cursor Phase 15 completion batch \u2014 see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
+    "notes_2026_05_24": "Open per ledger. Wilder (1978) p65 piecewise: RSI<30 → +1.0; 30-70 linear; >70 → -1.0. | 2026-05-24 Cursor Phase 15 completion batch — see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
   },
   {
     "id": "Q-027",
@@ -638,7 +638,7 @@
     ],
     "notes_2026_05_23": "Open. __tests__/components/ doesn't exist. S4 adds @testing-library/react + vitest jsdom env + 3 smoke tests.",
     "completed_at": "2026-05-24",
-    "notes_2026_05_24": "Open. __tests__/components/ doesn't exist. S4 adds @testing-library/react + vitest jsdom env + 3 smoke tests. | 2026-05-24 Cursor Phase 15 completion batch \u2014 see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
+    "notes_2026_05_24": "Open. __tests__/components/ doesn't exist. S4 adds @testing-library/react + vitest jsdom env + 3 smoke tests. | 2026-05-24 Cursor Phase 15 completion batch — see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
   },
   {
     "id": "Q-028",
@@ -664,7 +664,7 @@
     ],
     "notes_2026_05_23": "Open. No app/portfolio/page.tsx yet. S4 wires lib/portfolio + portfolio-backtest-results.json into a dashboard with portfolio Greeks (R9-H-2).",
     "completed_at": "2026-05-24",
-    "notes_2026_05_24": "Open. No app/portfolio/page.tsx yet. S4 wires lib/portfolio + portfolio-backtest-results.json into a dashboard with portfolio Greeks (R9-H-2). | 2026-05-24 Cursor Phase 15 completion batch \u2014 see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
+    "notes_2026_05_24": "Open. No app/portfolio/page.tsx yet. S4 wires lib/portfolio + portfolio-backtest-results.json into a dashboard with portfolio Greeks (R9-H-2). | 2026-05-24 Cursor Phase 15 completion batch — see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
   },
   {
     "id": "Q-029",
@@ -707,7 +707,7 @@
       "npm run test -- __tests__/ml/client.test.ts",
       "npm run check:smoke"
     ],
-    "notes_2026_05_24": "DONE. __tests__/ml/client.test.ts \u2014 happy path, non-OK, network error, abort, health up/down."
+    "notes_2026_05_24": "DONE. __tests__/ml/client.test.ts — happy path, non-OK, network error, abort, health up/down."
   },
   {
     "id": "Q-031",
@@ -801,7 +801,7 @@
       "test -f scripts/optimization-results-loop1.json",
       "npm run optimize:grid"
     ],
-    "notes_2026_05_24": "DONE. reviews/optimization-loop1.md + script header in optimize-grid.ts. Aggregate OOS WR 25.73% \u2014 not production-ready."
+    "notes_2026_05_24": "DONE. reviews/optimization-loop1.md + script header in optimize-grid.ts. Aggregate OOS WR 25.73% — not production-ready."
   },
   {
     "id": "Q-035",
@@ -821,11 +821,11 @@
     "verify_commands": [
       "npm run check:smoke:local"
     ],
-    "notes_2026_05_23": "Bundled into F5.6 / F6.5\u2013F6.8 a11y sweep in S4.",
+    "notes_2026_05_23": "Bundled into F5.6 / F6.5–F6.8 a11y sweep in S4.",
     "completed_at": "2026-06-03",
-    "notes_2026_05_24": "Bundled into F5.6 / F6.5\u2013F6.8 a11y sweep in S4. | 2026-05-24 Cursor Phase 15 completion batch \u2014 see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md",
-    "notes_2026_06_01": "REOPENED as PARTIAL. 7 low-contrast text-gray-600/text-slate-600 sites survived the S4 close across 4 files (SectorRotationPanel, options/MaxPainGauge, options/FlowScanner, options/OptionsChainTable) \u2014 fail ~3.4:1 vs WCAG AA 4.5:1. Evidence: inspection INSPECTION_PROGRAM_2026-05-30.md D3-6 + grep on main @ 8d56955. FIX IN FLIGHT: PR #32 (a11y sweep) addresses these; OptionsChainTable is covered by PR #29. Mark done once #32+#29 merge.",
-    "notes_2026_06_03": "DONE. OptionsChainTable footer text-gray-600 \u2192 text-gray-400; grep clean in components/."
+    "notes_2026_05_24": "Bundled into F5.6 / F6.5–F6.8 a11y sweep in S4. | 2026-05-24 Cursor Phase 15 completion batch — see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md",
+    "notes_2026_06_01": "REOPENED as PARTIAL. 7 low-contrast text-gray-600/text-slate-600 sites survived the S4 close across 4 files (SectorRotationPanel, options/MaxPainGauge, options/FlowScanner, options/OptionsChainTable) — fail ~3.4:1 vs WCAG AA 4.5:1. Evidence: inspection INSPECTION_PROGRAM_2026-05-30.md D3-6 + grep on main @ 8d56955. FIX IN FLIGHT: PR #32 (a11y sweep) addresses these; OptionsChainTable is covered by PR #29. Mark done once #32+#29 merge.",
+    "notes_2026_06_03": "DONE. OptionsChainTable footer text-gray-600 → text-gray-400; grep clean in components/."
   },
   {
     "id": "Q-036",
@@ -849,7 +849,7 @@
     "notes_2026_05_23": "Open per ledger. Double-submit cookie pattern; 1-day effort in S4.",
     "completed_at": "2026-05-24",
     "notes_2026_05_24": "CSRF guard closed via Q-055-NEW (cookie issuance + trading-agents POST validated). | 2026-05-24 superseded by the named continuation task. Closing here so the backlog tally reflects real outstanding work; the parent task's objectives live with its successor. (prior note: PARTIAL. lib/api/csrf.ts implemented and wired to app/api/backtest/route.ts:156 )",
-    "prior_closure_note": "Open per ledger. Double-submit cookie pattern; 1-day effort in S4. | 2026-05-24 Cursor Phase 15 completion batch \u2014 see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md",
+    "prior_closure_note": "Open per ledger. Double-submit cookie pattern; 1-day effort in S4. | 2026-05-24 Cursor Phase 15 completion batch — see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md",
     "superseded_by": "Q-055-NEW"
   },
   {
@@ -891,7 +891,7 @@
     ],
     "notes_2026_05_23": "Open per ledger. Documentation + UI tail-warning approach (avoids changing the metric).",
     "completed_at": "2026-05-24",
-    "notes_2026_05_24": "Open per ledger. Documentation + UI tail-warning approach (avoids changing the metric). | 2026-05-24 Cursor Phase 15 completion batch \u2014 see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
+    "notes_2026_05_24": "Open per ledger. Documentation + UI tail-warning approach (avoids changing the metric). | 2026-05-24 Cursor Phase 15 completion batch — see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
   },
   {
     "id": "Q-039-NEW",
@@ -912,7 +912,7 @@
     "verify_commands": [
       "od -c lib/auth.ts | grep test.trimmed"
     ],
-    "notes_2026_05_23": "FALSE POSITIVE \u2014 withdrawn. In-session execution discovered the file ALREADY contains /[\\x00-\\x1f\\x7f]/. Verified via od -c (bytes `[ \\0 - 037 177 ]`) and live JS eval ('John Smith' accepted; 'user\\x00name' rejected). The Read tool rendered NUL/US/DEL bytes as visual space/hyphen which made the line LOOK like /[ -]/ when displayed. Original Node REPL test re-typed the regex from Read output, not from file bytes \u2014 so it confirmed a phantom bug. F7.9 wrapper + predicate both correctly landed in Phase 13 S2. Lesson logged in PHASE-15-PLAN.md \u00a71 and workspace/HANDOFF.md."
+    "notes_2026_05_23": "FALSE POSITIVE — withdrawn. In-session execution discovered the file ALREADY contains /[\\x00-\\x1f\\x7f]/. Verified via od -c (bytes `[ \\0 - 037 177 ]`) and live JS eval ('John Smith' accepted; 'user\\x00name' rejected). The Read tool rendered NUL/US/DEL bytes as visual space/hyphen which made the line LOOK like /[ -]/ when displayed. Original Node REPL test re-typed the regex from Read output, not from file bytes — so it confirmed a phantom bug. F7.9 wrapper + predicate both correctly landed in Phase 13 S2. Lesson logged in PHASE-15-PLAN.md §1 and workspace/HANDOFF.md."
   },
   {
     "id": "Q-040-NEW",
@@ -934,10 +934,10 @@
       "npm run build",
       "curl -I https://quantan.app | grep Content-Security-Policy"
     ],
-    "notes_2026_05_23": "NEW Phase 15 P0. next.config.js:46 still 'Content-Security-Policy-Report-Only'. Phase 14 plan \u00a7S2.9 had this \u2014 never landed.",
+    "notes_2026_05_23": "NEW Phase 15 P0. next.config.js:46 still 'Content-Security-Policy-Report-Only'. Phase 14 plan §S2.9 had this — never landed.",
     "completed_at": "2026-05-24",
-    "notes_2026_05_24": "NEW Phase 15 P0. next.config.js:46 still 'Content-Security-Policy-Report-Only'. Phase 14 plan \u00a7S2.9 had this \u2014 never landed. | 2026-05-24 Cursor Phase 15 completion batch \u2014 see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md",
-    "partial": "CSP enforcing deferred \u2014 middleware nonce scaffold + Report-Only in next.config.js; set QUANTAN_CSP_ENFORCE=1 after audit"
+    "notes_2026_05_24": "NEW Phase 15 P0. next.config.js:46 still 'Content-Security-Policy-Report-Only'. Phase 14 plan §S2.9 had this — never landed. | 2026-05-24 Cursor Phase 15 completion batch — see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md",
+    "partial": "CSP enforcing deferred — middleware nonce scaffold + Report-Only in next.config.js; set QUANTAN_CSP_ENFORCE=1 after audit"
   },
   {
     "id": "Q-041-NEW",
@@ -961,9 +961,9 @@
       "python -m pytest quant_framework/",
       "curl /api/conditional-vol/SPY"
     ],
-    "notes_2026_05_23": "NEW Phase 15 \u2014 institutional analytics carry-over from R9-C-1. Engle (1982); Bollerslev (1986). 4 days.",
+    "notes_2026_05_23": "NEW Phase 15 — institutional analytics carry-over from R9-C-1. Engle (1982); Bollerslev (1986). 4 days.",
     "completed_at": "2026-05-24",
-    "notes_2026_05_24": "NEW Phase 15 \u2014 institutional analytics carry-over from R9-C-1. Engle (1982); Bollerslev (1986). 4 days. | 2026-05-24 Cursor Phase 15 completion batch \u2014 see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
+    "notes_2026_05_24": "NEW Phase 15 — institutional analytics carry-over from R9-C-1. Engle (1982); Bollerslev (1986). 4 days. | 2026-05-24 Cursor Phase 15 completion batch — see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
   },
   {
     "id": "Q-042-NEW",
@@ -986,9 +986,9 @@
       "python -m pytest quant_framework/",
       "npm run benchmark"
     ],
-    "notes_2026_05_23": "NEW Phase 15 \u2014 institutional analytics. Hamilton (1989); Guidolin & Timmermann (2007). 5 days.",
+    "notes_2026_05_23": "NEW Phase 15 — institutional analytics. Hamilton (1989); Guidolin & Timmermann (2007). 5 days.",
     "completed_at": "2026-05-24",
-    "notes_2026_05_24": "NEW Phase 15 \u2014 institutional analytics. Hamilton (1989); Guidolin & Timmermann (2007). 5 days. | 2026-05-24 Cursor Phase 15 completion batch \u2014 see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
+    "notes_2026_05_24": "NEW Phase 15 — institutional analytics. Hamilton (1989); Guidolin & Timmermann (2007). 5 days. | 2026-05-24 Cursor Phase 15 completion batch — see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
   },
   {
     "id": "Q-043-NEW",
@@ -1004,7 +1004,7 @@
     "acceptance_criteria": [
       "Re-prices portfolio under spot/vol/rate shocks",
       "6 canned scenarios: Fed +100bps, S&P -10%, VIX +50%, 2008-style, COVID, Flash Crash",
-      "Aggregates portfolio Greeks (\u0394 \u0393 \u03bd \u03b8 \u03c1)"
+      "Aggregates portfolio Greeks (Δ Γ ν θ ρ)"
     ],
     "verify_commands": [
       "npm run test -- __tests__/scenarios/",
@@ -1012,7 +1012,7 @@
     ],
     "notes_2026_05_23": "NEW Phase 15. Jorion (2006) ch.7. 6 days.",
     "completed_at": "2026-05-24",
-    "notes_2026_05_24": "NEW Phase 15. Jorion (2006) ch.7. 6 days. | 2026-05-24 Cursor Phase 15 completion batch \u2014 see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
+    "notes_2026_05_24": "NEW Phase 15. Jorion (2006) ch.7. 6 days. | 2026-05-24 Cursor Phase 15 completion batch — see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
   },
   {
     "id": "Q-044-NEW",
@@ -1036,7 +1036,7 @@
     ],
     "notes_2026_05_23": "NEW Phase 15. Carhart (1997); Fama-French (2015). 4 days.",
     "completed_at": "2026-05-24",
-    "notes_2026_05_24": "NEW Phase 15. Carhart (1997); Fama-French (2015). 4 days. | 2026-05-24 Cursor Phase 15 completion batch \u2014 see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
+    "notes_2026_05_24": "NEW Phase 15. Carhart (1997); Fama-French (2015). 4 days. | 2026-05-24 Cursor Phase 15 completion batch — see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
   },
   {
     "id": "Q-045-NEW",
@@ -1059,7 +1059,7 @@
     ],
     "notes_2026_05_23": "NEW Phase 15. Bhansali (2014). 3 days.",
     "completed_at": "2026-05-24",
-    "notes_2026_05_24": "NEW Phase 15. Bhansali (2014). 3 days. | 2026-05-24 Cursor Phase 15 completion batch \u2014 see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
+    "notes_2026_05_24": "NEW Phase 15. Bhansali (2014). 3 days. | 2026-05-24 Cursor Phase 15 completion batch — see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
   },
   {
     "id": "Q-046-NEW",
@@ -1080,7 +1080,7 @@
     ],
     "notes_2026_05_23": "NEW Phase 15. Krishnan (2017). 2 days. Feeds into Q-028.",
     "completed_at": "2026-05-24",
-    "notes_2026_05_24": "NEW Phase 15. Krishnan (2017). 2 days. Feeds into Q-028. | 2026-05-24 Cursor Phase 15 completion batch \u2014 see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
+    "notes_2026_05_24": "NEW Phase 15. Krishnan (2017). 2 days. Feeds into Q-028. | 2026-05-24 Cursor Phase 15 completion batch — see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
   },
   {
     "id": "Q-047-NEW",
@@ -1104,7 +1104,7 @@
     "completed_at": "2026-05-24",
     "notes_2026_05_24": "Stryker setup closed via Q-056-NEW (packages installed + dry-run verified). | 2026-05-24 superseded by the named continuation task. Closing here so the backlog tally reflects real outstanding work; the parent task's objectives live with its successor. (prior note: PARTIAL. stryker.conf.mjs exists; package.json has 'stryker' script. BUT @stryke)",
     "partial": "stryker.conf.mjs + npm run stryker; install @stryker-mutator/* before CI gate",
-    "prior_closure_note": "NEW Phase 15. Jia & Harman (2011); Petrovic & Ivankovic (2018). 2 days setup + iterative improvement. | 2026-05-24 Cursor Phase 15 completion batch \u2014 see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md",
+    "prior_closure_note": "NEW Phase 15. Jia & Harman (2011); Petrovic & Ivankovic (2018). 2 days setup + iterative improvement. | 2026-05-24 Cursor Phase 15 completion batch — see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md",
     "superseded_by": "Q-056-NEW"
   },
   {
@@ -1130,7 +1130,7 @@
     ],
     "notes_2026_05_23": "NEW Phase 15. Polygon provider class exists but not wired. 2 days code + 1 week external legal opinion.",
     "completed_at": "2026-05-24",
-    "notes_2026_05_24": "NEW Phase 15. Polygon provider class exists but not wired. 2 days code + 1 week external legal opinion. | 2026-05-24 Cursor Phase 15 completion batch \u2014 see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
+    "notes_2026_05_24": "NEW Phase 15. Polygon provider class exists but not wired. 2 days code + 1 week external legal opinion. | 2026-05-24 Cursor Phase 15 completion batch — see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
   },
   {
     "id": "Q-049-NEW",
@@ -1153,7 +1153,7 @@
     ],
     "notes_2026_05_23": "NEW Phase 15. Only parseLiveQuote pure validator tested; EventSource lifecycle untested. 1 day.",
     "completed_at": "2026-05-24",
-    "notes_2026_05_24": "NEW Phase 15. Only parseLiveQuote pure validator tested; EventSource lifecycle untested. 1 day. | 2026-05-24 Cursor Phase 15 completion batch \u2014 see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
+    "notes_2026_05_24": "NEW Phase 15. Only parseLiveQuote pure validator tested; EventSource lifecycle untested. 1 day. | 2026-05-24 Cursor Phase 15 completion batch — see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
   },
   {
     "id": "Q-050-NEW",
@@ -1174,7 +1174,7 @@
     ],
     "notes_2026_05_23": "NEW Phase 15. app/crypto/btc/page.tsx:555-556 still polls REST every 60s as primary. 1 day.",
     "completed_at": "2026-05-24",
-    "notes_2026_05_24": "NEW Phase 15. app/crypto/btc/page.tsx:555-556 still polls REST every 60s as primary. 1 day. | 2026-05-24 Cursor Phase 15 completion batch \u2014 see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
+    "notes_2026_05_24": "NEW Phase 15. app/crypto/btc/page.tsx:555-556 still polls REST every 60s as primary. 1 day. | 2026-05-24 Cursor Phase 15 completion batch — see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md"
   },
   {
     "id": "Q-051-NEW",
@@ -1202,15 +1202,15 @@
     "depends_on": [
       "Q-022"
     ],
-    "notes_2026_05_23": "Filed during Q-022. Full expanded include measured 62.43% stmts / 57.71% branches / 60.52% funcs / 64.27% lines. Worst gaps: hooks 5.58%, lib/ml 0%, lib/optimize 0.48%, lib/portfolio 51.28%, lib/data/providers 0%. Temporarily excluded via coverage.exclude[] \u2014 do NOT lower threshold percentages.",
+    "notes_2026_05_23": "Filed during Q-022. Full expanded include measured 62.43% stmts / 57.71% branches / 60.52% funcs / 64.27% lines. Worst gaps: hooks 5.58%, lib/ml 0%, lib/optimize 0.48%, lib/portfolio 51.28%, lib/data/providers 0%. Temporarily excluded via coverage.exclude[] — do NOT lower threshold percentages.",
     "completed_at": "2026-05-24",
-    "notes_2026_05_24": "Filed during Q-022. Full expanded include measured 62.43% stmts / 57.71% branches / 60.52% funcs / 64.27% lines. Worst gaps: hooks 5.58%, lib/ml 0%, lib/optimize 0.48%, lib/portfolio 51.28%, lib/data/providers 0%. Temporarily excluded via coverage.exclude[] \u2014 do NOT lower threshold percentages. | 2026-05-24 Cursor Phase 15 completion batch \u2014 see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md",
+    "notes_2026_05_24": "Filed during Q-022. Full expanded include measured 62.43% stmts / 57.71% branches / 60.52% funcs / 64.27% lines. Worst gaps: hooks 5.58%, lib/ml 0%, lib/optimize 0.48%, lib/portfolio 51.28%, lib/data/providers 0%. Temporarily excluded via coverage.exclude[] — do NOT lower threshold percentages. | 2026-05-24 Cursor Phase 15 completion batch — see workspace/CLAUDE_CODE_REVIEW_HANDOFF.md",
     "blocker": "Global coverage 62% with full include; excludes remain until more unit tests",
-    "notes_2026_05_24_progress": "PROGRESS. +44 tests in 3 new files (878 total, 66 files). Closed: __tests__/portfolio/tracker.test.ts (17), __tests__/portfolio/riskParity.test.ts (16), __tests__/data/providers.test.ts (12). Still uncovered: hooks/ (useLivePrices, useDialogA11y, useWatchlist, useErrorToast), lib/ml/, lib/optimize/ (gridSearch, parameterSets, sectorProfiles), lib/data/bloomberg/toBloombergSecurity.ts, lib/data/providers/yahoo.ts + index.ts + types.ts. Vitest config still excludes these from coverage thresholds until backfill completes. Side-discovery during this batch: real convergence bug in lib/portfolio/riskParity.ts:ercWeights (linear update oscillated on asymmetric variances) \u2014 fixed via sqrt() damping per Maillard-Roncalli-Teiletche (2010) \u00a74.2.",
+    "notes_2026_05_24_progress": "PROGRESS. +44 tests in 3 new files (878 total, 66 files). Closed: __tests__/portfolio/tracker.test.ts (17), __tests__/portfolio/riskParity.test.ts (16), __tests__/data/providers.test.ts (12). Still uncovered: hooks/ (useLivePrices, useDialogA11y, useWatchlist, useErrorToast), lib/ml/, lib/optimize/ (gridSearch, parameterSets, sectorProfiles), lib/data/bloomberg/toBloombergSecurity.ts, lib/data/providers/yahoo.ts + index.ts + types.ts. Vitest config still excludes these from coverage thresholds until backfill completes. Side-discovery during this batch: real convergence bug in lib/portfolio/riskParity.ts:ercWeights (linear update oscillated on asymmetric variances) — fixed via sqrt() damping per Maillard-Roncalli-Teiletche (2010) §4.2.",
     "notes_2026_06_03": "Removed lib/quant/frameworks.ts from coverage.exclude[]; added __tests__/quant/frameworks.test.ts.",
     "notes_2026_07_16": "Progress: lib/optimize/gridSearch.ts gained direct tests (Q-064), lib/portfolio tracker/var/stressTest exports gained direct tests (Q-074). Un-exclusion still requires measuring full-include coverage in CI (jsdom suites are CI-only on this machine) before touching coverage.exclude[].",
-    "notes_2026_07_17": "CONTINUATION SHIPPED: 3 excludes removed from vitest.config.ts coverage.exclude \u2014 lib/ml/** (stale: __tests__/ml/client.test.ts already existed), lib/data/bloomberg/** (new __tests__/data/bloombergBridge.test.ts: 13 tests covering both mappers, timing-safe secret compare, quote normalization with flexible keys, fail-closed HTTP/network paths, health check), lib/optimize/gridSearch.ts (Q-064 purged tests + new legacy-contract tests: 70/30 split geometry, protocol gates, aggregation). Local node-only approximation: global 92.97/82.4/95.71/95.85 vs thresholds 80/70/80/80; CI coverage job is the authoritative gate. REMAINING excludes: 6 jsdom-dependent hooks + lib/data/warehouse.ts (sqlite binding) + lib/quant/buildFundamentalsPayload.ts (457-line assembler, needs a dedicated fixture suite \u2014 the last big item).",
-    "resolution_2026_07_17": "CLOSED: the last coverage-DEBT exclude (lib/quant/buildFundamentalsPayload.ts, 457-line assembler) is gone \u2014 new fixture suite (__tests__/quant/buildFundamentalsPayload.test.ts: RICH/MINIMAL/BRANCH fixtures) measures 97.47 lines / 93.93 stmts / 100 funcs / 86.33 branches. Combined with the same-day un-exclusions (lib/ml, lib/data/bloomberg, gridSearch), every remaining coverage.exclude entry is STRUCTURAL by-design, not missing tests: 6 jsdom-coupled hooks (EventSource/canvas/next-auth harnesses) and lib/data/warehouse.ts (better-sqlite3 native binding absent in CI). Those are documented in the config; reopening them is a new decision, not this row."
+    "notes_2026_07_17": "CONTINUATION SHIPPED: 3 excludes removed from vitest.config.ts coverage.exclude — lib/ml/** (stale: __tests__/ml/client.test.ts already existed), lib/data/bloomberg/** (new __tests__/data/bloombergBridge.test.ts: 13 tests covering both mappers, timing-safe secret compare, quote normalization with flexible keys, fail-closed HTTP/network paths, health check), lib/optimize/gridSearch.ts (Q-064 purged tests + new legacy-contract tests: 70/30 split geometry, protocol gates, aggregation). Local node-only approximation: global 92.97/82.4/95.71/95.85 vs thresholds 80/70/80/80; CI coverage job is the authoritative gate. REMAINING excludes: 6 jsdom-dependent hooks + lib/data/warehouse.ts (sqlite binding) + lib/quant/buildFundamentalsPayload.ts (457-line assembler, needs a dedicated fixture suite — the last big item).",
+    "resolution_2026_07_17": "CLOSED: the last coverage-DEBT exclude (lib/quant/buildFundamentalsPayload.ts, 457-line assembler) is gone — new fixture suite (__tests__/quant/buildFundamentalsPayload.test.ts: RICH/MINIMAL/BRANCH fixtures) measures 97.47 lines / 93.93 stmts / 100 funcs / 86.33 branches. Combined with the same-day un-exclusions (lib/ml, lib/data/bloomberg, gridSearch), every remaining coverage.exclude entry is STRUCTURAL by-design, not missing tests: 6 jsdom-coupled hooks (EventSource/canvas/next-auth harnesses) and lib/data/warehouse.ts (better-sqlite3 native binding absent in CI). Those are documented in the config; reopening them is a new decision, not this row."
   },
   {
     "id": "Q-052-NEW",
@@ -1236,9 +1236,9 @@
       "npm run benchmark",
       "npm run typecheck"
     ],
-    "notes_2026_05_24": "Filed by 2026-05-24 Claude-Code review of Cursor's Q-004 closure (see workspace/REVIEW_2026-05-24.md \u00a7Issue 5).",
+    "notes_2026_05_24": "Filed by 2026-05-24 Claude-Code review of Cursor's Q-004 closure (see workspace/REVIEW_2026-05-24.md §Issue 5).",
     "completed_at": "2026-05-24",
-    "notes_2026_05_24_close": "DONE. (1) lib/quant/riskFreeRate.ts rewritten \u2014 cache now keyed by FRED seriesId (not tenorDays) so multiple tenor lookups share a single fetch; added prewarmRiskFreeRates() + module-init opt-in via QUANTAN_FRED_PREWARM=1 (off in tests/CI/benchmark for reproducibility). (2) lib/options/chain.ts:56 imports getRiskFreeRateSync; enrichContract uses tenor-matched rate per contract (daysToExpiry routed to DGS3MO/DGS1/DGS2/DGS10). (3) lib/backtest/portfolioBacktest.ts:529 uses getRiskFreeRateSync(365). Verified: typecheck clean; 834 tests passed (was 808); benchmark 57.05% unchanged (cache cold in benchmark, returns static fallback as designed). New tests in __tests__/quant/riskFreeRate.test.ts cover tenor routing, cache hydration via stubbed fetch, and prewarm parallelism."
+    "notes_2026_05_24_close": "DONE. (1) lib/quant/riskFreeRate.ts rewritten — cache now keyed by FRED seriesId (not tenorDays) so multiple tenor lookups share a single fetch; added prewarmRiskFreeRates() + module-init opt-in via QUANTAN_FRED_PREWARM=1 (off in tests/CI/benchmark for reproducibility). (2) lib/options/chain.ts:56 imports getRiskFreeRateSync; enrichContract uses tenor-matched rate per contract (daysToExpiry routed to DGS3MO/DGS1/DGS2/DGS10). (3) lib/backtest/portfolioBacktest.ts:529 uses getRiskFreeRateSync(365). Verified: typecheck clean; 834 tests passed (was 808); benchmark 57.05% unchanged (cache cold in benchmark, returns static fallback as designed). New tests in __tests__/quant/riskFreeRate.test.ts cover tenor routing, cache hydration via stubbed fetch, and prewarm parallelism."
   },
   {
     "id": "Q-053-NEW",
@@ -1262,9 +1262,9 @@
       "npm run check:smoke:local",
       "wc -l components/stock/QuantLabPanel.tsx"
     ],
-    "notes_2026_05_24": "Filed by review: Cursor extracted QuantLabMarketCards.tsx but parent file unchanged at 1684 LOC. See workspace/REVIEW_2026-05-24.md \u00a7Issue 1.",
+    "notes_2026_05_24": "Filed by review: Cursor extracted QuantLabMarketCards.tsx but parent file unchanged at 1684 LOC. See workspace/REVIEW_2026-05-24.md §Issue 1.",
     "completed_at": "2026-06-02",
-    "notes_2026_06_02_close": "CLOSED \u2014 handover verification: QuantLabPanel.tsx is 148 LOC (tabs/hooks extracted post-Q-054). Acceptance <=500 LOC met; decomposition complete."
+    "notes_2026_06_02_close": "CLOSED — handover verification: QuantLabPanel.tsx is 148 LOC (tabs/hooks extracted post-Q-054). Acceptance <=500 LOC met; decomposition complete."
   },
   {
     "id": "Q-054-NEW",
@@ -1287,9 +1287,9 @@
       "npm run check:smoke:local",
       "wc -l app/backtest/page.tsx"
     ],
-    "notes_2026_05_24": "Filed by review: Cursor extracted BacktestMetricsGrid.tsx but page unchanged at 887 LOC. See workspace/REVIEW_2026-05-24.md \u00a7Issue 2.",
+    "notes_2026_05_24": "Filed by review: Cursor extracted BacktestMetricsGrid.tsx but page unchanged at 887 LOC. See workspace/REVIEW_2026-05-24.md §Issue 2.",
     "completed_at": "2026-05-26",
-    "notes_2026_05_26_close": "DONE. app/backtest/page.tsx 887 \u2192 268 LOC (\u221269.8%). 6 new files under components/backtest/: BacktestMetricCard, AnalysisTab, WalkForwardPanel, LiveSignalsPanel, OverviewTab, KeyMetricsStrip. Pure mechanical extraction \u2014 no behavior change. PR #18 opened. PHASE-16-PLAN's \u2264200 LOC target NOT hit (landed at 268); remaining is page-specific orchestration that doesn't generalize. Max-effort code review (5 angles + sweep) ran; 12 pre-existing findings surfaced for a follow-up `fix(backtest): live-signals null-guards` PR (NOT addressed in this PR \u2014 commit preserves behavior). 1 introduced finding: KeyMetricsStrip declares local PortfolioSummary subset (schema-drift hazard, not runtime bug)."
+    "notes_2026_05_26_close": "DONE. app/backtest/page.tsx 887 → 268 LOC (−69.8%). 6 new files under components/backtest/: BacktestMetricCard, AnalysisTab, WalkForwardPanel, LiveSignalsPanel, OverviewTab, KeyMetricsStrip. Pure mechanical extraction — no behavior change. PR #18 opened. PHASE-16-PLAN's ≤200 LOC target NOT hit (landed at 268); remaining is page-specific orchestration that doesn't generalize. Max-effort code review (5 angles + sweep) ran; 12 pre-existing findings surfaced for a follow-up `fix(backtest): live-signals null-guards` PR (NOT addressed in this PR — commit preserves behavior). 1 introduced finding: KeyMetricsStrip declares local PortfolioSummary subset (schema-drift hazard, not runtime bug)."
   },
   {
     "id": "Q-055-NEW",
@@ -1313,7 +1313,7 @@
       "npm run test -- __tests__/api/csrf.test.ts",
       "npm run typecheck"
     ],
-    "notes_2026_05_24": "Filed by review: backtest POST validates CSRF but no cookie issuance + trading-agents POST unprotected. See workspace/REVIEW_2026-05-24.md \u00a7Issue 4.",
+    "notes_2026_05_24": "Filed by review: backtest POST validates CSRF but no cookie issuance + trading-agents POST unprotected. See workspace/REVIEW_2026-05-24.md §Issue 4.",
     "completed_at": "2026-05-24",
     "notes_2026_05_24_close": "DONE. (1) middleware.ts now sets quantan_csrf cookie when absent (httpOnly:false for double-submit pattern, sameSite:strict, secure in production, 24h maxAge). (2) app/api/trading-agents/[ticker]/route.ts:155 POST validates CSRF; X-API-Key callers bypass (server-to-server out of scope). Verified: typecheck clean, CSRF tests 2/2 pass. Client-side helper pattern documented in middleware.ts JSDoc."
   },
@@ -1338,13 +1338,13 @@
       "npm install",
       "npx stryker run --dry-run"
     ],
-    "notes_2026_05_24": "Filed by review: stryker.conf.mjs + npm script exist but packages not installed. See workspace/REVIEW_2026-05-24.md \u00a7Observation 12.",
+    "notes_2026_05_24": "Filed by review: stryker.conf.mjs + npm script exist but packages not installed. See workspace/REVIEW_2026-05-24.md §Observation 12.",
     "completed_at": "2026-05-24",
-    "notes_2026_05_24_install": "DONE. Installed @stryker-mutator/core + @stryker-mutator/vitest-runner via npm. stryker.conf.mjs targets lib/quant + lib/backtest + lib/options at 70%/80% break/high thresholds. Verified by dry-run on lib/quant/riskFreeRate.ts: 62.35% mutation score (below 70% break \u2014 correctly exits 1; this is a per-file score, not a baseline). Reports written to /reports/mutation/ (gitignored). Full baseline run on the 3 targeted dirs takes 30+ minutes \u2014 deferred to CI cron or operator-triggered run (npm run stryker). .gitignore updated."
+    "notes_2026_05_24_install": "DONE. Installed @stryker-mutator/core + @stryker-mutator/vitest-runner via npm. stryker.conf.mjs targets lib/quant + lib/backtest + lib/options at 70%/80% break/high thresholds. Verified by dry-run on lib/quant/riskFreeRate.ts: 62.35% mutation score (below 70% break — correctly exits 1; this is a per-file score, not a baseline). Reports written to /reports/mutation/ (gitignored). Full baseline run on the 3 targeted dirs takes 30+ minutes — deferred to CI cron or operator-triggered run (npm run stryker). .gitignore updated."
   },
   {
     "id": "Q-057-NEW",
-    "title": "Next.js upgrade \u2014 15.x (React 19) to close remaining CVEs",
+    "title": "Next.js upgrade — 15.x (React 19) to close remaining CVEs",
     "domain": "Security",
     "priority": "P0",
     "status": "done",
@@ -1373,7 +1373,7 @@
       "npm run test",
       "npm run benchmark"
     ],
-    "notes_2026_05_25": "Filed by audit: reviews/npm-audit-2026-05-25.md. Critical is next itself (14.2.15) with 23 advisories incl. Authorization Bypass in Middleware, SSRF, multiple cache-poisoning, XSS in CSP nonces \u2014 directly intersects the Q-040-NEW/Q-055-NEW/Q-029 work that just landed. npm audit fix --force proposes next@16.2.6 (semver-major: React 19 + partial-prerendering + config migration). next@15.x is intermediate (React 19 required). Owner sign-off needed on target version before any package.json mutation. Coordinate with Q-040-NEW CSP completion.",
+    "notes_2026_05_25": "Filed by audit: reviews/npm-audit-2026-05-25.md. Critical is next itself (14.2.15) with 23 advisories incl. Authorization Bypass in Middleware, SSRF, multiple cache-poisoning, XSS in CSP nonces — directly intersects the Q-040-NEW/Q-055-NEW/Q-029 work that just landed. npm audit fix --force proposes next@16.2.6 (semver-major: React 19 + partial-prerendering + config migration). next@15.x is intermediate (React 19 required). Owner sign-off needed on target version before any package.json mutation. Coordinate with Q-040-NEW CSP completion.",
     "notes_2026_06_03": "DONE. next@15.5.19 + react@19; async params on 13 API routes + 3 pages; build/typecheck/test/dual-benchmark PASS.",
     "completed_at": "2026-06-03"
   },
@@ -1404,7 +1404,7 @@
     ],
     "notes_2026_05_25": "Filed per PHASE-16-PLAN.md S1.3. Preconditions for S2 god-component decomposition (Q-053-NEW, Q-054-NEW) AND for Q-057-NEW Next.js upgrade verification. Use BacktestMetricsGrid.test.tsx as the pattern reference. Mock strategy: vi.mock for next-auth, fetch, useSearchParams; jsdom env via per-file `// @vitest-environment jsdom` pragma.",
     "completed_at": "2026-05-25",
-    "notes_2026_05_25_close": "DONE in same session. Pattern: pin deterministic loading + error states (not data state \u2014 would couple to copy/style tweaks). 6 new tests across 2 files: (1) __tests__/components/stock/QuantLabPanel.test.tsx \u2014 3 tests covering loading skeleton with all 6 tabs, error state with help text, ticker prop propagation. (2) __tests__/components/backtest/BacktestPage.test.tsx \u2014 3 tests covering centered loading spinner, error fallback with Retry button, network rejection. Both files use vi.stubGlobal for fetch (pending promise = loading; resolved 500 / rejected = error). 2 new snapshot files (.snap) committed: QuantLabPanel.test.tsx.snap (242 lines) + BacktestPage.test.tsx.snap (51 lines). Verify: 958 passed + 17 skipped (975 total / 75 + 1 files), benchmark 57.05% WR (unchanged), typecheck clean. Q-053-NEW / Q-054-NEW / Q-057-NEW now have structural regression guards."
+    "notes_2026_05_25_close": "DONE in same session. Pattern: pin deterministic loading + error states (not data state — would couple to copy/style tweaks). 6 new tests across 2 files: (1) __tests__/components/stock/QuantLabPanel.test.tsx — 3 tests covering loading skeleton with all 6 tabs, error state with help text, ticker prop propagation. (2) __tests__/components/backtest/BacktestPage.test.tsx — 3 tests covering centered loading spinner, error fallback with Retry button, network rejection. Both files use vi.stubGlobal for fetch (pending promise = loading; resolved 500 / rejected = error). 2 new snapshot files (.snap) committed: QuantLabPanel.test.tsx.snap (242 lines) + BacktestPage.test.tsx.snap (51 lines). Verify: 958 passed + 17 skipped (975 total / 75 + 1 files), benchmark 57.05% WR (unchanged), typecheck clean. Q-053-NEW / Q-054-NEW / Q-057-NEW now have structural regression guards."
   },
   {
     "id": "Q-059-NEW",
@@ -1464,7 +1464,7 @@
   },
   {
     "id": "Q-062-NEW",
-    "title": "End-to-end signal parity test (live \u2261 engine \u2261 CI)",
+    "title": "End-to-end signal parity test (live ≡ engine ≡ CI)",
     "domain": "Testing",
     "priority": "P0",
     "status": "done",
@@ -1494,7 +1494,7 @@
       "Desk/backtest UI labels 20d label WR and cost assumptions"
     ],
     "notes_2026_06_02": "SIGNAL_SSOT.md documents paths; UI copy audit deferred to Wave 7 browser QA.",
-    "notes_2026_06_03": "DONE on canonical main via PR #41 (handover): app/backtest/page.tsx methodology note (T+1 next-open fills, ~22 bps round-trip); LiveSignalsPanel caveat (live table \u2260 realized P&L). PRs #42/#43 merged on orphaned local lineage only \u2014 code present at de9a3d5."
+    "notes_2026_06_03": "DONE on canonical main via PR #41 (handover): app/backtest/page.tsx methodology note (T+1 next-open fills, ~22 bps round-trip); LiveSignalsPanel caveat (live table ≠ realized P&L). PRs #42/#43 merged on orphaned local lineage only — code present at de9a3d5."
   },
   {
     "id": "Q-064-NEW",
@@ -1516,7 +1516,7 @@
     "files": [
       "scripts/benchmark-signals.ts"
     ],
-    "resolution": "done 2026-07-07 (PR #97 \u2014 deflatedSharpe lib + tradeStats in benchmark report; additive)"
+    "resolution": "done 2026-07-07 (PR #97 — deflatedSharpe lib + tradeStats in benchmark report; additive)"
   },
   {
     "id": "Q-066-NEW",
@@ -1528,7 +1528,7 @@
       "scripts/benchmark-signals.ts",
       "lib/quant/regimeDetection.ts"
     ],
-    "resolution": "done 2026-07-07 (PR #97 \u2014 regime-bucketed net WR; NEW-Q-2 lead: BEAR_ALERT negative edge n=27)"
+    "resolution": "done 2026-07-07 (PR #97 — regime-bucketed net WR; NEW-Q-2 lead: BEAR_ALERT negative edge n=27)"
   },
   {
     "id": "Q-067-NEW",
@@ -1539,8 +1539,8 @@
     "files": [
       "workspace/shadow/"
     ],
-    "notes_2026_07_16": "DESIGN BLOCKER found at triage: the filed spec (persist to workspace/shadow/) cannot work in serverless production \u2014 Vercel function filesystems are ephemeral. A prod shadow log needs a storage decision (Vercel Blob / marketplace Redis / external), which is an owner cost+infra call (compare DECISION-D7-DATA). Local-dev-only logging would not answer the live-vs-backtest question the row exists for. Owner-gated pending storage decision.",
-    "resolution_2026_07_16": "SHIPPED (owner-delegated decision): lib/shadowLog.ts \u2014 append-only record of (timestamp, sha256 content hash, per-ticker actions, buy/hold/sell counts) for every fresh full computation served by /api/backtest/live (at most one write per 60s cache window). PLUGGABLE fail-closed sinks resolve the serverless-FS design blocker: (1) Redis/Upstash REST via the SAME KV_REST_API_URL/TOKEN pair the Q-005 rate limiter keys on \u2014 one owner provisioning act activates both \u2014 LPUSH capped at 10k entries; (2) local dev: workspace/shadow/YYYY-MM-DD.jsonl; (3) otherwise no-op. Never throws; 1.5s network timeout; QUANTAN_SHADOW_LOG=0 opt-out. 10 unit tests incl. end-to-end file sink and mocked Redis pipeline. In prod the sink is no-op UNTIL Redis is provisioned (Q-005 blocker)."
+    "notes_2026_07_16": "DESIGN BLOCKER found at triage: the filed spec (persist to workspace/shadow/) cannot work in serverless production — Vercel function filesystems are ephemeral. A prod shadow log needs a storage decision (Vercel Blob / marketplace Redis / external), which is an owner cost+infra call (compare DECISION-D7-DATA). Local-dev-only logging would not answer the live-vs-backtest question the row exists for. Owner-gated pending storage decision.",
+    "resolution_2026_07_16": "SHIPPED (owner-delegated decision): lib/shadowLog.ts — append-only record of (timestamp, sha256 content hash, per-ticker actions, buy/hold/sell counts) for every fresh full computation served by /api/backtest/live (at most one write per 60s cache window). PLUGGABLE fail-closed sinks resolve the serverless-FS design blocker: (1) Redis/Upstash REST via the SAME KV_REST_API_URL/TOKEN pair the Q-005 rate limiter keys on — one owner provisioning act activates both — LPUSH capped at 10k entries; (2) local dev: workspace/shadow/YYYY-MM-DD.jsonl; (3) otherwise no-op. Never throws; 1.5s network timeout; QUANTAN_SHADOW_LOG=0 opt-out. 10 unit tests incl. end-to-end file sink and mocked Redis pipeline. In prod the sink is no-op UNTIL Redis is provisioned (Q-005 blocker)."
   },
   {
     "id": "Q-068-NEW",
@@ -1552,12 +1552,12 @@
       "scripts/optimize-grid.ts",
       "reviews/optimization-loop1.md"
     ],
-    "notes_2026_07_16": "PARTIAL via Q-064/Q-076: Loop 3 (portfolio) re-run under the honest protocol \u2014 purged IS (< 2025-01-01, 21-bar purge) selection + one OOS validation (npm run portfolio:backtest; selects labelMatched_H60, OOS +18.58%/WR 60.34%/maxDD 8.11%). Loops 1-2 can now re-run on gridSearchPurged (lib/optimize/gridSearch.ts) \u2014 but ADOPTING re-derived sector-profile params changes published signals = owner-gated re-baseline. Remaining: wire scripts/optimize-grid.ts to gridSearchPurged and re-derive params for owner review.",
-    "resolution_2026_07_16b": "DONE: Loop 3 re-ran under the honest purged IS->OOS protocol (Q-076, portfolio:backtest). Loops 1-2: optimize-grid.ts now runs LOOP 1P \u2014 gridSearchPurged per instrument (per-fold IS-only selection, purged, embargoed). First run: 38/56 instruments evaluable, pooled honest OOS 522 trades at WR 50.00% on the simplified fast backtest \u2014 materially different from the legacy selection-biased report, confirming the bias critique. Sector-profile param ADOPTION from any of these numbers remains owner-gated (published-signal change)."
+    "notes_2026_07_16": "PARTIAL via Q-064/Q-076: Loop 3 (portfolio) re-run under the honest protocol — purged IS (< 2025-01-01, 21-bar purge) selection + one OOS validation (npm run portfolio:backtest; selects labelMatched_H60, OOS +18.58%/WR 60.34%/maxDD 8.11%). Loops 1-2 can now re-run on gridSearchPurged (lib/optimize/gridSearch.ts) — but ADOPTING re-derived sector-profile params changes published signals = owner-gated re-baseline. Remaining: wire scripts/optimize-grid.ts to gridSearchPurged and re-derive params for owner review.",
+    "resolution_2026_07_16b": "DONE: Loop 3 re-ran under the honest purged IS->OOS protocol (Q-076, portfolio:backtest). Loops 1-2: optimize-grid.ts now runs LOOP 1P — gridSearchPurged per instrument (per-fold IS-only selection, purged, embargoed). First run: 38/56 instruments evaluable, pooled honest OOS 522 trades at WR 50.00% on the simplified fast backtest — materially different from the legacy selection-biased report, confirming the bias critique. Sector-profile param ADOPTION from any of these numbers remains owner-gated (published-signal change)."
   },
   {
     "id": "Q-069",
-    "title": "Document /monitor \u2192 /desk redirect expectation (F-01)",
+    "title": "Document /monitor → /desk redirect expectation (F-01)",
     "domain": "Frontend/UX",
     "priority": "P3",
     "status": "done",
@@ -1566,7 +1566,7 @@
       "reviews/FUNCTION-AUDIT-UI-2026-06-03.md"
     ],
     "notes_2026_06_03": "UI audit F-01: /monitor 404 by design; desk is monitor substitute.",
-    "resolution": "done 2026-07-07 (PR #97 \u2014 routing expectation documented in app/desk/page.tsx)"
+    "resolution": "done 2026-07-07 (PR #97 — routing expectation documented in app/desk/page.tsx)"
   },
   {
     "id": "Q-070",
@@ -1578,7 +1578,7 @@
       "app/stock/[ticker]/page.tsx"
     ],
     "notes_2026_06_03": "UI audit F-02: standalone /quant-lab route does not exist.",
-    "resolution": "done 2026-07-07 (PR #97 \u2014 documented in app/stock/[ticker]/page.tsx)"
+    "resolution": "done 2026-07-07 (PR #97 — documented in app/stock/[ticker]/page.tsx)"
   },
   {
     "id": "Q-071",
@@ -1617,7 +1617,7 @@
       "README.md"
     ],
     "notes_2026_06_03": "5-minute upstream timeout; probe may fail without TRADING_AGENTS_BASE.",
-    "resolution_2026_07_17": "DONE: README \"Runtime behavior & timeouts\" section documents the 5-minute upstream hold, 10 req/min rate limit, the three latency regimes (warm 1-4 min; cold-start dyno wake with possible transient host 502; unconfigured -> 502 backend_not_configured BY DESIGN), and the Check-connection health probe as the triage tool. The F-08 probe timeouts were the unconfigured/cold-start regimes \u2014 expected behavior, now documented; no code defect."
+    "resolution_2026_07_17": "DONE: README \"Runtime behavior & timeouts\" section documents the 5-minute upstream hold, 10 req/min rate limit, the three latency regimes (warm 1-4 min; cold-start dyno wake with possible transient host 502; unconfigured -> 502 backend_not_configured BY DESIGN), and the Check-connection health probe as the triage tool. The F-08 probe timeouts were the unconfigured/cold-start regimes — expected behavior, now documented; no code defect."
   },
   {
     "id": "Q-074",
@@ -1630,13 +1630,13 @@
       "__tests__/quant/"
     ],
     "acceptance_criteria": [
-      "All 24 exports in FUNCTION-AUDIT-QUANT-2026-06-03.md have \u22651 direct test reference"
+      "All 24 exports in FUNCTION-AUDIT-QUANT-2026-06-03.md have ≥1 direct test reference"
     ],
     "verify_commands": [
       "npm run test"
     ],
     "notes_2026_06_03": "Quant audit 197b833e: 183 exports, 24 untested, 0 algorithm bugs.",
-    "resolution_2026_07_16": "All 24 audit-flagged exports now have direct test references: 14 covered by __tests__/quant/untestedExports.q074.test.ts (this PR), 9 by __tests__/backtest/mutationHardening.golden.test.ts (Q-075 PR #109), CODEX_FRAMEWORKS already in frameworks.test.ts. BONUS FIX: the direct tests caught stochRsiArray returning ALL-NaN k/d for every input under the default EMA smoothing (emaFull seeded from the NaN warmup prefix; the prior test only checked array lengths). Fixed with NaN-prefix-safe smoothing at both k and d levels + regression test. No production consumers (dormant defect) \u2014 published numbers unaffected."
+    "resolution_2026_07_16": "All 24 audit-flagged exports now have direct test references: 14 covered by __tests__/quant/untestedExports.q074.test.ts (this PR), 9 by __tests__/backtest/mutationHardening.golden.test.ts (Q-075 PR #109), CODEX_FRAMEWORKS already in frameworks.test.ts. BONUS FIX: the direct tests caught stochRsiArray returning ALL-NaN k/d for every input under the default EMA smoothing (emaFull seeded from the NaN warmup prefix; the prior test only checked array lengths). Fixed with NaN-prefix-safe smoothing at both k and d levels + regression test. No production consumers (dormant defect) — published numbers unaffected."
   },
   {
     "id": "Q-075",
@@ -1649,17 +1649,17 @@
       "__tests__/backtest/"
     ],
     "acceptance_criteria": [
-      "backtest shard mutation score \u2265 70 (stryker-weekly)"
+      "backtest shard mutation score ≥ 70 (stryker-weekly)"
     ],
     "verify_commands": [
       "npx stryker run --mutate \"lib/backtest/**/*.ts\""
     ],
-    "notes_2026_07_13": "First complete per-domain scores (07-12 sharded run): backtest 31.22 (exitRules.ts itself 79.33 \u2014 the gap is core/portfolioBacktest/walkForward), options 62.25, quant interim \u224868 at 97% tested (6h-cancelled; shard split again 07-13).",
-    "notes_2026_07_16": "HARDENING WAVE 1 SHIPPED: __tests__/backtest/mutationHardening.golden.test.ts \u2014 41 golden characterization tests pinning EXACT numeric outputs (deterministic synthetic fixtures) for the worst shard files: portfolioBacktest (6.43), core (26.14), signals (14.71), walkForward (28.83), liveSignal (12.50), signalHelpers (23.39), benchmarkLabel (25.00). Covers both engines under the production regime-only path AND the enhanced path, legacy DEFAULT_EXIT_CONFIG exit family, label pipeline, and every helper threshold boundary. Score validates on the next stryker-weekly run (2026-07-19); acceptance stays >= 70.",
-    "notes_2026_07_17": "WAVE 1 MEASURED (manual workflow_dispatch, run 29553164644): backtest shard 31.22 -> 58.69 (+27.5pp). Per-file: portfolioBacktest 6.4->47.5, core 26.1->57.8, signals 14.7->38.9, signalHelpers 23.4->72.6, benchmarkLabel 25.0->59.2, liveSignal 12.5->58.3, walkForward 28.8->76.1, exitRules 79.3->82.6. Still short of the >=70 acceptance. WAVE 2 SHIPPED: engine.ts aggregatePortfolio golden suite (was 35.32, 150 survived, ZERO direct tests \u2014 pure function, 12 tests pin end-aligned combine, F-4 net-win boundary, sector table, stub-exclusion boundary at 30/31 points, aligned-B&H alpha + both fallbacks, crypto calendar, PF edges, independent Sharpe recomputation) + core.ts dividend-accrual goldens (11-mutant cluster at 261-278 \u2014 all earlier fixtures were dividend-free). Validates on the next stryker run (scheduled Sunday 2026-07-19).",
+    "notes_2026_07_13": "First complete per-domain scores (07-12 sharded run): backtest 31.22 (exitRules.ts itself 79.33 — the gap is core/portfolioBacktest/walkForward), options 62.25, quant interim ≈68 at 97% tested (6h-cancelled; shard split again 07-13).",
+    "notes_2026_07_16": "HARDENING WAVE 1 SHIPPED: __tests__/backtest/mutationHardening.golden.test.ts — 41 golden characterization tests pinning EXACT numeric outputs (deterministic synthetic fixtures) for the worst shard files: portfolioBacktest (6.43), core (26.14), signals (14.71), walkForward (28.83), liveSignal (12.50), signalHelpers (23.39), benchmarkLabel (25.00). Covers both engines under the production regime-only path AND the enhanced path, legacy DEFAULT_EXIT_CONFIG exit family, label pipeline, and every helper threshold boundary. Score validates on the next stryker-weekly run (2026-07-19); acceptance stays >= 70.",
+    "notes_2026_07_17": "WAVE 1 MEASURED (manual workflow_dispatch, run 29553164644): backtest shard 31.22 -> 58.69 (+27.5pp). Per-file: portfolioBacktest 6.4->47.5, core 26.1->57.8, signals 14.7->38.9, signalHelpers 23.4->72.6, benchmarkLabel 25.0->59.2, liveSignal 12.5->58.3, walkForward 28.8->76.1, exitRules 79.3->82.6. Still short of the >=70 acceptance. WAVE 2 SHIPPED: engine.ts aggregatePortfolio golden suite (was 35.32, 150 survived, ZERO direct tests — pure function, 12 tests pin end-aligned combine, F-4 net-win boundary, sector table, stub-exclusion boundary at 30/31 points, aligned-B&H alpha + both fallbacks, crypto calendar, PF edges, independent Sharpe recomputation) + core.ts dividend-accrual goldens (11-mutant cluster at 261-278 — all earlier fixtures were dividend-free). Validates on the next stryker run (scheduled Sunday 2026-07-19).",
     "notes_2026_07_17b": "WAVE 2 MEASURED (run 29584073911): backtest 58.69 -> 63.50 (engine.ts 35.32 -> 80.85, core 57.83 -> 63.82). Waves 3+4 shipped same day targeting the remaining pools: #125 correlation-seed portfolio golden (structural kill: seed mutants flip totalTrades) + signals action-branch pins; wave 4 adds the never-exercised portfolio DD circuit-breaker golden (max_drawdown exit with exact T+1 bookkeeping at a 2% cap; 25%-default contrast run) + exact BUY/HOLD/SELL reason-string pins. Remaining tail after these: portfolioBacktest partial-exit/tape internals, benchmarkLabel 56, regimeSignal 47. Validates on the next stryker run.",
-    "notes_2026_07_22": "WAVE 5 (#129): backtest golden pins for the pools with no wave aboard \u2014 regimeSignal full dip-zone branch matrix (integer-exact deviation boundaries), benchmarkLabel WARMUP/tail HOLD + cost-override net-vs-gross + 252/251 boundary, liveSignal null-field HEALTHY_BULL payload + REGIME_COLORS. Ships alongside the gate-integrity fix (#130) so the backtest shard reading stops swinging. Validates on the stryker run dispatched 2026-07-22 (run 29930833563).",
-    "notes_2026_08_02": "WAVE 6 (#133): the sectorGates path of enhancedCombinedSignal \u2014 30 NO-COVERAGE mutants (3 score bonuses, gate filters, post-gate SELL re-check) that production never reaches because it runs the regime-only path. Unlock: buyWScoreThreshold is itself a sectorGates override, so it keeps action==='BUY' alive into the filter block. Bonuses pinned as exact DELTAS (+0.10 compression / +0.15 divergence / +0.20 climax). MEASURED locally: signals.ts 57.84 -> 73.53 (+48 killed, no-cov 31 -> 21). Shard was 69.99 on BOTH the 07-22 and 07-26 runs (deterministic, 0.01pp short). Honest projection: FLOOR ~70.4 (10 of 30 CI no-coverage mutants converted), up to ~71.5. Not covered: the goldenCrossGate DOWNGRADE arm needs gc=false while the regime still emits BUY \u2014 a dip deep enough to break the EMA cross also flips the SMA slope negative, so it looks unreachable (searched a 45-point fixture grid). Validates on run 30707395928.",
+    "notes_2026_07_22": "WAVE 5 (#129): backtest golden pins for the pools with no wave aboard — regimeSignal full dip-zone branch matrix (integer-exact deviation boundaries), benchmarkLabel WARMUP/tail HOLD + cost-override net-vs-gross + 252/251 boundary, liveSignal null-field HEALTHY_BULL payload + REGIME_COLORS. Ships alongside the gate-integrity fix (#130) so the backtest shard reading stops swinging. Validates on the stryker run dispatched 2026-07-22 (run 29930833563).",
+    "notes_2026_08_02": "WAVE 6 (#133): the sectorGates path of enhancedCombinedSignal — 30 NO-COVERAGE mutants (3 score bonuses, gate filters, post-gate SELL re-check) that production never reaches because it runs the regime-only path. Unlock: buyWScoreThreshold is itself a sectorGates override, so it keeps action==='BUY' alive into the filter block. Bonuses pinned as exact DELTAS (+0.10 compression / +0.15 divergence / +0.20 climax). MEASURED locally: signals.ts 57.84 -> 73.53 (+48 killed, no-cov 31 -> 21). Shard was 69.99 on BOTH the 07-22 and 07-26 runs (deterministic, 0.01pp short). Honest projection: FLOOR ~70.4 (10 of 30 CI no-coverage mutants converted), up to ~71.5. Not covered: the goldenCrossGate DOWNGRADE arm needs gc=false while the regime still emits BUY — a dip deep enough to break the EMA cross also flips the SMA slope negative, so it looks unreachable (searched a 45-point fixture grid). Validates on run 30707395928.",
     "notes_2026_08_02_VERIFIED": "CLOSED. Wave 6 measured on runs 30707395928 + 30742899850: signals.ts 66.67 -> 74.18 (killed 204 -> 227, no-coverage 30 -> 20), shard 69.99 -> 71.02 on BOTH runs. Acceptance (>=70) MET and stable. The backtest shard's journey: 31.22 -> 58.69 -> 63.50 -> 69.99 -> 71.02."
   },
   {
@@ -1677,7 +1677,7 @@
     "verify_commands": [
       "npm run portfolio:backtest"
     ],
-    "notes_2026_07_13": "Post-D2/D4 the grid only explores retired stop-family exits; ALL members score negative Sharpe (best -0.825) while the shipped label-matched default measures +8.52%/maxDD 9.88% \u2014 grid is stale. Sizing exploration is D6-adjacent: coordinate with the calibrated-score work.",
+    "notes_2026_07_13": "Post-D2/D4 the grid only explores retired stop-family exits; ALL members score negative Sharpe (best -0.825) while the shipped label-matched default measures +8.52%/maxDD 9.88% — grid is stale. Sizing exploration is D6-adjacent: coordinate with the calibrated-score work.",
     "resolution_2026_07_16": "Grid REFRESHED to the label-matched exit family: H in {10,20,40,60} time-only + structure sweep (maxPositions 5/15, cap 10%) + legacy stop family kept as a single reference row. Q-064 protocol applied: all configs run on the purged IS window (< 2025-01-01 minus 21-bar purge), best-by-IS selected, ONE OOS validation reported. First run (2026-07-16, production signal path): IS selects labelMatched_H60 (only positive IS Sharpe 0.042; consistent with C7 walk-forward preferring H=60); OOS 2025-> : +18.58%, WR 60.34%, maxDD 8.11%, PF 2.90, Sharpe 0.158, 58 trades. Every stop-family and short-hold variant scores negative IS Sharpe. NOTE: engine default stays H=20 (label-matched); an H change is a published-number re-baseline = owner decision."
   },
   {
@@ -1692,12 +1692,12 @@
     ],
     "acceptance_criteria": [
       "Walk-forward portfolio sim: top-decile score entries + 20-bar time exits beats equal-weight B&H on Sharpe or MAR in >=3 of 4 OOS years (D3-style acceptance)",
-      "No calibration requirement \u2014 ranking only"
+      "No calibration requirement — ranking only"
     ],
     "verify_commands": [
       "npm run experiment:score-select"
     ],
-    "notes_2026_07_13": "D6 experiment: calibration REJECTED (Brier below base, recency-isotonic worse pooled \u2014 base-rate regime shift) so real-Kelly stays blocked; but discrimination PASSED: top-decile non-overlap WR 60.71 Wilson95 [56.12, 65.13] \u2014 first CI lower bound above the base rate (54.71); positive edge all 4 OOS years; only 17.8% overlap with SSOT BUYs. Build the selection experiment on the D5 harness + rotation-experiment portfolio machinery.",
+    "notes_2026_07_13": "D6 experiment: calibration REJECTED (Brier below base, recency-isotonic worse pooled — base-rate regime shift) so real-Kelly stays blocked; but discrimination PASSED: top-decile non-overlap WR 60.71 Wilson95 [56.12, 65.13] — first CI lower bound above the base rate (54.71); positive edge all 4 OOS years; only 17.8% overlap with SSOT BUYs. Build the selection experiment on the D5 harness + rotation-experiment portfolio machinery.",
     "resolution_2026_07_16": "EXPERIMENT RUN -> REJECTED 2/4 OOS segments (needed >=3): 2023 YES (Sharpe 3.14 vs B&H 1.75), 2024 no (1.09 vs 2.09), 2025 no (0.58 vs 1.15), 2026H1 LOCKED HOLDOUT YES (2.26 vs 1.83; ret 30.2% vs 12.8%). Robust: MAR selection 2/4, q80 2/4, q95 2/4. Same 2024-25 decay as the per-year edge table (C4). Trade-level discrimination (D6) does not survive as a portfolio B&H-beater under D3 acceptance; score-ranked selection is answered: do not build as v2. Output: workspace/optimization-runs/score-ranked-selection-walkforward.json"
   },
   {
@@ -1719,18 +1719,18 @@
     "verify_commands": [
       "gh workflow run stryker-weekly.yml"
     ],
-    "notes_2026_07_17": "Filed from the first complete 4-shard run (29553164644). quant-rest 53.80: top uncaught = buildFundamentalsPayload 424 (run PRE-dates PR #119's fixture suite \u2014 already fixed, worth ~+12pp), researchScore 172, regimeDetection 85, dcf 32, frameworks 30, intermarket 27, yahooSymbol 19, constants 17. options 62.13: greeks 118, sentiment 83, chain 44. Method: Q-075-style exact-value golden pins on deterministic fixtures.",
-    "notes_2026_07_17b": "RE-MEASURE (run 29584073911, manual dispatch): OPTIONS 62.13 -> PASS >=70 (SECOND green shard); quant-rest 53.80 -> 65.08 (+11.3pp: researchScore 40->72.5, dcf 60->71.3, regimeDetection 49->65.5, buildFundamentalsPayload 0->32.78). KEY LESSON: line coverage != mutation kills \u2014 the #119 fixture suite covers 97% of buildFundamentalsPayload lines but 275 mutants survived because assertions touched a subset of the payload. WAVE 2: dense full-payload goldens (every technicals/dcf/bands/pillar/pivot/fib/relative number pinned to 6+ decimals) + exact regimeDetection ratio/ADX/confidence pins. Validates next run.",
-    "notes_2026_07_22": "WAVE 3 (#129) + WAVE 4 (#131), both verified via LOCAL targeted Stryker (components-excluded config): quant-rest \u2014 constants 5.56->100 (dynamic-import-in-test re-runs the RFR env IIFE inside the coverage window; #123's static import could never reach those 13 no-cov mutants), frameworks 54.55->100, relativeStrength 64.67->91.02, riskFreeRate 62.35->89.41, intermarket 55->83.33, sectorRotation 69.07->78.35; yahooSymbol wrapped in `Stryker disable all` (ALL 26 mutants proven EQUIVALENT \u2014 normalizeTicker SSOT re-applies the identical transform downstream; that is why #123's yahoo pins killed nothing). quant-indicators \u2014 btc-indicators 39.34->73.07 (generateSignals/btcRegime/on-chain exact pins), technicals 47.79->84.56 (ma200Regime full zone-metadata + dipSignal templates). Validates on run 29930833563.",
-    "notes_2026_08_02": "VERIFIED on the 07-22 + 07-26 pair: quant-rest 75.05 on BOTH runs and options 71.25/71.38 \u2014 both PASS and both stable. Q-078's acceptance criteria are met. quant-indicators also passes in both modes (86.83 dispatch / 74.29 schedule) thanks to the stable #131 btc-indicators (73.77) + technicals (85.29) pins, but see mutation_gate_verification_2026_07_26 in SESSION_STATE for the UNRESOLVED bimodal swing in indicators.ts/multiTimeframe.ts.",
-    "notes_2026_08_02_VERIFIED": "CLOSED. Both acceptance criteria met and stable across two consecutive runs: quant-rest 75.14/75.14 and options 71.38/71.25. quant-indicators 86.83/86.83. All four shards >= 70 \u2014 first-ever 4/4 green; the workflow's continue-on-error escape hatch has been removed."
+    "notes_2026_07_17": "Filed from the first complete 4-shard run (29553164644). quant-rest 53.80: top uncaught = buildFundamentalsPayload 424 (run PRE-dates PR #119's fixture suite — already fixed, worth ~+12pp), researchScore 172, regimeDetection 85, dcf 32, frameworks 30, intermarket 27, yahooSymbol 19, constants 17. options 62.13: greeks 118, sentiment 83, chain 44. Method: Q-075-style exact-value golden pins on deterministic fixtures.",
+    "notes_2026_07_17b": "RE-MEASURE (run 29584073911, manual dispatch): OPTIONS 62.13 -> PASS >=70 (SECOND green shard); quant-rest 53.80 -> 65.08 (+11.3pp: researchScore 40->72.5, dcf 60->71.3, regimeDetection 49->65.5, buildFundamentalsPayload 0->32.78). KEY LESSON: line coverage != mutation kills — the #119 fixture suite covers 97% of buildFundamentalsPayload lines but 275 mutants survived because assertions touched a subset of the payload. WAVE 2: dense full-payload goldens (every technicals/dcf/bands/pillar/pivot/fib/relative number pinned to 6+ decimals) + exact regimeDetection ratio/ADX/confidence pins. Validates next run.",
+    "notes_2026_07_22": "WAVE 3 (#129) + WAVE 4 (#131), both verified via LOCAL targeted Stryker (components-excluded config): quant-rest — constants 5.56->100 (dynamic-import-in-test re-runs the RFR env IIFE inside the coverage window; #123's static import could never reach those 13 no-cov mutants), frameworks 54.55->100, relativeStrength 64.67->91.02, riskFreeRate 62.35->89.41, intermarket 55->83.33, sectorRotation 69.07->78.35; yahooSymbol wrapped in `Stryker disable all` (ALL 26 mutants proven EQUIVALENT — normalizeTicker SSOT re-applies the identical transform downstream; that is why #123's yahoo pins killed nothing). quant-indicators — btc-indicators 39.34->73.07 (generateSignals/btcRegime/on-chain exact pins), technicals 47.79->84.56 (ma200Regime full zone-metadata + dipSignal templates). Validates on run 29930833563.",
+    "notes_2026_08_02": "VERIFIED on the 07-22 + 07-26 pair: quant-rest 75.05 on BOTH runs and options 71.25/71.38 — both PASS and both stable. Q-078's acceptance criteria are met. quant-indicators also passes in both modes (86.83 dispatch / 74.29 schedule) thanks to the stable #131 btc-indicators (73.77) + technicals (85.29) pins, but see mutation_gate_verification_2026_07_26 in SESSION_STATE for the UNRESOLVED bimodal swing in indicators.ts/multiTimeframe.ts.",
+    "notes_2026_08_02_VERIFIED": "CLOSED. Both acceptance criteria met and stable across two consecutive runs: quant-rest 75.14/75.14 and options 71.38/71.25. quant-indicators 86.83/86.83. All four shards >= 70 — first-ever 4/4 green; the workflow's continue-on-error escape hatch has been removed."
   },
   {
     "id": "Q-079",
     "title": "Audit design invariants I1-I8 and correct the enforcement tiers in CLAUDE.md",
     "domain": "Quant/Research",
     "priority": "P1",
-    "status": "pending",
+    "status": "done",
     "files": [
       "CLAUDE.md"
     ],
@@ -1743,7 +1743,8 @@
       "npm run typecheck",
       "npm run test"
     ],
-    "notes_2026_08_15": "The tiers currently in CLAUDE.md are an INITIAL ASSESSMENT made while installing the orchestration package on 2026-08-15, inferred from repo state rather than audited. One was already found wrong during install: I5 originally said DSR was not computed, but lib/quant/deflatedSharpe.ts exists (Q-065-NEW, PR #97). Assume the others may be similarly off. Delegate per invariant to data-integrity / quant-validator / security-compliance / red-team."
+    "notes_2026_08_15": "The tiers currently in CLAUDE.md are an INITIAL ASSESSMENT made while installing the orchestration package on 2026-08-15, inferred from repo state rather than audited. One was already found wrong during install: I5 originally said DSR was not computed, but lib/quant/deflatedSharpe.ts exists (Q-065-NEW, PR #97). Assume the others may be similarly off. Delegate per invariant to data-integrity / quant-validator / security-compliance / red-team.",
+    "notes_2026_08_17": "DONE. 3 tiers corrected (I5 PARTIAL->VIOLATED, I7 ENFORCED->VIOLATED, I8 UNVERIFIED->VIOLATED process/UNVERIFIED licence), 5 confirmed, and NO invariant is ENFORCED. Evidence: reviews/design-invariant-audit-2026-08-17/. Tier vocabulary now DEFINED in CLAUDE.md (it never was, which is how inferred tiers laundered). Filed Q-097..Q-102. Q-080 is unblocked."
   },
   {
     "id": "Q-080",
@@ -1767,10 +1768,9 @@
       "npm run verify:integrity",
       "npm run benchmark"
     ],
-    "blocked_by": [
-      "Q-079"
-    ],
-    "notes_2026_08_15": "Covers design invariants I4 and I6, both ASPIRATIONAL today. The 56-instrument universe is a hard-coded list of TODAY's large-cap survivors \u2014 scripts/optimize-grid.ts documents this inline as affecting EVERY metric it reports. Until this lands, every historical win rate, return and Sharpe in the platform is inflated by an unmeasured amount. Large; expect to slice it. Measuring the inflation is the highest-value first slice and is independently shippable."
+    "blocked_by": [],
+    "notes_2026_08_15": "Covers design invariants I4 and I6, both ASPIRATIONAL today. The 56-instrument universe is a hard-coded list of TODAY's large-cap survivors — scripts/optimize-grid.ts documents this inline as affecting EVERY metric it reports. Until this lands, every historical win rate, return and Sharpe in the platform is inflated by an unmeasured amount. Large; expect to slice it. Measuring the inflation is the highest-value first slice and is independently shippable.",
+    "notes_2026_08_17": "UNBLOCKED - Q-079 landed 2026-08-17. Scope refinements from that audit: I6 is TOTAL non-compliance (warehouse.ts:46-55 PRIMARY KEY (ticker,date); zero hits for figi|permId|securityId|isin|cusip repo-wide; identity is a lossy .replace() mangle at dataLoader.ts:37/:143 duplicated at benchmark-signals.ts:36). Fundamentals reach NO backtest or signal path, so the PIT work needs a TRIPWIRE there, not a migration. See also Q-102 for the data-vintage half."
   },
   {
     "id": "Q-081",
@@ -1793,7 +1793,8 @@
       "npm run benchmark",
       "npm run test"
     ],
-    "notes_2026_08_15": "The registry was created 2026-08-15 with 9 backfilled rows (T-0001..T-0009). scripts/benchmark-signals.ts currently calls deflatedSharpe(netRets, 10) and (netRets, 100) \u2014 both are GUESSES. The backfill alone accounts for ~45 configurations at minimum, and over 1000 if the Loop-1 declared grid is the right denominator (see Q-084), so the published DSR is deflated against too small a number. Auto-append matters more than the wiring: a registry nobody appends to decays immediately, which is the tagged-code-is-not-a-fixed-effect lesson again."
+    "notes_2026_08_15": "The registry was created 2026-08-15 with 9 backfilled rows (T-0001..T-0009). scripts/benchmark-signals.ts currently calls deflatedSharpe(netRets, 10) and (netRets, 100) — both are GUESSES. The backfill alone accounts for ~45 configurations at minimum, and over 1000 if the Loop-1 declared grid is the right denominator (see Q-084), so the published DSR is deflated against too small a number. Auto-append matters more than the wiring: a registry nobody appends to decays immediately, which is the tagged-code-is-not-a-fixed-effect lesson again.",
+    "notes_2026_08_17": "RE-SCOPE REQUIRED (Q-079 audit, finding F-I5-3). Wiring nTrials to the registry as currently scoped WOULD CHANGE THE HEADLINE FROM 1 TO 1. The published DSR is 1.0000 and provably insensitive to nTrials from 10 to 1e12, because it is computed over 3,410 OVERLAPPING trades rather than the repo's own ~347 effective sample (lib/quant/deflatedSharpe.ts:106,117). The binding parameter is T, the effective sample size, not the trial count. Re-scope around de-overlapping the trade series first; the nTrials wiring is a no-op until then. CLAUDE.md's 45/1053 arithmetic verifies exactly, but both are lower bounds."
   },
   {
     "id": "Q-082",
@@ -1811,8 +1812,8 @@
       "If it is not, decide between a licensed vendor, a data-use restriction, or not launching that surface"
     ],
     "owner_role": "Owner (PM)",
-    "notes_2026_08_15": "Design invariant I8, currently UNVERIFIED \u2014 the position has never been recorded anywhere in the repo. Market data licences almost universally prohibit redistribution, and the platform serves data to end users. This is a business-ending risk rather than a detail, which is why it is filed even though no code is broken.",
-    "notes_2026_08_16_REFRAMED": "REFRAMED 2026-08-16. As originally filed this asked the owner to \"confirm which yahoo-finance2 plan/tier production is on\". That question is malformed and the answer is now established without them: THERE IS NO PLAN AND NO ACCOUNT. Verified \u2014 package.json depends on yahoo-finance2 ^3.13.2, and .env.example contains no Yahoo API key, token or credential of any kind. yahoo-finance2 is an unofficial community library consuming Yahoo Finance endpoints that are undocumented and unauthenticated; there is no commercial agreement between this project and Yahoo. CONSEQUENCE: the I8 position is not \"we may be on the wrong tier\", it is \"there is no licence to be within the terms of\", which is a strictly worse starting point and RAISES the severity rather than lowering it. What an agent CANNOT do here is conclude whether that is acceptable \u2014 that is a legal question, it is not answerable from the repo, and it is tightly coupled to Q-083 (MAS/FAA) because both turn on what the product shows end users. Do not close this by reading Yahoo ToS and forming a view; route it with Q-083."
+    "notes_2026_08_15": "Design invariant I8, currently UNVERIFIED — the position has never been recorded anywhere in the repo. Market data licences almost universally prohibit redistribution, and the platform serves data to end users. This is a business-ending risk rather than a detail, which is why it is filed even though no code is broken.",
+    "notes_2026_08_16_REFRAMED": "REFRAMED 2026-08-16. As originally filed this asked the owner to \"confirm which yahoo-finance2 plan/tier production is on\". That question is malformed and the answer is now established without them: THERE IS NO PLAN AND NO ACCOUNT. Verified — package.json depends on yahoo-finance2 ^3.13.2, and .env.example contains no Yahoo API key, token or credential of any kind. yahoo-finance2 is an unofficial community library consuming Yahoo Finance endpoints that are undocumented and unauthenticated; there is no commercial agreement between this project and Yahoo. CONSEQUENCE: the I8 position is not \"we may be on the wrong tier\", it is \"there is no licence to be within the terms of\", which is a strictly worse starting point and RAISES the severity rather than lowering it. What an agent CANNOT do here is conclude whether that is acceptable — that is a legal question, it is not answerable from the repo, and it is tightly coupled to Q-083 (MAS/FAA) because both turn on what the product shows end users. Do not close this by reading Yahoo ToS and forming a view; route it with Q-083."
   },
   {
     "id": "Q-083",
@@ -1831,8 +1832,8 @@
       "A real legal opinion is obtained before any retail launch"
     ],
     "owner_role": "Owner (PM)",
-    "human_blocker": "Needs a qualified Singapore legal opinion \u2014 cannot be closed by an agent",
-    "notes_2026_08_15": "P0-legal. Research tooling and regulated financial advisory are a bright line in Singapore. The agent deliverable here is a precise inventory of what the product currently tells users and where that sits relative to the line \u2014 NOT a legal conclusion. Filed 2026-08-15 during the orchestration install; flagged as P0 because a retail tier would make it urgent and it has never been assessed."
+    "human_blocker": "Needs a qualified Singapore legal opinion — cannot be closed by an agent",
+    "notes_2026_08_15": "P0-legal. Research tooling and regulated financial advisory are a bright line in Singapore. The agent deliverable here is a precise inventory of what the product currently tells users and where that sits relative to the line — NOT a legal conclusion. Filed 2026-08-15 during the orchestration install; flagged as P0 because a retail tier would make it urgent and it has never been assessed."
   },
   {
     "id": "Q-084",
@@ -1853,7 +1854,7 @@
       "npm run optimize:grid"
     ],
     "blocked_by": [],
-    "notes_2026_08_15": "LOOP1_GRID declares slopeThreshold(4) x buyWScoreThreshold(4) x sellWScoreThreshold(4) x confidenceThreshold(4) x atrStopMultiplier(4) = 1024 combinations, but the run output reports totalCombinations=16 (13 valid) per instrument. LOOP2_GRID by contrast matches its own docstring exactly (4x4x3x2x3=288), so this is specific to Loop 1. Until resolved, any multiplicity correction using T-0001 is provisional \u2014 the denominator differs by ~64x, which is not a rounding question."
+    "notes_2026_08_15": "LOOP1_GRID declares slopeThreshold(4) x buyWScoreThreshold(4) x sellWScoreThreshold(4) x confidenceThreshold(4) x atrStopMultiplier(4) = 1024 combinations, but the run output reports totalCombinations=16 (13 valid) per instrument. LOOP2_GRID by contrast matches its own docstring exactly (4x4x3x2x3=288), so this is specific to Loop 1. Until resolved, any multiplicity correction using T-0001 is provisional — the denominator differs by ~64x, which is not a rounding question."
   },
   {
     "id": "Q-085",
@@ -1876,7 +1877,7 @@
     "blocked_by": [
       "Q-081"
     ],
-    "notes_2026_08_15": "Confirmed absent 2026-08-15: no pbo/cscv implementation anywhere in lib/ or scripts/. DSR exists (lib/quant/deflatedSharpe.ts) but is only half the multiplicity story \u2014 DSR deflates a Sharpe, PBO estimates the probability that the selected configuration is overfit relative to the alternatives. Blocked on Q-081 because both need an honest trial count to mean anything."
+    "notes_2026_08_15": "Confirmed absent 2026-08-15: no pbo/cscv implementation anywhere in lib/ or scripts/. DSR exists (lib/quant/deflatedSharpe.ts) but is only half the multiplicity story — DSR deflates a Sharpe, PBO estimates the probability that the selected configuration is overfit relative to the alternatives. Blocked on Q-081 because both need an honest trial count to mean anything."
   },
   {
     "id": "Q-086",
@@ -1897,7 +1898,7 @@
       "npm run test",
       "npm run typecheck"
     ],
-    "notes_2026_08_16": "CANDIDATE FINDING, not a confirmed defect \u2014 filed for the accountant agent to own. lib/quant/dcf.ts documents that netDebt defaults to 0 and that this \"silently inflates\" equity value for levered companies (10-200% overstatement per its own docstring). buildFundamentalsPayload.ts DOES compute netDebt = ltd + std - cash whenever balanceSheetHistory is present, so the fallback only triggers when the balance-sheet module is unavailable for a ticker. UNVERIFIED: whether that ever happens in the live 56-name universe, and if so whether the UI marks the result. That is the I2 (fail-closed) question \u2014 a silently inflated per-share value rendering as if fully supported is exactly what I2 forbids. Establish the frequency BEFORE deciding on a fix; this may be a no-op."
+    "notes_2026_08_16": "CANDIDATE FINDING, not a confirmed defect — filed for the accountant agent to own. lib/quant/dcf.ts documents that netDebt defaults to 0 and that this \"silently inflates\" equity value for levered companies (10-200% overstatement per its own docstring). buildFundamentalsPayload.ts DOES compute netDebt = ltd + std - cash whenever balanceSheetHistory is present, so the fallback only triggers when the balance-sheet module is unavailable for a ticker. UNVERIFIED: whether that ever happens in the live 56-name universe, and if so whether the UI marks the result. That is the I2 (fail-closed) question — a silently inflated per-share value rendering as if fully supported is exactly what I2 forbids. Establish the frequency BEFORE deciding on a fix; this may be a no-op."
   },
   {
     "id": "Q-087",
@@ -1914,8 +1915,8 @@
       "If yes: identify a data source providing debt schedules, covenants, segment reporting and related-party disclosure, and record licence terms per Q-082",
       "If no: record the decision so the gate agents stay as refusal walls by design rather than looking like unfinished work"
     ],
-    "notes_2026_08_16": "Filed 2026-08-16 when the accountant/forensic-auditor/actuary/underwriter/credit-analyst roster was added. The platform holds annual income/balance/cashflow rows plus summary ratios from yahoo-finance2 and NOTHING of the disclosure layer \u2014 no footnotes, segments, subsidiary lists, related-party transactions, covenants, debt schedules, credit spreads, ratings, or actuarial data. Consequence: forensic-auditor defaults to CANNOT ASSESS, credit-analyst to NOT RATEABLE, actuary to INSUFFICIENT DATA for reserving. Those defaults are CORRECT and are the safety property the agents were added for \u2014 this item is NOT a request to make them produce grades. It is a decision about scope. Note that ingesting credit data would move the product closer to the FAA/SFA line, so Q-083 gates any user-visible use of it. DEPENDENCY NOTE: Q-082 (vendor licence) gates only the SOURCING criterion \u2014 you cannot licence-check a feed before the owner confirms the vendor plan. The first criterion, the scope decision on whether QUANTAN intends to support issuer-level credit analysis at all, needs no licence and is actionable now. blocked_by was removed so the coordinator does not skip the whole item behind an owner-gated dependency it only partly depends on.",
-    "notes_2026_08_16_DECISION": "DECISION 2026-08-16 (owner delegated the call): NO \u2014 do not ingest issuer-level credit or structural data now. Deferred, not cancelled; revisit only after Q-083 has a real legal answer. Reasoning: (1) Credit grades and issuer safety labels are the single closest thing this product could ship to the FAA/SFA regulated-advice line, and Q-083 is an OPEN P0 with no legal opinion yet \u2014 buying the data first would widen the exposure at exactly the point it is least understood. (2) Q-082 now shows the platform consumes its EXISTING market data with no licence at all; acquiring a second, more sensitive data class before resolving the first vendor position compounds an unresolved risk rather than adding capability. (3) The refusal defaults are not a gap to be closed \u2014 forensic-auditor returning CANNOT ASSESS and credit-analyst returning NOT RATEABLE is the platform correctly declining to grade what it cannot see, which is the PRIME DIRECTIVE working as designed. (4) Nothing currently in the product needs an issuer rating to function; no user-facing slot is blocked on this. REVISIT TRIGGER: a Q-083 legal opinion that clarifies what may be shown to users, OR a concrete product requirement that cannot be met without issuer-level data. If revisited, the sequence is legal opinion -> licensed source -> gate agents -> UI, never the reverse."
+    "notes_2026_08_16": "Filed 2026-08-16 when the accountant/forensic-auditor/actuary/underwriter/credit-analyst roster was added. The platform holds annual income/balance/cashflow rows plus summary ratios from yahoo-finance2 and NOTHING of the disclosure layer — no footnotes, segments, subsidiary lists, related-party transactions, covenants, debt schedules, credit spreads, ratings, or actuarial data. Consequence: forensic-auditor defaults to CANNOT ASSESS, credit-analyst to NOT RATEABLE, actuary to INSUFFICIENT DATA for reserving. Those defaults are CORRECT and are the safety property the agents were added for — this item is NOT a request to make them produce grades. It is a decision about scope. Note that ingesting credit data would move the product closer to the FAA/SFA line, so Q-083 gates any user-visible use of it. DEPENDENCY NOTE: Q-082 (vendor licence) gates only the SOURCING criterion — you cannot licence-check a feed before the owner confirms the vendor plan. The first criterion, the scope decision on whether QUANTAN intends to support issuer-level credit analysis at all, needs no licence and is actionable now. blocked_by was removed so the coordinator does not skip the whole item behind an owner-gated dependency it only partly depends on.",
+    "notes_2026_08_16_DECISION": "DECISION 2026-08-16 (owner delegated the call): NO — do not ingest issuer-level credit or structural data now. Deferred, not cancelled; revisit only after Q-083 has a real legal answer. Reasoning: (1) Credit grades and issuer safety labels are the single closest thing this product could ship to the FAA/SFA regulated-advice line, and Q-083 is an OPEN P0 with no legal opinion yet — buying the data first would widen the exposure at exactly the point it is least understood. (2) Q-082 now shows the platform consumes its EXISTING market data with no licence at all; acquiring a second, more sensitive data class before resolving the first vendor position compounds an unresolved risk rather than adding capability. (3) The refusal defaults are not a gap to be closed — forensic-auditor returning CANNOT ASSESS and credit-analyst returning NOT RATEABLE is the platform correctly declining to grade what it cannot see, which is the PRIME DIRECTIVE working as designed. (4) Nothing currently in the product needs an issuer rating to function; no user-facing slot is blocked on this. REVISIT TRIGGER: a Q-083 legal opinion that clarifies what may be shown to users, OR a concrete product requirement that cannot be met without issuer-level data. If revisited, the sequence is legal opinion -> licensed source -> gate agents -> UI, never the reverse."
   },
   {
     "id": "Q-088",
@@ -1940,10 +1941,10 @@
       "npm run typecheck",
       "npm run test"
     ],
-    "notes_2026_08_16": "FOUND 2026-08-16 by the red-team cold-boot pass during MAP-REPAIR, OUTSIDE that sprint scope, and filed rather than fixed per /sprint step 3. VERIFIED INDEPENDENTLY: (1) grep for __SYNTHETIC__ across app components lib hooks scripts __tests__ tests returns ZERO hits repo-wide; (2) lib/mockData.ts is production code, NOT under __tests__/ or tests/; (3) it is imported by app/api/chart/[ticker]/route.ts (generateDarkPoolMarkers \u2014 a CHART ROUTE), app/stock/[ticker]/page.tsx and app/sector/[slug]/page.tsx (generateDarkPoolPrints, getNewsForSector). CLAUDE.md I3 states verbatim: \"Any code path that could route synthetic data into a backtest, a chart, or a signal is a P0 defect. Add a runtime assertion, not just a comment.\" So this is a P0 by the constitution's own definition. SHARP EDGE: the 2026-08-15 wave recorded \"honest data labeling \u2014 the three synthetic surfaces are labeled\" as a headline win serving I1/I2/I3. LABELING IS NOT CONTAINMENT \u2014 I3 asks for the path not to exist plus a type-level tag and a runtime assertion. Tagged code is not a fixed effect. Do NOT close this by adding a label. Note the labeling work was still genuinely valuable for I1/I2; it just does not discharge I3.",
-    "notes_2026_08_16b": "LIVE-PATH CONFIRMED (not dead code): generateDarkPoolMarkers is CALLED at app/api/chart/[ticker]/route.ts:111 and :236 \u2014 two executing call sites on the chart route, both fed real candle data and the ticker. Synthetic markers are therefore computed and returned alongside genuine OHLC on every chart request reaching either branch. This is not an unused import. The Phase 14 wave 29 comments at :112 and :237 show the call sites were ACTIVELY MAINTAINED (an \"as any\" cast was removed there) without the I3 question ever being raised \u2014 the code was improved while the invariant violation went unnoticed. That is why the fix must be a type-level __SYNTHETIC__ tag plus a runtime assertion at the boundary, not a comment and not a lint rule: a reviewer already looked straight at these lines and did not see it.",
+    "notes_2026_08_16": "FOUND 2026-08-16 by the red-team cold-boot pass during MAP-REPAIR, OUTSIDE that sprint scope, and filed rather than fixed per /sprint step 3. VERIFIED INDEPENDENTLY: (1) grep for __SYNTHETIC__ across app components lib hooks scripts __tests__ tests returns ZERO hits repo-wide; (2) lib/mockData.ts is production code, NOT under __tests__/ or tests/; (3) it is imported by app/api/chart/[ticker]/route.ts (generateDarkPoolMarkers — a CHART ROUTE), app/stock/[ticker]/page.tsx and app/sector/[slug]/page.tsx (generateDarkPoolPrints, getNewsForSector). CLAUDE.md I3 states verbatim: \"Any code path that could route synthetic data into a backtest, a chart, or a signal is a P0 defect. Add a runtime assertion, not just a comment.\" So this is a P0 by the constitution's own definition. SHARP EDGE: the 2026-08-15 wave recorded \"honest data labeling — the three synthetic surfaces are labeled\" as a headline win serving I1/I2/I3. LABELING IS NOT CONTAINMENT — I3 asks for the path not to exist plus a type-level tag and a runtime assertion. Tagged code is not a fixed effect. Do NOT close this by adding a label. Note the labeling work was still genuinely valuable for I1/I2; it just does not discharge I3.",
+    "notes_2026_08_16b": "LIVE-PATH CONFIRMED (not dead code): generateDarkPoolMarkers is CALLED at app/api/chart/[ticker]/route.ts:111 and :236 — two executing call sites on the chart route, both fed real candle data and the ticker. Synthetic markers are therefore computed and returned alongside genuine OHLC on every chart request reaching either branch. This is not an unused import. The Phase 14 wave 29 comments at :112 and :237 show the call sites were ACTIVELY MAINTAINED (an \"as any\" cast was removed there) without the I3 question ever being raised — the code was improved while the invariant violation went unnoticed. That is why the fix must be a type-level __SYNTHETIC__ tag plus a runtime assertion at the boundary, not a comment and not a lint rule: a reviewer already looked straight at these lines and did not see it.",
     "completed_at": "2026-08-16",
-    "resolution": "DONE 2026-08-16 \u2014 PR #147 (squash 0027886), merged and production-verified. Removed getNewsForSector()/SECTOR_NEWS and generateDarkPoolMarkers() outright rather than labeling them; NewsFeed lost its static-array prop so it structurally cannot be handed fabricated content. Containment enforced by a non-assignable Synthetic<T> wrapper (lib/synthetic.ts), a value-inspecting runtime guard (unwrapSynthetic/assertNotSynthetic), and an allowlist architecture test covering app/components/lib/hooks/scripts. Five mutations verified to fail it, including a tsc leak probe. NOTE the first containment attempt was BROKEN and shipped green \u2014 inverted intersection brand, a hardcoded-true assertion that could never fire, and a guard defeated by dynamic import / relative path / inline authoring; caught by red-team, rebuilt. Prod verified: /api/chart/AAPL carries no darkPoolMarkers, news 10/10 items dated. Follow-ons filed: Q-089 through Q-096."
+    "resolution": "DONE 2026-08-16 — PR #147 (squash 0027886), merged and production-verified. Removed getNewsForSector()/SECTOR_NEWS and generateDarkPoolMarkers() outright rather than labeling them; NewsFeed lost its static-array prop so it structurally cannot be handed fabricated content. Containment enforced by a non-assignable Synthetic<T> wrapper (lib/synthetic.ts), a value-inspecting runtime guard (unwrapSynthetic/assertNotSynthetic), and an allowlist architecture test covering app/components/lib/hooks/scripts. Five mutations verified to fail it, including a tsc leak probe. NOTE the first containment attempt was BROKEN and shipped green — inverted intersection brand, a hardcoded-true assertion that could never fire, and a guard defeated by dynamic import / relative path / inline authoring; caught by red-team, rebuilt. Prod verified: /api/chart/AAPL carries no darkPoolMarkers, news 10/10 items dated. Follow-ons filed: Q-089 through Q-096."
   },
   {
     "id": "Q-089",
@@ -1958,21 +1959,21 @@
       "app/sector/[slug]/page.tsx"
     ],
     "owner_role": "Owner (PM)",
-    "human_blocker": "Product call \u2014 whether an illustrative-only surface should exist at all. An agent can implement either outcome but should not decide which.",
+    "human_blocker": "Product call — whether an illustrative-only surface should exist at all. An agent can implement either outcome but should not decide which.",
     "acceptance_criteria": [
       "Decide: delete the synthetic prints surface, or keep it as explicitly illustrative",
       "If DELETE: generateDarkPoolPrints, the prints table, the flow gauge and the aggregate tiles are removed, and lib/mockData.ts ceases to exist as production code",
-      "If KEEP: the aggregate tiles carry the same ILLUSTRATIVE disclosure the table and gauge already have, and the sector-page caption at app/sector/[slug]/page.tsx (which tells users \"Dark pool prints (blue \u25cf) ... overlay on the chart\") is corrected \u2014 those chart markers were deleted in Q-088"
+      "If KEEP: the aggregate tiles carry the same ILLUSTRATIVE disclosure the table and gauge already have, and the sector-page caption at app/sector/[slug]/page.tsx (which tells users \"Dark pool prints (blue ●) ... overlay on the chart\") is corrected — those chart markers were deleted in Q-088"
     ],
     "verify_commands": [
       "npm run typecheck",
       "npm run test"
     ],
-    "notes_2026_08_16": "Filed by Q-088. That work removed every synthetic path reaching a CHART (design invariant I3 is discharged). What remains is generateDarkPoolPrints feeding the dark-pool prints TABLE, the flow gauge and the aggregate tiles \u2014 a display surface, not a chart or signal, so it is outside I3's literal clause. It is branded Synthetic<DarkPoolPrint> and guarded by assertSyntheticAccepted at the DarkPoolPanel props boundary, so it cannot leak into chart or signal paths. RECOMMENDATION: DELETE. There is no real per-print dark-pool data source in the current stack and none is purchasable within it \u2014 off-exchange PERCENTAGE from /api/darkpool/[ticker] is real and already renders, so the panel retains genuine content without the fabricated per-print rows. An illustrative table of invented prints priced from a 13-entry seed table (unknown tickers default to ~$100) sitting beside a real quote is the exact confusion UX-6 already had to patch once: prints showed ~$100 against a real $305.40 AAPL quote. KNOWN GAP EITHER WAY: the aggregate tiles at stock:651-665 and sector:557-571 derive from these synthetic prints and carry NO disclosure today, unlike the table and gauge which got ILLUSTRATIVE badges on 2026-08-15. So \"keep\" is not a no-op \u2014 it requires labeling work."
+    "notes_2026_08_16": "Filed by Q-088. That work removed every synthetic path reaching a CHART (design invariant I3 is discharged). What remains is generateDarkPoolPrints feeding the dark-pool prints TABLE, the flow gauge and the aggregate tiles — a display surface, not a chart or signal, so it is outside I3's literal clause. It is branded Synthetic<DarkPoolPrint> and guarded by assertSyntheticAccepted at the DarkPoolPanel props boundary, so it cannot leak into chart or signal paths. RECOMMENDATION: DELETE. There is no real per-print dark-pool data source in the current stack and none is purchasable within it — off-exchange PERCENTAGE from /api/darkpool/[ticker] is real and already renders, so the panel retains genuine content without the fabricated per-print rows. An illustrative table of invented prints priced from a 13-entry seed table (unknown tickers default to ~$100) sitting beside a real quote is the exact confusion UX-6 already had to patch once: prints showed ~$100 against a real $305.40 AAPL quote. KNOWN GAP EITHER WAY: the aggregate tiles at stock:651-665 and sector:557-571 derive from these synthetic prints and carry NO disclosure today, unlike the table and gauge which got ILLUSTRATIVE badges on 2026-08-15. So \"keep\" is not a no-op — it requires labeling work."
   },
   {
     "id": "Q-090",
-    "title": "News publisher badge launders source tier \u2014 Tier-2 aggregator items render identically to Tier-0/1 wires",
+    "title": "News publisher badge launders source tier — Tier-2 aggregator items render identically to Tier-0/1 wires",
     "domain": "Data/Infrastructure",
     "priority": "P2",
     "status": "pending",
@@ -1991,7 +1992,7 @@
       "npm run typecheck",
       "npm run test"
     ],
-    "notes_2026_08_16": "Filed by the disinformation-analyst review of Q-088 (PR #147). Yahoo Finance news is an AGGREGATOR republishing other outlets \u2014 Tier 2 under the platform's own source-tier model, regardless of which wire originally wrote a story. components/NewsFeed.tsx renders the raw item.publisher string in a plain badge with identical styling for every source, so Reuters and an SEO content mill are visually indistinguishable. Live smoke on /stock/AAPL returned TheStreet, Simply Wall St., Motley Fool and 24/7 Wall St. \u2014 all commentary/aggregator tier \u2014 each rendered exactly as a named wire would be. CLAUDE.md's own rule is that a Tier-2+ source may never independently move a signal and may only corroborate or flag; the display currently treats all publishers as equivalent with no flag at all. NOT a Q-088 regression \u2014 Q-088 replaced fabricated content with real content, which is strictly better; this is the next layer of honesty on the replacement."
+    "notes_2026_08_16": "Filed by the disinformation-analyst review of Q-088 (PR #147). Yahoo Finance news is an AGGREGATOR republishing other outlets — Tier 2 under the platform's own source-tier model, regardless of which wire originally wrote a story. components/NewsFeed.tsx renders the raw item.publisher string in a plain badge with identical styling for every source, so Reuters and an SEO content mill are visually indistinguishable. Live smoke on /stock/AAPL returned TheStreet, Simply Wall St., Motley Fool and 24/7 Wall St. — all commentary/aggregator tier — each rendered exactly as a named wire would be. CLAUDE.md's own rule is that a Tier-2+ source may never independently move a signal and may only corroborate or flag; the display currently treats all publishers as equivalent with no flag at all. NOT a Q-088 regression — Q-088 replaced fabricated content with real content, which is strictly better; this is the next layer of honesty on the replacement."
   },
   {
     "id": "Q-091",
@@ -2044,12 +2045,12 @@
     "acceptance_criteria": [
       "Either a working `npm run lint` exists and passes, or the \"lint clean\" clause is removed from CLAUDE.md WHAT DONE MEANS",
       "If lint is adopted, it runs in CI as an enforcing job (not continue-on-error)",
-      "The rule and the reality agree \u2014 whichever direction that is resolved"
+      "The rule and the reality agree — whichever direction that is resolved"
     ],
     "verify_commands": [
       "npm run lint"
     ],
-    "notes_2026_08_16": "Found by the red-team review of Q-088 (finding Q088-11). CLAUDE.md WHAT DONE MEANS lists \"lint clean\" as a gate. There is no `lint` script in package.json and no eslint config; `npx next lint` drops into an interactive setup wizard. So that gate has NEVER been run, on any PR, by any agent \u2014 while every session has been reporting \"done\" against a definition that includes it. This is the instructions-are-untested-code lesson (#140) applied to the constitution itself: a rule nothing executes drifts silently and everyone believes it holds. Visible artefact in the Q-088 diff: app/sector/[slug]/page.tsx has a line indented 14 spaces inside a 12-space block, left by a deletion \u2014 exactly what a linter catches. RESOLVE IN EITHER DIRECTION, but resolve it: an unenforceable clause in the definition of done is worse than no clause, because it manufactures false confidence."
+    "notes_2026_08_16": "Found by the red-team review of Q-088 (finding Q088-11). CLAUDE.md WHAT DONE MEANS lists \"lint clean\" as a gate. There is no `lint` script in package.json and no eslint config; `npx next lint` drops into an interactive setup wizard. So that gate has NEVER been run, on any PR, by any agent — while every session has been reporting \"done\" against a definition that includes it. This is the instructions-are-untested-code lesson (#140) applied to the constitution itself: a rule nothing executes drifts silently and everyone believes it holds. Visible artefact in the Q-088 diff: app/sector/[slug]/page.tsx has a line indented 14 spaces inside a 12-space block, left by a deletion — exactly what a linter catches. RESOLVE IN EITHER DIRECTION, but resolve it: an unenforceable clause in the definition of done is worse than no clause, because it manufactures false confidence."
   },
   {
     "id": "Q-094",
@@ -2071,7 +2072,7 @@
       "npm run typecheck",
       "npm run test"
     ],
-    "notes_2026_08_16": "Found by the red-team review of Q-088 (finding Q088-7). components/NewsFeed.tsx does `setNews(data.news ?? [])` with no parse, against the CLAUDE.md house rule \"Runtime validation at every I/O boundary (zod). Parse, don't validate.\" A 200 carrying {news:[{}]} renders a card with an empty headline, publisher \"Unknown\" and href=\"#\" beneath the Live badge. NOT a security hole \u2014 safeHref prevents scheme injection and React escapes the text \u2014 this is display fail-open. Low priority because the shape comes from our own route, which now fails closed on schema drift (Q088-5, fixed in PR #147); this is the remaining defence-in-depth layer."
+    "notes_2026_08_16": "Found by the red-team review of Q-088 (finding Q088-7). components/NewsFeed.tsx does `setNews(data.news ?? [])` with no parse, against the CLAUDE.md house rule \"Runtime validation at every I/O boundary (zod). Parse, don't validate.\" A 200 carrying {news:[{}]} renders a card with an empty headline, publisher \"Unknown\" and href=\"#\" beneath the Live badge. NOT a security hole — safeHref prevents scheme injection and React escapes the text — this is display fail-open. Low priority because the shape comes from our own route, which now fails closed on schema drift (Q088-5, fixed in PR #147); this is the remaining defence-in-depth layer."
   },
   {
     "id": "Q-095",
@@ -2090,13 +2091,13 @@
     "verify_commands": [
       "npm run test"
     ],
-    "notes_2026_08_16": "Found by the red-team review of Q-088 (finding Q088-12), and it hit during that very review. Two agents appended concurrently; one write left no trailing newline, so the next row glued onto the previous last field and produced a single 23-column row that SWALLOWED AN ENTIRE CRITICAL FINDING \u2014 invisible to any CSV reader. It was caught and repaired by hand, and the current file is verified (all 28 Q088-*/MR-* rows well-formed). Separately, a column-count audit shows 7 malformed rows at lines 42, 52, 57, 60, 61, 62, 113 that are PRE-EXISTING on origin/main, not caused by this work. CLAUDE.md calls this file \"the risk register\" and \"this IS the risk register\". A register that silently loses a CRITICAL row under normal multi-agent operation is not one. Consider append-only JSONL, which has no quoting/newline ambiguity, matching .quantlab/TRIAL_REGISTRY.jsonl."
+    "notes_2026_08_16": "Found by the red-team review of Q-088 (finding Q088-12), and it hit during that very review. Two agents appended concurrently; one write left no trailing newline, so the next row glued onto the previous last field and produced a single 23-column row that SWALLOWED AN ENTIRE CRITICAL FINDING — invisible to any CSV reader. It was caught and repaired by hand, and the current file is verified (all 28 Q088-*/MR-* rows well-formed). Separately, a column-count audit shows 7 malformed rows at lines 42, 52, 57, 60, 61, 62, 113 that are PRE-EXISTING on origin/main, not caused by this work. CLAUDE.md calls this file \"the risk register\" and \"this IS the risk register\". A register that silently loses a CRITICAL row under normal multi-agent operation is not one. Consider append-only JSONL, which has no quoting/newline ambiguity, matching .quantlab/TRIAL_REGISTRY.jsonl."
   },
   {
     "id": "Q-096",
     "title": "KLineChart still accepts darkPoolMarkers/newsMarkers props with no guard",
     "domain": "Frontend/UX",
-    "priority": "P3",
+    "priority": "P1",
     "status": "pending",
     "files": [
       "components/KLineChart.tsx",
@@ -2111,6 +2112,152 @@
       "npm run typecheck",
       "npm run test"
     ],
-    "notes_2026_08_16": "Found by the red-team review of Q-088 (finding Q088-10). Nothing is broken today: Q-088 removed every producer, BtcChartPanel passes EMPTY_DARK_POOL_MARKERS, and KLineChart still accepts the props so no consumer breaks. But the rendering affordance is fully wired \u2014 hooks/useKLineChart.ts still draws both marker layers \u2014 so re-plotting fabricated markers is a one-line change. lib/synthetic.ts now exports assertNotSynthetic() precisely for boundaries like this. Low priority: the architecture allowlist already blocks the import path that fed them, and this is the belt-and-braces layer."
+    "notes_2026_08_16": "Found by the red-team review of Q-088 (finding Q088-10). Nothing is broken today: Q-088 removed every producer, BtcChartPanel passes EMPTY_DARK_POOL_MARKERS, and KLineChart still accepts the props so no consumer breaks. But the rendering affordance is fully wired — hooks/useKLineChart.ts still draws both marker layers — so re-plotting fabricated markers is a one-line change. lib/synthetic.ts now exports assertNotSynthetic() precisely for boundaries like this. Low priority: the architecture allowlist already blocks the import path that fed them, and this is the belt-and-braces layer.",
+    "notes_2026_08_17": "PRIORITY RAISED P3->P1 by the Q-079 audit. The stated rationale for P3 - 'the architecture allowlist already blocks the import path that fed them' - is FALSIFIED. Mutation M-F2 restored synthetic prints to <KLineChart darkPoolMarkers> keyed on REAL candle times, needing no import path at all, and escaped the guard (48/48 green, tsc clean). app/sector/[slug]/page.tsx:63 and app/stock/[ticker]/page.tsx:293 call unwrapSynthetic at component top, stripping the brand into lexical scope where the array is freely assignable to the marker prop 430 lines below. Sink fully wired: components/KLineChart.tsx:55-56, hooks/useKLineChart.ts:821-832. The import allowlist is the ONLY layer, not the second. Track with Q-098."
+  },
+  {
+    "id": "Q-097",
+    "title": "I7 VIOLATED: main has no branch protection and an empty required-check set",
+    "domain": "Infra/CI",
+    "priority": "P0",
+    "status": "pending",
+    "files": [
+      ".github/workflows/refresh-data.yml",
+      "workspace/VERCEL_OPERATIONS.md"
+    ],
+    "acceptance_criteria": [
+      "Branch protection or a ruleset exists on main (OWNER ACTION - repository settings, not a code change)",
+      "The required-status-check set is non-empty and includes at minimum: typecheck, test, and the Vercel build",
+      "refresh-data.yml no longer pushes to main without CI, or its bot commits are gated by the same required checks",
+      "A rollback procedure exists that someone has executed at least once in a drill",
+      "gh api repos/:owner/:repo/branches/main reports protected:true with a non-empty contexts list"
+    ],
+    "verify_commands": [
+      "gh api repos/wanghaoheng123-boop/QUANTAN-sector-investment/branches/main --jq '{protected, contexts: .protection.required_status_checks.contexts}'"
+    ],
+    "notes_2026_08_17": "Q-079 audit. main reports protected:false, required_status_checks.contexts:[], enforcement_level:off, rulesets:[]. Repo is PUBLIC so protection is free - unconfigured, not unavailable. Because the required set is empty, EVERY green check in this repo's history has been advisory. Evidenced: PR #120 merged 49s after its coverage job failed (04:35:56Z fail -> 04:36:45Z merge); e49b1d1 reached production with a red test job via merge skew. refresh-data.yml:137 'git push origin HEAD:main' lands bot commits weekly with zero typecheck/test/coverage/smoke, each auto-deploying to prod. The Vercel build is the ONLY gate that catches Next.js route-config errors and is not required either. No rollback script exists; VERCEL_OPERATIONS.md:351 forbids vercel rollback without owner request. Independently re-verified by the lead against the GitHub API. THE FIRST CRITERION IS AN OWNER ACTION - no agent should change repo settings.",
+    "blocked_by": []
+  },
+  {
+    "id": "Q-098",
+    "title": "I3 guard is a name blocklist, not a property check: 6 of 7 mutations escape",
+    "domain": "Testing",
+    "priority": "P0",
+    "status": "pending",
+    "files": [
+      "__tests__/architecture/synthetic-containment.test.ts",
+      "lib/synthetic.ts",
+      "app/sector/[slug]/page.tsx",
+      "app/stock/[ticker]/page.tsx"
+    ],
+    "acceptance_criteria": [
+      "The guard detects synthetic-ness as a property, not by matching the literal module name 'mockData'",
+      "All seven Q-079 mutations (M-A..M-F2) fail the guard; the escaping six are recorded in reviews/design-invariant-audit-2026-08-17/I3-evidence.md",
+      "assertNotSynthetic has at least one production call site on a chart/signal/backtest boundary, and a test proves it throws",
+      "The test header at :14-17 no longer claims to test a property unless it does"
+    ],
+    "verify_commands": [
+      "npx vitest run __tests__/architecture",
+      "npm run typecheck"
+    ],
+    "notes_2026_08_17": "Q-079 audit, by adversarial mutation rather than inspection. __tests__/architecture/synthetic-containment.test.ts:85 MENTIONS_MOCKDATA matches the literal string 'mockData', so the mechanism is an opt-in registry of known-bad NAMES. Escaping mutations: M-B new synthetic module under a different name feeding a backtest; M-C __tests__ fixture imported into lib/quant/ and re-exported; M-D computed specifier 'mock'+'Data' in the live chart route; M-E inline Math.random() OHLC in the live chart route returned as source:'yahoo'; M-F/M-F2 synthetic prints to <KLineChart darkPoolMarkers> keyed on real candle times (a one-prop restoration of the exact Q-088 defect). Only M-A, the positive control, was caught. The brand DIRECTION is correct and scripts/ IS scanned - those two halves are genuinely fixed. Supersedes the stated rationale of Q-096.",
+    "blocked_by": []
+  },
+  {
+    "id": "Q-099",
+    "title": "I5 is a gate with no gate: CI enforces the raw edge, deflated statistics gate nothing",
+    "domain": "Quant/Research",
+    "priority": "P0",
+    "status": "pending",
+    "files": [
+      "scripts/benchmark-signals.ts",
+      ".github/workflows/ci.yml",
+      "lib/quant/deflatedSharpe.ts"
+    ],
+    "acceptance_criteria": [
+      "A named executing gate blocks publication when OOS / DSR / PBO / a registry row is missing, or I5 is rewritten to describe what the platform actually does",
+      "The gated number is the deflated one, not aggregateWinRate",
+      "No UI or doc surface presents a raw in-sample statistic without its deflated counterpart, or renders a metric under a name it is not"
+    ],
+    "verify_commands": [
+      "npm run typecheck",
+      "npm run test"
+    ],
+    "notes_2026_08_17": "Q-079 audit. The only executing performance gate is scripts/benchmark-signals.ts:325-331 (process.exit(1) on RAW edge < 1.81pp) via ci.yml:73; ci.yml:82-96 reads only aggregateNetWinRate/aggregateWinRate and never touches tradeStats. It passes identically if DSR is null, the registry is deleted, and no OOS run ever happened. PBO/CSCV has zero implementation (the 10 files matching cscv|combinatorial|pbo are all prose), so NO strategy has ever met I5's bar including the one shipped result. The trial registry has 9 rows, all backfilled:true, no writer/reader/validator. Related UI defects from the same audit: the card labelled 'Sharpe Ratio' is annReturn/maxDD and its negative branch is unreachable so losing portfolios render '-'; the 'Walk-Forward / Overfitting Check' panel contains no overfitting statistic (mounted app/backtest/page.tsx:237, fed from a real /api/backtest fetch at :64-72,122).",
+    "blocked_by": []
+  },
+  {
+    "id": "Q-100",
+    "title": "I8 process gate absent: 11 vendors, 6 end-user-exposed with no auth, zero recorded licence findings",
+    "domain": "Security/Compliance",
+    "priority": "P0",
+    "status": "pending",
+    "files": [
+      "components/ComplianceBanner.tsx",
+      "middleware.ts",
+      "app/api/prices/route.ts",
+      "hooks/useBtcCandles.ts"
+    ],
+    "acceptance_criteria": [
+      "A recorded licence finding exists for every vendor whose data reaches an end user, or the surface is withdrawn",
+      "A mechanism forces the question before a data-exposing feature ships (PR template, checklist, or CI check)",
+      "reviews/PHASE-15-PLAN.md:44 no longer records a compliance banner as present when its three required elements do not exist",
+      "OWNER + COUNSEL: the substantive redistribution question is answered for Yahoo, CoinGecko, Kraken, Coinbase, Bybit and OKX"
+    ],
+    "verify_commands": [
+      "grep -rn 'YAHOO_RESEARCH_ONLY' --include='*.ts' --include='*.tsx' ."
+    ],
+    "notes_2026_08_17": "Q-079 audit. I8 splits: (a) the substantive licence question is UNVERIFIED and closable only by the owner with counsel; (b) the PROCESS half - 'confirm the licence permits it AND RECORD THE FINDING' - is VIOLATED, with no mechanism anywhere and the trigger live now. PR #147 turned the stock-page news surface from synthetic to LIVE Yahoo content and descends from the commit that wrote I8; no licence finding was recorded with it. Six vendors are end-user-exposed with no auth: Yahoo (app/api/prices/route.ts:131 +12 sites), CoinGecko (browser-direct hooks/useBtcCandles.ts:34), Kraken, Coinbase, Bybit, OKX. middleware.ts:119 matches all paths but its body :51-116 only does CSP+CSRF, so ~19 public routes serve vendor data to anyone. CORRECTION to CLAUDE.md's old premise: the position HAS been written down as a RISK (findings-ledger F4.5, still open since Phase 14; reviews/R7-security-compliance.md:213) - what was never recorded is a licence CONFIRMATION. Routes with Q-082 and Q-083.",
+    "blocked_by": [
+      "Q-082"
+    ]
+  },
+  {
+    "id": "Q-101",
+    "title": "I1/I2: provenance and staleness flags are built and read by nobody",
+    "domain": "Frontend/UX",
+    "priority": "P1",
+    "status": "pending",
+    "files": [
+      "lib/data/mergeQuotes.ts",
+      "components/DataFreshnessIndicator.tsx",
+      "app/api/chart/[ticker]/route.ts",
+      "app/api/options/[ticker]/route.ts"
+    ],
+    "acceptance_criteria": [
+      "Every surface that can serve a cached or stale value renders a visible flag, or the flag is deleted as dead weight",
+      "A test fails if a route emits _cached:true and the consuming surface renders no indicator",
+      "DataFreshnessIndicator is mounted on every page that renders a vendor quote, or the exceptions are named and justified"
+    ],
+    "verify_commands": [
+      "npm run typecheck",
+      "npm run test"
+    ],
+    "notes_2026_08_17": "Q-079 audit. Same green-and-inert shape as the Q-088 lesson: the plumbing exists and nothing consumes it. lib/data/mergeQuotes.ts:18-28 builds per-field QuoteProvenance on every quote and grep '.provenance' across components/ app/ hooks/ returns ZERO consumers. _cached:true (app/api/chart/[ticker]/route.ts:60) has 8 producers and 0 consumers - the cache substitution happens and the flag dies in the JSON. app/api/options/[ticker]/route.ts:82-86 emits dataProvenance{delayedMinutes:15,realtime:false} with a comment promising a DELAYED badge no component renders. DataFreshnessIndicator.tsx:66-71 is correct but mounted on 2 of 16 pages (app/desk/page.tsx:163, app/sector/[slug]/page.tsx:345). Declared blind spot from that audit: hooks/ SWR keepPreviousData was not checked and is the most likely undiscovered I2 violation.",
+    "blocked_by": []
+  },
+  {
+    "id": "Q-102",
+    "title": "I4: weekly in-place history rewrite and a rolling survivor universe make benchmark floors non-reproducible",
+    "domain": "Data/Integrity",
+    "priority": "P1",
+    "status": "pending",
+    "files": [
+      "scripts/fetchBacktestData.mjs",
+      ".github/workflows/refresh-data.yml",
+      "reviews/invariants-baseline.md"
+    ],
+    "acceptance_criteria": [
+      "Historical data is append-only or versioned, so a past benchmark run can be reproduced byte-identically",
+      "The backtest universe is pinned to a dated membership list rather than re-anchored to Date.now()",
+      "A tripwire fails if any fundamentals module is imported from lib/backtest/ or a signal path",
+      "A vendor restatement is detectable as a restatement, not as signal drift"
+    ],
+    "verify_commands": [
+      "node scripts/verify-data-integrity.mjs",
+      "npm run test"
+    ],
+    "notes_2026_08_17": "Q-079 audit, feeds Q-080. scripts/fetchBacktestData.mjs:116-122 writeFileSync over the entire history every Sunday via refresh-data.yml, pushed to main - so both floors in reviews/invariants-baseline.md are non-reproducible and a vendor restatement presents as signal drift. Universe is a rolling present-day survivor list (:12-68 hardcoded names, :71 PERIOD_DAYS=1825 re-anchored to Date.now()), window ~2021-2026 not a fixed historical span. AFFIRMATIVE NEGATIVE worth keeping: fundamentals reach NO backtest or signal path today - they are UI-only (app/api/fundamentals/[ticker]/route.ts:68, lib/briefs/sectorBrief.ts:214) - so this needs a tripwire, not a migration. LATENT, not live: lib/backtest/walkForward.ts:157-159 has embargo 0 against 60-day holds, but all 16 call sites are in __tests__/; the live OOS path lib/optimize/gridSearch.ts:347 applies embargo 5 and is tested.",
+    "blocked_by": []
   }
 ]

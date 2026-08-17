@@ -66,79 +66,197 @@ Never conflate them in a report. Say "design invariant I4" or "baseline floor".
 
 ## DESIGN INVARIANTS I1–I8
 
-**Read this first: I1–I8 are the TARGET state, not a description of the repo
-today.** The enforcement tier on each is an initial assessment made
-2026-08-15 from repo state and has **not** yet been confirmed by a full audit
-(that audit is `Q-079`). The rule that actually binds:
+**Audited 2026-08-17 (`Q-079`).** Every tier below rests on `file:line` evidence
+recorded in `reviews/design-invariant-audit-2026-08-17/`, for the compliant
+findings as much as the violations. Three tiers were wrong and are corrected
+here; five were confirmed. I1–I8 remain the TARGET state — the tier measures how
+far the repo is from it, and is not a description of what the repo does.
 
 > **A PR must not regress an invariant. Closing an existing gap is backlog
 > work, not a merge blocker.** A constitution the codebase massively violates
 > gets learned-ignored, and then all of it is decoration.
 
-If you find the tier below is wrong, fix the tier — that is a valid,
-valuable commit.
+**No invariant is currently ENFORCED.** I7 was the only one that claimed to be,
+and the audit found the opposite. Read every tier below as a measurement, not a
+reassurance.
 
-### I1 — Provenance or it doesn't ship · PARTIAL
+### What the tiers mean — load-bearing definitions, not labels
+
+| Tier | Meaning |
+|---|---|
+| **ENFORCED** | A named executing artifact **fails** when the invariant is violated, and someone has **watched it fail**. Reading the code and concluding it looks right does not qualify. |
+| **PARTIAL** | A mechanism exists on some paths; the gaps are named as `file:line`. |
+| **ASPIRATIONAL** | Target state. No mechanism. Known non-compliance. |
+| **VIOLATED** | A live path actively does the opposite, **or** the invariant names a gate that does not exist. |
+| **UNVERIFIED** | Cannot be determined from the repo. A valid outcome — prefer it to a guess. |
+
+**A tier may only be raised by exhibiting the artifact that fails.** Q-088 and
+Q-079 each found a guard that was green and inert; "the guard exists" is the
+claim that has now failed twice. If you find a tier below is wrong, fix the
+tier — that is a valid, valuable commit — but bring the evidence.
+
+### I1 — Provenance or it doesn't ship · PARTIAL *(confirmed 2026-08-17)*
 Every number rendered in the UI or fed to a model should carry
 `(vendor, vendor_timestamp, ingest_timestamp, transform_chain_hash, quality_flag)`.
 If provenance is missing, the value renders as `—` with a reason, never as a number.
-*Today:* honest data labeling and chart integrity landed (#142/#143);
-the full provenance tuple does not exist.
+*Today:* the full 5-tuple does not exist, and what does exist is **built and
+inert**. `lib/data/mergeQuotes.ts:18-28` constructs per-field `QuoteProvenance`
+on every quote; grepping `.provenance` across `components/ app/ hooks/` returns
+**zero consumers**. `app/api/options/[ticker]/route.ts:82-86` emits
+`dataProvenance {delayedMinutes:15, realtime:false}` with a comment promising a
+DELAYED badge that no component renders. → `Q-101`.
 
-### I2 — Fail closed, never fail silent · PARTIAL
+### I2 — Fail closed, never fail silent · PARTIAL *(confirmed 2026-08-17)*
 Stale data displays as STALE with age. Missing data displays as MISSING.
 Never forward-fill into a live quote. Never substitute a cached value for a
 live one without a visible flag. A broken feed must degrade the UI, not
 invisibly poison it.
+*Today:* `components/DataFreshnessIndicator.tsx:66-71` correctly renders
+`Stale — refresh` with age, but is mounted on **2 of 16 pages**
+(`app/desk/page.tsx:163`, `app/sector/[slug]/page.tsx:345`). The cache flag
+`_cached: true` (`app/api/chart/[ticker]/route.ts:60`) has **8 producers and 0
+consumers** — the cache substitution happens and the flag dies in the JSON.
+→ `Q-101`.
 
-### I3 — No synthetic data crosses the boundary · PARTIAL
+### I3 — No synthetic data crosses the boundary · PARTIAL *(confirmed 2026-08-17, on different grounds)*
 Mock/fixture/synthetic data is permitted only in `__tests__/` and `tests/` and
 must be tagged `__SYNTHETIC__` at the type level. Any code path that could
 route synthetic data into a backtest, a chart, or a signal is a P0 defect.
 Add a runtime assertion, not just a comment.
+*Today:* after `Q-088` no live synthetic path reaches a chart — both stock and
+sector pages pass no marker props, and `components/BtcChartPanel.tsx:94-95`
+passes empty constants. The wrapper brand's direction is correct and `scripts/`
+**is** scanned. But **the guard is a name blocklist, not a property check**:
+`__tests__/architecture/synthetic-containment.test.ts:85` matches the literal
+string `mockData`, so **6 of 7 adversarial mutations escaped**, including a
+one-prop restoration of the exact Q-088 chart defect. The test's own header at
+`:14-17` claims it checks "a property rather than a pattern match" — that
+sentence is false. `assertNotSynthetic` (`lib/synthetic.ts:87-95`) has **zero
+production call sites**, so I3's "runtime assertion" clause has no executing
+instance on any chart, signal, or backtest boundary. → `Q-098`.
 
-### I4 — Point-in-time or it's a lie · ASPIRATIONAL
+### I4 — Point-in-time or it's a lie · ASPIRATIONAL *(confirmed 2026-08-17)*
 No backtest may consume data that did not exist, in that exact form, at the
 simulated timestamp. Covers restated fundamentals, index membership, analyst
 estimates, ratings, corporate actions, and our own reference data.
 *Today:* there is **no bitemporal store**, and the price path uses
-`yahoo-finance2` split-adjusted closes (see `AGENTS.md` Phase 10). The research
-side does use purge + embargo walk-forward (20d purge / 5-bar embargo). Treat
-any PIT claim as unproven until `Q-080` lands.
+`yahoo-finance2` split-adjusted closes (see `AGENTS.md` Phase 10).
+`scripts/fetchBacktestData.mjs:116-122` rewrites the entire history **in place**
+every Sunday via `refresh-data.yml` and pushes it to `main`, so both benchmark
+floors are non-reproducible and a vendor restatement would present as signal
+drift. The universe is a **rolling present-day survivor list** (`:12-68`
+hardcoded names, `:71` `PERIOD_DAYS = 1825` re-anchored to `Date.now()`), giving
+a ~2021-2026 window — not a fixed historical one.
+*Correction to the previous text:* the "20d purge / 5-bar embargo" claim was
+wrong in both directions. The real OOS research path
+(`lib/optimize/gridSearch.ts:347`) **does** apply embargo 5 and is tested.
+`lib/backtest/walkForward.ts:157-159` has **embargo 0** against 60-day holds,
+but all 16 of its call sites are in `__tests__/` — so that defect is **latent,
+not live**. Do not cite `lib/backtest/gridSearch.ts`; it does not exist.
+*Affirmative negative, established by search:* fundamentals reach **no** backtest
+or signal path — they are UI-only (`app/api/fundamentals/[ticker]/route.ts:68`,
+`lib/briefs/sectorBrief.ts:214`). `Q-080` should install a tripwire there, not a
+migration. → `Q-080`, `Q-102`.
 
-### I5 — Every claim of skill must survive the adversary · PARTIAL
+### I5 — Every claim of skill must survive the adversary · VIOLATED *(was PARTIAL; corrected 2026-08-17)*
 No strategy, factor, or model reaches the UI or the docs without out-of-sample
 results, Deflated Sharpe Ratio, Probability of Backtest Overfitting, and an
 entry in `.quantlab/TRIAL_REGISTRY.jsonl` recording how many configurations
 were tried. Report the deflated number as the headline, never the raw one.
 
-*Today:* OOS, purged walk-forward (Q-064), and pre-registered decision rules are
-genuinely in use — this is the strongest area of the platform. Two real gaps:
-- **DSR is implemented** (`lib/quant/deflatedSharpe.ts`, Bailey & López de Prado)
-  but `scripts/benchmark-signals.ts` calls it with a **hardcoded** `nTrials` of
-  10 and 100. Those are guesses. The registry's backfill already accounts for
-  ~45 configurations at minimum (over 1000 if the Loop-1 declared grid is the
-  right denominator), so the published DSR is deflated against a number that is
-  too small, and the code's own note flags the trade overlap as optimistic too.
-  Wiring `nTrials` to the registry is `Q-081`.
-- **PBO/CSCV is not implemented at all.** `Q-085`.
+*Today:* **I5 is a gate with no gate** — no enforcing `file:line` can be named.
+The only executing performance gate is `scripts/benchmark-signals.ts:325-331`
+(`process.exit(1)` on **raw** edge < 1.81pp) via `ci.yml:73`, and `ci.yml:82-96`
+reads only `aggregateNetWinRate`/`aggregateWinRate`, never `tradeStats`. I5 says
+report the deflated number; CI enforces the raw one. It passes identically if
+DSR is null, the registry is deleted, and no OOS run ever happened.
 
-### I6 — Securities identified by permanent ID, never ticker · ASPIRATIONAL
+Sub-tiers, which are not level:
+- **OOS · PARTIAL** — purged walk-forward exists and is unit-tested, and
+  pre-registered rules really did reject candidates, but no CI job runs any OOS
+  script and the number CI gates is full-sample.
+- **DSR · PARTIAL** — implemented correctly (`lib/quant/deflatedSharpe.ts`,
+  Bailey & López de Prado), computed on exactly one path, **read by nothing**.
+- **PBO/CSCV · ASPIRATIONAL** — zero implementation. The 10 files matching
+  `cscv|combinatorial|pbo` are all prose. `Q-085`.
+- **Trial registry · ASPIRATIONAL** — 9 rows, all `backfilled:true`, all
+  `logged_at:2026-08-15`; no writer, no reader, no validator. A static file is
+  not a mechanism.
+
+**Because PBO does not exist, no strategy has ever met I5's bar — including the
+one shipped result.** The published DSR is **1.0000 and provably insensitive to
+`nTrials` from 10 to 10¹²**, because it is computed over 3,410 *overlapping*
+trades rather than the repo's own ~347 effective sample
+(`lib/quant/deflatedSharpe.ts:106,117`). **`Q-081` as currently scoped would
+change the headline from 1 to 1** — re-scope it around the effective sample size
+`T`, not `nTrials`. The 45/1053 arithmetic in the old text verifies exactly, but
+both are lower bounds.
+
+The previous claim that this is "the strongest area of the platform" is
+withdrawn. The good layer exists; the published headlines do not come from it.
+
+### I6 — Securities identified by permanent ID, never ticker · ASPIRATIONAL *(confirmed 2026-08-17)*
 Tickers are recycled and reassigned. Use FIGI/PermID/internal surrogate keys
 with a ticker→ID mapping table that is itself bitemporal.
-*Today:* the 56-instrument universe is ticker-keyed throughout.
+*Today:* total non-compliance, not partial. `lib/data/warehouse.ts:46-55` is
+`PRIMARY KEY (ticker, date)`, and grepping `figi|permId|securityId|isin|cusip`
+across `lib/ scripts/ app/ components/ hooks/ types/ __tests__/` returns **zero
+hits**. Identity is a lossy string mangle — `lib/backtest/dataLoader.ts:37`
+`.replace(/\./g,'-')`, inverted at `:143`, duplicated at
+`scripts/benchmark-signals.ts:36`. `verify-data-integrity.mjs` cannot detect a
+clean ticker handover: a reassignment would splice two issuers into one series.
+→ `Q-080`.
 
-### I7 — Main is always deployable · ENFORCED
+### I7 — Main is always deployable · VIOLATED *(was ENFORCED; corrected 2026-08-17)*
 Work on branches. CI must be green before merge. Never push a broken `main`.
 Never leave the repo mid-refactor at session end. Merging the PR **is** the
 deploy — `main` auto-deploys to production.
+*Today:* **nothing enforces any of that.** `main` reports `protected: false`,
+`required_status_checks.contexts: []`, `enforcement_level: off`, and `rulesets`
+is empty. **The required-check set is EMPTY**, so every green check mark in this
+repo's history has been advisory. Evidenced, not hypothetical: PR #120 merged
+**49 seconds after** its `coverage` job reported failure, and `e49b1d1` shipped
+to production with a red `test` job via merge skew.
+`refresh-data.yml:137` (`git push origin HEAD:main`) lands bot commits weekly
+with **zero** typecheck/test/coverage/smoke, each auto-deploying to production.
+The Vercel build — the only gate that catches Next.js route-config errors — is
+not required either, so a failed build merges, prod silently keeps serving the
+old deployment, and nothing alarms. No rollback script or procedure exists;
+`VERCEL_OPERATIONS.md:351` forbids `vercel rollback` without owner request.
+The repo is **public**, so branch protection is free: unconfigured, not
+unavailable. → `Q-097` (owner action — repo settings).
+*Related:* "WHAT DONE MEANS" below requires **lint clean** and **no lint
+exists** — no `lint` script, no tracked config, not installed, zero workflow
+hits. The definition of done names a gate that cannot run. → `Q-093`.
 
-### I8 — Vendor terms are law · UNVERIFIED
+### I8 — Vendor terms are law · VIOLATED (process) / UNVERIFIED (licence) *(was UNVERIFIED; corrected 2026-08-17)*
 Market data licences almost universally prohibit redistribution. Before any
 feature exposes vendor data to end users, confirm the licence permits it and
 record the finding. This is a business-ending risk, not a detail.
-*Today:* the `yahoo-finance2` redistribution position has never been written
-down. See `Q-082`.
+*Today:* the invariant has two halves and they sit at different tiers.
+- **(a) The substantive licence question · UNVERIFIED.** No licence, account or
+  agreement is visible in the repo for any vendor. This is a legal question about
+  off-repo documents and **no agent can close it** — it needs the owner and
+  external counsel. `Q-082`, `Q-083`.
+- **(b) The process requirement · VIOLATED.** "Confirm the licence permits it
+  **and record the finding**" has no mechanism anywhere — no checklist, PR
+  template, or CI check — and its trigger condition is live now with zero
+  recorded findings. PR #147 turned the stock-page news surface from synthetic to
+  **live Yahoo content** and descends from the commit that wrote I8; no licence
+  finding was recorded with it.
+
+Scope is far wider than `yahoo-finance2`: **11 vendors**, six of them
+end-user-exposed with **no auth** — Yahoo (`app/api/prices/route.ts:131` + 12
+sites), CoinGecko (browser-direct at `hooks/useBtcCandles.ts:34`), Kraken,
+Coinbase, Bybit, OKX. `middleware.ts:119` matches all paths but its body
+(`:51-116`) only does CSP + CSRF, so ~19 public routes serve vendor data to
+anyone.
+*Correction to the previous text:* "the position has never been written down" is
+**false**. The *risk* was recorded in Phase 14 (`reviews/findings-ledger.csv`
+row F4.5, still `open`; `reviews/R7-security-compliance.md:213`); a licence
+*confirmation* never was. `reviews/PHASE-15-PLAN.md:44` records a compliance
+banner as "present" whose three required elements — research-only text, a ToS
+link, and a `YAHOO_RESEARCH_ONLY` kill flag — do not exist. → `Q-100`.
 
 ---
 
@@ -195,10 +313,16 @@ regulated-advice line.
 
 ## WHAT "DONE" MEANS
 
-Tests pass · types check · lint clean · the adversary agent has reviewed it and
-its objections are resolved or logged in `reviews/findings-ledger.csv` · the
+Tests pass · types check · ~~lint clean~~ · the adversary agent has reviewed it
+and its objections are resolved or logged in `reviews/findings-ledger.csv` · the
 Vercel build is green · a decision note is recorded if an architectural choice
 was made · `workspace/SESSION_STATE.json` and `MEMORY_LOG.md` are updated.
+
+**"lint clean" is struck because no lint exists** — no `lint` script in
+`package.json`, no tracked config, not installed, zero workflow references
+(verified 2026-08-17, `Q-079`). Do not report it as passing. Resolve in either
+direction under `Q-093`; an unenforceable clause in the definition of done
+manufactures false confidence.
 
 **Tagged code ≠ fixed effect.** A commit that adds the right label but changes
 no behaviour is not done. Prove the effect, then claim it.
@@ -212,6 +336,14 @@ npm run benchmark         # after ANY signal/backtest change; WR floor in review
 Note: jsdom component tests are CI-only on this machine. Stryker does not run
 on PRs. The a11y workflow is schedule-only AND advisory — a green check is not
 zero violations; read the job log.
+
+**These gates are advisory, all of them.** `main` has no branch protection and
+the required-status-check set is empty (verified 2026-08-17, `Q-079` — see I7),
+so nothing stops a red PR from merging and auto-deploying. Until `Q-097` lands,
+running these locally before you push IS the gate. `npm run check:ci` does not
+substitute: its `check:smoke` step probes the **live production URL**
+(`scripts/smoke-production.mjs:8`), not your branch, so it can pass while your
+change is broken.
 
 ---
 
