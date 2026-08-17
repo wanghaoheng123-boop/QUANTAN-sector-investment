@@ -68,8 +68,8 @@ Never conflate them in a report. Say "design invariant I4" or "baseline floor".
 
 **Audited 2026-08-17 (`Q-079`).** Every tier below rests on `file:line` evidence
 recorded in `reviews/design-invariant-audit-2026-08-17/`, for the compliant
-findings as much as the violations. **Five tiers were wrong and are corrected
-here; three were confirmed.** I1–I8 remain the TARGET state — the tier measures
+findings as much as the violations. **Six tiers were wrong and are corrected
+here; two were confirmed.** I1–I8 remain the TARGET state — the tier measures
 how far the repo is from it, and is not a description of what the repo does.
 
 > **A PR must not regress an invariant. Closing an existing gap is backlog
@@ -87,7 +87,7 @@ reassurance.
 | **ENFORCED** | A named executing artifact **fails** when the invariant is violated, and someone has **watched it fail**. Reading the code and concluding it looks right does not qualify. |
 | **PARTIAL** | A mechanism exists on some paths; the gaps are named as `file:line`. |
 | **ASPIRATIONAL** | Target state. No mechanism. Known non-compliance. |
-| **VIOLATED** | A live path actively does the opposite, **or** the invariant names a gate that does not exist. |
+| **VIOLATED** | A live path actively does the opposite, **or** the invariant asserts a control the project **relies on** and that control has no executing instance. |
 | **UNVERIFIED** | Cannot be determined from the repo. A valid outcome — prefer it to a guess. |
 
 **A tier may only be raised by exhibiting the artifact that fails.** Q-088 and
@@ -95,10 +95,13 @@ Q-079 each found a guard that was green and inert; "the guard exists" is the
 claim that has now failed twice. If you find a tier below is wrong, fix the
 tier — that is a valid, valuable commit — but bring the evidence.
 
-**Apply the second VIOLATED clause honestly.** An invariant that demands a
-mechanism it does not have is violated, however much adjacent machinery exists.
-Three tiers moved to VIOLATED on that clause alone (I3, I5, I8) — none of them
-because a live path is currently emitting bad data. Resist the pull toward
+**ASPIRATIONAL vs VIOLATED turns on reliance, not on absence.** I4 and I6 are
+ASPIRATIONAL because the capability was never built and the document says so —
+nobody acts as if we have it. I3, I5, I7 and I8 are VIOLATED because each asserts
+a control the project *relies on* — a containment guard, a skill bar, CI, a
+licence check — that has no executing instance. The earlier phrasing ("names a
+gate that does not exist") was unfalsifiable: it catches every non-ENFORCED
+invariant, and perversely rated I3 worse than I6. Resist the pull toward
 PARTIAL as the diplomatic answer: PARTIAL requires a mechanism on **some** paths,
 and zero is not some. Where an invariant has separable halves at different tiers,
 the heading takes the **worse** one and the body states the split (see I8).
@@ -108,25 +111,29 @@ Every number rendered in the UI or fed to a model should carry
 `(vendor, vendor_timestamp, ingest_timestamp, transform_chain_hash, quality_flag)`.
 If provenance is missing, the value renders as `—` with a reason, never as a number.
 *Today:* the full 5-tuple does not exist, and what does exist is **built and
-inert**. `lib/data/mergeQuotes.ts:18-28` constructs per-field `QuoteProvenance`
-on every quote; grepping `.provenance` across `components/ app/ hooks/` returns
-**zero consumers**. `app/api/options/[ticker]/route.ts:82-86` emits
+inert**. `lib/data/mergeQuotes.ts` declares `QuoteProvenance` at `:18-28` and
+constructs it per field at `:105` and `:167`; grepping `.provenance` across
+`components/ app/ hooks/` returns **zero consumers** — the only hits are
+comments. `app/api/options/[ticker]/route.ts:82-86` emits
 `dataProvenance {delayedMinutes:15, realtime:false}` with a comment promising a
 DELAYED badge that no component renders. **Not PARTIAL: PARTIAL requires a
 mechanism on some paths, and the consumer count is zero, not few.** Numbers
 render today with no provenance and no `—`. → `Q-101`.
 
-### I2 — Fail closed, never fail silent · PARTIAL *(confirmed 2026-08-17)*
+### I2 — Fail closed, never fail silent · VIOLATED *(was PARTIAL; corrected 2026-08-17)*
 Stale data displays as STALE with age. Missing data displays as MISSING.
 Never forward-fill into a live quote. Never substitute a cached value for a
 live one without a visible flag. A broken feed must degrade the UI, not
 invisibly poison it.
-*Today:* `components/DataFreshnessIndicator.tsx:66-71` correctly renders
-`Stale — refresh` with age, but is mounted on **2 of 16 pages**
-(`app/desk/page.tsx:163`, `app/sector/[slug]/page.tsx:345`). The cache flag
-`_cached: true` (`app/api/chart/[ticker]/route.ts:60`) has **8 producers and 0
-consumers** — the cache substitution happens and the flag dies in the JSON.
-→ `Q-101`.
+*Today:* the two halves sit at different tiers, so the heading takes the worse.
+**Staleness · PARTIAL:** `components/DataFreshnessIndicator.tsx:66-71` correctly
+renders `Stale — refresh` with age, but is mounted on **2 of 16 pages**
+(`app/desk/page.tsx:163`, `app/sector/[slug]/page.tsx:345`).
+**Cache substitution · VIOLATED:** the flag `_cached`
+(`app/api/chart/[ticker]/route.ts:60`) appears at **7 sites, 3 of which set it,
+with zero consumers** — so a cached value *is* substituted for a live one with no
+visible flag, which is precisely what I2 names and forbids. That is a live path
+doing the opposite, not merely a missing mechanism. → `Q-101`.
 
 ### I3 — No synthetic data crosses the boundary · VIOLATED *(was PARTIAL; corrected 2026-08-17)*
 Mock/fixture/synthetic data is permitted only in `__tests__/` and `tests/` and
@@ -144,6 +151,14 @@ one-prop restoration of the exact Q-088 chart defect. The test's own header at
 sentence is false. `assertNotSynthetic` (`lib/synthetic.ts:87-95`) has **zero
 production call sites**, so I3's "runtime assertion" clause has no executing
 instance on any chart, signal, or backtest boundary. → `Q-098`.
+*Provenance of the "6 of 7" figure:* it is single-sourced to this audit's
+mutation run and is **not reproducible from the repo** — the mutations were
+applied and reverted, leaving no executable artifact. `Q-098` converts them into
+tests. Note the test file's own `:19-20` says "All five mutations are now
+caught": that refers to Q-088's *different* five (M1, M2b, M4, M5, M6), not to
+these seven, so the two claims do not conflict. **The tier does not rest on that
+figure** — it rests on `assertNotSynthetic` having zero production call sites,
+which was independently re-verified.
 *Why VIOLATED and not PARTIAL:* I3 explicitly requires "a runtime assertion, not
 just a comment", and that assertion exists as an exported function with no
 caller. The invariant names a gate that does not exist — the same clause that
@@ -165,9 +180,10 @@ a ~2021-2026 window — not a fixed historical one.
 *Correction to the previous text:* the "20d purge / 5-bar embargo" claim was
 wrong in both directions. The real OOS research path
 (`lib/optimize/gridSearch.ts:347`) **does** apply embargo 5 and is tested.
-`lib/backtest/walkForward.ts:157-159` has **embargo 0** against 60-day holds,
-but all 16 of its call sites are in `__tests__/` — so that defect is **latent,
-not live**. Do not cite `lib/backtest/gridSearch.ts`; it does not exist.
+`lib/backtest/walkForward.ts:158-160` has **embargo 0** against 60-day holds, but
+every *invocation* is in `__tests__/` (15 across three suites);
+`lib/backtest/engine.ts:239-240` re-exports it and nothing in `app/` or
+`scripts/` calls it — so that defect is **latent, not live**. Do not cite `lib/backtest/gridSearch.ts`; it does not exist.
 *Affirmative negative, established by search:* fundamentals reach **no** backtest
 or signal path — they are UI-only (`app/api/fundamentals/[ticker]/route.ts:68`,
 `lib/briefs/sectorBrief.ts:214`). `Q-080` should install a tripwire there, not a
@@ -206,14 +222,26 @@ headline by nothing. **`Q-081` as currently scoped would change the headline fro
 1 to 1.** The 45/1053 arithmetic in the old text verifies exactly, but both are
 lower bounds and both are the wrong lever.
 
-The suspected cause is the sample size, not the trial count: the same results
-file reports `nTrades: 347` at top level (`:43`) while `tradeStats.nTrades` is
-**3,410** — a ~10× gap consistent with counting overlapping trades — and DSR is
-computed on the larger (`lib/quant/deflatedSharpe.ts:106,117`). Treat the
-saturation as established and the *diagnosis* as strong but not closed: the
-distributional moments are not persisted, so which `T` is correct cannot be
-recomputed from the repo. Re-scope `Q-081` around `T` and de-overlapping, and
-confirm the moments before acting.
+**The saturation is an artifact of sample size, and the repo names the honest one
+itself.** `scripts/benchmark-results.json` carries `nonOverlapStats.nTrades = 347`
+whose own note reads *"the honest effective n behind the pooled WR"*, while DSR is
+computed on `tradeStats.nTrades = 3410`, the overlapping count
+(`lib/quant/deflatedSharpe.ts:106,117`). Because `expectedMaxSharpe` scales as
+`1/√(T−1)` (`:117`), `T` and `nTrials` are coupled — and at the honest `T` the
+trial count stops being inert:
+
+| `T` | n=10 | n=45 | n=100 | n=1053 |
+|---|---|---|---|---|
+| 3410 (as published) | 1.0000 | 1.0000 | 1.0000 | 1.0000 |
+| **347 (honest effective n)** | 0.9709 | 0.8924 | 0.8282 | **0.5848** |
+
+**At the honest `T` the shipped result falls below any conventional bar at every
+trial count the registry supports.** So `Q-081` is not merely mis-scoped: fixing
+`nTrials` alone changes 1 to 1, but fixing `T` alone leaves multiplicity
+uncorrected. **The fix is joint.** The real caveat is narrower than the previous
+draft claimed — the distributional moments are not persisted, so the table
+assumes `g3=0, g4=3`; the direction and magnitude are robust, the third decimal
+is not.
 
 The previous claim that this is "the strongest area of the platform" is
 withdrawn. The good layer exists; the published headlines do not come from it.

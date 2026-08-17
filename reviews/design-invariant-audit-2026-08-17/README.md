@@ -6,7 +6,7 @@ sprint began (I5 asserted DSR was not computed — it is; I3 was tiered PARTIAL 
 Q-088 found synthetic data on a live chart route). This audit tested the
 remaining prior.
 
-**Result: 5 tiers corrected, 3 confirmed, and no invariant is ENFORCED.**
+**Result: 6 tiers corrected, 2 confirmed, and no invariant is ENFORCED.**
 I7 was the only one claiming enforcement, and it is the one that inverted.
 
 This document is the index. The per-invariant evidence — including what was
@@ -17,7 +17,7 @@ forking the SSOT; this directory is frozen evidence, not a second register.
 | | Invariant | Was | Now | Verdict |
 |---|---|---|---|---|
 | I1 | Provenance or it doesn't ship | PARTIAL | **ASPIRATIONAL** | **corrected** |
-| I2 | Fail closed, never fail silent | PARTIAL | **PARTIAL** | confirmed |
+| I2 | Fail closed, never fail silent | PARTIAL | **VIOLATED** | **corrected** |
 | I3 | No synthetic data crosses the boundary | PARTIAL | **VIOLATED** | **corrected** |
 | I4 | Point-in-time or it's a lie | ASPIRATIONAL | **ASPIRATIONAL** | confirmed |
 | I5 | Every claim of skill must survive the adversary | PARTIAL | **VIOLATED** | **corrected** |
@@ -82,6 +82,13 @@ sites**, so I3's "add a runtime assertion" clause has no executing instance.
 **I1 · PARTIAL → ASPIRATIONAL.** `lib/data/mergeQuotes.ts:18-28` builds
 per-field provenance on every quote and **nothing reads it** — zero consumers
 across `components/ app/ hooks/`. PARTIAL requires a mechanism on *some* paths.
+
+**I2 · PARTIAL → VIOLATED** *(found by red-team, after the first two commits).*
+The staleness half is genuinely PARTIAL (2 of 16 pages). The cache-substitution
+half is not: `_cached` has zero consumers, so a cached value *is* served in place
+of a live one with no visible flag — the exact thing I2 forbids, and clause 1,
+not clause 2. The "heading takes the worse half" rule invented one commit earlier
+had not been applied here.
 
 ## A second cross-check, on the audit itself
 

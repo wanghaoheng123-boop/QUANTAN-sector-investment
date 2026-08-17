@@ -1,3 +1,23 @@
+> **ERRATUM — added 2026-08-18 after cross-check and red-team review.**
+> Two claims below are superseded; `CLAUDE.md` carries the corrected version.
+>
+> 1. **`walkForwardAnalysis` is NOT a production path.** This file calls it
+>    "Path 1 — production / UI … published as an OOS robustness signal" at
+>    `:189-191` and `:335`. Every *invocation* is in `__tests__/` (15 across
+>    three suites); `lib/backtest/engine.ts:239-240` only re-exports it, and
+>    `WalkForwardPanel` computes its own quarterly split. The embargo-0 defect is
+>    real but **latent**, and severity is MEDIUM, not HIGH. Its line range is
+>    `:158-160`, not `:157-159`.
+> 2. **`lib/backtest/gridSearch.ts` does not exist.** Citations to it below are
+>    void. The live grid-search path is `lib/optimize/gridSearch.ts`, which
+>    applies embargo 5 and is tested.
+> 3. `_cached` is **7 sites, 3 of which set it** — not 8 producers. The 8th grep
+>    hit is the substring `no_cached_analysis`.
+> 4. `lib/data/mergeQuotes.ts:18-28` is the `QuoteProvenance` *interface*;
+>    construction is at `:105` and `:167`. The zero-consumer finding stands.
+>
+> Left otherwise unedited as the frozen record of what the audit actually found.
+
 # Q-079 — Design invariant audit: I1, I2, I4, I6
 
 **Date:** 2026-08-17 · **Branch:** `claude/q079-invariants-audit-2e38e2` · **Scope:** evidence only, no fixes.

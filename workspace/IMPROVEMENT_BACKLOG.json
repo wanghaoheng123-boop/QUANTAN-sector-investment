@@ -1774,7 +1774,7 @@
   },
   {
     "id": "Q-081",
-    "title": "Wire Deflated Sharpe nTrials to the trial registry and auto-append experiment rows",
+    "title": "Deflated Sharpe is saturated: fix the effective sample size T AND wire nTrials to the registry",
     "domain": "Quant/Research",
     "priority": "P1",
     "status": "pending",
@@ -1794,7 +1794,7 @@
       "npm run test"
     ],
     "notes_2026_08_15": "The registry was created 2026-08-15 with 9 backfilled rows (T-0001..T-0009). scripts/benchmark-signals.ts currently calls deflatedSharpe(netRets, 10) and (netRets, 100) \u2014 both are GUESSES. The backfill alone accounts for ~45 configurations at minimum, and over 1000 if the Loop-1 declared grid is the right denominator (see Q-084), so the published DSR is deflated against too small a number. Auto-append matters more than the wiring: a registry nobody appends to decays immediately, which is the tagged-code-is-not-a-fixed-effect lesson again.",
-    "notes_2026_08_17": "RE-SCOPE REQUIRED (Q-079 audit, finding F-I5-3). Wiring nTrials to the registry as currently scoped WOULD CHANGE THE HEADLINE FROM 1 TO 1. ESTABLISHED: the published DSR is saturated \u2014 the committed scripts/benchmark-results.json carries deflatedSharpeN10=1 AND deflatedSharpeN100=1, so a 10x change in the trial count already moves nothing. SUSPECTED CAUSE, NOT CLOSED: the same file reports nTrades:347 at :43 against tradeStats.nTrades of 3410, and DSR is computed on the larger (lib/quant/deflatedSharpe.ts:106,117) \u2014 consistent with counting overlapping trades. The distributional moments are NOT persisted, so the correct T cannot be recomputed from the repo; confirm them before acting. Re-scope around de-overlapping the trade series and the effective sample size T, not the trial count. CLAUDE.md's 45/1053 arithmetic verifies exactly but both are lower bounds and both are the wrong lever."
+    "notes_2026_08_17": "RE-SCOPED (Q-079 audit + red-team). Wiring nTrials ALONE would change the headline from 1 to 1. CAUSE: DSR is computed on tradeStats.nTrades=3410 (overlapping trades) while scripts/benchmark-results.json's own nonOverlapStats.nTrades=347 carries the note 'This is the honest effective n behind the pooled WR'. Since expectedMaxSharpe scales as 1/sqrt(T-1) (lib/quant/deflatedSharpe.ts:117), T and nTrials are COUPLED. At T=347 the DSR becomes 0.9709 (n=10), 0.8924 (n=45), 0.8282 (n=100), 0.5848 (n=1053) \u2014 i.e. THE SHIPPED RESULT FALLS BELOW ANY CONVENTIONAL BAR at every trial count the registry supports. THE FIX IS JOINT: de-overlap the trade series to get an honest T, and wire nTrials to the registry. Doing either alone is a no-op or leaves multiplicity uncorrected. Caveat: the distributional moments are not persisted, so those figures assume g3=0,g4=3 \u2014 direction and magnitude robust, third decimal soft. Confirm the moments before publishing any replacement number."
   },
   {
     "id": "Q-082",
