@@ -6,7 +6,7 @@ sprint began (I5 asserted DSR was not computed — it is; I3 was tiered PARTIAL 
 Q-088 found synthetic data on a live chart route). This audit tested the
 remaining prior.
 
-**Result: 3 tiers corrected, 5 confirmed, and no invariant is ENFORCED.**
+**Result: 5 tiers corrected, 3 confirmed, and no invariant is ENFORCED.**
 I7 was the only one claiming enforcement, and it is the one that inverted.
 
 This document is the index. The per-invariant evidence — including what was
@@ -16,14 +16,14 @@ forking the SSOT; this directory is frozen evidence, not a second register.
 
 | | Invariant | Was | Now | Verdict |
 |---|---|---|---|---|
-| I1 | Provenance or it doesn't ship | PARTIAL | **PARTIAL** | confirmed |
+| I1 | Provenance or it doesn't ship | PARTIAL | **ASPIRATIONAL** | **corrected** |
 | I2 | Fail closed, never fail silent | PARTIAL | **PARTIAL** | confirmed |
-| I3 | No synthetic data crosses the boundary | PARTIAL | **PARTIAL** | confirmed, different grounds |
+| I3 | No synthetic data crosses the boundary | PARTIAL | **VIOLATED** | **corrected** |
 | I4 | Point-in-time or it's a lie | ASPIRATIONAL | **ASPIRATIONAL** | confirmed |
 | I5 | Every claim of skill must survive the adversary | PARTIAL | **VIOLATED** | **corrected** |
 | I6 | Securities identified by permanent ID | ASPIRATIONAL | **ASPIRATIONAL** | confirmed |
 | I7 | Main is always deployable | **ENFORCED** | **VIOLATED** | **corrected** |
-| I8 | Vendor terms are law | UNVERIFIED | **VIOLATED** (process) / **UNVERIFIED** (licence) | **corrected** |
+| I8 | Vendor terms are law | UNVERIFIED | **VIOLATED** | **corrected** |
 
 ## Evidence files
 
@@ -35,7 +35,7 @@ forking the SSOT; this directory is frozen evidence, not a second register.
 | `I7-evidence.md` | I7 | `sre-devops` |
 | `I8-evidence.md` | I8 | `security-compliance` |
 
-## The three corrections
+## The corrections
 
 **I7 · ENFORCED → VIOLATED.** `main` has no branch protection
 (`protected: false`, `required_status_checks.contexts: []`,
@@ -53,18 +53,57 @@ against the GitHub API before filing.
 (`scripts/benchmark-signals.ts:325-331` via `ci.yml:73`) exits on the **raw**
 edge, the exact number I5 forbids as a headline. PBO/CSCV has no implementation,
 so no strategy has ever met I5's bar, including the one shipped result. The
-published DSR is **1.0000 and provably insensitive to `nTrials` from 10 to
-10¹²**, because it is computed over 3,410 overlapping trades rather than the
-repo's own ~347 effective sample — which means `Q-081` as scoped would change the
-headline from 1 to 1.
+published DSR is **saturated at 1.0000** — the committed
+`scripts/benchmark-results.json` carries `deflatedSharpeN10 = 1` **and**
+`deflatedSharpeN100 = 1`, so a 10× change in the trial count already moves the
+headline by nothing — which means `Q-081` as scoped would change the headline
+from 1 to 1. The suspected cause is sample size: the same file reports
+`nTrades: 347` at top level (`:43`) against `tradeStats.nTrades` of **3,410**,
+and DSR is computed on the larger. **The saturation is established; the
+diagnosis is not closed** — the distributional moments are not persisted, so
+which `T` is correct cannot be recomputed from the repo. Q-081 is re-scoped
+around `T`, with a note to confirm the moments before acting.
 
-**I8 · UNVERIFIED → VIOLATED (process) / UNVERIFIED (licence).** The invariant
-has two halves at different tiers. The substantive licence question is genuinely
+**I8 · UNVERIFIED → VIOLATED.** The invariant has two separable halves at
+different tiers and the heading takes the worse one. The substantive licence question is genuinely
 UNVERIFIED and closable only by the owner with counsel. But I8's operative
 sentence is "confirm the licence permits it **and record the finding**" — a
 procedural gate that does not exist anywhere, whose trigger condition is live now
 across 11 vendors, six of them end-user-exposed with no auth. Rating the whole
 invariant UNVERIFIED would have understated a live process failure.
+
+**I3 · PARTIAL → VIOLATED.** Audited by running seven adversarial mutations
+rather than reading the guard. Six escaped. The guard matches the literal string
+`mockData` (`__tests__/architecture/synthetic-containment.test.ts:85`), so it is
+an opt-in blocklist of known-bad **names**, not the property check its own header
+at `:14-17` claims to be. `assertNotSynthetic` has **zero production call
+sites**, so I3's "add a runtime assertion" clause has no executing instance.
+
+**I1 · PARTIAL → ASPIRATIONAL.** `lib/data/mergeQuotes.ts:18-28` builds
+per-field provenance on every quote and **nothing reads it** — zero consumers
+across `components/ app/ hooks/`. PARTIAL requires a mechanism on *some* paths.
+
+## A second cross-check, on the audit itself
+
+The first draft of this audit rated I1 and I3 PARTIAL — their existing tier — and
+gave I8 a compound heading. Reviewed against the **tier definitions this same
+commit introduced**, all three were wrong:
+
+- **VIOLATED** is defined as "a live path actively does the opposite, **or** the
+  invariant names a gate that does not exist." I3 demands "a runtime assertion,
+  not just a comment", and `assertNotSynthetic` has zero production call sites.
+  That is the second clause exactly — the same clause used to move I5 and I8. I3
+  at PARTIAL was the same evidence wearing a friendlier label.
+- **PARTIAL** is defined as "a mechanism exists on **some** paths." I1's
+  provenance has **zero** consumers. Zero is not some. I2 genuinely is PARTIAL
+  (2 of 16 pages); I1 is ASPIRATIONAL.
+- The definition table admits no compound value, so I8's heading now takes the
+  worse half with the split stated in the body.
+
+Recorded because it is the audit's own version of the failure it was hunting:
+"confirmed" requires no edit and produces no visible work, which is exactly where
+an auditor gets lazy. The tier table was written in the same commit it failed to
+govern.
 
 ## Cross-check that changed a finding
 

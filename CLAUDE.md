@@ -68,9 +68,9 @@ Never conflate them in a report. Say "design invariant I4" or "baseline floor".
 
 **Audited 2026-08-17 (`Q-079`).** Every tier below rests on `file:line` evidence
 recorded in `reviews/design-invariant-audit-2026-08-17/`, for the compliant
-findings as much as the violations. Three tiers were wrong and are corrected
-here; five were confirmed. I1–I8 remain the TARGET state — the tier measures how
-far the repo is from it, and is not a description of what the repo does.
+findings as much as the violations. **Five tiers were wrong and are corrected
+here; three were confirmed.** I1–I8 remain the TARGET state — the tier measures
+how far the repo is from it, and is not a description of what the repo does.
 
 > **A PR must not regress an invariant. Closing an existing gap is backlog
 > work, not a merge blocker.** A constitution the codebase massively violates
@@ -95,7 +95,15 @@ Q-079 each found a guard that was green and inert; "the guard exists" is the
 claim that has now failed twice. If you find a tier below is wrong, fix the
 tier — that is a valid, valuable commit — but bring the evidence.
 
-### I1 — Provenance or it doesn't ship · PARTIAL *(confirmed 2026-08-17)*
+**Apply the second VIOLATED clause honestly.** An invariant that demands a
+mechanism it does not have is violated, however much adjacent machinery exists.
+Three tiers moved to VIOLATED on that clause alone (I3, I5, I8) — none of them
+because a live path is currently emitting bad data. Resist the pull toward
+PARTIAL as the diplomatic answer: PARTIAL requires a mechanism on **some** paths,
+and zero is not some. Where an invariant has separable halves at different tiers,
+the heading takes the **worse** one and the body states the split (see I8).
+
+### I1 — Provenance or it doesn't ship · ASPIRATIONAL *(was PARTIAL; corrected 2026-08-17)*
 Every number rendered in the UI or fed to a model should carry
 `(vendor, vendor_timestamp, ingest_timestamp, transform_chain_hash, quality_flag)`.
 If provenance is missing, the value renders as `—` with a reason, never as a number.
@@ -104,7 +112,9 @@ inert**. `lib/data/mergeQuotes.ts:18-28` constructs per-field `QuoteProvenance`
 on every quote; grepping `.provenance` across `components/ app/ hooks/` returns
 **zero consumers**. `app/api/options/[ticker]/route.ts:82-86` emits
 `dataProvenance {delayedMinutes:15, realtime:false}` with a comment promising a
-DELAYED badge that no component renders. → `Q-101`.
+DELAYED badge that no component renders. **Not PARTIAL: PARTIAL requires a
+mechanism on some paths, and the consumer count is zero, not few.** Numbers
+render today with no provenance and no `—`. → `Q-101`.
 
 ### I2 — Fail closed, never fail silent · PARTIAL *(confirmed 2026-08-17)*
 Stale data displays as STALE with age. Missing data displays as MISSING.
@@ -118,7 +128,7 @@ invisibly poison it.
 consumers** — the cache substitution happens and the flag dies in the JSON.
 → `Q-101`.
 
-### I3 — No synthetic data crosses the boundary · PARTIAL *(confirmed 2026-08-17, on different grounds)*
+### I3 — No synthetic data crosses the boundary · VIOLATED *(was PARTIAL; corrected 2026-08-17)*
 Mock/fixture/synthetic data is permitted only in `__tests__/` and `tests/` and
 must be tagged `__SYNTHETIC__` at the type level. Any code path that could
 route synthetic data into a backtest, a chart, or a signal is a P0 defect.
@@ -134,6 +144,11 @@ one-prop restoration of the exact Q-088 chart defect. The test's own header at
 sentence is false. `assertNotSynthetic` (`lib/synthetic.ts:87-95`) has **zero
 production call sites**, so I3's "runtime assertion" clause has no executing
 instance on any chart, signal, or backtest boundary. → `Q-098`.
+*Why VIOLATED and not PARTIAL:* I3 explicitly requires "a runtime assertion, not
+just a comment", and that assertion exists as an exported function with no
+caller. The invariant names a gate that does not exist — the same clause that
+moved I5 and I8. That no live path is emitting synthetic data today is what
+keeps this from being worse; it is not what would make it PARTIAL.
 
 ### I4 — Point-in-time or it's a lie · ASPIRATIONAL *(confirmed 2026-08-17)*
 No backtest may consume data that did not exist, in that exact form, at the
@@ -184,13 +199,21 @@ Sub-tiers, which are not level:
   not a mechanism.
 
 **Because PBO does not exist, no strategy has ever met I5's bar — including the
-one shipped result.** The published DSR is **1.0000 and provably insensitive to
-`nTrials` from 10 to 10¹²**, because it is computed over 3,410 *overlapping*
-trades rather than the repo's own ~347 effective sample
-(`lib/quant/deflatedSharpe.ts:106,117`). **`Q-081` as currently scoped would
-change the headline from 1 to 1** — re-scope it around the effective sample size
-`T`, not `nTrials`. The 45/1053 arithmetic in the old text verifies exactly, but
-both are lower bounds.
+one shipped result.** The published DSR is **saturated at 1.0000**: the committed
+`scripts/benchmark-results.json` carries `deflatedSharpeN10 = 1` **and**
+`deflatedSharpeN100 = 1`, so a 10× change in the trial count already moves the
+headline by nothing. **`Q-081` as currently scoped would change the headline from
+1 to 1.** The 45/1053 arithmetic in the old text verifies exactly, but both are
+lower bounds and both are the wrong lever.
+
+The suspected cause is the sample size, not the trial count: the same results
+file reports `nTrades: 347` at top level (`:43`) while `tradeStats.nTrades` is
+**3,410** — a ~10× gap consistent with counting overlapping trades — and DSR is
+computed on the larger (`lib/quant/deflatedSharpe.ts:106,117`). Treat the
+saturation as established and the *diagnosis* as strong but not closed: the
+distributional moments are not persisted, so which `T` is correct cannot be
+recomputed from the repo. Re-scope `Q-081` around `T` and de-overlapping, and
+confirm the moments before acting.
 
 The previous claim that this is "the strongest area of the platform" is
 withdrawn. The good layer exists; the published headlines do not come from it.
@@ -229,11 +252,14 @@ unavailable. → `Q-097` (owner action — repo settings).
 exists** — no `lint` script, no tracked config, not installed, zero workflow
 hits. The definition of done names a gate that cannot run. → `Q-093`.
 
-### I8 — Vendor terms are law · VIOLATED (process) / UNVERIFIED (licence) *(was UNVERIFIED; corrected 2026-08-17)*
+### I8 — Vendor terms are law · VIOLATED *(was UNVERIFIED; corrected 2026-08-17)*
 Market data licences almost universally prohibit redistribution. Before any
 feature exposes vendor data to end users, confirm the licence permits it and
 record the finding. This is a business-ending risk, not a detail.
-*Today:* the invariant has two halves and they sit at different tiers.
+*Today:* the invariant has two separable halves at different tiers. **The
+heading takes the worse one.** Do not read the UNVERIFIED half as covering the
+whole invariant — that reading is what kept this at UNVERIFIED for a year while
+the process failure ran live.
 - **(a) The substantive licence question · UNVERIFIED.** No licence, account or
   agreement is visible in the repo for any vendor. This is a legal question about
   off-repo documents and **no agent can close it** — it needs the owner and
