@@ -1730,7 +1730,7 @@
     "title": "Audit design invariants I1-I8 and correct the enforcement tiers in CLAUDE.md",
     "domain": "Quant/Research",
     "priority": "P1",
-    "status": "pending",
+    "status": "done",
     "files": [
       "CLAUDE.md"
     ],
@@ -1743,7 +1743,8 @@
       "npm run typecheck",
       "npm run test"
     ],
-    "notes_2026_08_15": "The tiers currently in CLAUDE.md are an INITIAL ASSESSMENT made while installing the orchestration package on 2026-08-15, inferred from repo state rather than audited. One was already found wrong during install: I5 originally said DSR was not computed, but lib/quant/deflatedSharpe.ts exists (Q-065-NEW, PR #97). Assume the others may be similarly off. Delegate per invariant to data-integrity / quant-validator / security-compliance / red-team."
+    "notes_2026_08_15": "The tiers currently in CLAUDE.md are an INITIAL ASSESSMENT made while installing the orchestration package on 2026-08-15, inferred from repo state rather than audited. One was already found wrong during install: I5 originally said DSR was not computed, but lib/quant/deflatedSharpe.ts exists (Q-065-NEW, PR #97). Assume the others may be similarly off. Delegate per invariant to data-integrity / quant-validator / security-compliance / red-team.",
+    "notes_2026_08_17": "DONE. 3 tiers corrected (I5 PARTIAL->VIOLATED, I7 ENFORCED->VIOLATED, I8 UNVERIFIED->VIOLATED process/UNVERIFIED licence), 5 confirmed, and NO invariant is ENFORCED. Evidence: reviews/design-invariant-audit-2026-08-17/. Tier vocabulary now DEFINED in CLAUDE.md (it never was, which is how inferred tiers laundered). Filed Q-097..Q-102. Q-080 is unblocked."
   },
   {
     "id": "Q-080",
@@ -1767,14 +1768,13 @@
       "npm run verify:integrity",
       "npm run benchmark"
     ],
-    "blocked_by": [
-      "Q-079"
-    ],
-    "notes_2026_08_15": "Covers design invariants I4 and I6, both ASPIRATIONAL today. The 56-instrument universe is a hard-coded list of TODAY's large-cap survivors \u2014 scripts/optimize-grid.ts documents this inline as affecting EVERY metric it reports. Until this lands, every historical win rate, return and Sharpe in the platform is inflated by an unmeasured amount. Large; expect to slice it. Measuring the inflation is the highest-value first slice and is independently shippable."
+    "blocked_by": [],
+    "notes_2026_08_15": "Covers design invariants I4 and I6, both ASPIRATIONAL today. The 56-instrument universe is a hard-coded list of TODAY's large-cap survivors \u2014 scripts/optimize-grid.ts documents this inline as affecting EVERY metric it reports. Until this lands, every historical win rate, return and Sharpe in the platform is inflated by an unmeasured amount. Large; expect to slice it. Measuring the inflation is the highest-value first slice and is independently shippable.",
+    "notes_2026_08_17": "UNBLOCKED - Q-079 landed 2026-08-17. Scope refinements from that audit: I6 is TOTAL non-compliance (warehouse.ts:46-55 PRIMARY KEY (ticker,date); zero hits for figi|permId|securityId|isin|cusip repo-wide; identity is a lossy .replace() mangle at dataLoader.ts:37/:143 duplicated at benchmark-signals.ts:36). Fundamentals reach NO backtest or signal path, so the PIT work needs a TRIPWIRE there, not a migration. See also Q-102 for the data-vintage half."
   },
   {
     "id": "Q-081",
-    "title": "Wire Deflated Sharpe nTrials to the trial registry and auto-append experiment rows",
+    "title": "Deflated Sharpe is saturated: fix the effective sample size T AND wire nTrials to the registry",
     "domain": "Quant/Research",
     "priority": "P1",
     "status": "pending",
@@ -1793,7 +1793,8 @@
       "npm run benchmark",
       "npm run test"
     ],
-    "notes_2026_08_15": "The registry was created 2026-08-15 with 9 backfilled rows (T-0001..T-0009). scripts/benchmark-signals.ts currently calls deflatedSharpe(netRets, 10) and (netRets, 100) \u2014 both are GUESSES. The backfill alone accounts for ~45 configurations at minimum, and over 1000 if the Loop-1 declared grid is the right denominator (see Q-084), so the published DSR is deflated against too small a number. Auto-append matters more than the wiring: a registry nobody appends to decays immediately, which is the tagged-code-is-not-a-fixed-effect lesson again."
+    "notes_2026_08_15": "The registry was created 2026-08-15 with 9 backfilled rows (T-0001..T-0009). scripts/benchmark-signals.ts currently calls deflatedSharpe(netRets, 10) and (netRets, 100) \u2014 both are GUESSES. The backfill alone accounts for ~45 configurations at minimum, and over 1000 if the Loop-1 declared grid is the right denominator (see Q-084), so the published DSR is deflated against too small a number. Auto-append matters more than the wiring: a registry nobody appends to decays immediately, which is the tagged-code-is-not-a-fixed-effect lesson again.",
+    "notes_2026_08_17": "RE-SCOPED (Q-079 audit + red-team). Wiring nTrials ALONE would change the headline from 1 to 1. CAUSE: DSR is computed on tradeStats.nTrades=3410 (overlapping trades) while scripts/benchmark-results.json's own nonOverlapStats.nTrades=347 carries the note 'This is the honest effective n behind the pooled WR'. Since expectedMaxSharpe scales as 1/sqrt(T-1) (lib/quant/deflatedSharpe.ts:117), T and nTrials are COUPLED. At T=347 the DSR becomes 0.9709 (n=10), 0.8924 (n=45), 0.8282 (n=100), 0.5848 (n=1053) \u2014 i.e. THE SHIPPED RESULT FALLS BELOW ANY CONVENTIONAL BAR at every trial count the registry supports. THE FIX IS JOINT: de-overlap the trade series to get an honest T, and wire nTrials to the registry. Doing either alone is a no-op or leaves multiplicity uncorrected. Caveat: the distributional moments are not persisted, so those figures assume g3=0,g4=3 \u2014 direction and magnitude robust, third decimal soft. Confirm the moments before publishing any replacement number."
   },
   {
     "id": "Q-082",
@@ -2096,7 +2097,7 @@
     "id": "Q-096",
     "title": "KLineChart still accepts darkPoolMarkers/newsMarkers props with no guard",
     "domain": "Frontend/UX",
-    "priority": "P3",
+    "priority": "P1",
     "status": "pending",
     "files": [
       "components/KLineChart.tsx",
@@ -2111,6 +2112,152 @@
       "npm run typecheck",
       "npm run test"
     ],
-    "notes_2026_08_16": "Found by the red-team review of Q-088 (finding Q088-10). Nothing is broken today: Q-088 removed every producer, BtcChartPanel passes EMPTY_DARK_POOL_MARKERS, and KLineChart still accepts the props so no consumer breaks. But the rendering affordance is fully wired \u2014 hooks/useKLineChart.ts still draws both marker layers \u2014 so re-plotting fabricated markers is a one-line change. lib/synthetic.ts now exports assertNotSynthetic() precisely for boundaries like this. Low priority: the architecture allowlist already blocks the import path that fed them, and this is the belt-and-braces layer."
+    "notes_2026_08_16": "Found by the red-team review of Q-088 (finding Q088-10). Nothing is broken today: Q-088 removed every producer, BtcChartPanel passes EMPTY_DARK_POOL_MARKERS, and KLineChart still accepts the props so no consumer breaks. But the rendering affordance is fully wired \u2014 hooks/useKLineChart.ts still draws both marker layers \u2014 so re-plotting fabricated markers is a one-line change. lib/synthetic.ts now exports assertNotSynthetic() precisely for boundaries like this. Low priority: the architecture allowlist already blocks the import path that fed them, and this is the belt-and-braces layer.",
+    "notes_2026_08_17": "PRIORITY RAISED P3->P1 by the Q-079 audit. The stated rationale for P3 - 'the architecture allowlist already blocks the import path that fed them' - is FALSIFIED. Mutation M-F2 restored synthetic prints to <KLineChart darkPoolMarkers> keyed on REAL candle times, needing no import path at all, and escaped the guard (48/48 green, tsc clean). app/sector/[slug]/page.tsx:63 and app/stock/[ticker]/page.tsx:293 call unwrapSynthetic at component top, stripping the brand into lexical scope where the array is freely assignable to the marker prop 430 lines below. Sink fully wired: components/KLineChart.tsx:55-56, hooks/useKLineChart.ts:821-832. The import allowlist is the ONLY layer, not the second. Track with Q-098."
+  },
+  {
+    "id": "Q-097",
+    "title": "I7 VIOLATED: main has no branch protection and an empty required-check set",
+    "domain": "Infra/CI",
+    "priority": "P0",
+    "status": "pending",
+    "files": [
+      ".github/workflows/refresh-data.yml",
+      "workspace/VERCEL_OPERATIONS.md"
+    ],
+    "acceptance_criteria": [
+      "Branch protection or a ruleset exists on main (OWNER ACTION - repository settings, not a code change)",
+      "The required-status-check set is non-empty and includes at minimum: typecheck, test, and the Vercel build",
+      "refresh-data.yml no longer pushes to main without CI, or its bot commits are gated by the same required checks",
+      "A rollback procedure exists that someone has executed at least once in a drill",
+      "gh api repos/:owner/:repo/branches/main reports protected:true with a non-empty contexts list"
+    ],
+    "verify_commands": [
+      "gh api repos/wanghaoheng123-boop/QUANTAN-sector-investment/branches/main --jq '{protected, contexts: .protection.required_status_checks.contexts}'"
+    ],
+    "notes_2026_08_17": "Q-079 audit. main reports protected:false, required_status_checks.contexts:[], enforcement_level:off, rulesets:[]. Repo is PUBLIC so protection is free - unconfigured, not unavailable. Because the required set is empty, EVERY green check in this repo's history has been advisory. Evidenced: PR #120 merged 49s after its coverage job failed (04:35:56Z fail -> 04:36:45Z merge); e49b1d1 reached production with a red test job via merge skew. refresh-data.yml:137 'git push origin HEAD:main' lands bot commits weekly with zero typecheck/test/coverage/smoke, each auto-deploying to prod. The Vercel build is the ONLY gate that catches Next.js route-config errors and is not required either. No rollback script exists; VERCEL_OPERATIONS.md:351 forbids vercel rollback without owner request. Independently re-verified by the lead against the GitHub API. THE FIRST CRITERION IS AN OWNER ACTION - no agent should change repo settings.",
+    "blocked_by": []
+  },
+  {
+    "id": "Q-098",
+    "title": "I3 guard is a name blocklist, not a property check: 6 of 7 mutations escape",
+    "domain": "Testing",
+    "priority": "P0",
+    "status": "pending",
+    "files": [
+      "__tests__/architecture/synthetic-containment.test.ts",
+      "lib/synthetic.ts",
+      "app/sector/[slug]/page.tsx",
+      "app/stock/[ticker]/page.tsx"
+    ],
+    "acceptance_criteria": [
+      "The guard detects synthetic-ness as a property, not by matching the literal module name 'mockData'",
+      "All seven Q-079 mutations (M-A..M-F2) fail the guard; the escaping six are recorded in reviews/design-invariant-audit-2026-08-17/I3-evidence.md",
+      "assertNotSynthetic has at least one production call site on a chart/signal/backtest boundary, and a test proves it throws",
+      "The test header at :14-17 no longer claims to test a property unless it does"
+    ],
+    "verify_commands": [
+      "npx vitest run __tests__/architecture",
+      "npm run typecheck"
+    ],
+    "notes_2026_08_17": "Q-079 audit, by adversarial mutation rather than inspection. __tests__/architecture/synthetic-containment.test.ts:85 MENTIONS_MOCKDATA matches the literal string 'mockData', so the mechanism is an opt-in registry of known-bad NAMES. Escaping mutations: M-B new synthetic module under a different name feeding a backtest; M-C __tests__ fixture imported into lib/quant/ and re-exported; M-D computed specifier 'mock'+'Data' in the live chart route; M-E inline Math.random() OHLC in the live chart route returned as source:'yahoo'; M-F/M-F2 synthetic prints to <KLineChart darkPoolMarkers> keyed on real candle times (a one-prop restoration of the exact Q-088 defect). Only M-A, the positive control, was caught. The brand DIRECTION is correct and scripts/ IS scanned - those two halves are genuinely fixed. Supersedes the stated rationale of Q-096.",
+    "blocked_by": []
+  },
+  {
+    "id": "Q-099",
+    "title": "I5 is a gate with no gate: CI enforces the raw edge, deflated statistics gate nothing",
+    "domain": "Quant/Research",
+    "priority": "P0",
+    "status": "pending",
+    "files": [
+      "scripts/benchmark-signals.ts",
+      ".github/workflows/ci.yml",
+      "lib/quant/deflatedSharpe.ts"
+    ],
+    "acceptance_criteria": [
+      "A named executing gate blocks publication when OOS / DSR / PBO / a registry row is missing, or I5 is rewritten to describe what the platform actually does",
+      "The gated number is the deflated one, not aggregateWinRate",
+      "No UI or doc surface presents a raw in-sample statistic without its deflated counterpart, or renders a metric under a name it is not"
+    ],
+    "verify_commands": [
+      "npm run typecheck",
+      "npm run test"
+    ],
+    "notes_2026_08_17": "Q-079 audit. The only executing performance gate is scripts/benchmark-signals.ts:325-331 (process.exit(1) on RAW edge < 1.81pp) via ci.yml:73; ci.yml:82-96 reads only aggregateNetWinRate/aggregateWinRate and never touches tradeStats. It passes identically if DSR is null, the registry is deleted, and no OOS run ever happened. PBO/CSCV has zero implementation (the 10 files matching cscv|combinatorial|pbo are all prose), so NO strategy has ever met I5's bar including the one shipped result. The trial registry has 9 rows, all backfilled:true, no writer/reader/validator. Related UI defects from the same audit: the card labelled 'Sharpe Ratio' is annReturn/maxDD and its negative branch is unreachable so losing portfolios render '-'; the 'Walk-Forward / Overfitting Check' panel contains no overfitting statistic (mounted app/backtest/page.tsx:237, fed from a real /api/backtest fetch at :64-72,122).",
+    "blocked_by": []
+  },
+  {
+    "id": "Q-100",
+    "title": "I8 process gate absent: 11 vendors, 6 end-user-exposed with no auth, zero recorded licence findings",
+    "domain": "Security/Compliance",
+    "priority": "P0",
+    "status": "pending",
+    "files": [
+      "components/ComplianceBanner.tsx",
+      "middleware.ts",
+      "app/api/prices/route.ts",
+      "hooks/useBtcCandles.ts"
+    ],
+    "acceptance_criteria": [
+      "A recorded licence finding exists for every vendor whose data reaches an end user, or the surface is withdrawn",
+      "A mechanism forces the question before a data-exposing feature ships (PR template, checklist, or CI check)",
+      "reviews/PHASE-15-PLAN.md:44 no longer records a compliance banner as present when its three required elements do not exist",
+      "OWNER + COUNSEL: the substantive redistribution question is answered for Yahoo, CoinGecko, Kraken, Coinbase, Bybit and OKX"
+    ],
+    "verify_commands": [
+      "grep -rn 'YAHOO_RESEARCH_ONLY' --include='*.ts' --include='*.tsx' ."
+    ],
+    "notes_2026_08_17": "Q-079 audit. I8 splits: (a) the substantive licence question is UNVERIFIED and closable only by the owner with counsel; (b) the PROCESS half - 'confirm the licence permits it AND RECORD THE FINDING' - is VIOLATED, with no mechanism anywhere and the trigger live now. PR #147 turned the stock-page news surface from synthetic to LIVE Yahoo content and descends from the commit that wrote I8; no licence finding was recorded with it. Six vendors are end-user-exposed with no auth: Yahoo (app/api/prices/route.ts:131 +12 sites), CoinGecko (browser-direct hooks/useBtcCandles.ts:34), Kraken, Coinbase, Bybit, OKX. middleware.ts:119 matches all paths but its body :51-116 only does CSP+CSRF, so ~19 public routes serve vendor data to anyone. CORRECTION to CLAUDE.md's old premise: the position HAS been written down as a RISK (findings-ledger F4.5, still open since Phase 14; reviews/R7-security-compliance.md:213) - what was never recorded is a licence CONFIRMATION. Routes with Q-082 and Q-083.",
+    "blocked_by": [
+      "Q-082"
+    ]
+  },
+  {
+    "id": "Q-101",
+    "title": "I1/I2: provenance and staleness flags are built and read by nobody",
+    "domain": "Frontend/UX",
+    "priority": "P1",
+    "status": "pending",
+    "files": [
+      "lib/data/mergeQuotes.ts",
+      "components/DataFreshnessIndicator.tsx",
+      "app/api/chart/[ticker]/route.ts",
+      "app/api/options/[ticker]/route.ts"
+    ],
+    "acceptance_criteria": [
+      "Every surface that can serve a cached or stale value renders a visible flag, or the flag is deleted as dead weight",
+      "A test fails if a route emits _cached:true and the consuming surface renders no indicator",
+      "DataFreshnessIndicator is mounted on every page that renders a vendor quote, or the exceptions are named and justified"
+    ],
+    "verify_commands": [
+      "npm run typecheck",
+      "npm run test"
+    ],
+    "notes_2026_08_17": "Q-079 audit. Same green-and-inert shape as the Q-088 lesson: the plumbing exists and nothing consumes it. lib/data/mergeQuotes.ts:18-28 builds per-field QuoteProvenance on every quote and grep '.provenance' across components/ app/ hooks/ returns ZERO consumers. _cached:true (app/api/chart/[ticker]/route.ts:60) has 8 producers and 0 consumers - the cache substitution happens and the flag dies in the JSON. app/api/options/[ticker]/route.ts:82-86 emits dataProvenance{delayedMinutes:15,realtime:false} with a comment promising a DELAYED badge no component renders. DataFreshnessIndicator.tsx:66-71 is correct but mounted on 2 of 16 pages (app/desk/page.tsx:163, app/sector/[slug]/page.tsx:345). Declared blind spot from that audit: hooks/ SWR keepPreviousData was not checked and is the most likely undiscovered I2 violation.",
+    "blocked_by": []
+  },
+  {
+    "id": "Q-102",
+    "title": "I4: weekly in-place history rewrite and a rolling survivor universe make benchmark floors non-reproducible",
+    "domain": "Data/Integrity",
+    "priority": "P1",
+    "status": "pending",
+    "files": [
+      "scripts/fetchBacktestData.mjs",
+      ".github/workflows/refresh-data.yml",
+      "reviews/invariants-baseline.md"
+    ],
+    "acceptance_criteria": [
+      "Historical data is append-only or versioned, so a past benchmark run can be reproduced byte-identically",
+      "The backtest universe is pinned to a dated membership list rather than re-anchored to Date.now()",
+      "A tripwire fails if any fundamentals module is imported from lib/backtest/ or a signal path",
+      "A vendor restatement is detectable as a restatement, not as signal drift"
+    ],
+    "verify_commands": [
+      "node scripts/verify-data-integrity.mjs",
+      "npm run test"
+    ],
+    "notes_2026_08_17": "Q-079 audit, feeds Q-080. scripts/fetchBacktestData.mjs:116-122 writeFileSync over the entire history every Sunday via refresh-data.yml, pushed to main - so both floors in reviews/invariants-baseline.md are non-reproducible and a vendor restatement presents as signal drift. Universe is a rolling present-day survivor list (:12-68 hardcoded names, :71 PERIOD_DAYS=1825 re-anchored to Date.now()), window ~2021-2026 not a fixed historical span. AFFIRMATIVE NEGATIVE worth keeping: fundamentals reach NO backtest or signal path today - they are UI-only (app/api/fundamentals/[ticker]/route.ts:68, lib/briefs/sectorBrief.ts:214) - so this needs a tripwire, not a migration. LATENT, not live: lib/backtest/walkForward.ts:157-159 has embargo 0 against 60-day holds, but all 16 call sites are in __tests__/; the live OOS path lib/optimize/gridSearch.ts:347 applies embargo 5 and is tested.",
+    "blocked_by": []
   }
 ]

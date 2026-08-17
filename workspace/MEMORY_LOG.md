@@ -754,3 +754,68 @@ runtime guard that inspects the value, allowlist guard across all production dir
 `Q-089` (product decision on the prints surface), `Q-090`–`Q-096` filed.
 I1–I8 tiers remain **inferred, not audited** — I3 was tiered PARTIAL and this work
 shows it was closer to VIOLATED. `Q-079` is not bookkeeping.
+
+---
+
+## 2026-08-17/18 — Q-079: design invariants I1–I8 audited, five tiers corrected
+
+**Selected on rule (c), not (a).** Both open P0s were owner-gated (Q-005 needs
+Redis provisioned, Q-083 needs a legal opinion), so rule (a) was structurally
+empty. Q-080 is the only open item declaring `blocked_by: ["Q-079"]` — rule (c)
+fired and Q-081/Q-093 never entered contention. Merged PR #148 first so the
+coordinator would not see an already-shipped P0.
+
+**Result: 5 tiers corrected, 3 confirmed, and no invariant is ENFORCED.**
+I1 PARTIAL→ASPIRATIONAL · I3 PARTIAL→VIOLATED · I5 PARTIAL→VIOLATED ·
+I7 ENFORCED→VIOLATED · I8 UNVERIFIED→VIOLATED. Confirmed: I2, I4, I6.
+Evidence in `reviews/design-invariant-audit-2026-08-17/`, one specialist per
+invariant, `file:line` required for compliant findings as much as violations.
+
+**I7 is the headline, and it inverts the constitution's strongest claim.** It was
+the only invariant asserting enforcement. `main` has no branch protection at all
+— `protected:false`, `required_status_checks.contexts:[]`, `rulesets:[]` — so
+**every green check mark in this repo's history has been advisory**, including
+the ones I read to approve merging #148 at the top of this session. The repo is
+public, so protection is free: unconfigured, not unavailable. PR #120 merged 49
+seconds after its coverage job failed. `e49b1d1` reached production with a red
+test job. `refresh-data.yml:137` pushes to `main` weekly with zero CI, each push
+auto-deploying. Re-verified against the GitHub API myself rather than trusting
+the agent, because it drives an owner action.
+
+**The lesson: the audit committed the exact failure it was hunting.** The first
+pass introduced a tier-definition table and then did not apply it to its own
+output — I3 and I1 were left at their existing PARTIAL, and I8 got a compound
+heading the table admits no value for. Against the definitions written in that
+same commit, I3 names a gate that does not exist (`assertNotSynthetic`, zero
+production call sites — the very clause used to move I5 and I8), and PARTIAL
+requires a mechanism on *some* paths while I1's provenance has *zero* consumers.
+Caught on review, not on writing. **Generalise: "confirmed" is where an auditor
+gets lazy, because it requires no edit and produces no visible work — audit the
+tiers you did not change at least as hard as the ones you did.** And an audit is
+easier to fake than a guard: its whole output is prose, so a confident tier
+beside a plausible citation is visually identical to a verified one.
+
+**The cross-check that paid for itself.** The I4 agent reported embargo=0 on "the
+production walk-forward path", cited. Passed to the I5 agent mid-run, which
+refuted the liveness half: all 16 call sites are in `__tests__/`, and the live
+path (`lib/optimize/gridSearch.ts:347`) applies embargo 5 and is tested. That
+write-up also cited `lib/backtest/gridSearch.ts`, **which does not exist** — a
+fabricated path that reached a finding and was caught only because a second agent
+happened to look. I had already repeated the claim to the owner before the
+refutation landed; corrected in the same session.
+
+**One claim walked back.** DSR saturation is established from the committed
+artifact (`deflatedSharpeN10 = 1` *and* `deflatedSharpeN100 = 1`), so Q-081 as
+scoped would change the headline from 1 to 1. But the *diagnosis* — a ~347
+effective sample against 3,410 overlapping trades — is the results file's own
+top-level `nTrades`, not a verified effective sample size, and the moments are
+not persisted so the correct `T` cannot be recomputed here. The source agent had
+flagged it as illustrative; the first draft stated it as fact.
+
+**Filed, not fixed:** Q-097…Q-102 + 19 ledger rows. Q-080 unblocked, Q-081
+re-scoped, Q-096 raised P3→P1 (its P3 rationale is falsified by mutation M-F2).
+Closed MR-1/2/3 and Q088-4 after verifying each on `main` myself; MR-4 stays open.
+
+**Open P0s went 2 → 6.** Q-097 (repo settings) and Q-100 (counsel) are new
+owner-gated. **Q-098 and Q-099 are the first agent-actionable P0s this project
+has had** — next session's rule (a) fires where it was empty this time.
