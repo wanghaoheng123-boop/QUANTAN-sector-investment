@@ -819,3 +819,15 @@ Closed MR-1/2/3 and Q088-4 after verifying each on `main` myself; MR-4 stays ope
 **Open P0s went 2 → 6.** Q-097 (repo settings) and Q-100 (counsel) are new
 owner-gated. **Q-098 and Q-099 are the first agent-actionable P0s this project
 has had** — next session's rule (a) fires where it was empty this time.
+
+**Addendum (same session).** Q-079 needed a second PR. After #149 merged I
+re-read the audit index against `CLAUDE.md` and found it still asserting five
+claims red-team had refuted — the red-team pass had corrected the constitution
+and the README's tier *table*, but not the README's *prose*. Since `CLAUDE.md`
+names that directory as the evidence of record for every tier, the index
+contradicting it was a real defect. Fixed in #150 (`6849a24`); the buried I5
+finding restored in full. **Generalise: when a review changes a conclusion,
+re-grep every document that cites it — correcting the authoritative file and
+leaving its own evidence index stale is how a corrected finding silently
+reverts.** The five per-invariant evidence files stay frozen by design, with
+ERRATUM headers where superseded: they are testimony, not verdict.
