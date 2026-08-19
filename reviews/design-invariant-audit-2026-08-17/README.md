@@ -9,6 +9,13 @@ remaining prior.
 **Result: 6 tiers corrected, 2 confirmed, and no invariant is ENFORCED.**
 I7 was the only one claiming enforcement, and it is the one that inverted.
 
+**Revision note.** This index reflects the state *after* adversarial review. Two
+rounds of self-correction are recorded below rather than silently folded in — see
+"A second cross-check, on the audit itself". The five per-invariant evidence files
+are the **frozen record of what each specialist found** and are deliberately not
+rewritten; where review superseded them they carry an ERRATUM header, and
+`CLAUDE.md` is authoritative on every tier.
+
 This document is the index. The per-invariant evidence — including what was
 checked, what would have shown failure, and declared blind spots — lives in the
 sibling files. **The tier itself is stated only in `CLAUDE.md`**, to avoid
@@ -56,13 +63,26 @@ so no strategy has ever met I5's bar, including the one shipped result. The
 published DSR is **saturated at 1.0000** — the committed
 `scripts/benchmark-results.json` carries `deflatedSharpeN10 = 1` **and**
 `deflatedSharpeN100 = 1`, so a 10× change in the trial count already moves the
-headline by nothing — which means `Q-081` as scoped would change the headline
-from 1 to 1. The suspected cause is sample size: the same file reports
-`nTrades: 347` at top level (`:43`) against `tradeStats.nTrades` of **3,410**,
-and DSR is computed on the larger. **The saturation is established; the
-diagnosis is not closed** — the distributional moments are not persisted, so
-which `T` is correct cannot be recomputed from the repo. Q-081 is re-scoped
-around `T`, with a note to confirm the moments before acting.
+headline by nothing.
+
+**The saturation is an artifact of sample size, and the repo names the honest one
+itself.** DSR is computed on `tradeStats.nTrades = 3410`, the *overlapping*
+count, while the same file's `nonOverlapStats.nTrades = 347` carries the note
+*"the honest effective n behind the pooled WR"*. Because `expectedMaxSharpe`
+scales as `1/√(T−1)` (`lib/quant/deflatedSharpe.ts:117`), `T` and `nTrials` are
+coupled — and at the honest `T` the trial count stops being inert:
+
+| `T` | n=10 | n=45 | n=100 | n=1053 |
+|---|---|---|---|---|
+| 3410 (as published) | 1.0000 | 1.0000 | 1.0000 | 1.0000 |
+| **347 (honest effective n)** | 0.9709 | 0.8924 | 0.8282 | **0.5848** |
+
+**At the honest `T` the shipped result falls below any conventional bar at every
+trial count the registry supports.** `Q-081` is therefore not merely mis-scoped:
+fixing `nTrials` alone changes 1 to 1, but fixing `T` alone leaves multiplicity
+uncorrected. **The fix is joint.** The moments are not persisted, so the table
+assumes `g3=0, g4=3` — direction and magnitude are robust, the third decimal is
+not.
 
 **I8 · UNVERIFIED → VIOLATED.** The invariant has two separable halves at
 different tiers and the heading takes the worse one. The substantive licence question is genuinely
@@ -79,9 +99,18 @@ an opt-in blocklist of known-bad **names**, not the property check its own heade
 at `:14-17` claims to be. `assertNotSynthetic` has **zero production call
 sites**, so I3's "add a runtime assertion" clause has no executing instance.
 
-**I1 · PARTIAL → ASPIRATIONAL.** `lib/data/mergeQuotes.ts:18-28` builds
-per-field provenance on every quote and **nothing reads it** — zero consumers
-across `components/ app/ hooks/`. PARTIAL requires a mechanism on *some* paths.
+*Provenance of the "6 of 7" figure:* single-sourced to this audit's mutation run
+and **not reproducible from the repo** — the mutations were applied and reverted,
+leaving no executable artifact. `Q-098` converts them into tests. The test file's
+own `:19-20` ("All five mutations are now caught") refers to Q-088's *different*
+five, so the two claims do not conflict. **The tier does not rest on that
+figure** — it rests on `assertNotSynthetic` having zero production call sites,
+independently re-verified by red-team.
+
+**I1 · PARTIAL → ASPIRATIONAL.** `lib/data/mergeQuotes.ts` declares
+`QuoteProvenance` at `:18-28` and constructs it per field at `:105` and `:167`,
+and **nothing reads it** — zero consumers across `components/ app/ hooks/`, the
+only hits being comments. PARTIAL requires a mechanism on *some* paths.
 
 **I2 · PARTIAL → VIOLATED** *(found by red-team, after the first two commits).*
 The staleness half is genuinely PARTIAL (2 of 16 pages). The cache-substitution
@@ -96,11 +125,14 @@ The first draft of this audit rated I1 and I3 PARTIAL — their existing tier �
 gave I8 a compound heading. Reviewed against the **tier definitions this same
 commit introduced**, all three were wrong:
 
-- **VIOLATED** is defined as "a live path actively does the opposite, **or** the
-  invariant names a gate that does not exist." I3 demands "a runtime assertion,
-  not just a comment", and `assertNotSynthetic` has zero production call sites.
-  That is the second clause exactly — the same clause used to move I5 and I8. I3
-  at PARTIAL was the same evidence wearing a friendlier label.
+- **VIOLATED**'s second clause caught I3: it demands "a runtime assertion, not
+  just a comment", and `assertNotSynthetic` has zero production call sites — the
+  same clause used to move I5 and I8. I3 at PARTIAL was the same evidence wearing
+  a friendlier label. *(That clause read "names a gate that does not exist" at the
+  time. Red-team then showed the phrasing was **unfalsifiable** — it catches every
+  non-ENFORCED invariant and perversely rated I3 worse than I6 — so `CLAUDE.md`
+  now turns it on **reliance**: a control the project relies on with no executing
+  instance. I3 still qualifies; I4 and I6 correctly do not.)*
 - **PARTIAL** is defined as "a mechanism exists on **some** paths." I1's
   provenance has **zero** consumers. Zero is not some. I2 genuinely is PARTIAL
   (2 of 16 pages); I1 is ASPIRATIONAL.
@@ -116,8 +148,10 @@ govern.
 
 The I4 audit reported zero embargo on "the production walk-forward path". The I5
 audit was sent that claim mid-run and **refuted the liveness half**:
-`walkForwardAnalysis` has 16 call sites and all 16 are in `__tests__/`. The
-embargo-0 defect at `lib/backtest/walkForward.ts:157-159` is real but **latent**;
+every *invocation* of `walkForwardAnalysis` is in `__tests__/` (15 across three
+suites); `lib/backtest/engine.ts:239-240` re-exports it and nothing in `app/` or
+`scripts/` calls it, and `WalkForwardPanel` computes its own quarterly split. The
+embargo-0 defect at `lib/backtest/walkForward.ts:158-160` is real but **latent**;
 the live OOS research path is `lib/optimize/gridSearch.ts:347`, which applies
 embargo 5 and is tested. The I4 write-up's `lib/backtest/gridSearch.ts` citation
 points at a file that does not exist — do not propagate it.
