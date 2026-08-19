@@ -12,6 +12,7 @@ import {
   type OhlcBar,
 } from '@/lib/quant/indicators'
 import { useKLineChart } from '@/hooks/useKLineChart'
+import { assertNotSynthetic } from '@/lib/synthetic'
 
 const TIMEFRAMES = ['1D', '1W', '1M', '3M', '6M', '1Y', 'ALL'] as const
 type Timeframe = typeof TIMEFRAMES[number]
@@ -31,19 +32,6 @@ interface Candle {
   volume: number
 }
 
-interface DarkPoolMarker {
-  time: string
-  price: number
-  size: number
-  sentiment: 'BULLISH' | 'BEARISH'
-}
-
-interface NewsMarker {
-  time: string
-  headline: string
-  impact: 'positive' | 'negative' | 'neutral'
-}
-
 // KLineIndicatorFlags lives in ./klineTypes (neutral leaf) to avoid a
 // KLineChart ↔ useKLineChart cycle; re-exported here so the public import
 // path `@/components/KLineChart` is unchanged for callers.
@@ -52,8 +40,6 @@ import type { KLineIndicatorFlags } from './klineTypes'
 
 interface KLineChartProps {
   candles: Candle[]
-  darkPoolMarkers?: DarkPoolMarker[]
-  newsMarkers?: NewsMarker[]
   color: string
   ticker: string
   range?: string
@@ -187,8 +173,6 @@ function formatLegendVolume(v: number): string {
 
 export default function KLineChart({
   candles,
-  darkPoolMarkers = [],
-  newsMarkers = [],
   color,
   ticker,
   showRSI = true,
@@ -208,6 +192,16 @@ export default function KLineChart({
       }
     }
   }
+
+  // I3 — the chart boundary. This is the surface Q-088's defect actually
+  // reached: fabricated block prints were plotted on the real price series at
+  // arbitrary candle indices. I3 requires "a runtime assertion, not just a
+  // comment", and the Q-079 audit found `assertNotSynthetic` had ZERO
+  // production call sites, so that clause had no executing instance anywhere.
+  // This is one. It inspects the VALUE, so it fires on anything carrying the
+  // __SYNTHETIC__ marker regardless of which module produced it or what that
+  // module is called.
+  assertNotSynthetic(candles, 'KLineChart candles')
 
   const indicatorsProp = useMemo(
     () => ({ ...DEFAULT_INDICATORS, ...indicatorsIn }),
@@ -257,8 +251,6 @@ export default function KLineChart({
     macdRef,
     atrRef,
     candles,
-    darkPoolMarkers,
-    newsMarkers,
     color,
     showRSI,
     indicatorsProp,

@@ -69,7 +69,9 @@ Never conflate them in a report. Say "design invariant I4" or "baseline floor".
 **Audited 2026-08-17 (`Q-079`).** Every tier below rests on `file:line` evidence
 recorded in `reviews/design-invariant-audit-2026-08-17/`, for the compliant
 findings as much as the violations. **Six tiers were wrong and are corrected
-here; two were confirmed.** I1–I8 remain the TARGET state — the tier measures
+here; two were confirmed.** `Q-098` has since closed I3 from VIOLATED to
+PARTIAL — the first invariant this project has moved in the good direction with
+the failing artifact exhibited. I1–I8 remain the TARGET state — the tier measures
 how far the repo is from it, and is not a description of what the repo does.
 
 > **A PR must not regress an invariant. Closing an existing gap is backlog
@@ -135,35 +137,47 @@ with zero consumers** — so a cached value *is* substituted for a live one with
 visible flag, which is precisely what I2 names and forbids. That is a live path
 doing the opposite, not merely a missing mechanism. → `Q-101`.
 
-### I3 — No synthetic data crosses the boundary · VIOLATED *(was PARTIAL; corrected 2026-08-17)*
+### I3 — No synthetic data crosses the boundary · PARTIAL *(VIOLATED 2026-08-17; closed to PARTIAL by `Q-098` 2026-08-18)*
 Mock/fixture/synthetic data is permitted only in `__tests__/` and `tests/` and
 must be tagged `__SYNTHETIC__` at the type level. Any code path that could
 route synthetic data into a backtest, a chart, or a signal is a P0 defect.
 Add a runtime assertion, not just a comment.
-*Today:* after `Q-088` no live synthetic path reaches a chart — both stock and
-sector pages pass no marker props, and `components/BtcChartPanel.tsx:94-95`
-passes empty constants. The wrapper brand's direction is correct and `scripts/`
-**is** scanned. But **the guard is a name blocklist, not a property check**:
-`__tests__/architecture/synthetic-containment.test.ts:85` matches the literal
-string `mockData`, so **6 of 7 adversarial mutations escaped**, including a
-one-prop restoration of the exact Q-088 chart defect. The test's own header at
-`:14-17` claims it checks "a property rather than a pattern match" — that
-sentence is false. `assertNotSynthetic` (`lib/synthetic.ts:87-95`) has **zero
-production call sites**, so I3's "runtime assertion" clause has no executing
-instance on any chart, signal, or backtest boundary. → `Q-098`.
-*Provenance of the "6 of 7" figure:* it is single-sourced to this audit's
-mutation run and is **not reproducible from the repo** — the mutations were
-applied and reverted, leaving no executable artifact. `Q-098` converts them into
-tests. Note the test file's own `:19-20` says "All five mutations are now
-caught": that refers to Q-088's *different* five (M1, M2b, M4, M5, M6), not to
-these seven, so the two claims do not conflict. **The tier does not rest on that
-figure** — it rests on `assertNotSynthetic` having zero production call sites,
-which was independently re-verified.
-*Why VIOLATED and not PARTIAL:* I3 explicitly requires "a runtime assertion, not
-just a comment", and that assertion exists as an exported function with no
-caller. The invariant names a gate that does not exist — the same clause that
-moved I5 and I8. That no live path is emitting synthetic data today is what
-keeps this from being worse; it is not what would make it PARTIAL.
+*Today:* the guard is a **property check with named gaps**, and both halves of
+I3's demand now have executing instances.
+`__tests__/architecture/syntheticContainment.ts` decides a module is synthetic
+because it lives in a fixture directory or **exports a binding annotated
+`Synthetic<…>`** — so a rename does not evade it. It is a pure function of a
+virtual file set, which makes all seven Q-079 mutations **executable test cases**
+rather than a claim in a review document
+(`__tests__/architecture/synthetic-containment.test.ts`). Two rules were added
+for the escapes an import check structurally cannot see: `opaque-specifier`
+(a non-literal dynamic specifier, mutation M-D) and `inline-fabrication`
+(`Math.random()` in a live data path, M-E). The two-step launder — import a
+branded binding, then re-export it bare — is caught as `synthetic-reexport`, and
+that rule applies to allowlisted files too: the allowlist grants import
+permission, never permission to launder.
+`assertNotSynthetic` now has **two production call sites** —
+`components/KLineChart.tsx:204` (chart) and `lib/backtest/core.ts:225`
+(backtest) — so I3's "runtime assertion, not just a comment" clause has an
+executing instance on the two boundaries the invariant names. `Q-096` removed the
+`darkPoolMarkers`/`newsMarkers` props and their drawing code outright, which
+turns mutation M-F2 from a detection problem into a type error.
+
+**Watched it fail, on the real tree, 2026-08-18.** M-B (a synthetic module named
+`demoPrices`, not `mockData`, feeding `lib/backtest/dataLoader.ts`) and M-E
+(fabricated OHLC in the live chart route) were applied to the working tree; the
+suite failed with `synthetic-import` and `inline-fabrication` respectively, then
+returned to 37/37 green on revert.
+
+*Why PARTIAL and not ENFORCED:* the gap is named and tested. An **unbranded**
+fabricator — one returning invented rows without `markSynthetic` and without
+`Math.random` — is invisible to static analysis, and
+`synthetic-containment.test.ts` asserts that escape explicitly in its
+"what this guard CANNOT do" block rather than leaving it implied. I3 claims
+*any* such path is a P0 defect; the mechanism covers many paths, not all. The
+runtime assertions and the structural removal are the second and third layers
+precisely because the first is not a proof. → `Q-089` (product decision on the
+remaining synthetic prints surface).
 
 ### I4 — Point-in-time or it's a lie · ASPIRATIONAL *(confirmed 2026-08-17)*
 No backtest may consume data that did not exist, in that exact form, at the

@@ -24,8 +24,6 @@ const INDICATOR_PRESETS = [
   ['all', 'All'],
 ] as const
 
-const EMPTY_DARK_POOL_MARKERS: never[] = []
-const EMPTY_NEWS_MARKERS: never[] = []
 const BTC_CHART_COLOR = '#f7931a'
 
 export interface BtcChartPanelProps {
@@ -91,8 +89,6 @@ function BtcChartPanel({
             <CryptoChartBoundary title="BTC chart crashed">
               <KLineChart
                 candles={candles}
-                darkPoolMarkers={EMPTY_DARK_POOL_MARKERS}
-                newsMarkers={EMPTY_NEWS_MARKERS}
                 color={BTC_CHART_COLOR}
                 ticker="BTC"
                 range={activeRange}

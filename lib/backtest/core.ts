@@ -9,6 +9,7 @@ import { sortinoRatio, atrArray as atr } from '@/lib/quant/indicators'
 import { getRiskFreeRateSync } from '@/lib/quant/riskFreeRate'
 import { DEFAULT_TIME_EXIT_CONFIG } from './exitRules'
 import { costBpsPerSide, DEFAULT_EXECUTION_COSTS } from './executionModel'
+import { assertNotSynthetic } from '@/lib/synthetic'
 
 // ─── Transaction cost model (SSOT: lib/backtest/executionModel.ts) ───────────
 /** Basis points per side (entry OR exit); matches benchmark label net costs. */
@@ -217,6 +218,12 @@ export function backtestInstrument(
   rows: OhlcvRow[],
   config: Partial<BacktestConfig> = {},
 ): BacktestResult {
+  // I3 — the backtest boundary, which the invariant names first. A backtest is
+  // the surface where synthetic data does the most damage, because the output
+  // is a performance claim rather than a visibly wrong chart. Inspects the
+  // VALUE, so it fires on the marker regardless of the producing module's name.
+  assertNotSynthetic(rows, 'backtestInstrument rows')
+
   const cfg = { ...DEFAULT_CONFIG, ...config }
   const initialCapital = cfg.initialCapital
   const annualization = tradingDaysPerYear(ticker, sector)
