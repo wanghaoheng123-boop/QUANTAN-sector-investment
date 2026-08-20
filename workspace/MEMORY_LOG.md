@@ -805,7 +805,7 @@ happened to look. I had already repeated the claim to the owner before the
 refutation landed; corrected in the same session.
 
 **One claim walked back.** DSR saturation is established from the committed
-artifact (`deflatedSharpeN10 = 1` *and* `deflatedSharpeN100 = 1`), so Q-081 as
+artifact (both committed `deflatedSharpe*` values were exactly 1), so Q-081 as
 scoped would change the headline from 1 to 1. But the *diagnosis* — a ~347
 effective sample against 3,410 overlapping trades — is the results file's own
 top-level `nTrades`, not a verified effective sample size, and the moments are

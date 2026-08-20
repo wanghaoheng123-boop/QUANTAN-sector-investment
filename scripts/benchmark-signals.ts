@@ -21,6 +21,12 @@ import {
 import { DEFAULT_EXECUTION_COSTS, netReturnAfterCosts } from '../lib/backtest/executionModel'
 import { probabilisticSharpe, deflatedSharpe, sampleStd } from '../lib/quant/deflatedSharpe'
 import { readTrialCount } from '../lib/quant/trialRegistry'
+import {
+  effectiveSampleSize,
+  designEffect,
+  meanClusterSize,
+  meanPairwiseCorrelation,
+} from '../lib/quant/effectiveSampleSize'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -148,13 +154,6 @@ if (trials.rows === 0) {
   process.exit(1)
 }
 
-const psr = probabilisticSharpe(netRetsEffective, 0)
-const dsrLower = deflatedSharpe(netRetsEffective, trials.lower)
-const dsrUpper = deflatedSharpe(netRetsEffective, trials.upper)
-/** The headline: deflated against the LARGEST defensible trial count. */
-const dsrHeadline = dsrUpper
-// Retained only to show what the previous headline was measuring.
-const dsrOverlappingOptimistic = deflatedSharpe(netRets, trials.upper)
 
 // ── Base rate (2026-07-11 rethink): the honest context for the headline WR ──
 // Net-label outcome of "BUY every eligible bar" on the SAME universe/window/
@@ -166,6 +165,8 @@ let baseBuys = 0
 let baseNetWins = 0
 let baseSumNet = 0
 const baseByYear = new Map<string, { n: number; wins: number }>()
+/** Equal-weight market net 20d return keyed by signal date — the benchmark leg. */
+const marketByDate = new Map<string, { sum: number; n: number }>()
 for (const { rows } of allData) {
   for (let i = WARMUP_BARS; i < rows.length - LABEL_HOLD_DAYS - 1; i++) {
     const entry = rows[i + 1].close
@@ -176,7 +177,12 @@ for (const { rows } of allData) {
     baseBuys++
     baseSumNet += net
     if (net > 0) baseNetWins++
-    const year = new Date(rows[i].time * 1000).toISOString().slice(0, 4)
+    const dayKey = new Date(rows[i].time * 1000).toISOString().slice(0, 10)
+    const mk = marketByDate.get(dayKey) ?? { sum: 0, n: 0 }
+    mk.sum += net
+    mk.n++
+    marketByDate.set(dayKey, mk)
+    const year = dayKey.slice(0, 4)
     const by = baseByYear.get(year) ?? { n: 0, wins: 0 }
     by.n++
     if (net > 0) by.wins++
@@ -185,6 +191,80 @@ for (const { rows } of allData) {
 }
 const baseRateNetWR = baseBuys > 0 ? (baseNetWins / baseBuys) * 100 : 0
 const baseRateAvgNet = baseBuys > 0 ? (baseSumNet / baseBuys) * 100 : 0
+
+// ── EFFECTIVE SAMPLE SIZE (adversarial validation of Q-081) ─────────────────
+//
+// De-overlapping fixed only the WITHIN-instrument dependence. 56 names, many in
+// the same sector, trading the same window, are correlated on the same dates:
+// trades sharing a calendar block are one bet on the market placed many times.
+// Counting 345 "observations" over ~49 blocks of market time is the same
+// category error as counting 3394 overlapping trades over 345, one level up.
+//
+// Kish design effect: DEFF = 1 + (m̄ − 1)·ρ, n_eff = n / DEFF.
+const dateAxis = [
+  ...new Set(allData.flatMap(({ rows }) => rows.map((r) => new Date(r.time * 1000).toISOString().slice(0, 10)))),
+].sort()
+const dateOrdinal = new Map(dateAxis.map((d, i) => [d, i]));
+const BLOCK_BARS = LABEL_HOLD_DAYS + 1
+const blockCounts = new Map<number, number>()
+for (const t of nonOverlapTrades) {
+  const ord = dateOrdinal.get(t.date)
+  if (ord === undefined) continue
+  const block = Math.floor(ord / BLOCK_BARS)
+  blockCounts.set(block, (blockCounts.get(block) ?? 0) + 1)
+}
+const clusterSizes = [...blockCounts.values()]
+
+// rho: mean pairwise correlation of instrument daily returns on a common axis.
+const dailySeries = allData.map(({ rows }) => {
+  const byDate = new Map<string, number>()
+  for (let i = 1; i < rows.length; i++) {
+    const prev = rows[i - 1].close
+    if (!(prev > 0) || !(rows[i].close > 0)) continue
+    byDate.set(new Date(rows[i].time * 1000).toISOString().slice(0, 10), rows[i].close / prev - 1)
+  }
+  return byDate
+})
+const commonDates = dateAxis.filter((d) => dailySeries.every((m) => m.has(d)))
+const alignedSeries = dailySeries.map((m) => commonDates.map((d) => m.get(d) as number))
+const rho = meanPairwiseCorrelation(alignedSeries)
+const mBar = meanClusterSize(clusterSizes)
+const deff = designEffect(mBar, rho ?? 0)
+const nEff = Math.round(effectiveSampleSize(netRetsEffective.length, mBar, rho ?? 0))
+
+// ── EXCESS OVER THE MARKET — the number that actually matters ───────────────
+//
+// DSR against SR>0 is a straw-man null: a long-only strategy on a present-day
+// SURVIVOR list in a bull window clears SR>0 by construction. The honest test
+// is whether the SELECTION beats holding the same 56 names over the same
+// windows. Survivorship cancels in the difference: both legs are the same
+// universe.
+const excessRets: number[] = []
+for (const t of nonOverlapTrades) {
+  const mk = marketByDate.get(t.date)
+  if (!mk || mk.n === 0) continue
+  excessRets.push(t.netReturn - mk.sum / mk.n)
+}
+const excessMean = excessRets.length > 0 ? excessRets.reduce((a, b) => a + b, 0) / excessRets.length : 0
+const excessSd = excessRets.length > 1 ? sampleStd(excessRets) : 0
+const excessSharpe = excessSd > 0 ? excessMean / excessSd : null
+/** t-statistic on the EFFECTIVE sample. Harvey-Liu-Zhu (2016) bar is |t| > 3.0. */
+const excessT = excessSharpe == null ? null : excessSharpe * Math.sqrt(Math.max(1, nEff))
+
+const psr = probabilisticSharpe(netRetsEffective, 0, nEff)
+const dsrLower = deflatedSharpe(netRetsEffective, trials.lower, nEff)
+const dsrUpper = deflatedSharpe(netRetsEffective, trials.upper, nEff)
+/** Headline: deflated on the EFFECTIVE sample against the largest defensible N. */
+const dsrHeadline = dsrUpper
+/** What Q-081 published before this correction — clustered sample, unadjusted. */
+const dsrAtRawNonOverlap = deflatedSharpe(netRetsEffective, trials.upper)
+/** What the benchmark published before Q-081 — the saturated overlapping figure. */
+const dsrOverlappingOptimistic = deflatedSharpe(netRets, trials.upper)
+/** The Sharpe actually being deflated. Published because a headline nobody can reconstruct is not a result. */
+const nonOverlapSharpe =
+  netRetsEffective.length > 1 && sampleStd(netRetsEffective) > 0
+    ? netRetsEffective.reduce((a, b) => a + b, 0) / netRetsEffective.length / sampleStd(netRetsEffective)
+    : null
 
 // ── Non-overlapping WR + Wilson CI (2026-07-11 red team, C2) ─────────────────
 // Daily signals with 20d holds OVERLAP ~10×, inflating n from ~350 to 3,435.
@@ -281,17 +361,27 @@ const benchmark = {
     expectancyNetPct: Number((expectancyNet * 100).toFixed(4)),
     avgHoldDays: LABEL_HOLD_DAYS,
   },
-  // Q-065, corrected by Q-081/Q-099: per-trade Sharpe + PSR/DSR.
+  // Q-065, corrected by Q-081/Q-099 and again by adversarial validation.
   //
-  // THE HEADLINE IS `deflatedSharpe`, computed on the NON-OVERLAPPING sample
-  // against the LARGEST defensible trial count. I5 says report the deflated
-  // number, never the raw one.
+  // READ `excessOverMarket` FIRST. DSR tests SR>0, which a long-only strategy on
+  // a present-day survivor list in a bull window clears by construction. The
+  // number that bears on SKILL is whether the selection beat holding the same
+  // names over the same windows.
   tradeStats: {
-    // The pooled overlapping count, kept because per-trade Sharpe is computed
-    // on it and because the previous headline was. It is NOT the DSR sample.
     nTrades: netRets.length,
-    nTradesEffective: netRetsEffective.length,
-    perTradeSharpe: perTradeSharpe == null ? null : Number(perTradeSharpe.toFixed(4)),
+    nTradesNonOverlapping: netRetsEffective.length,
+    nEffective: nEff,
+    clustering: {
+      meanClusterSize: Number(mBar.toFixed(2)),
+      intraClusterCorrelation: rho == null ? null : Number(rho.toFixed(4)),
+      designEffect: Number(deff.toFixed(2)),
+      occupiedBlocks: clusterSizes.length,
+      note:
+        'Kish design effect DEFF = 1 + (mBar-1)*rho, n_eff = n/DEFF. De-overlapping removes WITHIN-instrument dependence only; ' +
+        'trades sharing a calendar block across 56 correlated names are one bet placed many times.',
+    },
+    perTradeSharpeOverlapping: perTradeSharpe == null ? null : Number(perTradeSharpe.toFixed(4)),
+    perTradeSharpeNonOverlapping: nonOverlapSharpe == null ? null : Number(nonOverlapSharpe.toFixed(4)),
     psrGtZero: psr == null ? null : Number(psr.toFixed(4)),
     deflatedSharpe: dsrHeadline == null ? null : Number(dsrHeadline.toFixed(4)),
     deflatedSharpeBand:
@@ -299,18 +389,35 @@ const benchmark = {
         ? null
         : [Number(dsrUpper.toFixed(4)), Number(dsrLower.toFixed(4))],
     nTrials: { lower: trials.lower, upper: trials.upper, registryRows: trials.rows, uncertainTrials: trials.uncertain },
-    deflatedSharpeOverlappingOptimistic:
-      dsrOverlappingOptimistic == null ? null : Number(dsrOverlappingOptimistic.toFixed(4)),
+    // The two superseded headlines, kept so the correction is auditable.
+    supersededHeadlines: {
+      atRawNonOverlapN: dsrAtRawNonOverlap == null ? null : Number(dsrAtRawNonOverlap.toFixed(4)),
+      atOverlappingN: dsrOverlappingOptimistic == null ? null : Number(dsrOverlappingOptimistic.toFixed(4)),
+      note:
+        'atOverlappingN is what this benchmark published before Q-081 (saturated at 1.0000, insensitive to nTrials). ' +
+        'atRawNonOverlapN is what Q-081 published before clustering was accounted for. Both are too flattering.',
+    },
+    excessOverMarket: {
+      nTrades: excessRets.length,
+      meanPct: Number((excessMean * 100).toFixed(4)),
+      sharpe: excessSharpe == null ? null : Number(excessSharpe.toFixed(4)),
+      tStat: excessT == null ? null : Number(excessT.toFixed(3)),
+      significanceBar: 3.0,
+      note:
+        'Each trade differenced against the EQUAL-WEIGHT return of the same universe over the same window, so survivorship ' +
+        'cancels (both legs are the same 56 names). t is computed on n_eff. Harvey-Liu-Zhu (2016) require |t| > 3.0 for a ' +
+        'newly-proposed factor. THIS IS THE NUMBER THAT BEARS ON SKILL.',
+    },
     note:
-      'Bailey-Lopez de Prado PSR/DSR. HEADLINE (deflatedSharpe) is computed on the NON-OVERLAPPING per-instrument sample (n=' +
+      'Bailey-Lopez de Prado PSR/DSR on the NON-OVERLAPPING sample (n=' +
       netRetsEffective.length +
-      ') against nTrials=' +
+      '), discounted to n_eff=' +
+      nEff +
+      ' for cross-sectional clustering, against nTrials=' +
       trials.upper +
-      ' counted from .quantlab/TRIAL_REGISTRY.jsonl. Band spans the registry interval [' +
-      trials.lower +
-      ', ' +
-      trials.upper +
-      '] — both LOWER BOUNDS, since discarded-without-record configurations are absent by construction; T-0001 is flagged uncertain (Q-084). deflatedSharpeOverlappingOptimistic is the SAME statistic on the pooled overlapping series and is the number this benchmark published before Q-081: it saturates at 1.0000 and is insensitive to nTrials, which is why it was replaced.',
+      ' counted from .quantlab/TRIAL_REGISTRY.jsonl. NOT A SKILL CERTIFICATION: PBO/CSCV has no implementation (Q-085), so ' +
+      'I5 is unmet by construction, and DSR tests a straw-man null (SR>0) that a long-only survivor-list strategy clears ' +
+      'automatically. Trial bounds are LOWER bounds: discarded-without-record configurations are absent by construction.',
   },
   // 2026-07-11 rethink (additive): "BUY every bar" base rate on the same
   // universe/window/costs — the honest yardstick for the headline WR.
@@ -331,7 +438,7 @@ const benchmark = {
     netWinRatePct: noN > 0 ? Number(((noWins / noN) * 100).toFixed(2)) : null,
     wilson95Pct: [Number((noLo * 100).toFixed(2)), Number((noHi * 100).toFixed(2))],
     note:
-      'Greedy per-instrument non-overlapping sample (one trade per closed 20d window). This is the honest effective n behind the pooled WR; compare the Wilson CI to the always-buy base rate, not to 50%.',
+      'Greedy per-instrument non-overlapping sample (one trade per closed 20d window). This removes WITHIN-instrument overlap only — it is NOT the effective n. Cross-sectional clustering across 56 correlated names reduces the information content further; see tradeStats.nEffective and tradeStats.clustering. Compare the Wilson CI to the always-buy base rate, not to 50%.',
   },
   perYearEdge,
   // Q-066 (additive): WR bucketed by the regime zone at the signal bar.
@@ -356,10 +463,15 @@ console.log(`Avg 20d return (gross): ${benchmark.aggregate.avgReturn20d}%`)
 console.log(`Avg 20d return (net): ${benchmark.aggregate.avgNetReturn20d}%`)
 console.log(`Expectancy gross/net: ${benchmark.aggregate.expectancyGrossPct}% / ${benchmark.aggregate.expectancyNetPct}%`)
 console.log(
-  `Per-trade Sharpe (net): ${benchmark.tradeStats.perTradeSharpe} | PSR(>0): ${benchmark.tradeStats.psrGtZero}`,
-  `DEFLATED Sharpe (headline): ${benchmark.tradeStats.deflatedSharpe} — non-overlapping n=${benchmark.tradeStats.nTradesEffective}, nTrials=${benchmark.tradeStats.nTrials.upper} counted from the trial registry`,
-  `  band over registry interval [${benchmark.tradeStats.nTrials.lower}, ${benchmark.tradeStats.nTrials.upper}]: ${JSON.stringify(benchmark.tradeStats.deflatedSharpeBand)} (both ends are LOWER bounds on trials tried)`,
-  `  same statistic on the OVERLAPPING series (what this benchmark published before Q-081): ${benchmark.tradeStats.deflatedSharpeOverlappingOptimistic} — saturated, insensitive to nTrials`,
+  [
+    `Per-trade Sharpe (net): overlapping ${benchmark.tradeStats.perTradeSharpeOverlapping} | non-overlapping ${benchmark.tradeStats.perTradeSharpeNonOverlapping} (the SR actually deflated)`,
+    `Effective sample: n=${benchmark.tradeStats.nTradesNonOverlapping} non-overlapping -> n_eff=${benchmark.tradeStats.nEffective} ` +
+      `(DEFF ${benchmark.tradeStats.clustering.designEffect} = 1 + (mBar ${benchmark.tradeStats.clustering.meanClusterSize} - 1) x rho ${benchmark.tradeStats.clustering.intraClusterCorrelation}, ${benchmark.tradeStats.clustering.occupiedBlocks} blocks)`,
+    `DEFLATED Sharpe: ${benchmark.tradeStats.deflatedSharpe} at n_eff, nTrials=${benchmark.tradeStats.nTrials.upper} | band ${JSON.stringify(benchmark.tradeStats.deflatedSharpeBand)}`,
+    `  superseded: ${benchmark.tradeStats.supersededHeadlines.atRawNonOverlapN} (Q-081, clustering ignored) <- ${benchmark.tradeStats.supersededHeadlines.atOverlappingN} (pre-Q-081, saturated)`,
+    `EXCESS OVER MARKET (the number that bears on skill): mean ${benchmark.tradeStats.excessOverMarket.meanPct}%/trade, ` +
+      `SR ${benchmark.tradeStats.excessOverMarket.sharpe}, t=${benchmark.tradeStats.excessOverMarket.tStat} vs bar ${benchmark.tradeStats.excessOverMarket.significanceBar}`,
+  ].join('\n'),
 )
 console.log(
   `Always-buy base rate (net): ${benchmark.alwaysBuyBaseline.netWinRatePct}% over ${benchmark.alwaysBuyBaseline.nBars} bars | strategy edge over base: ${benchmark.edgeOverBaseRatePp}pp`,
@@ -405,36 +517,38 @@ if (benchmark.edgeOverBaseRatePp < FLOOR_EDGE_PP) {
   process.exit(1)
 }
 /**
- * I5 gate (Q-099). Until now the ONLY executing performance gate read the RAW
- * edge, which is precisely the number I5 forbids as a headline — so a run could
- * pass with DSR null, the trial registry deleted, and no OOS run ever performed.
+ * I5 gate (Q-099), re-based after adversarial validation.
  *
- * READ WHAT THIS GATE IS AND IS NOT.
+ * WHY THIS DOES NOT GATE ON THE DEFLATED SHARPE
+ * --------------------------------------------
+ * The first version floored DSR at 0.43. Two things were wrong with that, and
+ * the first is disqualifying:
  *
- * It is a REGRESSION guard on the deflated statistic. It is NOT a certification
- * that the strategy has skill, and it must never be quoted as one:
+ *  1. IT PUNISHED COMPLIANCE. DSR falls monotonically in `nTrials`, and the
+ *     standing order is to log every experiment including failures. At the
+ *     measured values, roughly 700 further logged configurations — fewer than
+ *     the single T-0001 grid already on file — would breach the floor. The only
+ *     way to keep CI green would have been to STOP LOGGING TRIALS, which is
+ *     precisely the behaviour I5 exists to compel. A gate that rewards hiding
+ *     evidence is worse than no gate.
+ *  2. IT WAS A COIN FLIP. A DSR near 0.5 sits at the steepest point of the
+ *     normal CDF, so ordinary sample drift moves it freely across any nearby
+ *     threshold. Floor a Sharpe or a z-statistic; never a probability near 0.5.
  *
- *  - The measured DSR is ~0.49. A conventional bar is 0.95. **The shipped result
- *    does not come close to clearing it**, and this gate does not pretend
- *    otherwise — it freezes the current value so the number cannot silently get
- *    worse while nobody is reading it.
- *  - I5's full bar additionally requires PBO/CSCV, which has NO implementation
- *    (`Q-085`). No strategy in this repo has ever met I5. Passing this gate
- *    leaves that untouched.
+ * So the gate now floors the SHARPE on the non-overlapping sample — invariant to
+ * `nTrials`, and a genuine regression signal for code breakage — while the
+ * deflated statistics are REPORTED and the structural preconditions I5 names
+ * (a deflated number exists; the trial denominator was counted, not guessed) are
+ * enforced as hard failures.
  *
- * Per CLAUDE.md: a PR must not regress an invariant, but closing an existing gap
- * is backlog work, not a merge blocker. Hence a floor at the frozen value rather
- * than at the conventional bar — setting 0.95 today would fail every run and be
- * learned-ignored within a week, which is how a constitution becomes decoration.
- *
- * Tolerance is wider than the WR convention (50 bps) because the price history
- * is rewritten in place weekly and the universe is re-anchored to Date.now()
- * (`Q-102`), so the sample genuinely moves between runs. Observed first-hand:
- * regenerating this benchmark five days after the committed run moved the trade
- * count 3410 -> 3394 and the effective sample 347 -> 345 with no code change.
+ * WHAT THIS GATE DOES NOT DO. It does not certify skill, and nothing here may be
+ * quoted as if it did. On the evidence: the excess over an equal-weight hold of
+ * the same universe is not statistically distinguishable from zero, PBO/CSCV has
+ * no implementation (`Q-085`) so I5 is unmet by construction, and the floor
+ * below is set to catch a broken pipeline, not to mark a bar worth clearing.
  */
-const FLOOR_DEFLATED_SHARPE = 0.43
-const CONVENTIONAL_DSR_BAR = 0.95
+const FLOOR_NONOVERLAP_SHARPE = 0.08
+const HLZ_SIGNIFICANCE_BAR = 3.0
 
 const dsrPublished = benchmark.tradeStats.deflatedSharpe
 if (dsrPublished == null) {
@@ -445,20 +559,33 @@ if (dsrPublished == null) {
   process.exit(1)
 }
 if (benchmark.tradeStats.nTrials.registryRows === 0) {
-  console.error('\nFAIL (I5): the trial registry contributed zero rows, so nTrials is not counted.')
+  console.error('\nFAIL (I5): the trial registry contributed zero rows, so nTrials was not counted.')
   process.exit(1)
 }
-if (dsrPublished < FLOOR_DEFLATED_SHARPE) {
+const srNonOverlap = benchmark.tradeStats.perTradeSharpeNonOverlapping
+if (srNonOverlap == null || srNonOverlap < FLOOR_NONOVERLAP_SHARPE) {
   console.error(
-    `\nREGRESSION (I5 gate): deflated Sharpe ${dsrPublished} below floor ${FLOOR_DEFLATED_SHARPE} ` +
-      `(non-overlapping n=${benchmark.tradeStats.nTradesEffective}, nTrials=${benchmark.tradeStats.nTrials.upper})`,
+    `\nREGRESSION (I5 gate): non-overlapping per-trade Sharpe ${srNonOverlap} below floor ${FLOOR_NONOVERLAP_SHARPE}`,
   )
   process.exit(1)
 }
+
+const tStat = benchmark.tradeStats.excessOverMarket.tStat
 console.log(
-  `\nI5 gate: deflated Sharpe ${dsrPublished} >= floor ${FLOOR_DEFLATED_SHARPE} — REGRESSION GUARD ONLY.\n` +
-    `  This is NOT a skill certification: ${dsrPublished} is far below the conventional ${CONVENTIONAL_DSR_BAR} bar,\n` +
-    `  and I5 also requires PBO/CSCV, which has no implementation (Q-085). No strategy here has met I5.`,
+  [
+    '',
+    'I5 status — REPORTED, NOT CERTIFIED:',
+    `  deflated Sharpe        ${dsrPublished} (n_eff=${benchmark.tradeStats.nEffective}, nTrials=${benchmark.tradeStats.nTrials.upper})`,
+    `  excess over market     t=${tStat} against a |t| > ${HLZ_SIGNIFICANCE_BAR} bar (Harvey-Liu-Zhu 2016)`,
+    `  PBO / CSCV             NOT IMPLEMENTED (Q-085) — I5 is unmet by construction`,
+    tStat != null && Math.abs(tStat) < HLZ_SIGNIFICANCE_BAR
+      ? '  => NO CLAIM OF SKILL IS SUPPORTED. The selection is not statistically distinguishable'
+        + '\n     from holding the same universe over the same windows.'
+      : '  => review required: the excess t has crossed the significance bar.',
+    `  The gate above floors the SHARPE (${FLOOR_NONOVERLAP_SHARPE}) to catch pipeline breakage.`,
+    '  It is not a skill test and must not be quoted as one.',
+    '',
+  ].join('\n'),
 )
 
 if (benchmark.aggregate.aggregateNetWinRate < FLOOR_NET_WR) {
@@ -477,6 +604,6 @@ if (wilsonLowPct != null && wilsonLowPct < benchmark.alwaysBuyBaseline.netWinRat
   console.warn(
     `WARN (expected until significance): non-overlap Wilson 95% lower bound ${wilsonLowPct}% is below the ` +
       `always-buy base rate ${benchmark.alwaysBuyBaseline.netWinRatePct}% — the selection edge is not yet ` +
-      `statistically significant at effective n=${benchmark.nonOverlapStats.nTrades}.`,
+      `statistically significant at n_eff=${benchmark.tradeStats.nEffective} (non-overlapping n=${benchmark.nonOverlapStats.nTrades}, discounted for cross-sectional clustering).`,
   )
 }

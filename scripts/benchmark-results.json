@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-08-20T17:09:02.603Z",
+  "timestamp": "2026-08-20T17:27:48.718Z",
   "version": "v2.0-ssot-regime-production",
   "strategy": "resolveBacktestSignal (regime-only, QUANTAN_USE_ENHANCED_SIGNAL=0)",
   "metricNote": "Label win rate: 20d forward return after BUY; entry next close; gross and net after round-trip costs",
@@ -26,26 +26,47 @@
   },
   "tradeStats": {
     "nTrades": 3394,
-    "nTradesEffective": 345,
-    "perTradeSharpe": 0.2028,
-    "psrGtZero": 0.9996,
-    "deflatedSharpe": 0.4858,
+    "nTradesNonOverlapping": 345,
+    "nEffective": 134,
+    "clustering": {
+      "meanClusterSize": 7.28,
+      "intraClusterCorrelation": 0.2494,
+      "designEffect": 2.57,
+      "occupiedBlocks": 70,
+      "note": "Kish design effect DEFF = 1 + (mBar-1)*rho, n_eff = n/DEFF. De-overlapping removes WITHIN-instrument dependence only; trades sharing a calendar block across 56 correlated names are one bet placed many times."
+    },
+    "perTradeSharpeOverlapping": 0.2028,
+    "perTradeSharpeNonOverlapping": 0.1744,
+    "psrGtZero": 0.9809,
+    "deflatedSharpe": 0.0974,
     "deflatedSharpeBand": [
-      0.4858,
-      0.8485
+      0.0974,
+      0.4053
     ],
     "nTrials": {
-      "lower": 45,
-      "upper": 1053,
-      "registryRows": 9,
+      "lower": 46,
+      "upper": 1054,
+      "registryRows": 10,
       "uncertainTrials": [
         "T-0001",
         "T-0007",
         "T-0008"
       ]
     },
-    "deflatedSharpeOverlappingOptimistic": 1,
-    "note": "Bailey-Lopez de Prado PSR/DSR. HEADLINE (deflatedSharpe) is computed on the NON-OVERLAPPING per-instrument sample (n=345) against nTrials=1053 counted from .quantlab/TRIAL_REGISTRY.jsonl. Band spans the registry interval [45, 1053] — both LOWER BOUNDS, since discarded-without-record configurations are absent by construction; T-0001 is flagged uncertain (Q-084). deflatedSharpeOverlappingOptimistic is the SAME statistic on the pooled overlapping series and is the number this benchmark published before Q-081: it saturates at 1.0000 and is insensitive to nTrials, which is why it was replaced."
+    "supersededHeadlines": {
+      "atRawNonOverlapN": 0.4857,
+      "atOverlappingN": 1,
+      "note": "atOverlappingN is what this benchmark published before Q-081 (saturated at 1.0000, insensitive to nTrials). atRawNonOverlapN is what Q-081 published before clustering was accounted for. Both are too flattering."
+    },
+    "excessOverMarket": {
+      "nTrades": 345,
+      "meanPct": 0.1248,
+      "sharpe": 0.016,
+      "tStat": 0.185,
+      "significanceBar": 3,
+      "note": "Each trade differenced against the EQUAL-WEIGHT return of the same universe over the same window, so survivorship cancels (both legs are the same 56 names). t is computed on n_eff. Harvey-Liu-Zhu (2016) require |t| > 3.0 for a newly-proposed factor. THIS IS THE NUMBER THAT BEARS ON SKILL."
+    },
+    "note": "Bailey-Lopez de Prado PSR/DSR on the NON-OVERLAPPING sample (n=345), discounted to n_eff=134 for cross-sectional clustering, against nTrials=1054 counted from .quantlab/TRIAL_REGISTRY.jsonl. NOT A SKILL CERTIFICATION: PBO/CSCV has no implementation (Q-085), so I5 is unmet by construction, and DSR tests a straw-man null (SR>0) that a long-only survivor-list strategy clears automatically. Trial bounds are LOWER bounds: discarded-without-record configurations are absent by construction."
   },
   "alwaysBuyBaseline": {
     "nBars": 58419,
@@ -61,7 +82,7 @@
       51.54,
       61.94
     ],
-    "note": "Greedy per-instrument non-overlapping sample (one trade per closed 20d window). This is the honest effective n behind the pooled WR; compare the Wilson CI to the always-buy base rate, not to 50%."
+    "note": "Greedy per-instrument non-overlapping sample (one trade per closed 20d window). This removes WITHIN-instrument overlap only — it is NOT the effective n. Cross-sectional clustering across 56 correlated names reduces the information content further; see tradeStats.nEffective and tradeStats.clustering. Compare the Wilson CI to the always-buy base rate, not to 50%."
   },
   "perYearEdge": [
     {

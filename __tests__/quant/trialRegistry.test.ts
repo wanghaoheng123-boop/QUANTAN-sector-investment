@@ -86,15 +86,17 @@ describe('I5 — the published headline is the DEFLATED number on the HONEST sam
   const bench = JSON.parse(readFileSync(join(ROOT, 'scripts/benchmark-results.json'), 'utf8'))
 
   it('deflatedSharpe is computed on the non-overlapping sample, not the pooled one', () => {
-    expect(bench.tradeStats.nTradesEffective).toBeLessThan(bench.tradeStats.nTrades)
-    expect(bench.nonOverlapStats.nTrades).toBe(bench.tradeStats.nTradesEffective)
+    expect(bench.tradeStats.nTradesNonOverlapping).toBeLessThan(bench.tradeStats.nTrades)
+    expect(bench.nonOverlapStats.nTrades).toBe(bench.tradeStats.nTradesNonOverlapping)
+    // …and n_eff discounts it further for cross-sectional clustering.
+    expect(bench.tradeStats.nEffective).toBeLessThan(bench.tradeStats.nTradesNonOverlapping)
   })
 
   it('the headline is not saturated — the old one was, which made nTrials inert', () => {
     // The pre-Q-081 headline was exactly 1.0000 and provably unmoved by nTrials
     // from 10 to 1e12. A statistic that cannot move is not a test.
     expect(bench.tradeStats.deflatedSharpe).toBeLessThan(1)
-    expect(bench.tradeStats.deflatedSharpeOverlappingOptimistic).toBeGreaterThan(
+    expect(bench.tradeStats.supersededHeadlines.atOverlappingN).toBeGreaterThan(
       bench.tradeStats.deflatedSharpe,
     )
   })
@@ -106,10 +108,24 @@ describe('I5 — the published headline is the DEFLATED number on the HONEST sam
   })
 
   it('the shipped result does NOT clear a conventional bar, and the record says so', () => {
-    // This assertion exists to keep the number honest in both directions: if a
-    // future change pushes DSR above 0.95, this test fails and forces someone
-    // to re-read the claim rather than quietly inheriting it.
+    // Honest in both directions: if a future change pushes DSR above 0.95 this
+    // fails and forces someone to re-read the claim rather than inherit it.
     expect(bench.tradeStats.deflatedSharpe).toBeLessThan(0.95)
-    expect(bench.tradeStats.note).toMatch(/NON-OVERLAPPING/)
+    expect(bench.tradeStats.note).toMatch(/NOT A SKILL CERTIFICATION/)
+  })
+
+  it('the excess over an equal-weight hold of the same universe is the headline test', () => {
+    // DSR tests SR>0, which a long-only survivor-list strategy in a bull window
+    // clears by construction. This is the number that bears on SKILL.
+    const x = bench.tradeStats.excessOverMarket
+    expect(x.tStat).not.toBeNull()
+    expect(Math.abs(x.tStat)).toBeLessThan(x.significanceBar)
+  })
+
+  it('the clustering discount is applied and recorded, not merely asserted', () => {
+    const c = bench.tradeStats.clustering
+    expect(c.designEffect).toBeGreaterThan(1)
+    expect(c.intraClusterCorrelation).toBeGreaterThan(0)
+    expect(c.occupiedBlocks).toBeGreaterThan(0)
   })
 })
