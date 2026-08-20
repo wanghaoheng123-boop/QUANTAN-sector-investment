@@ -20,9 +20,6 @@ import type {
   HistogramData,
   LineData,
   Time,
-  SeriesMarker,
-  SeriesMarkerPosition,
-  SeriesMarkerShape,
 } from 'lightweight-charts'
 import {
   CHART_EMA_COLORS,
@@ -51,19 +48,6 @@ interface Candle {
   low: number
   close: number
   volume: number
-}
-
-interface DarkPoolMarker {
-  time: string
-  price: number
-  size: number
-  sentiment: 'BULLISH' | 'BEARISH'
-}
-
-interface NewsMarker {
-  time: string
-  headline: string
-  impact: 'positive' | 'negative' | 'neutral'
 }
 
 // ─── indicator adapters (identical to those in KLineChart.tsx) ────────────────
@@ -158,8 +142,6 @@ export interface UseKLineChartParams {
   macdRef: React.RefObject<HTMLDivElement | null>
   atrRef: React.RefObject<HTMLDivElement | null>
   candles: Candle[]
-  darkPoolMarkers: DarkPoolMarker[]
-  newsMarkers: NewsMarker[]
   color: string
   showRSI: boolean
   indicatorsProp: Required<KLineIndicatorFlags>
@@ -195,8 +177,6 @@ export function useKLineChart({
   macdRef,
   atrRef,
   candles,
-  darkPoolMarkers,
-  newsMarkers,
   color,
   showRSI,
   indicatorsProp,
@@ -818,32 +798,6 @@ export function useKLineChart({
       bbLowerRef.current.setData(lineData(bb.map((b) => b.lower)))
     }
 
-    const dpMarkers: SeriesMarker<Time>[] = darkPoolMarkers
-      .filter((m) => sortedCandles.some((c) => c.time === m.time))
-      .map((m) => ({
-        time: m.time as Time,
-        position: (m.sentiment === 'BULLISH' ? 'belowBar' : 'aboveBar') as SeriesMarkerPosition,
-        color: m.sentiment === 'BULLISH' ? '#3b82f6' : '#a855f7',
-        shape: 'circle' as SeriesMarkerShape,
-        text: `${(m.size / 1000).toFixed(0)}K`,
-        size: 0.6,
-      }))
-
-    const nMarkers: SeriesMarker<Time>[] = newsMarkers
-      .filter((n) => n.time && sortedCandles.some((c) => c.time === n.time))
-      .map((n) => ({
-        time: n.time as Time,
-        position: (n.impact === 'negative' ? 'aboveBar' : 'belowBar') as SeriesMarkerPosition,
-        color: n.impact === 'positive' ? '#00d084' : n.impact === 'negative' ? '#ff4757' : '#94a3b8',
-        shape: (n.impact === 'positive' ? 'arrowUp' : n.impact === 'negative' ? 'arrowDown' : 'circle') as SeriesMarkerShape,
-        text: '📰',
-        size: 0.8,
-      }))
-
-    const allMarkers = [...dpMarkers, ...nMarkers].sort(
-      (a, b) => chartTimeKey(a.time as string | number) - chartTimeKey(b.time as string | number),
-    )
-    if (allMarkers.length > 0) candleRef.current.setMarkers(allMarkers)
 
     if (showRSI && rsiLineRef.current && rsiChartRef.current) {
       const rsiVals = calcRSI(closes)
@@ -907,7 +861,7 @@ export function useKLineChart({
         /* ignore */
       }
     }
-  }, [candles, darkPoolMarkers, newsMarkers, showRSI, indicatorsProp, visSerialised, chartReadyGen, renderFib])
+  }, [candles, showRSI, indicatorsProp, visSerialised, chartReadyGen, renderFib])
 
   return {
     chartReadyGen,

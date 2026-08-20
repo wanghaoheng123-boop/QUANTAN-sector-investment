@@ -2098,7 +2098,7 @@
     "title": "KLineChart still accepts darkPoolMarkers/newsMarkers props with no guard",
     "domain": "Frontend/UX",
     "priority": "P1",
-    "status": "pending",
+    "status": "done",
     "files": [
       "components/KLineChart.tsx",
       "hooks/useKLineChart.ts",
@@ -2113,7 +2113,8 @@
       "npm run test"
     ],
     "notes_2026_08_16": "Found by the red-team review of Q-088 (finding Q088-10). Nothing is broken today: Q-088 removed every producer, BtcChartPanel passes EMPTY_DARK_POOL_MARKERS, and KLineChart still accepts the props so no consumer breaks. But the rendering affordance is fully wired \u2014 hooks/useKLineChart.ts still draws both marker layers \u2014 so re-plotting fabricated markers is a one-line change. lib/synthetic.ts now exports assertNotSynthetic() precisely for boundaries like this. Low priority: the architecture allowlist already blocks the import path that fed them, and this is the belt-and-braces layer.",
-    "notes_2026_08_17": "PRIORITY RAISED P3->P1 by the Q-079 audit. The stated rationale for P3 - 'the architecture allowlist already blocks the import path that fed them' - is FALSIFIED. Mutation M-F2 restored synthetic prints to <KLineChart darkPoolMarkers> keyed on REAL candle times, needing no import path at all, and escaped the guard (48/48 green, tsc clean). app/sector/[slug]/page.tsx:63 and app/stock/[ticker]/page.tsx:293 call unwrapSynthetic at component top, stripping the brand into lexical scope where the array is freely assignable to the marker prop 430 lines below. Sink fully wired: components/KLineChart.tsx:55-56, hooks/useKLineChart.ts:821-832. The import allowlist is the ONLY layer, not the second. Track with Q-098."
+    "notes_2026_08_17": "PRIORITY RAISED P3->P1 by the Q-079 audit. The stated rationale for P3 - 'the architecture allowlist already blocks the import path that fed them' - is FALSIFIED. Mutation M-F2 restored synthetic prints to <KLineChart darkPoolMarkers> keyed on REAL candle times, needing no import path at all, and escaped the guard (48/48 green, tsc clean). app/sector/[slug]/page.tsx:63 and app/stock/[ticker]/page.tsx:293 call unwrapSynthetic at component top, stripping the brand into lexical scope where the array is freely assignable to the marker prop 430 lines below. Sink fully wired: components/KLineChart.tsx:55-56, hooks/useKLineChart.ts:821-832. The import allowlist is the ONLY layer, not the second. Track with Q-098.",
+    "notes_2026_08_18": "DONE, by removal rather than by guard. darkPoolMarkers/newsMarkers props, the DarkPoolMarker/NewsMarker interfaces, the marker-building block in hooks/useKLineChart.ts and the EMPTY_* constants in BtcChartPanel are all deleted. The only 'producer' was BtcChartPanel passing empty constants, so nothing real was lost. This makes mutation M-F2 a TYPE ERROR rather than a detection problem \u2014 structural beats detective, and no import guard could ever have caught M-F2 because it needed no import path."
   },
   {
     "id": "Q-097",
@@ -2143,7 +2144,7 @@
     "title": "I3 guard is a name blocklist, not a property check: 6 of 7 mutations escape",
     "domain": "Testing",
     "priority": "P0",
-    "status": "pending",
+    "status": "done",
     "files": [
       "__tests__/architecture/synthetic-containment.test.ts",
       "lib/synthetic.ts",
@@ -2161,7 +2162,8 @@
       "npm run typecheck"
     ],
     "notes_2026_08_17": "Q-079 audit, by adversarial mutation rather than inspection. __tests__/architecture/synthetic-containment.test.ts:85 MENTIONS_MOCKDATA matches the literal string 'mockData', so the mechanism is an opt-in registry of known-bad NAMES. Escaping mutations: M-B new synthetic module under a different name feeding a backtest; M-C __tests__ fixture imported into lib/quant/ and re-exported; M-D computed specifier 'mock'+'Data' in the live chart route; M-E inline Math.random() OHLC in the live chart route returned as source:'yahoo'; M-F/M-F2 synthetic prints to <KLineChart darkPoolMarkers> keyed on real candle times (a one-prop restoration of the exact Q-088 defect). Only M-A, the positive control, was caught. The brand DIRECTION is correct and scripts/ IS scanned - those two halves are genuinely fixed. Supersedes the stated rationale of Q-096.",
-    "blocked_by": []
+    "blocked_by": [],
+    "notes_2026_08_18": "DONE. Guard rewritten as a PROPERTY check: __tests__/architecture/syntheticContainment.ts classifies a module as synthetic by fixture path OR by exporting a binding annotated Synthetic<...>, so a rename does not evade it. It is a PURE function of a virtual file set, which converts all seven Q-079 mutations into EXECUTABLE test cases (the '6 of 7 escaped' figure was previously unreproducible prose). Added rules an import check structurally cannot cover: opaque-specifier (non-literal dynamic specifier, M-D) and inline-fabrication (Math.random in a live data path, M-E). Found and fixed a gap the audit had not named: the TWO-STEP LAUNDER (import a branded binding, then bare `export { X }`) has no `from` clause for a specifier rule to match \u2014 now caught as synthetic-reexport, which applies to allowlisted files too. assertNotSynthetic wired at components/KLineChart.tsx:204 and lib/backtest/core.ts:225. WATCHED IT FAIL on the real tree: M-B (module named demoPrices, not mockData) and M-E applied, suite failed with the right rules, 37/37 green on revert. I3 moved VIOLATED -> PARTIAL. Not ENFORCED: an UNBRANDED fabricator escapes static analysis, and the test asserts that escape explicitly. || RED-TEAM ROUND 2 (all fixed in-PR, each with a regression test): RT-1 the fixture-directory rule had ZERO REACHABLE INSTANCES because the scan never walked __tests__/, so those edges resolved to null and were SILENTLY SKIPPED \u2014 green and inert, the subtlest instance yet, since the rule was not wrong but unreachable. RT-2 isSyntheticModule matched the ANNOTATION TEXT ': Synthetic<', so an inferred return type made a producer invisible; now keyed on markSynthetic(), the one sanctioned constructor. RT-8 the allowlist DID grant laundering: `export const X = generateDarkPoolPrints(...)` from an allowlisted page was green. RT-3 both assertion sites were UNFIRABLE because tsc blocks Synthetic<T> from a parameter typed T \u2014 moved to the r.json() boundary where data arrives untyped, with a test proving the marker survives JSON. RT-4 the marker test was itself a name blocklist; now asserts absence of .setMarkers(. RT-9 root modules incl. middleware.ts were outside the analyser. RT-7 unused SeriesMarker imports (no lint exists to catch these). || THREE adversarial rounds, 13 findings, all fixed or named. ROUND 3: leak matching was LINE-BOUNDED so a round-2 fix was restored by reformatting across three lines; the extension set was an allowlist so .json (which dataLoader loads the whole price universe from) was neither offender nor resolvable target and its edges were silently dropped; rule 3 matched the marker by POSITION not presence; the constructor via dynamic-import destructuring was invisible. Struck TWO false claims in my own code. THE PATTERN ACROSS ALL THREE ROUNDS: never a wrong rule, always a rule that was CORRECT AND UNREACHABLE \u2014 the scan did not visit a fixture directory, then a top-level directory, then a file extension. When a guard is green, ask what it VISITED before asking what it decided. Landed PARTIAL with six escapes asserted as passing tests in a 'what this guard CANNOT do' block, so a green run cannot be read as a proof."
   },
   {
     "id": "Q-099",

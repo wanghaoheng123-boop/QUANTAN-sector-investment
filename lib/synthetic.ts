@@ -30,8 +30,31 @@
  * into the running system and across JSON.
  */
 
+/**
+ * Private tag. Declared, never exported, and impossible to name from outside
+ * this module — which is what makes the brand NOMINAL rather than structural.
+ *
+ * WHY THIS EXISTS (red-team, Q-098 round 2). The previous shape was a plain
+ * structural interface:
+ *
+ *     export interface Synthetic<T> { readonly __SYNTHETIC__: true; readonly value: T }
+ *
+ * TypeScript is structurally typed, so ANY object literal of that shape was a
+ * valid `Synthetic<T>` — no cast, no error:
+ *
+ *     const forged: Synthetic<number[]> = { __SYNTHETIC__: true, value: [1] }  // compiled clean
+ *
+ * That falsified the sentence the whole containment design rested on — that
+ * `markSynthetic()` is the one sanctioned constructor and a cast is the only
+ * other way in — and it meant the `brand-cast` guard never had to fire, because
+ * forging required no cast. With an unnameable symbol in the required shape, the
+ * literal above is a type error and `markSynthetic()` really is the only route.
+ */
+declare const SYNTHETIC_TAG: unique symbol
+
 /** Opaque carrier for synthetic values. Not assignable to `T` by design. */
 export interface Synthetic<T> {
+  readonly [SYNTHETIC_TAG]: true
   readonly __SYNTHETIC__: true
   readonly value: T
 }
@@ -42,7 +65,17 @@ export interface Synthetic<T> {
  * this, so `unwrapSynthetic` has something to verify.
  */
 export function markSynthetic<T>(value: T): Synthetic<T> {
-  return { __SYNTHETIC__: true, value }
+  // The single sanctioned cast, and the reason it is sanctioned: SYNTHETIC_TAG
+  // is a compile-time-only marker with no runtime representation, so the object
+  // genuinely cannot carry it.
+  //
+  // An earlier version of this comment claimed confining the cast here "makes
+  // every OTHER cast into the brand a `brand-cast` violation". That is FALSE and
+  // was struck after review: the static rule matches `as Synthetic<…>` and
+  // `as never`, but a value passed through an `any`-typed intermediate reaches a
+  // brand-typed slot with no cast to match at all. The nominal tag is what makes
+  // forgery hard; `brand-cast` is a backstop with a named gap, not a proof.
+  return { __SYNTHETIC__: true, value } as unknown as Synthetic<T>
 }
 
 /** Runtime predicate — works on values crossing a JSON or JS boundary. */
