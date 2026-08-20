@@ -1777,7 +1777,7 @@
     "title": "Deflated Sharpe is saturated: fix the effective sample size T AND wire nTrials to the registry",
     "domain": "Quant/Research",
     "priority": "P1",
-    "status": "pending",
+    "status": "done",
     "files": [
       "scripts/benchmark-signals.ts",
       "lib/quant/deflatedSharpe.ts",
@@ -1794,7 +1794,8 @@
       "npm run test"
     ],
     "notes_2026_08_15": "The registry was created 2026-08-15 with 9 backfilled rows (T-0001..T-0009). scripts/benchmark-signals.ts currently calls deflatedSharpe(netRets, 10) and (netRets, 100) \u2014 both are GUESSES. The backfill alone accounts for ~45 configurations at minimum, and over 1000 if the Loop-1 declared grid is the right denominator (see Q-084), so the published DSR is deflated against too small a number. Auto-append matters more than the wiring: a registry nobody appends to decays immediately, which is the tagged-code-is-not-a-fixed-effect lesson again.",
-    "notes_2026_08_17": "RE-SCOPED (Q-079 audit + red-team). Wiring nTrials ALONE would change the headline from 1 to 1. CAUSE: DSR is computed on tradeStats.nTrades=3410 (overlapping trades) while scripts/benchmark-results.json's own nonOverlapStats.nTrades=347 carries the note 'This is the honest effective n behind the pooled WR'. Since expectedMaxSharpe scales as 1/sqrt(T-1) (lib/quant/deflatedSharpe.ts:117), T and nTrials are COUPLED. At T=347 the DSR becomes 0.9709 (n=10), 0.8924 (n=45), 0.8282 (n=100), 0.5848 (n=1053) \u2014 i.e. THE SHIPPED RESULT FALLS BELOW ANY CONVENTIONAL BAR at every trial count the registry supports. THE FIX IS JOINT: de-overlap the trade series to get an honest T, and wire nTrials to the registry. Doing either alone is a no-op or leaves multiplicity uncorrected. Caveat: the distributional moments are not persisted, so those figures assume g3=0,g4=3 \u2014 direction and magnitude robust, third decimal soft. Confirm the moments before publishing any replacement number."
+    "notes_2026_08_17": "RE-SCOPED (Q-079 audit + red-team). Wiring nTrials ALONE would change the headline from 1 to 1. CAUSE: DSR is computed on tradeStats.nTrades=3410 (overlapping trades) while scripts/benchmark-results.json's own nonOverlapStats.nTrades=347 carries the note 'This is the honest effective n behind the pooled WR'. Since expectedMaxSharpe scales as 1/sqrt(T-1) (lib/quant/deflatedSharpe.ts:117), T and nTrials are COUPLED. At T=347 the DSR becomes 0.9709 (n=10), 0.8924 (n=45), 0.8282 (n=100), 0.5848 (n=1053) \u2014 i.e. THE SHIPPED RESULT FALLS BELOW ANY CONVENTIONAL BAR at every trial count the registry supports. THE FIX IS JOINT: de-overlap the trade series to get an honest T, and wire nTrials to the registry. Doing either alone is a no-op or leaves multiplicity uncorrected. Caveat: the distributional moments are not persisted, so those figures assume g3=0,g4=3 \u2014 direction and magnitude robust, third decimal soft. Confirm the moments before publishing any replacement number.",
+    "notes_2026_08_21": "DONE 2026-08-21 (PR #155/d5d3a61). The re-scope was right: nTrials alone would have changed 1 to 1. Fixed JOINTLY \u2014 lib/quant/trialRegistry.ts counts nTrials (45/1053, a band because T-0001 is uncertain) and the DSR sample moved from 3394 overlapping trades to n_eff=114 after a Kish clustering discount. Headline 1.0000 -> 0.0723."
   },
   {
     "id": "Q-082",
@@ -1877,7 +1878,8 @@
     "blocked_by": [
       "Q-081"
     ],
-    "notes_2026_08_15": "Confirmed absent 2026-08-15: no pbo/cscv implementation anywhere in lib/ or scripts/. DSR exists (lib/quant/deflatedSharpe.ts) but is only half the multiplicity story \u2014 DSR deflates a Sharpe, PBO estimates the probability that the selected configuration is overfit relative to the alternatives. Blocked on Q-081 because both need an honest trial count to mean anything."
+    "notes_2026_08_15": "Confirmed absent 2026-08-15: no pbo/cscv implementation anywhere in lib/ or scripts/. DSR exists (lib/quant/deflatedSharpe.ts) but is only half the multiplicity story \u2014 DSR deflates a Sharpe, PBO estimates the probability that the selected configuration is overfit relative to the alternatives. Blocked on Q-081 because both need an honest trial count to mean anything.",
+    "notes_2026_08_21": "ELEVATED IN IMPORTANCE by Q-099: PBO/CSCV is now the ONLY thing standing between the platform and I5 being meetable at all. The benchmark prints 'PBO / CSCV NOT IMPLEMENTED (Q-085) \u2014 I5 is unmet by construction' on every run."
   },
   {
     "id": "Q-086",
@@ -2170,7 +2172,7 @@
     "title": "I5 is a gate with no gate: CI enforces the raw edge, deflated statistics gate nothing",
     "domain": "Quant/Research",
     "priority": "P0",
-    "status": "pending",
+    "status": "done",
     "files": [
       "scripts/benchmark-signals.ts",
       ".github/workflows/ci.yml",
@@ -2186,7 +2188,8 @@
       "npm run test"
     ],
     "notes_2026_08_17": "Q-079 audit. The only executing performance gate is scripts/benchmark-signals.ts:325-331 (process.exit(1) on RAW edge < 1.81pp) via ci.yml:73; ci.yml:82-96 reads only aggregateNetWinRate/aggregateWinRate and never touches tradeStats. It passes identically if DSR is null, the registry is deleted, and no OOS run ever happened. PBO/CSCV has zero implementation (the 10 files matching cscv|combinatorial|pbo are all prose), so NO strategy has ever met I5's bar including the one shipped result. The trial registry has 9 rows, all backfilled:true, no writer/reader/validator. Related UI defects from the same audit: the card labelled 'Sharpe Ratio' is annReturn/maxDD and its negative branch is unreachable so losing portfolios render '-'; the 'Walk-Forward / Overfitting Check' panel contains no overfitting statistic (mounted app/backtest/page.tsx:237, fed from a real /api/backtest fetch at :64-72,122).",
-    "blocked_by": []
+    "blocked_by": [],
+    "notes_2026_08_21": "DONE 2026-08-21 (PR #155/d5d3a61). I5 now has an executing gate that CAN fail: deflated statistic present, trial denominator counted from the registry, clustering estimable, selection not significantly harmful. Two earlier gate designs were rejected in review and both lessons are in CLAUDE.md \u2014 flooring DSR PUNISHED COMPLIANCE (it falls in nTrials, so logging trials broke CI), and flooring the Sharpe at 0.08 COULD NOT FIRE because the always-buy null Sharpe is 0.1410. No positive performance floor is enforced, deliberately: none has been demonstrated. I5 remains UNMET by construction until Q-085 (PBO)."
   },
   {
     "id": "Q-100",
