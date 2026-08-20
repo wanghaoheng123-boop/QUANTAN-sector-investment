@@ -83,12 +83,20 @@ const rel = (f: string) => relative(ROOT, f).split(sep).join('/')
  * `isProduction()` remains the violation DOMAIN, so fixture files are resolvable
  * targets without themselves being scanned as offenders.
  */
-const SCAN_DIRS = [...DEFAULT_OPTIONS.productionDirs, '__tests__', 'tests']
-const rootModules = readdirSync(ROOT)
-  .filter((f) => /\.(ts|tsx|mjs|js)$/.test(f))
-  .map((f) => join(ROOT, f))
-
-const realFiles: VirtualFile[] = [...SCAN_DIRS.flatMap((d) => walk(join(ROOT, d))), ...rootModules]
+/**
+ * ENUMERATING directories is the same defect one level up, and it bit twice.
+ * RT-1 was a fixture directory missing from the scan; then a bridge in `src/`
+ * escaped for the identical reason — `isProduction()` had been inverted in the
+ * analyser, but this walk still listed the directories it would visit, so the
+ * rule was correct and unreachable. Scan everything; let `isProduction()` decide.
+ */
+const IGNORED_DIRS = new Set(['node_modules', '.next', 'coverage', 'dist', 'build', '.git'])
+const realFiles: VirtualFile[] = readdirSync(ROOT)
+  .filter((e) => !e.startsWith('.') && !IGNORED_DIRS.has(e))
+  .flatMap((e) => {
+    const full = join(ROOT, e)
+    return statSync(full).isDirectory() ? walk(full) : /\.(ts|tsx|mjs|js)$/.test(e) ? [full] : []
+  })
   .map((f) => ({ path: rel(f), source: readFileSync(f, 'utf8') }))
 
 const opts = { ...DEFAULT_OPTIONS, allowlist: ALLOWLIST }
@@ -140,9 +148,19 @@ describe('I3 — the guard is not vacuous', () => {
     expect(realFiles.length).toBeGreaterThan(100)
   })
 
-  it('reaches app/api routes and scripts', () => {
+  it('reaches app/api routes, scripts, fixtures and the repo root', () => {
     expect(realFiles.some((f) => f.path.startsWith('app/api/'))).toBe(true)
     expect(realFiles.some((f) => f.path.startsWith('scripts/'))).toBe(true)
+    expect(realFiles.some((f) => f.path.startsWith('__tests__/'))).toBe(true)
+    expect(realFiles.some((f) => f.path === 'middleware.ts')).toBe(true)
+  })
+
+  it('scans directories nobody enumerated — the walk is not an allowlist', () => {
+    // A bridge in any top-level directory must be reachable. Enumerating dirs
+    // left src/ and types/ invisible, which is how a two-line re-export
+    // laundered the fixture module with zero violations.
+    const dirs = new Set(realFiles.map((f) => f.path.split('/')[0]))
+    expect(dirs.size).toBeGreaterThan(DEFAULT_OPTIONS.productionDirs.length)
   })
 
   it('every allowlisted file exists — no stale row hiding a gap', () => {
