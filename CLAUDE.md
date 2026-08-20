@@ -291,7 +291,7 @@ took three passes, each one flattering:
 |---|---|---|---|
 | pre-`Q-081` | 3,394 *overlapping* trades | **1.0000** | saturated; provably unmoved by `nTrials` from 10 to 10¹² |
 | `Q-081` first pass | 345 non-overlapping | **0.4858** | removed only *within-instrument* overlap |
-| **current** | **n_eff = 134** | **0.0974** | discounts cross-sectional clustering (Kish DEFF) |
+| **current** | **n_eff = 114** | **0.0723** | discounts cross-sectional clustering (Kish DEFF) |
 
 De-overlapping was not enough: 56 names, many in the same sector, trading the
 same window, are correlated on the same dates, so trades sharing a calendar block
@@ -304,17 +304,33 @@ construction — a straw-man null. The honest test differences each trade agains
 an **equal-weight hold of the same 56 names over the same window**, so
 survivorship cancels in the difference:
 
-> **excess ≈ +0.11% per trade, t ≈ 0.19, against a Harvey–López de Prado–Zhu bar
-> of |t| > 3.0.** The selection is **not statistically distinguishable from
-> holding the universe.**
+> **excess ≈ +0.11% per trade, t ≈ 0.17, against the |t| > 3.0 bar of Harvey,
+> Liu & Zhu (2016), "…and the Cross-Section of Expected Returns", RFS 29(1).**
+> The selection is **not statistically distinguishable from holding the
+> universe.**
 
 **Permitted wording, and it is narrow.** You may say: *"On a 56-name present-day
 survivor list over 2021–2026, BUY labels returned more per 20 days than
 unconditional exposure, but the excess is not statistically distinguishable from
 zero. Deflated Sharpe is 0.10–0.49 depending on how the effective sample is
-counted; PBO is not computed. No claim of skill is supported."* You may **not**
-say skill, edge, alpha, or outperformance, and may not quote a DSR without the
-`n_eff` it was computed on.
+counted; PBO is not computed. No claim of skill is supported."*
+
+**Scope of the ban, stated precisely so it is enforceable.** It governs
+**user-visible claims and prose** — UI copy, docs, reports, chat answers. You may
+not present the strategy as having skill, edge, alpha or outperformance, and may
+not quote a DSR without the `n_eff` it was computed on. It does **not** rename
+internal measurements: `edgeOverBaseRatePp` and `FLOOR_EDGE_PP` are quantities,
+and renaming them would churn a CI gate without changing a claim.
+
+**The ban is violated on landing, and pretending otherwise would repeat the
+failure this section documents.** Four user-visible labels call an
+indistinguishable-from-zero excess "Alpha" —
+`components/backtest/KeyMetricsStrip.tsx:55` ("Alpha vs B&H"),
+`components/backtest/WalkForwardPanel.tsx:124` ("Strategy Alpha"),
+`components/backtest/InstrumentTable.tsx:67`,
+`components/backtest/AnalysisTab.tsx:108`. Naming a statistic after the
+conclusion you hoped for is exactly the calibration failure I5 exists to catch.
+→ `Q-103`.
 
 **The gate does not gate on DSR, deliberately.** The first version floored it at
 0.43 and `quant-validator` showed that **punished compliance**: DSR falls

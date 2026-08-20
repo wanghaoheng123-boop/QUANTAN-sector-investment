@@ -204,14 +204,53 @@ const baseRateAvgNet = baseBuys > 0 ? (baseSumNet / baseBuys) * 100 : 0
 const dateAxis = [
   ...new Set(allData.flatMap(({ rows }) => rows.map((r) => new Date(r.time * 1000).toISOString().slice(0, 10)))),
 ].sort()
-const dateOrdinal = new Map(dateAxis.map((d, i) => [d, i]));
+
+// The axis MUST be trading days, not calendar days.
+//
+// The first implementation unioned every instrument's dates and indexed on that.
+// BTC trades weekends, so the union carried 1826 entries against an equity
+// calendar of 1253 — meaning a "21-bar" block actually spanned 21 CALENDAR days
+// ~= 14.4 trading days, about 69% of one holding period. Blocks came out too
+// short, clusters too small, and n_eff too generous: 70 blocks and n_eff 134,
+// where the correct axis gives ~48 blocks and n_eff ~113. The docstring in
+// effectiveSampleSize.ts said "~49 occupied blocks" the whole time; the code
+// disagreed and nobody checked the code against it.
+//
+// Weekend dates are CARRIED FORWARD into the enclosing trading-day block rather
+// than skipped. Skipping would drop those trades from the cluster-size
+// denominator while `n` stayed 345, re-inflating n_eff by exactly the mechanism
+// this correction exists to remove.
+const isWeekend = (d: string) => {
+  const wd = new Date(`${d}T00:00:00Z`).getUTCDay()
+  return wd === 0 || wd === 6
+}
+const tradingAxis = dateAxis.filter((d) => !isWeekend(d))
+const tradingOrdinal = new Map(tradingAxis.map((d, i) => [d, i]))
+const ordByDate = new Map<string, number>()
+let carriedOrdinal = 0
+for (const d of dateAxis) {
+  const own = tradingOrdinal.get(d)
+  if (own !== undefined) carriedOrdinal = own
+  ordByDate.set(d, carriedOrdinal)
+}
+
 const BLOCK_BARS = LABEL_HOLD_DAYS + 1
 const blockCounts = new Map<number, number>()
+let unmappedTrades = 0
 for (const t of nonOverlapTrades) {
-  const ord = dateOrdinal.get(t.date)
-  if (ord === undefined) continue
+  const ord = ordByDate.get(t.date)
+  if (ord === undefined) {
+    unmappedTrades++
+    continue
+  }
   const block = Math.floor(ord / BLOCK_BARS)
   blockCounts.set(block, (blockCounts.get(block) ?? 0) + 1)
+}
+if (unmappedTrades > 0) {
+  // Fail closed: an unmapped trade shrinks the cluster denominator while n is
+  // unchanged, which inflates n_eff — an error in the flattering direction.
+  console.error(`\nFAIL: ${unmappedTrades} trades could not be mapped onto the trading-day axis.`)
+  process.exit(1)
 }
 const clusterSizes = [...blockCounts.values()]
 
@@ -228,9 +267,21 @@ const dailySeries = allData.map(({ rows }) => {
 const commonDates = dateAxis.filter((d) => dailySeries.every((m) => m.has(d)))
 const alignedSeries = dailySeries.map((m) => commonDates.map((d) => m.get(d) as number))
 const rho = meanPairwiseCorrelation(alignedSeries)
+if (rho == null || !Number.isFinite(rho) || clusterSizes.length === 0) {
+  // I2 — fail closed, never fail silent. `rho ?? 0` would set DEFF to 1 and
+  // silently restore n_eff to the unclustered 345, quietly republishing the
+  // superseded 0.4858 as though it were the corrected number. A missing
+  // correction must stop the run, not default to the flattering branch.
+  console.error(
+    '\nFAIL: intra-cluster correlation could not be estimated ' +
+      `(rho=${rho}, clusters=${clusterSizes.length}). Refusing to publish a deflated Sharpe ` +
+      'with no clustering discount — that is the pre-correction number wearing the corrected name.',
+  )
+  process.exit(1)
+}
 const mBar = meanClusterSize(clusterSizes)
-const deff = designEffect(mBar, rho ?? 0)
-const nEff = Math.round(effectiveSampleSize(netRetsEffective.length, mBar, rho ?? 0))
+const deff = designEffect(mBar, rho)
+const nEff = Math.round(effectiveSampleSize(netRetsEffective.length, mBar, rho))
 
 // ── EXCESS OVER THE MARKET — the number that actually matters ───────────────
 //
@@ -519,36 +570,46 @@ if (benchmark.edgeOverBaseRatePp < FLOOR_EDGE_PP) {
 /**
  * I5 gate (Q-099), re-based after adversarial validation.
  *
- * WHY THIS DOES NOT GATE ON THE DEFLATED SHARPE
- * --------------------------------------------
- * The first version floored DSR at 0.43. Two things were wrong with that, and
- * the first is disqualifying:
+ * WHY THIS GATES NEITHER THE DEFLATED SHARPE NOR A PERFORMANCE FLOOR
+ * -----------------------------------------------------------------
+ * Two earlier versions of this gate were rejected in review, and the reasons are
+ * worth keeping because both looked reasonable when written.
  *
- *  1. IT PUNISHED COMPLIANCE. DSR falls monotonically in `nTrials`, and the
- *     standing order is to log every experiment including failures. At the
- *     measured values, roughly 700 further logged configurations — fewer than
- *     the single T-0001 grid already on file — would breach the floor. The only
- *     way to keep CI green would have been to STOP LOGGING TRIALS, which is
- *     precisely the behaviour I5 exists to compel. A gate that rewards hiding
- *     evidence is worse than no gate.
- *  2. IT WAS A COIN FLIP. A DSR near 0.5 sits at the steepest point of the
- *     normal CDF, so ordinary sample drift moves it freely across any nearby
- *     threshold. Floor a Sharpe or a z-statistic; never a probability near 0.5.
+ *  1. FLOORING DSR PUNISHED COMPLIANCE. DSR falls monotonically in `nTrials`,
+ *     and the standing order is to log every experiment including failures. At
+ *     the measured values roughly 700 further logged configurations — fewer than
+ *     the single T-0001 grid already on file — would have breached the floor,
+ *     making "stop logging trials" the only way to keep CI green. That is the
+ *     exact behaviour I5 exists to compel. A gate that rewards hiding evidence
+ *     is worse than no gate. (A DSR near 0.5 also sits at the steepest point of
+ *     the normal CDF, so drift alone crosses any nearby threshold.)
  *
- * So the gate now floors the SHARPE on the non-overlapping sample — invariant to
- * `nTrials`, and a genuine regression signal for code breakage — while the
- * deflated statistics are REPORTED and the structural preconditions I5 names
- * (a deflated number exists; the trial denominator was counted, not guessed) are
- * enforced as hard failures.
+ *  2. FLOORING THE SHARPE COULD NOT FIRE. Set at 0.08 against a measured 0.17,
+ *     it looked like a regression guard. It was not: the ALWAYS-BUY null Sharpe
+ *     on this universe is 0.1410, and the minimum over 200 random-selection
+ *     resamples is 0.0891 — both above the floor. Review forced `BUY` on every
+ *     bar, reducing selection to nothing, and the run still passed this gate.
+ *     A floor beneath the no-skill null cannot detect the absence of skill.
  *
- * WHAT THIS GATE DOES NOT DO. It does not certify skill, and nothing here may be
- * quoted as if it did. On the evidence: the excess over an equal-weight hold of
- * the same universe is not statistically distinguishable from zero, PBO/CSCV has
- * no implementation (`Q-085`) so I5 is unmet by construction, and the floor
- * below is set to catch a broken pipeline, not to mark a bar worth clearing.
+ * SO THERE IS NO POSITIVE PERFORMANCE FLOOR HERE, DELIBERATELY. No positive
+ * performance has been demonstrated — the excess over an equal-weight hold of
+ * the same universe is not distinguishable from zero — and a floor under an
+ * undemonstrated quantity is theatre. Pipeline breakage is already caught by
+ * FLOOR_EDGE_PP above, which demonstrably fired on the review mutation before
+ * control reached this block.
+ *
+ * WHAT THIS GATE DOES ENFORCE, all of which can actually fail:
+ *  - the deflated statistic exists (I5 names it as the headline);
+ *  - the trial denominator was COUNTED from the registry, not guessed;
+ *  - the clustering discount was estimable (enforced above; failing open would
+ *    silently republish the pre-correction number);
+ *  - the selection is not significantly HARMFUL versus holding the universe.
  */
-const FLOOR_NONOVERLAP_SHARPE = 0.08
 const HLZ_SIGNIFICANCE_BAR = 3.0
+/** Fail if the selection is significantly WORSE than holding the universe. */
+const HARMFUL_T = -HLZ_SIGNIFICANCE_BAR
+/** Warn when the primary edge gate is within this margin of its floor. */
+const THIN_HEADROOM_PP = 0.25
 
 const dsrPublished = benchmark.tradeStats.deflatedSharpe
 if (dsrPublished == null) {
@@ -562,15 +623,22 @@ if (benchmark.tradeStats.nTrials.registryRows === 0) {
   console.error('\nFAIL (I5): the trial registry contributed zero rows, so nTrials was not counted.')
   process.exit(1)
 }
-const srNonOverlap = benchmark.tradeStats.perTradeSharpeNonOverlapping
-if (srNonOverlap == null || srNonOverlap < FLOOR_NONOVERLAP_SHARPE) {
+
+const tStat = benchmark.tradeStats.excessOverMarket.tStat
+if (tStat != null && tStat < HARMFUL_T) {
   console.error(
-    `\nREGRESSION (I5 gate): non-overlapping per-trade Sharpe ${srNonOverlap} below floor ${FLOOR_NONOVERLAP_SHARPE}`,
+    `\nFAIL (I5): the selection is significantly WORSE than holding the universe (t=${tStat} < ${HARMFUL_T}).`,
   )
   process.exit(1)
 }
-
-const tStat = benchmark.tradeStats.excessOverMarket.tStat
+const headroomPp = Number((benchmark.edgeOverBaseRatePp - FLOOR_EDGE_PP).toFixed(2))
+if (headroomPp < THIN_HEADROOM_PP) {
+  console.warn(
+    `\nWARN: the PRIMARY edge gate has ${headroomPp}pp of headroom (${benchmark.edgeOverBaseRatePp} vs floor ${FLOOR_EDGE_PP}). ` +
+      'The dataset is rewritten in place weekly and the universe re-anchored to Date.now() (Q-102), so this can breach on data drift ' +
+      'alone, with no code change. Treat a breach as a data-vintage question first, not a regression.',
+  )
+}
 console.log(
   [
     '',
@@ -582,8 +650,9 @@ console.log(
       ? '  => NO CLAIM OF SKILL IS SUPPORTED. The selection is not statistically distinguishable'
         + '\n     from holding the same universe over the same windows.'
       : '  => review required: the excess t has crossed the significance bar.',
-    `  The gate above floors the SHARPE (${FLOOR_NONOVERLAP_SHARPE}) to catch pipeline breakage.`,
-    '  It is not a skill test and must not be quoted as one.',
+    '  No positive performance floor is enforced here, deliberately: the always-buy null',
+    `  Sharpe on this universe is ~0.14, so any floor beneath it cannot detect absent skill.`,
+    '  Pipeline breakage is caught by the edge gate above. This block is a report.',
     '',
   ].join('\n'),
 )

@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-08-20T17:27:48.718Z",
+  "timestamp": "2026-08-20T17:43:07.492Z",
   "version": "v2.0-ssot-regime-production",
   "strategy": "resolveBacktestSignal (regime-only, QUANTAN_USE_ENHANCED_SIGNAL=0)",
   "metricNote": "Label win rate: 20d forward return after BUY; entry next close; gross and net after round-trip costs",
@@ -27,21 +27,21 @@
   "tradeStats": {
     "nTrades": 3394,
     "nTradesNonOverlapping": 345,
-    "nEffective": 134,
+    "nEffective": 114,
     "clustering": {
-      "meanClusterSize": 7.28,
+      "meanClusterSize": 9.16,
       "intraClusterCorrelation": 0.2494,
-      "designEffect": 2.57,
-      "occupiedBlocks": 70,
+      "designEffect": 3.03,
+      "occupiedBlocks": 51,
       "note": "Kish design effect DEFF = 1 + (mBar-1)*rho, n_eff = n/DEFF. De-overlapping removes WITHIN-instrument dependence only; trades sharing a calendar block across 56 correlated names are one bet placed many times."
     },
     "perTradeSharpeOverlapping": 0.2028,
     "perTradeSharpeNonOverlapping": 0.1744,
-    "psrGtZero": 0.9809,
-    "deflatedSharpe": 0.0974,
+    "psrGtZero": 0.972,
+    "deflatedSharpe": 0.0723,
     "deflatedSharpeBand": [
-      0.0974,
-      0.4053
+      0.0723,
+      0.3439
     ],
     "nTrials": {
       "lower": 46,
@@ -62,11 +62,11 @@
       "nTrades": 345,
       "meanPct": 0.1248,
       "sharpe": 0.016,
-      "tStat": 0.185,
+      "tStat": 0.17,
       "significanceBar": 3,
       "note": "Each trade differenced against the EQUAL-WEIGHT return of the same universe over the same window, so survivorship cancels (both legs are the same 56 names). t is computed on n_eff. Harvey-Liu-Zhu (2016) require |t| > 3.0 for a newly-proposed factor. THIS IS THE NUMBER THAT BEARS ON SKILL."
     },
-    "note": "Bailey-Lopez de Prado PSR/DSR on the NON-OVERLAPPING sample (n=345), discounted to n_eff=134 for cross-sectional clustering, against nTrials=1054 counted from .quantlab/TRIAL_REGISTRY.jsonl. NOT A SKILL CERTIFICATION: PBO/CSCV has no implementation (Q-085), so I5 is unmet by construction, and DSR tests a straw-man null (SR>0) that a long-only survivor-list strategy clears automatically. Trial bounds are LOWER bounds: discarded-without-record configurations are absent by construction."
+    "note": "Bailey-Lopez de Prado PSR/DSR on the NON-OVERLAPPING sample (n=345), discounted to n_eff=114 for cross-sectional clustering, against nTrials=1054 counted from .quantlab/TRIAL_REGISTRY.jsonl. NOT A SKILL CERTIFICATION: PBO/CSCV has no implementation (Q-085), so I5 is unmet by construction, and DSR tests a straw-man null (SR>0) that a long-only survivor-list strategy clears automatically. Trial bounds are LOWER bounds: discarded-without-record configurations are absent by construction."
   },
   "alwaysBuyBaseline": {
     "nBars": 58419,
