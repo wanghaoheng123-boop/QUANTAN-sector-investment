@@ -19,6 +19,16 @@ I7 was the only one claiming enforcement, and it is the one that inverted.
 > call sites — over three adversarial rounds, all recorded in
 > `workspace/SESSION_STATE.json → q098_i3_property_guard_2026_08_18`.
 >
+> **ALSO SUPERSEDED — `Q-081`/`Q-099`, 2026-08-21 (PR #155, `d5d3a61`).** The I5
+> tier is unchanged at **VIOLATED**, but its *numbers* below are obsolete. The
+> published DSR is now **0.0723** on an effective sample of **114**, and the
+> sensitivity table below (built on `T`=347 with assumed moments) was superseded
+> twice: de-overlapping alone left the sample ~3× too large, because it removed
+> only *within-instrument* dependence. More importantly, the publication gate
+> **REJECTED the claim of skill**: the excess over an equal-weight hold of the
+> same universe is **t ≈ 0.17** against a bar of 3.0. `CLAUDE.md` I5 carries the
+> current figures and the permitted wording.
+>
 > Every other tier on this page still stands.
 
 **Revision note.** This index reflects the state *after* adversarial review. Two
@@ -78,7 +88,10 @@ published DSR is **saturated at 1.0000** — the committed
 headline by nothing.
 
 **The saturation is an artifact of sample size, and the repo names the honest one
-itself.** DSR is computed on `tradeStats.nTrades = 3410`, the *overlapping*
+itself.** *(Superseded — see the banner. The direction was right and the
+magnitude was not: 347 is itself ~3× too generous, and the real test is the
+excess over the market, not DSR at all.)* DSR is computed on
+`tradeStats.nTrades = 3410`, the *overlapping*
 count, while the same file's `nonOverlapStats.nTrades = 347` carries the note
 *"the honest effective n behind the pooled WR"*. Because `expectedMaxSharpe`
 scales as `1/√(T−1)` (`lib/quant/deflatedSharpe.ts:117`), `T` and `nTrials` are
@@ -95,6 +108,14 @@ fixing `nTrials` alone changes 1 to 1, but fixing `T` alone leaves multiplicity
 uncorrected. **The fix is joint.** The moments are not persisted, so the table
 assumes `g3=0, g4=3` — direction and magnitude are robust, the third decimal is
 not.
+
+*What `Q-081` actually found, recorded here because this paragraph's conclusion
+was right for the wrong reason:* the shipped figure is **0.0723 at n_eff=114**,
+not 0.5848 at 347 — de-overlapping removed only within-instrument dependence,
+and 56 correlated names trading the same window mean trades sharing a calendar
+block are one bet placed many times. And **DSR was never the deciding test**: it
+checks `SR > 0`, which a long-only survivor-list strategy in a bull window clears
+by construction.
 
 **I8 · UNVERIFIED → VIOLATED.** The invariant has two separable halves at
 different tiers and the heading takes the worse one. The substantive licence question is genuinely
