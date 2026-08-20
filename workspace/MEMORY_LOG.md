@@ -831,3 +831,54 @@ re-grep every document that cites it — correcting the authoritative file and
 leaving its own evidence index stale is how a corrected finding silently
 reverts.** The five per-invariant evidence files stay frozen by design, with
 ERRATUM headers where superseded: they are testimony, not verdict.
+
+---
+
+## 2026-08-18 — Q-098 + Q-096: the I3 guard, third attempt
+
+Shipped as #152 (`01cc8c3`). I3 moved **VIOLATED → PARTIAL**. First sprint where
+the coordinator's rule (a) had an agent-actionable P0 to select — Q-079 created it.
+
+**Three adversarial rounds, thirteen findings, all fixed or named.** Each round
+broke the previous round's fixes. That is the story worth keeping.
+
+**The pattern: the recurring defect was never a wrong rule — it was a rule that
+was correct and _unreachable_.** Three separate times the scan never visited the
+thing the rule governed: a fixture directory (round 1), a top-level directory
+(round 2), a file extension (round 3). Each time the suite stayed green with the
+rule at **zero instances**, which is indistinguishable from the rule passing.
+**When a guard is green, ask what it visited before you ask what it decided.**
+
+The corollary cost me a round: I inverted `isProduction()` in round 2 and the
+`src/` bridge *still* escaped, because the test's walk separately enumerated
+directories. **Fixing the predicate does nothing while the input set is an
+allowlist.**
+
+**The load-bearing sentence was false.** "`markSynthetic()` is the one sanctioned
+constructor, and the only other way in is a cast" — `Synthetic<T>` was a plain
+*structural* interface, so `{ __SYNTHETIC__: true, value }` forged it with no
+cast at all, and `brand-cast` never had to fire. The brand is now nominal via an
+unnameable `unique symbol`; the forgery is a type error.
+
+**Three drafts of the "property" were source-text matches** wearing a property's
+name: `mockData` → `: Synthetic<` (beaten by an inferred return type) →
+`markSynthetic(` (beaten by an alias). Only resolution through the import graph
+is a property.
+
+**I wrote three false claims in my own comments while removing a false claim.**
+"The brand is in the type" (it was in the annotation); "every OTHER cast is a
+brand-cast violation" (an `any` intermediate needs none); and a cross-reference
+to a residual the referenced block did not contain. Writing an honest-limits
+block is not the same as keeping it true.
+
+**Landed PARTIAL, not ENFORCED**, with six escapes asserted as *passing tests* so
+a green run cannot be read as a proof — including the backstop scope: the runtime
+assertion covers exactly four sites, none in `lib/quant`, `lib/data` or `app/api`.
+
+Also: the first two assertion sites were **unfirable** — `tsc` blocks
+`Synthetic<T>` from a parameter typed `T`, making them `assert(true)` one remove
+out. The firable one is at the `r.json()` boundary.
+
+**Next:** Q-099 (I5 has no gate) is the top agent-actionable P0. Q-089 is its
+natural companion — deleting the remaining synthetic prints surface would remove
+the last live producer and empty the allowlist.
