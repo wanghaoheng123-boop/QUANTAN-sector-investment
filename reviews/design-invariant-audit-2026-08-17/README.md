@@ -9,6 +9,18 @@ remaining prior.
 **Result: 6 tiers corrected, 2 confirmed, and no invariant is ENFORCED.**
 I7 was the only one claiming enforcement, and it is the one that inverted.
 
+> **SUPERSEDED IN PART — `Q-098`, 2026-08-18 (PR #152, `01cc8c3`).**
+> **I3 has since moved VIOLATED → PARTIAL.** The finding below is the correct
+> record of what was true on 2026-08-17 and is deliberately not rewritten, but do
+> not cite it as the current tier: `CLAUDE.md` is authoritative, and the guard it
+> describes (a `mockData` name-blocklist with `assertNotSynthetic` at zero call
+> sites) no longer exists. Q-098 rebuilt it as an import-graph property check,
+> made the `Synthetic<T>` brand nominal, and gave the runtime assertion firable
+> call sites — over three adversarial rounds, all recorded in
+> `workspace/SESSION_STATE.json → q098_i3_property_guard_2026_08_18`.
+>
+> Every other tier on this page still stands.
+
 **Revision note.** This index reflects the state *after* adversarial review. Two
 rounds of self-correction are recorded below rather than silently folded in — see
 "A second cross-check, on the audit itself". The five per-invariant evidence files
@@ -25,7 +37,7 @@ forking the SSOT; this directory is frozen evidence, not a second register.
 |---|---|---|---|---|
 | I1 | Provenance or it doesn't ship | PARTIAL | **ASPIRATIONAL** | **corrected** |
 | I2 | Fail closed, never fail silent | PARTIAL | **VIOLATED** | **corrected** |
-| I3 | No synthetic data crosses the boundary | PARTIAL | **VIOLATED** | **corrected** |
+| I3 | No synthetic data crosses the boundary | PARTIAL | **VIOLATED** → *PARTIAL (Q-098)* | **corrected**, since closed |
 | I4 | Point-in-time or it's a lie | ASPIRATIONAL | **ASPIRATIONAL** | confirmed |
 | I5 | Every claim of skill must survive the adversary | PARTIAL | **VIOLATED** | **corrected** |
 | I6 | Securities identified by permanent ID | ASPIRATIONAL | **ASPIRATIONAL** | confirmed |
@@ -92,7 +104,7 @@ procedural gate that does not exist anywhere, whose trigger condition is live no
 across 11 vendors, six of them end-user-exposed with no auth. Rating the whole
 invariant UNVERIFIED would have understated a live process failure.
 
-**I3 · PARTIAL → VIOLATED.** Audited by running seven adversarial mutations
+**I3 · PARTIAL → VIOLATED** *(closed to PARTIAL by `Q-098` the following day — see the banner above).* Audited by running seven adversarial mutations
 rather than reading the guard. Six escaped. The guard matches the literal string
 `mockData` (`__tests__/architecture/synthetic-containment.test.ts:85`), so it is
 an opt-in blocklist of known-bad **names**, not the property check its own header
@@ -105,7 +117,9 @@ leaving no executable artifact. `Q-098` converts them into tests. The test file'
 own `:19-20` ("All five mutations are now caught") refers to Q-088's *different*
 five, so the two claims do not conflict. **The tier does not rest on that
 figure** — it rests on `assertNotSynthetic` having zero production call sites,
-independently re-verified by red-team.
+independently re-verified by red-team. **`Q-098` has since made all seven
+executable**, so the figure is no longer single-sourced prose; it went on to find
+six further escapes across two more review rounds.
 
 **I1 · PARTIAL → ASPIRATIONAL.** `lib/data/mergeQuotes.ts` declares
 `QuoteProvenance` at `:18-28` and constructs it per field at `:105` and `:167`,
