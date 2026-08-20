@@ -40,6 +40,7 @@ import {
   analyse,
   isSyntheticModule,
   classifySynthetic,
+  SCANNABLE,
   extractSpecifiers,
   resolveSpecifier,
   DEFAULT_OPTIONS,
@@ -62,7 +63,7 @@ function walk(dir: string, out: string[] = []): string[] {
     if (entry === 'node_modules' || entry === '.next' || entry.startsWith('.')) continue
     const full = join(dir, entry)
     if (statSync(full).isDirectory()) walk(full, out)
-    else if (/\.(ts|tsx|mjs|js)$/.test(entry)) out.push(full)
+    else if (SCANNABLE.test(entry)) out.push(full)
   }
   return out
 }
@@ -95,9 +96,21 @@ const realFiles: VirtualFile[] = readdirSync(ROOT)
   .filter((e) => !e.startsWith('.') && !IGNORED_DIRS.has(e))
   .flatMap((e) => {
     const full = join(ROOT, e)
-    return statSync(full).isDirectory() ? walk(full) : /\.(ts|tsx|mjs|js)$/.test(e) ? [full] : []
+    return statSync(full).isDirectory() ? walk(full) : SCANNABLE.test(e) ? [full] : []
   })
-  .map((f) => ({ path: rel(f), source: readFileSync(f, 'utf8') }))
+  .map((f) => {
+    const path = rel(f)
+    // `.json` files must be RESOLVABLE TARGETS — an unresolvable import is
+    // silently dropped, and `lib/backtest/dataLoader.ts` loads the whole price
+    // universe from one. But the tree holds ~14MB of JSON, so keep only the
+    // marker verdict rather than the content. JSON carries no imports, so an
+    // empty source loses nothing the analyser would have used.
+    if (path.endsWith('.json')) {
+      const hit = readFileSync(f, 'utf8').includes('__SYNTHETIC__')
+      return { path, source: hit ? '"__SYNTHETIC__": true' : '' }
+    }
+    return { path, source: readFileSync(f, 'utf8') }
+  })
 
 const opts = { ...DEFAULT_OPTIONS, allowlist: ALLOWLIST }
 
@@ -486,6 +499,90 @@ describe('I3 — round-2 escapes: the property was still nominal', () => {
   })
 })
 
+describe('I3 — round-3 escapes: reachability and line boundaries', () => {
+  it('a MULTI-LINE derived export is caught (line-bounded matching restored the leak)', () => {
+    // `export const X = { rows: gen(...) }` on ONE line was caught; the same
+    // statement across three lines was not. 13 files already use that idiom and
+    // no formatter pins it, so this was a reformat away from reopening.
+    const v = run(
+      mutate({
+        path: 'app/stock/[ticker]/page.tsx',
+        source: `import { generateDarkPoolPrints } from '@/lib/mockData'
+export const DEBUG_PRINTS = {
+  rows: generateDarkPoolPrints('AAPL'),
+}`,
+      }),
+      new Set(['app/stock/[ticker]/page.tsx']),
+    )
+    expect(v.map((x) => x.rule)).toContain('synthetic-reexport')
+  })
+
+  it('an allowlisted page may still USE synthetic data inside its component', () => {
+    // The collapse must not turn the sanctioned pattern into a violation:
+    // `export default function Page() { …gen()… }` is exactly what the
+    // allowlist exists to permit.
+    const v = run(
+      mutate({
+        path: 'app/stock/[ticker]/page.tsx',
+        source: `import { generateDarkPoolPrints } from '@/lib/mockData'
+export default function Page() {
+  const prints = generateDarkPoolPrints('AAPL')
+  return prints
+}`,
+      }),
+      new Set(['app/stock/[ticker]/page.tsx']),
+    )
+    expect(v).toEqual([])
+  })
+
+  it('a .json fixture is a resolvable target, not a silently dropped edge', () => {
+    const v = run(
+      mutate(
+        { path: 'lib/fixtures/data.json', source: '"__SYNTHETIC__": true' },
+        {
+          path: 'lib/backtest/dataLoader.ts',
+          source: `import data from '../fixtures/data.json'\nexport const rows = data`,
+        },
+      ),
+    )
+    expect(v.map((x) => x.rule)).toContain('synthetic-import')
+  })
+
+  it('a .cjs bridge is scanned', () => {
+    const v = run(
+      mutate({ path: 'lib/bridge.cjs', source: `export { generateDarkPoolPrints } from './mockData'` }),
+    )
+    expect(v.some((x) => x.file === 'lib/bridge.cjs')).toBe(true)
+  })
+
+  it('the marker assigned by property, not by literal key, is caught', () => {
+    const f: VirtualFile = {
+      path: 'lib/sneaky.ts',
+      source: `export function make(rows: unknown[]) { const o: any = { value: rows }; o.__SYNTHETIC__ = true; return o }`,
+    }
+    expect(classifySynthetic(f, [...BASE, f], 'lib/synthetic.ts')).toBe(true)
+  })
+
+  it('the constructor obtained by DYNAMIC import destructuring is caught', () => {
+    const f: VirtualFile = {
+      path: 'lib/demoPrices.ts',
+      source: `export async function demoRows() {
+                 const { markSynthetic } = await import('./synthetic')
+                 return markSynthetic([{ close: 1 }])
+               }`,
+    }
+    expect(classifySynthetic(f, [...BASE, f], 'lib/synthetic.ts')).toBe(true)
+  })
+
+  it('the scan covers every extension the resolver can resolve', () => {
+    // Reachability, again: an extension the walk skips is an edge the resolver
+    // drops silently. This asserts the two sets cannot drift apart.
+    expect(SCANNABLE.test('x.json')).toBe(true)
+    expect(SCANNABLE.test('x.cjs')).toBe(true)
+    expect(realFiles.some((f) => f.path.endsWith('.json'))).toBe(true)
+  })
+})
+
 describe('I3 — specifier resolution actually resolves', () => {
   const byPath = new Map(BASE.map((f) => [f.path, f]))
 
@@ -676,6 +773,60 @@ describe('I3 — what this guard CANNOT do (stated, not papered over)', () => {
     const jsonSites = (src.match(/\.json\(\)/g) ?? []).length
     const guards = (src.match(/assertNotSynthetic\(/g) ?? []).length
     expect(jsonSites).toBeGreaterThan(guards)
+  })
+
+  it('does not follow an alias chain of three or more links', () => {
+    // Taint propagation runs two passes. a -> b -> c escapes. Realistic enough
+    // to name; the runtime assertion is the layer that covers it.
+    const v = run(
+      mutate({
+        path: 'app/stock/[ticker]/page.tsx',
+        source: `import { generateDarkPoolPrints } from '@/lib/mockData'
+const a = generateDarkPoolPrints('AAPL')
+const b = a
+const c = b
+export default c`,
+      }),
+      new Set(['app/stock/[ticker]/page.tsx']),
+    )
+    expect(v.map((x) => x.rule)).not.toContain('synthetic-reexport')
+  })
+
+  it('does not catch a cast laundered through an any-typed intermediate', () => {
+    // `brand-cast` matches `as Synthetic<…>` and `as never`. A value routed
+    // through `any` reaches a brand-typed slot with no cast to match. The
+    // nominal tag makes honest forgery a type error; this is the dishonest
+    // route, and it is a backstop gap, not a proof.
+    const v = run(
+      mutate({
+        path: 'lib/backtest/dataLoader.ts',
+        source: `import type { Synthetic } from '../synthetic'
+const loose: any = { __MARK: true }
+export const rows: Synthetic<number[]> = loose`,
+      }),
+    )
+    expect(v.map((x) => x.rule)).not.toContain('brand-cast')
+  })
+
+  it('the runtime backstop covers FOUR sites, not every boundary', () => {
+    // Scope stated so the assertions are not read as blanket coverage. Nothing
+    // in lib/quant, lib/data or app/api asserts; a runtime-branded value
+    // produced and consumed entirely inside those trees is unguarded.
+    const guarded = realFiles.filter(
+      (f) =>
+        /assertNotSynthetic\s*\(/.test(f.source) &&
+        !f.path.startsWith('__tests__/') &&
+        f.path !== DEFAULT_OPTIONS.brandModule, // defines it; not a call site
+    )
+    const paths = guarded.map((f) => f.path).sort()
+    expect(paths).toEqual([
+      'app/sector/[slug]/page.tsx',
+      'app/stock/[ticker]/page.tsx',
+      'components/KLineChart.tsx',
+      'lib/backtest/core.ts',
+    ])
+    expect(paths.some((p) => p.startsWith('lib/quant/'))).toBe(false)
+    expect(paths.some((p) => p.startsWith('app/api/'))).toBe(false)
   })
 
   it('cannot decide whether prose is true', () => {

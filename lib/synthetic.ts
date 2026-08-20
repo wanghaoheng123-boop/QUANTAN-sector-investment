@@ -65,10 +65,16 @@ export interface Synthetic<T> {
  * this, so `unwrapSynthetic` has something to verify.
  */
 export function markSynthetic<T>(value: T): Synthetic<T> {
-  // The single sanctioned cast in the codebase, and the reason it is sanctioned:
-  // SYNTHETIC_TAG is a compile-time-only marker with no runtime representation,
-  // so the object genuinely cannot carry it. Confining the cast here is what
-  // makes every OTHER cast into the brand a `brand-cast` violation.
+  // The single sanctioned cast, and the reason it is sanctioned: SYNTHETIC_TAG
+  // is a compile-time-only marker with no runtime representation, so the object
+  // genuinely cannot carry it.
+  //
+  // An earlier version of this comment claimed confining the cast here "makes
+  // every OTHER cast into the brand a `brand-cast` violation". That is FALSE and
+  // was struck after review: the static rule matches `as Synthetic<…>` and
+  // `as never`, but a value passed through an `any`-typed intermediate reaches a
+  // brand-typed slot with no cast to match at all. The nominal tag is what makes
+  // forgery hard; `brand-cast` is a backstop with a named gap, not a proof.
   return { __SYNTHETIC__: true, value } as unknown as Synthetic<T>
 }
 

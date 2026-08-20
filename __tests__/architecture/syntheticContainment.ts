@@ -120,9 +120,11 @@ export function stripComments(src: string): string {
 export function isSyntheticModule(file: VirtualFile, brandModule: string): boolean {
   if (SYNTHETIC_DIR.test(file.path)) return true
   if (file.path === brandModule) return false // defines the brand; is not branded data
-  // Rule 3: direct construction of the marker shape. `lib/synthetic.ts` is now
-  // nominal so this is a type error too, but the static backstop stays.
-  return /__SYNTHETIC__\s*:/.test(stripComments(file.source))
+  // Rule 3: the marker key ANYWHERE outside the brand module. A colon match
+  // missed `o.__SYNTHETIC__ = true`, `o['__SYNTHETIC__'] = true` and the JSON
+  // key form — all of which yield runtime-branded values. Presence is the
+  // property; the position is not.
+  return /__SYNTHETIC__/.test(stripComments(file.source))
 }
 
 /**
@@ -211,6 +213,14 @@ export function extractSpecifiers(code: string): Specifier[] {
   for (const m of code.matchAll(/\bimport\s*['"]([^'"]+)['"]/g)) {
     out.push({ raw: m[1], reexport: false, clause: '' })
   }
+  // `const { markSynthetic } = await import('./synthetic')` — the destructuring
+  // sits OUTSIDE the import() call, so the clause was empty and constructor
+  // resolution saw no names.
+  for (const m of code.matchAll(
+    /(?:const|let|var)\s*(\{[^}]*\})\s*=\s*(?:await\s+)?(?:import|require)\s*\(\s*['"]([^'"]+)['"]\s*\)/g,
+  )) {
+    out.push({ raw: m[2], reexport: false, clause: m[1] })
+  }
   // dynamic import()/require() — a non-literal argument is UNRESOLVABLE, which
   // is itself the finding (mutation M-D concatenated the specifier at runtime).
   for (const m of code.matchAll(/\b(?:import|require)\s*\(([^)]*)\)/g)) {
@@ -223,7 +233,15 @@ export function extractSpecifiers(code: string): Specifier[] {
   return out
 }
 
-const EXTS = ['', '.ts', '.tsx', '.mjs', '.js', '/index.ts', '/index.tsx']
+/**
+ * Every extension that can carry a module OR data. `.json` matters
+ * specifically: `lib/backtest/dataLoader.ts` loads the entire backtest price
+ * universe from one, and an unresolvable target is SILENTLY DROPPED — the same
+ * silent-skip that made rule 1 unreachable in round 1.
+ */
+const CODE_EXTS = ['.ts', '.tsx', '.mts', '.cts', '.mjs', '.cjs', '.js', '.jsx', '.json'] as const
+export const SCANNABLE = /\.(ts|tsx|mts|cts|mjs|cjs|js|jsx|json)$/
+const EXTS = ['', ...CODE_EXTS, '/index.ts', '/index.tsx', '/index.js']
 
 /** Resolve `@/…` and relative specifiers against the virtual file set. */
 export function resolveSpecifier(
@@ -299,7 +317,37 @@ export function clauseBindings(clause: string): string[] {
  * exported function body is not tracked — that needs real data-flow analysis,
  * not regex. The runtime assertions are the layer for that.
  */
-export function exportedLeaks(code: string, bindings: readonly string[]): string[] {
+/**
+ * Join lines while brackets are unbalanced, so a multi-line statement becomes
+ * one line. Leak detection matched `([^\n]*)`, so simply reformatting
+ * `export const X = { rows: gen(...) }` across three lines defeated it — and 13
+ * files already use that idiom with no formatter pinning it. Declarations
+ * (`export default function`, `export function/class`) are deliberately NOT
+ * treated as value exports downstream: a component that USES synthetic data
+ * internally is the sanctioned allowlisted pattern; exporting the VALUE is not.
+ */
+export function collapseStatements(code: string): string {
+  const out: string[] = []
+  let buf = ''
+  let depth = 0
+  for (const line of code.split('\n')) {
+    buf = buf ? `${buf} ${line.trim()}` : line
+    for (const ch of line) {
+      if (ch === '(' || ch === '[' || ch === '{') depth++
+      else if (ch === ')' || ch === ']' || ch === '}') depth--
+    }
+    if (depth <= 0) {
+      out.push(buf)
+      buf = ''
+      depth = 0
+    }
+  }
+  if (buf) out.push(buf)
+  return out.join('\n')
+}
+
+export function exportedLeaks(rawCode: string, bindings: readonly string[]): string[] {
+  const code = collapseStatements(rawCode)
   const leaks = new Set<string>()
   if (bindings.length === 0) return []
   const esc = (b: string) => b.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -307,8 +355,11 @@ export function exportedLeaks(code: string, bindings: readonly string[]): string
   // Taint propagation through local intermediates. `const PRINTS = gen(...)`
   // followed by `export default PRINTS` laundered the value with neither
   // statement naming both sides — so matching the imported binding alone missed
-  // it. Two passes cover a short alias chain; deeper chains are named as a
-  // residual in the containment test's "what this guard CANNOT do" block.
+  // it. Two passes cover a short alias chain; chains of three or more escape,
+  // and that residual IS asserted in the containment test's "what this guard
+  // CANNOT do" block. (An earlier version of this comment claimed the same and
+  // the block did not contain it — a false cross-reference, which is the sin
+  // this package exists to remove. Check the block before editing this line.)
   const tainted = new Set(bindings)
   for (let pass = 0; pass < 2; pass++) {
     const cur = new RegExp(`\\b(?:${[...tainted].map(esc).join('|')})\\b`)
@@ -322,8 +373,10 @@ export function exportedLeaks(code: string, bindings: readonly string[]): string
   for (const m of code.matchAll(/\bexport\s+(?:const|let|var)\s+(\w+)[^=\n]*=\s*([^\n]*)/g)) {
     if (refs.test(m[2])) leaks.add(m[1])
   }
-  // `export default <expr>` — round 2 walked prints out this way.
-  for (const m of code.matchAll(/\bexport\s+default\s+([^\n]*)/g)) {
+  // `export default <expr>` — round 2 walked prints out this way. Excludes
+  // declarations: `export default function Page() { … }` legitimately USES
+  // synthetic data inside an allowlisted page; that is the sanctioned pattern.
+  for (const m of code.matchAll(/\bexport\s+default\s+(?!(?:async\s+)?function\b|class\b)([^\n]*)/g)) {
     if (refs.test(m[1])) leaks.add('default')
   }
   return [...leaks]
@@ -377,7 +430,7 @@ export function analyse(files: readonly VirtualFile[], opts: AnalyseOptions): Vi
   // top-level directory outside the analyser, where a two-line re-export bridge
   // laundered the fixture module with zero violations reported. An allowlist of
   // directories has the same defect as an allowlist of module names.
-  const isProduction = (p: string) => !SYNTHETIC_DIR.test(p) && /\.(ts|tsx|mjs|js)$/.test(p)
+  const isProduction = (p: string) => !SYNTHETIC_DIR.test(p) && SCANNABLE.test(p)
 
   for (const f of files) {
     if (!isProduction(f.path)) continue
@@ -462,7 +515,14 @@ export function analyse(files: readonly VirtualFile[], opts: AnalyseOptions): Vi
 
     // The wrapper makes honest construction impossible outside markSynthetic(),
     // which makes a cast the natural bypass.
-    if (f.path !== opts.brandModule && /as\s+(unknown\s+as\s+)?Synthetic\s*</.test(code)) {
+    // `as never` and `as unknown as Synthetic<…>` are both routes into a
+    // brand-typed slot. An `any`-typed intermediate needs no cast at all and is
+    // named as a residual rather than pretended away.
+    if (
+      f.path !== opts.brandModule &&
+      /\bSynthetic\s*</.test(code) &&
+      /\bas\s+(?:unknown\s+as\s+)?(?:Synthetic\s*<|never\b)/.test(code)
+    ) {
       violations.push({
         rule: 'brand-cast',
         file: f.path,
