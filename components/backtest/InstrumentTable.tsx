@@ -64,7 +64,9 @@ export default function InstrumentTable({ results, sectorColors }: Props) {
     { key: 'maxDrawdown', label: 'Max DD', align: 'text-right', metricKey: 'maxDrawdown' },
     { key: 'winRate', label: 'Win Rate', align: 'text-right', metricKey: 'winRate' },
     { key: 'totalTrades', label: 'Trades', align: 'text-right' },
-    { key: 'excessReturn', label: 'Alpha', align: 'text-right', metricKey: 'alpha' },
+    // 'Excess', not 'Alpha' — a raw return difference with no risk adjustment
+    // and no significance test (CLAUDE.md I5, Q-103).
+    { key: 'excessReturn', label: 'Excess', align: 'text-right', metricKey: 'excessVsBuyHold' },
   ]
 
   return (

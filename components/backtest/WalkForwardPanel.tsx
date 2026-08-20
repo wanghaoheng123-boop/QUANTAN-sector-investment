@@ -121,7 +121,7 @@ export function WalkForwardPanel({ results }: { results: BacktestResult[] }) {
           </div>
         </div>
         <div className="bg-slate-800/40 rounded-lg p-3 border border-slate-700/50">
-          <div className="text-[10px] text-slate-400 uppercase mb-1">Strategy Alpha</div>
+          <div className="text-[10px] text-slate-400 uppercase mb-1">Excess vs B&amp;H</div>
           <div className={`text-xl font-bold font-mono ${selected.excessReturn >= 0 ? 'text-cyan-400' : 'text-orange-400'}`}>
             {(selected.excessReturn * 100).toFixed(1)}%
           </div>
