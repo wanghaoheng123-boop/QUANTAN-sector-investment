@@ -24,8 +24,11 @@
  * (`'mock' + 'Data'`) falsified that sentence.
  *
  * A module is synthetic here because of what it IS:
- *   1. it lives in a test/fixture directory, or
- *   2. it CALLS `markSynthetic()` — i.e. it constructs branded values.
+ *   1. it lives in a test/fixture directory,
+ *   2. it IMPORTS THE BRAND CONSTRUCTOR — tracked through aliases
+ *      (`markSynthetic as mk`) and through re-export hops
+ *      (`export { markSynthetic as brandIt } from './synthetic'`), or
+ *   3. it constructs the marker shape directly (`__SYNTHETIC__: true`).
  *
  * Rule 2 is the load-bearing one, and it keys on the CONSTRUCTOR rather than on
  * a type annotation. An earlier draft of this file matched `: Synthetic<…>` in
@@ -34,11 +37,22 @@
  * is the same false-header shape Q-079 struck at the old guard. Annotation text
  * is not the type.
  *
- * `markSynthetic()` is the ONE sanctioned constructor of a branded value, and
- * the only other way in — a cast — is caught by `brand-cast`. So "calls the
- * constructor" closes the producer surface in a way "mentions the type name"
- * cannot, and it no longer misclassifies a CONSUMER that merely holds a
- * `Synthetic<…>` prop (`components/DarkPoolPanel.tsx`).
+ * Round 2 of review broke the text-match version too: `/\bmarkSynthetic\s*\(/`
+ * missed `import { markSynthetic as mk }`, a second-hop re-export, and
+ * `const f = markSynthetic; f(...)`. Replacing one source-text match with
+ * another source-text match is not a property. Rule 2 now RESOLVES the
+ * constructor through the import graph, so the local name is irrelevant.
+ *
+ * Rule 3 exists because the same review showed the brand was STRUCTURAL:
+ * `{ __SYNTHETIC__: true, value }` satisfied `Synthetic<T>` with no cast, so
+ * `markSynthetic()` was never the only constructor and `brand-cast` never had to
+ * fire. `lib/synthetic.ts` is now nominal (an unnameable `unique symbol`), which
+ * makes that forgery a type error — rule 3 is the static backstop for it.
+ *
+ * None of this misclassifies a CONSUMER that merely holds a `Synthetic<…>` prop
+ * or calls `assertNotSynthetic` (`components/DarkPoolPanel.tsx`,
+ * `components/KLineChart.tsx`, `lib/backtest/core.ts`): importing a guard is not
+ * importing the constructor.
  *
  * RESIDUAL LIMITS, stated rather than papered over:
  *  - A producer that returns raw fabricated values without the brand is invisible
@@ -106,7 +120,76 @@ export function stripComments(src: string): string {
 export function isSyntheticModule(file: VirtualFile, brandModule: string): boolean {
   if (SYNTHETIC_DIR.test(file.path)) return true
   if (file.path === brandModule) return false // defines the brand; is not branded data
-  return /\bmarkSynthetic\s*\(/.test(stripComments(file.source))
+  // Rule 3: direct construction of the marker shape. `lib/synthetic.ts` is now
+  // nominal so this is a type error too, but the static backstop stays.
+  return /__SYNTHETIC__\s*:/.test(stripComments(file.source))
+}
+
+/**
+ * Modules that re-publish the brand CONSTRUCTOR, and the names they publish it
+ * under. Seeded with the brand module, then closed over re-export hops, so
+ * `export { markSynthetic as brandIt } from './synthetic'` makes the bridge a
+ * provider of `brandIt`. Without this, one re-export hop laundered the
+ * constructor and every producer downstream became invisible.
+ */
+export function brandProviders(
+  files: readonly VirtualFile[],
+  brandModule: string,
+): Map<string, Set<string>> {
+  const byPath = new Map(files.map((f) => [f.path, f]))
+  const providers = new Map<string, Set<string>>([[brandModule, new Set(['markSynthetic'])]])
+  for (let pass = 0; pass < 10; pass++) {
+    let changed = false
+    for (const f of files) {
+      const code = stripComments(f.source)
+      for (const m of code.matchAll(/\bexport\b([\s\S]{0,800}?)\bfrom\s*['"]([^'"]+)['"]/g)) {
+        const target = resolveSpecifier(f.path, m[2], byPath)
+        if (target === null) continue
+        const src = providers.get(target)
+        if (!src) continue
+        const cur = providers.get(f.path) ?? new Set<string>()
+        const before = cur.size
+        if (/\*/.test(m[1]) && !/\{/.test(m[1])) for (const n of src) cur.add(n)
+        for (const n of parseClause(m[1]).named) if (src.has(n.exported)) cur.add(n.local)
+        if (cur.size > before) {
+          providers.set(f.path, cur)
+          changed = true
+        }
+      }
+    }
+    if (!changed) break
+  }
+  return providers
+}
+
+/**
+ * Does this module obtain the brand constructor, under ANY local name and via
+ * any number of re-export hops? This is rule 2, and it is why the local name is
+ * irrelevant: `markSynthetic as mk`, `const f = markSynthetic`, and a second-hop
+ * `brandIt` all resolve to the same exported binding. Importing a GUARD
+ * (`assertNotSynthetic`, `unwrapSynthetic`) is not importing the constructor, so
+ * consumers are not swept up.
+ */
+export function importsConstructor(
+  file: VirtualFile,
+  byPath: ReadonlyMap<string, VirtualFile>,
+  providers: ReadonlyMap<string, Set<string>>,
+): boolean {
+  const code = stripComments(file.source)
+  for (const spec of extractSpecifiers(code)) {
+    if (spec.raw === null) continue
+    const target = resolveSpecifier(file.path, spec.raw, byPath)
+    if (target === null) continue
+    const names = providers.get(target)
+    if (!names) continue
+    const parsed = parseClause(spec.clause)
+    if (parsed.named.some((n) => names.has(n.exported))) return true
+    if (parsed.namespaceAs) {
+      const ns = parsed.namespaceAs.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      if (new RegExp(`\\b${ns}\\s*\\.\\s*(?:${[...names].join('|')})\\b`).test(code)) return true
+    }
+  }
+  return false
 }
 
 interface Specifier {
@@ -165,6 +248,28 @@ export function resolveSpecifier(
   return null
 }
 
+/** `{ a, b as c }` → [{exported:'a',local:'a'},{exported:'b',local:'c'}]; `* as M` → namespace. */
+export function parseClause(clause: string): {
+  named: { exported: string; local: string }[]
+  namespaceAs: string | null
+  typeOnly: boolean
+} {
+  const typeOnly = /^\s*type\s/.test(clause)
+  const ns = /\*\s+as\s+(\w+)/.exec(clause)
+  const named: { exported: string; local: string }[] = []
+  const braced = /\{([^}]*)\}/.exec(clause)
+  if (braced) {
+    for (const part of braced[1].split(',')) {
+      const t = part.trim()
+      if (!t || /^type\s/.test(t)) continue
+      const as = /^(\w+)\s+as\s+(\w+)$/.exec(t)
+      if (as) named.push({ exported: as[1], local: as[2] })
+      else named.push({ exported: t, local: t })
+    }
+  }
+  return { named, namespaceAs: ns ? ns[1] : null, typeOnly }
+}
+
 /** Local binding names introduced by an import clause, e.g. `{ a, b as c }` → [a, c]. */
 export function clauseBindings(clause: string): string[] {
   const names: string[] = []
@@ -196,12 +301,30 @@ export function clauseBindings(clause: string): string[] {
  */
 export function exportedLeaks(code: string, bindings: readonly string[]): string[] {
   const leaks = new Set<string>()
-  const bare = bareExportedNames(code)
-  for (const b of bindings) if (bare.has(b)) leaks.add(b)
-  for (const m of code.matchAll(/\bexport\s+(?:const|let|var)\s+(\w+)[^=\n]*=\s*([^\n]*)/g)) {
-    for (const b of bindings) {
-      if (new RegExp(`\\b${b}\\b`).test(m[2])) leaks.add(m[1])
+  if (bindings.length === 0) return []
+  const esc = (b: string) => b.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+  // Taint propagation through local intermediates. `const PRINTS = gen(...)`
+  // followed by `export default PRINTS` laundered the value with neither
+  // statement naming both sides — so matching the imported binding alone missed
+  // it. Two passes cover a short alias chain; deeper chains are named as a
+  // residual in the containment test's "what this guard CANNOT do" block.
+  const tainted = new Set(bindings)
+  for (let pass = 0; pass < 2; pass++) {
+    const cur = new RegExp(`\\b(?:${[...tainted].map(esc).join('|')})\\b`)
+    for (const m of code.matchAll(/\b(?:const|let|var)\s+(\w+)[^=\n]*=\s*([^\n]*)/g)) {
+      if (cur.test(m[2])) tainted.add(m[1])
     }
+  }
+  const refs = new RegExp(`\\b(?:${[...tainted].map(esc).join('|')})\\b`)
+  const bare = bareExportedNames(code)
+  for (const b of tainted) if (bare.has(b)) leaks.add(b)
+  for (const m of code.matchAll(/\bexport\s+(?:const|let|var)\s+(\w+)[^=\n]*=\s*([^\n]*)/g)) {
+    if (refs.test(m[2])) leaks.add(m[1])
+  }
+  // `export default <expr>` — round 2 walked prints out this way.
+  for (const m of code.matchAll(/\bexport\s+default\s+([^\n]*)/g)) {
+    if (refs.test(m[1])) leaks.add('default')
   }
   return [...leaks]
 }
@@ -218,20 +341,43 @@ export function bareExportedNames(code: string): Set<string> {
   return out
 }
 
+/**
+ * Full classification: the three rules together, resolved against a file set.
+ * `isSyntheticModule` alone answers only rules 1 and 3 — it cannot see rule 2,
+ * which needs the import graph. Use this when asking "is this module synthetic".
+ */
+export function classifySynthetic(
+  file: VirtualFile,
+  files: readonly VirtualFile[],
+  brandModule: string,
+): boolean {
+  if (isSyntheticModule(file, brandModule)) return true
+  if (file.path === brandModule) return false
+  const byPath = new Map(files.map((f) => [f.path, f]))
+  if (!byPath.has(file.path)) byPath.set(file.path, file)
+  return importsConstructor(file, byPath, brandProviders([...byPath.values()], brandModule))
+}
+
 export function analyse(files: readonly VirtualFile[], opts: AnalyseOptions): Violation[] {
   const byPath = new Map(files.map((f) => [f.path, f]))
   const violations: Violation[] = []
 
+  const providers = brandProviders(files, opts.brandModule)
   const synthetic = new Set(
-    files.filter((f) => isSyntheticModule(f, opts.brandModule)).map((f) => f.path),
+    files
+      .filter(
+        (f) =>
+          isSyntheticModule(f, opts.brandModule) ||
+          (f.path !== opts.brandModule && importsConstructor(f, byPath, providers)),
+      )
+      .map((f) => f.path),
   )
-  const isProduction = (p: string) => {
-    if (SYNTHETIC_DIR.test(p)) return false
-    // Root-level modules are production: `middleware.ts` runs on every request
-    // and was outside the analyser entirely until red-team pointed it out.
-    if (!p.includes('/')) return /\.(ts|tsx|mjs|js)$/.test(p)
-    return opts.productionDirs.some((d) => p === d || p.startsWith(d + '/'))
-  }
+  // INVERTED deliberately: everything that is not a fixture is production.
+  // Enumerating production directories left `src/`, `types/` and any new
+  // top-level directory outside the analyser, where a two-line re-export bridge
+  // laundered the fixture module with zero violations reported. An allowlist of
+  // directories has the same defect as an allowlist of module names.
+  const isProduction = (p: string) => !SYNTHETIC_DIR.test(p) && /\.(ts|tsx|mjs|js)$/.test(p)
 
   for (const f of files) {
     if (!isProduction(f.path)) continue
@@ -265,7 +411,12 @@ export function analyse(files: readonly VirtualFile[], opts: AnalyseOptions): Vi
         // re-export it by name with a bare `export { … }`. There is no `from`
         // clause to match, so a specifier-only rule never sees it — this is the
         // shape mutation M-C used.
-        const leaked = exportedLeaks(code, clauseBindings(spec.clause))
+        const parsed = parseClause(spec.clause)
+        const bindings = [
+          ...parsed.named.map((n) => n.local),
+          ...(parsed.namespaceAs ? [parsed.namespaceAs] : []),
+        ]
+        const leaked = exportedLeaks(code, bindings)
         if (leaked.length > 0) {
           violations.push({
             rule: 'synthetic-reexport',

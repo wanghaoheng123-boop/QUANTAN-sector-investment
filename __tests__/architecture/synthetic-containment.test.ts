@@ -14,9 +14,16 @@
  * Two things are different now.
  *
  * 1. THE TEST IS A PROPERTY. `syntheticContainment.ts` decides a module is
- *    synthetic because it lives in a fixture directory or because it EXPORTS a
- *    binding annotated `Synthetic<…>`. Rename `lib/mockData.ts` to anything at
- *    all and it is still caught, because the brand is in the type.
+ *    synthetic because it lives in a fixture directory, because it RESOLVES THE
+ *    BRAND CONSTRUCTOR through the import graph (any alias, any number of
+ *    re-export hops), or because it constructs the marker shape directly.
+ *    Rename `lib/mockData.ts` to anything and it is still caught.
+ *
+ *    Two earlier drafts of this sentence were false, which is itself the lesson.
+ *    The first matched `: Synthetic<` in the source text — defeated by letting
+ *    TypeScript infer the return type. The second matched `markSynthetic(` —
+ *    defeated by `import { markSynthetic as mk }`. Replacing one source-text
+ *    match with another is not a property; only resolution is.
  *
  * 2. THE MUTATIONS ARE EXECUTABLE. Q-079's "6 of 7 escaped" existed only in a
  *    review document — the mutations were applied to the working tree and
@@ -32,6 +39,7 @@ import { join, relative, sep } from 'path'
 import {
   analyse,
   isSyntheticModule,
+  classifySynthetic,
   extractSpecifiers,
   resolveSpecifier,
   DEFAULT_OPTIONS,
@@ -149,19 +157,20 @@ describe('I3 — the guard is not vacuous', () => {
 describe('I3 — synthetic-ness is a PROPERTY, not a module name', () => {
   it('classifies the fixture module by its exported brand, not its name', () => {
     const m = BASE.find((f) => f.path === 'lib/mockData.ts')!
-    expect(isSyntheticModule(m, 'lib/synthetic.ts')).toBe(true)
+    expect(classifySynthetic(m, BASE, 'lib/synthetic.ts')).toBe(true)
     // …and still does after a rename. This is the single point the old guard failed.
-    expect(isSyntheticModule({ ...m, path: 'lib/demoPrices.ts' }, 'lib/synthetic.ts')).toBe(true)
+    const renamed = { ...m, path: 'lib/demoPrices.ts' }
+    expect(classifySynthetic(renamed, [...BASE, renamed], 'lib/synthetic.ts')).toBe(true)
   })
 
   it('does not classify the brand definition itself as synthetic data', () => {
     const b = BASE.find((f) => f.path === 'lib/synthetic.ts')!
-    expect(isSyntheticModule(b, 'lib/synthetic.ts')).toBe(false)
+    expect(classifySynthetic(b, BASE, 'lib/synthetic.ts')).toBe(false)
   })
 
   it('does not classify ordinary production code as synthetic', () => {
     const q = BASE.find((f) => f.path === 'lib/quant/relativeStrength.ts')!
-    expect(isSyntheticModule(q, 'lib/synthetic.ts')).toBe(false)
+    expect(classifySynthetic(q, BASE, 'lib/synthetic.ts')).toBe(false)
   })
 
   it('classifies fixture directories by path', () => {
@@ -317,7 +326,7 @@ describe('I3 — the three escapes red-team found (all were green before)', () =
       source: `import { markSynthetic } from './synthetic'
                export function demoRows() { return markSynthetic([{ close: 1 }]) }`,
     }
-    expect(isSyntheticModule(inferred, 'lib/synthetic.ts')).toBe(true)
+    expect(classifySynthetic(inferred, [...BASE, inferred], 'lib/synthetic.ts')).toBe(true)
 
     const v = run(
       mutate(inferred, {
@@ -338,7 +347,7 @@ describe('I3 — the three escapes red-team found (all were green before)', () =
                  return unwrapSynthetic(p.prints, 'DarkPoolPanel')
                }`,
     }
-    expect(isSyntheticModule(consumer, 'lib/synthetic.ts')).toBe(false)
+    expect(classifySynthetic(consumer, [...BASE, consumer], 'lib/synthetic.ts')).toBe(false)
   })
 
   it('RT-8: an ALLOWLISTED file cannot re-publish synthetic data as a derived export', () => {
@@ -359,6 +368,103 @@ describe('I3 — the three escapes red-team found (all were green before)', () =
 
   it('RT-9: root-level modules such as middleware.ts are inside the analyser', () => {
     expect(realFiles.some((f) => f.path === 'middleware.ts')).toBe(true)
+  })
+})
+
+describe('I3 — round-2 escapes: the property was still nominal', () => {
+  const withBrand = (extra: VirtualFile[]) => [...BASE, ...extra]
+
+  it('an ALIASED constructor import is caught', () => {
+    const f: VirtualFile = {
+      path: 'lib/demoPrices.ts',
+      source: `import { markSynthetic as mk } from './synthetic'
+               export function demoRows() { return mk([{ close: 1 }]) }`,
+    }
+    expect(classifySynthetic(f, withBrand([f]), 'lib/synthetic.ts')).toBe(true)
+  })
+
+  it('a SECOND-HOP re-export of the constructor is followed', () => {
+    // `export { markSynthetic as brandIt } from './synthetic'` used to launder
+    // the constructor: the downstream producer became invisible.
+    const bridge: VirtualFile = {
+      path: 'lib/brandKit.ts',
+      source: `export { markSynthetic as brandIt } from './synthetic'`,
+    }
+    const producer: VirtualFile = {
+      path: 'lib/demoPrices.ts',
+      source: `import { brandIt } from './brandKit'
+               export function demoRows() { return brandIt([{ close: 1 }]) }`,
+    }
+    expect(classifySynthetic(producer, withBrand([bridge, producer]), 'lib/synthetic.ts')).toBe(true)
+  })
+
+  it('an INDIRECT reference (const f = markSynthetic) is caught', () => {
+    const f: VirtualFile = {
+      path: 'lib/demoPrices.ts',
+      source: `import { markSynthetic } from './synthetic'
+               const f = markSynthetic
+               export function demoRows() { return f([{ close: 1 }]) }`,
+    }
+    expect(classifySynthetic(f, withBrand([f]), 'lib/synthetic.ts')).toBe(true)
+  })
+
+  it('DIRECT construction of the marker shape is caught (the brand was structural)', () => {
+    // `Synthetic<T>` was a plain structural interface, so this literal was a
+    // valid Synthetic<T> with NO cast — falsifying "markSynthetic is the one
+    // sanctioned constructor" and meaning `brand-cast` never had to fire.
+    // lib/synthetic.ts is now nominal, and this is the static backstop.
+    const f: VirtualFile = {
+      path: 'lib/forged.ts',
+      source: `export const forged = { __SYNTHETIC__: true, value: [1] }`,
+    }
+    expect(classifySynthetic(f, withBrand([f]), 'lib/synthetic.ts')).toBe(true)
+  })
+
+  it('the nominal brand makes that forgery a TYPE error too', () => {
+    // Belt and braces: the static rule above is a backstop, not the primary
+    // defence. The primary defence is that the shape can no longer be named.
+    const brand = readFileSync(join(ROOT, 'lib/synthetic.ts'), 'utf8')
+    expect(brand).toMatch(/declare const SYNTHETIC_TAG: unique symbol/)
+    expect(brand).toMatch(/readonly \[SYNTHETIC_TAG\]: true/)
+  })
+
+  it('NAMESPACE laundering out of an allowlisted file is caught', () => {
+    const v = run(
+      mutate({
+        path: 'app/stock/[ticker]/page.tsx',
+        source: `import * as M from '@/lib/mockData'
+                 export const LAUNDERED = M.generateDarkPoolPrints('AAPL')`,
+      }),
+      new Set(['app/stock/[ticker]/page.tsx']),
+    )
+    expect(v.map((x) => x.rule)).toContain('synthetic-reexport')
+  })
+
+  it('DEFAULT-EXPORT laundering out of an allowlisted file is caught', () => {
+    const v = run(
+      mutate({
+        path: 'app/stock/[ticker]/page.tsx',
+        source: `import { generateDarkPoolPrints } from '@/lib/mockData'
+                 const PRINTS = generateDarkPoolPrints('AAPL')
+                 export default PRINTS`,
+      }),
+      new Set(['app/stock/[ticker]/page.tsx']),
+    )
+    expect(v.map((x) => x.rule)).toContain('synthetic-reexport')
+  })
+
+  it('a bridge in an UNSCANNED top-level directory is still production', () => {
+    // `src/bridge.ts` re-exporting the fixture module used to yield zero
+    // violations, because production was an ALLOWLIST OF DIRECTORIES — the same
+    // defect as an allowlist of module names, one level up. Now inverted:
+    // everything that is not a fixture is production.
+    const v = run(
+      mutate({
+        path: 'src/bridge.ts',
+        source: `export { generateDarkPoolPrints } from '../lib/mockData'`,
+      }),
+    )
+    expect(v.some((x) => x.file === 'src/bridge.ts')).toBe(true)
   })
 })
 
@@ -398,7 +504,7 @@ describe('I3 — the real repository is contained', () => {
     // Guards against the analyser passing because it found NOTHING synthetic.
     const mock = realFiles.find((f) => f.path === 'lib/mockData.ts')
     expect(mock).toBeDefined()
-    expect(isSyntheticModule(mock!, DEFAULT_OPTIONS.brandModule)).toBe(true)
+    expect(classifySynthetic(mock!, realFiles, DEFAULT_OPTIONS.brandModule)).toBe(true)
   })
 
   it('removing the allowlist makes the real tree FAIL — the allowlist is load-bearing', () => {
@@ -523,6 +629,35 @@ describe('I3 — what this guard CANNOT do (stated, not papered over)', () => {
       }),
     )
     expect(v).toEqual([])
+  })
+
+  it('does not track a synthetic value returned from deep inside a function body', () => {
+    // `exportedLeaks` is statement-scoped. A value constructed and returned from
+    // several lines inside an exported function is not followed — that needs
+    // real data-flow analysis, not regex. The runtime assertion at the JSON
+    // boundary is the layer that covers this.
+    const v = run(
+      mutate({
+        path: 'app/stock/[ticker]/page.tsx',
+        source: `import { generateDarkPoolPrints } from '@/lib/mockData'
+                 export function getPrints() {
+                   const t = 'AAPL'
+                   return generateDarkPoolPrints(t)
+                 }`,
+      }),
+      new Set(['app/stock/[ticker]/page.tsx']),
+    )
+    expect(v.map((x) => x.rule)).not.toContain('synthetic-reexport')
+  })
+
+  it('does not guard the non-chart r.json() sites on the stock page', () => {
+    // Named by red-team: quote / fundamentals / news responses are parsed
+    // without an assertNotSynthetic. Out of scope for Q-098 and recorded so it
+    // is not mistaken for coverage. → Q-101 territory.
+    const src = readFileSync(join(ROOT, 'app/stock/[ticker]/page.tsx'), 'utf8')
+    const jsonSites = (src.match(/\.json\(\)/g) ?? []).length
+    const guards = (src.match(/assertNotSynthetic\(/g) ?? []).length
+    expect(jsonSites).toBeGreaterThan(guards)
   })
 
   it('cannot decide whether prose is true', () => {
