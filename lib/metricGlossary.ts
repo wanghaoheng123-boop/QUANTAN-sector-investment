@@ -180,7 +180,7 @@ export const METRIC_GLOSSARY: Record<string, MetricMeta> = {
     label: 'Excess vs Buy & Hold',
     definition:
       'Raw difference between the strategy return and a passive buy-and-hold of the same instruments over the same window. Not risk-adjusted and not beta-adjusted — it is a subtraction, not a measure of skill.',
-    range: 'Typically -10% to +20% annual, and frequently indistinguishable from zero.',
+    range: 'A TOTAL-window difference, not annualised — over a ~5-year backtest it spans tens of percent, and is frequently indistinguishable from zero.',
     howToUse:
       'Treat a positive value as a description of one historical window, not as evidence of skill: a difference this noisy needs a significance test before it means anything, and on this universe the measured excess is not statistically distinguishable from zero. A persistently negative value is the more actionable signal.',
   },

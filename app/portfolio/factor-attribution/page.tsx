@@ -15,6 +15,12 @@ export default function FactorAttributionPage() {
     <main className="max-w-3xl mx-auto px-4 py-8 space-y-4">
       <h1 className="text-2xl font-semibold text-slate-100">Factor attribution</h1>
       <p className="text-sm text-amber-200/80 border border-amber-500/30 rounded-lg p-3">{attr.disclaimer}</p>
+      <p className="text-sm text-rose-200/90 border border-rose-500/40 rounded-lg p-3">
+        <strong>Demo only — every number on this page is fabricated.</strong> The input series is
+        generated arithmetically in this file, and the five factors are scalar multiples of it, so
+        the regression is degenerate by construction. Nothing here is measured, and no loading or
+        intercept below describes any real asset.
+      </p>
       <p className="text-sm text-slate-400">5-factor loadings (demo series). Monthly report export in Phase 16.</p>
       <ul className="text-sm text-slate-200 space-y-1">
         {Object.entries(attr.loadings).map(([k, v]) => (
@@ -24,7 +30,7 @@ export default function FactorAttributionPage() {
         ))}
       </ul>
       <p className="text-xs text-slate-400">
-        Alpha (daily): {attr.alpha.toFixed(5)} · R²: {attr.rSquared != null ? attr.rSquared.toFixed(2) : 'N/A (multivariate OLS deferred)'}
+        Regression intercept (daily): {attr.alpha.toFixed(5)} · R²: {attr.rSquared != null ? attr.rSquared.toFixed(2) : 'N/A (multivariate OLS deferred)'}
       </p>
     </main>
   )

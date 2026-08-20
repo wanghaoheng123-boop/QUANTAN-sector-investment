@@ -27,15 +27,14 @@ import { readFileSync, readdirSync, statSync, existsSync } from 'fs'
 import { join, relative, sep } from 'path'
 
 const ROOT = join(__dirname, '../..')
-const UI_DIRS = ['app', 'components'] as const
+
 /**
- * User-visible copy is not confined to `app/` and `components/`. The worst
- * violation found by this guard was a glossary TOOLTIP in `lib/` telling users
- * "Positive alpha = strategy adds value beyond beta exposure" — a skill claim
- * the platform's own numbers reject, in a file no UI-directory scan would reach.
- * Scanning only the obvious directories is the reachability defect again.
+ * Scan every source directory, not a hand-picked list of UI folders.
+ *
+ * The first version scanned `app/**.tsx` + `components/**.tsx` + one named
+ * glossary file, and it was GREEN while three live "Alpha" surfaces remained.
  */
-const UI_COPY_FILES = ['lib/metricGlossary.ts'] as const
+const SCAN_DIRS = ['app', 'components', 'lib', 'hooks'] as const
 
 function walk(dir: string, out: string[] = []): string[] {
   if (!existsSync(dir)) return out
@@ -43,67 +42,129 @@ function walk(dir: string, out: string[] = []): string[] {
     if (entry === 'node_modules' || entry === '.next' || entry.startsWith('.')) continue
     const full = join(dir, entry)
     if (statSync(full).isDirectory()) walk(full, out)
-    else if (/\.tsx$/.test(entry)) out.push(full)
+    else if (/\.tsx?$/.test(entry)) out.push(full)
   }
   return out
 }
 
 const rel = (f: string) => relative(ROOT, f).split(sep).join('/')
-const files = [
-  ...UI_DIRS.flatMap((d) => walk(join(ROOT, d))),
-  ...UI_COPY_FILES.map((f) => join(ROOT, f)).filter((f) => existsSync(f)),
-].map((f) => ({
+const stripComments = (src: string) =>
+  src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1')
+
+const files = SCAN_DIRS.flatMap((d) => walk(join(ROOT, d))).map((f) => ({
   path: rel(f),
-  // Comments are stripped: several of these files now EXPLAIN why the word was
-  // removed, and prose describing a banned pattern is not that pattern.
-  source: readFileSync(f, 'utf8')
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/(^|[^:])\/\/.*$/gm, '$1'),
+  source: stripComments(readFileSync(f, 'utf8')),
 }))
 
-/** Skill words, matched only inside a string literal or JSX text node. */
-const BANNED = /\b(alpha|outperformance|outperforms?)\b/i
+/**
+ * Skill words. `outperform` needs its inflections: the first version used
+ * `outperforms?`, which sailed past a live "Outperforming SPY in window".
+ */
+const BANNED = /\b(alpha|outperform(?:s|ed|ing)?|outperformance)\b/i
 
-describe('I5 — the skill-wording ban is reachable', () => {
-  it('scans a realistic number of UI files', () => {
-    // Q-098's lesson: a guard whose scan is empty passes for the wrong reason.
-    expect(files.length).toBeGreaterThan(30)
+/**
+ * COPY IS PHRASES; IDENTIFIERS ARE SINGLE TOKENS.
+ *
+ * This is the discriminator, and it matters because `alpha` is a legitimate
+ * identifier in real statistics here — `lib/portfolio/var.ts` uses it for a
+ * significance level and `lib/portfolio/factorAttribution.ts` for a regression
+ * intercept. Neither is a claim, and neither should be renamed to satisfy a
+ * wording ban. A rendered phrase contains whitespace; `'alpha'` alone does not.
+ *
+ * The previous extractor was the whole defect: it took string literals plus JSX
+ * text matched by `/>[^<>{}]{2,80}</`, which silently skipped
+ *   - any JSX text longer than 80 characters (both sr-only table captions), and
+ *   - any JSX text containing an interpolation (the factor-attribution label).
+ * Its "positive control" asserted `BANNED.test('Alpha vs B&H')` — validating the
+ * DECIDER while the VISITOR returned nothing. Green, and blind.
+ */
+export function renderedPhrases(source: string): string[] {
+  const out: string[] = []
+
+  // 1. String and template literals that contain whitespace.
+  for (const m of source.matchAll(/(['"`])((?:(?!\1)[^\\]|\\.)*)\1/g)) {
+    const body = m[2]
+    if (/\s/.test(body) && /[A-Za-z]/.test(body)) out.push(body)
+  }
+
+  // 2. JSX text nodes: any length, across newlines, interpolations removed.
+  for (const m of source.matchAll(/>([^<]{2,400})</g)) {
+    const text = m[1].replace(/\{[^{}]*\}/g, ' ')
+    // Reject anything that reads as code rather than prose. Parentheses are
+    // NOT rejected — prose uses them ("Alpha (daily):"), and excluding them was
+    // how the factor-attribution label stayed invisible.
+    // Reject only on STRUCTURAL code markers.
+    //
+    // Two earlier attempts each blinded the guard, and both looked sensible:
+    //   - rejecting any text containing `;` hid a live disclaimer, because
+    //     prose uses semicolons;
+    //   - rejecting the WORD `return` hid essentially all of this product's
+    //     copy, because it is a finance app and its UI says "annualised
+    //     return" everywhere.
+    // Every filter here shrinks what the guard visits, so prefer over-matching
+    // and let the offender list be the judge.
+    if (/=>|\)\s*;|={/.test(text)) continue
+    // Type syntax, not prose: `Record<'alpha' | K, number>` puts an interface
+    // body between angle brackets and it reads as a JSX text node otherwise.
+    if (/\||\?:|\b(?:number|string|boolean|null|undefined|unknown|void)\b/.test(text)) continue
+    if (!/[A-Za-z]{2,}/.test(text)) continue
+    out.push(text)
+  }
+  return out
+}
+
+describe('I5 — the skill-wording ban is REACHABLE (the guard must visit the text)', () => {
+  it('scans a realistic number of source files', () => {
+    expect(files.length).toBeGreaterThan(100)
   })
 
-  it('reaches the glossary, where user copy lives outside the UI directories', () => {
-    expect(files.some((x) => x.path === 'lib/metricGlossary.ts')).toBe(true)
+  it('spans every source directory, not a hand-picked UI list', () => {
+    const dirs = new Set(files.map((f) => f.path.split('/')[0]))
+    for (const d of SCAN_DIRS) expect(dirs.has(d)).toBe(true)
   })
 
-  it('reaches the four files that violated the ban on landing', () => {
-    for (const f of [
-      'components/backtest/KeyMetricsStrip.tsx',
-      'components/backtest/WalkForwardPanel.tsx',
-      'components/backtest/InstrumentTable.tsx',
-      'components/backtest/AnalysisTab.tsx',
-    ]) {
-      expect(files.some((x) => x.path === f)).toBe(true)
-    }
+  it('EXTRACTS long JSX text — the sr-only captions the first version skipped', () => {
+    // This is the visitor test the first version lacked. `{2,80}` meant both
+    // accessible table captions were never looked at, so sighted users read
+    // "Excess" while screen-reader users read "alpha".
+    const long = `<caption className="sr-only">Per-instrument results: annualised return, drawdown, Sharpe, Sortino, win rate, and alpha vs buy-and-hold</caption>`
+    expect(renderedPhrases(long).some((p) => BANNED.test(p))).toBe(true)
   })
 
-  it('detects the banned word when it IS present (positive control)', () => {
-    // Without this, a broken matcher would look identical to a clean tree.
-    expect(BANNED.test(`label="Alpha vs B&H"`)).toBe(true)
-    expect(BANNED.test(`<div>Strategy Alpha</div>`)).toBe(true)
-    expect(BANNED.test(`label="Excess vs B&H"`)).toBe(false)
+  it('EXTRACTS JSX text containing an interpolation', () => {
+    const interpolated = `<p className="x">Alpha (daily): {attr.alpha.toFixed(5)} · done</p>`
+    expect(renderedPhrases(interpolated).some((p) => BANNED.test(p))).toBe(true)
+  })
+
+  it('EXTRACTS prose containing a semicolon', () => {
+    // Punctuation-based rejection hid a live disclaimer for a whole round.
+    const prose = `<p>Indicators are simplified heuristics — not tested alpha, not execution logic; always verify before trading.</p>`
+    expect(renderedPhrases(prose).some((p) => BANNED.test(p))).toBe(true)
+  })
+
+  it('EXTRACTS template literals', () => {
+    expect(renderedPhrases('const d = `Outperforming SPY in window (+2%).`').some((p) => BANNED.test(p))).toBe(true)
+  })
+
+  it('catches the -ing and -ed inflections the first matcher missed', () => {
+    expect(BANNED.test('Outperforming SPY')).toBe(true)
+    expect(BANNED.test('outperformed the benchmark')).toBe(true)
+  })
+
+  it('does NOT flag legitimate statistical identifiers', () => {
+    // `alpha` is a significance level in var.ts and a regression intercept in
+    // factorAttribution.ts. Renaming real statistics to satisfy a copy ban would
+    // be the tail wagging the dog.
+    expect(renderedPhrases("const alpha = 1 - confidenceLevel").some((p) => BANNED.test(p))).toBe(false)
+    expect(renderedPhrases("Record<'alpha' | keyof FactorReturns, number>").some((p) => BANNED.test(p))).toBe(false)
   })
 })
 
 describe('I5 — no user-visible copy asserts skill', () => {
-  it('no string literal or JSX text uses a skill word', () => {
-    const offenders: string[] = []
-    for (const f of files) {
-      const strings = [
-        ...(f.source.match(/(['"`])(?:(?!\1)[^\\]|\\.)*\1/g) ?? []),
-        // JSX text between tags, e.g. <div>Strategy Alpha</div>
-        ...(f.source.match(/>[^<>{}]{2,80}</g) ?? []),
-      ]
-      if (strings.some((s) => BANNED.test(s))) offenders.push(f.path)
-    }
+  it('no rendered phrase anywhere in app, components, lib or hooks uses a skill word', () => {
+    const offenders = files
+      .filter((f) => renderedPhrases(f.source).some((p) => BANNED.test(p)))
+      .map((f) => f.path)
     expect(offenders).toEqual([])
   })
 

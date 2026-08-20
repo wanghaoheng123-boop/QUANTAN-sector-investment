@@ -102,7 +102,7 @@ export function AnalysisTab({ results, sectorColors }: { results: BacktestResult
         </h2>
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
-            <caption className="sr-only">Risk/return matrix — per-ticker annualised return, drawdown, Sharpe, Sortino, win rate, and alpha vs buy-and-hold</caption>
+            <caption className="sr-only">Risk/return matrix — per-ticker annualised return, drawdown, Sharpe, Sortino, win rate, and excess vs buy-and-hold</caption>
             <thead>
               <tr className="border-b border-slate-800">
                 {['Ticker', 'Sector', 'Ann. Ret', 'Max DD', 'Sharpe', 'Sortino', 'Win Rate', 'PF', 'B&H Ret', 'Excess'].map(h => (

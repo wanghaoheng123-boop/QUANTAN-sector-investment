@@ -521,7 +521,7 @@ export default function BtcQuantLab({ candles }: Props) {
       {/* Disclaimer */}
       <div className="text-center text-[10px] text-slate-400 max-w-2xl mx-auto space-y-1">
         <p>
-          Indicators are simplified heuristics — not tested alpha, not execution logic, and can disagree with other venues or
+          Indicators are simplified heuristics — not validated trading signals, not execution logic, and can disagree with other venues or
           professional systems. Funding is shown in exchange decimal form; always verify on the exchange before trading.
         </p>
         <p>Not financial advice. Past performance does not guarantee future results.</p>

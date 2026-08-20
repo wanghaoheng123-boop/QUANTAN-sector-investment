@@ -41,8 +41,12 @@ export function KeyMetricsStrip({ portfolio, instrumentCount }: KeyMetricsStripP
   //
   // The `> 0` guard on the return was removed deliberately. It made the negative
   // branch UNREACHABLE, so a LOSING portfolio rendered an em dash instead of a
-  // negative ratio — the worst outcome silently displayed as "no data". Only the
-  // drawdown denominator needs guarding.
+  // negative ratio — the worst outcome silently displayed as "no data".
+  //
+  // Residual, stated rather than implied: `fmtRatio` handles null and Infinity
+  // but not NaN, and the old `avgAnnReturn > 0` test incidentally swallowed a
+  // NaN numerator. Nothing in the engine currently produces one
+  // (`truePortfolioAnnReturn`, engine.ts:152), so this is latent, not live.
   const displayedMar =
     portfolio.maxPortfolioDd > 0
       ? portfolio.avgAnnReturn / (portfolio.maxPortfolioDd || 1)

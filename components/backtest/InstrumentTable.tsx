@@ -86,7 +86,7 @@ export default function InstrumentTable({ results, sectorColors }: Props) {
       <div className="overflow-x-auto rounded-xl border border-slate-800">
         <table className="w-full text-xs">
           {/* F6.4 (Phase 13 S2): caption + scope for screen readers — WCAG 1.3.1. */}
-          <caption className="sr-only">Per-instrument backtest results — ticker, sector, total return, annualized return, Sharpe ratio, max drawdown, win rate, trade count, and alpha vs benchmark. Click any column header to sort.</caption>
+          <caption className="sr-only">Per-instrument backtest results — ticker, sector, total return, annualized return, Sharpe ratio, max drawdown, win rate, trade count, and excess vs benchmark. Click any column header to sort.</caption>
           <thead className="bg-slate-900 border-b border-slate-800">
             <tr>
               {cols.map(col => (
