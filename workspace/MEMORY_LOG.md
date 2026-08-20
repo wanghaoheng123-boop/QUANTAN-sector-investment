@@ -882,3 +882,58 @@ out. The firable one is at the `r.json()` boundary.
 **Next:** Q-099 (I5 has no gate) is the top agent-actionable P0. Q-089 is its
 natural companion — deleting the remaining synthetic prints surface would remove
 the last live producer and empty the allowlist.
+
+---
+
+## 2026-08-21 — Q-081 + Q-099: the publication gate said no, and the no shipped
+
+Shipped as #155 (`d5d3a61`). Owner chose "fix T, then gate" — the only order in
+which the gate can mean anything, since gating a saturated constant is theatre.
+
+**The result is a refusal.** Deflated Sharpe went **1.0000 → 0.4858 → 0.0723**
+across three corrections, *each earlier one flattering*. But DSR was never the
+right test: it checks `SR > 0`, which a long-only strategy on a present-day
+survivor list in a bull window clears by construction. Differencing each trade
+against an equal-weight hold of the **same 56 names over the same window** — so
+survivorship cancels — gives excess ≈ +0.11%/trade, **t ≈ 0.17 against a bar of
+3.0**. `quant-validator` REJECTED the claim of skill. The benchmark now prints
+that verdict on every run, and CLAUDE.md carries narrow permitted wording.
+
+**Two lessons, both about things that look like gates.**
+
+1. **A floor beneath the no-skill null cannot detect absent skill.** I floored the
+   non-overlapping Sharpe at 0.08 against a measured 0.17 and called it a
+   regression guard. The always-buy null Sharpe here is **0.1410**, and the
+   minimum over 200 random-selection resamples is **0.0891** — both *above* my
+   floor. Red-team forced BUY on every bar, reducing selection to nothing, and
+   the run still passed. **Measure the null and check your floor clears it.**
+2. **A gate must not punish the behaviour it exists to compel.** My first gate
+   floored DSR — which falls monotonically in `nTrials`, so ~700 further logged
+   configurations would have breached it, making "stop logging trials" the only
+   way to keep CI green. I5 exists to force trial logging. Also: floor a Sharpe
+   or a z, never a probability near 0.5 — that's the steepest point of Φ.
+
+**A false claim in my own comment, for the third package running.**
+`effectiveSampleSize.ts`'s docstring said "~49 occupied blocks" while the code
+produced 70. The docstring was right; nobody checked the code against it. Cause:
+the clustering axis unioned every instrument's dates and **BTC trades weekends**
+(1826 entries vs an equity calendar of 1253), so a "21-bar" block spanned 21
+*calendar* days ≈ 14.4 trading days. That one defect made the published DSR 39%
+too high.
+
+**And it failed open.** `rho ?? 0` set DEFF to 1 and silently restored n_eff to
+345 — republishing the superseded 0.4858 under the corrected name. Fails closed
+now, verified.
+
+**The pattern across two packages:** in both Q-098 and Q-081 the *first*
+correction was itself too flattering, and both times the error ran in the
+direction that made the platform look better. Budget for round two and three on
+anything producing a number the project would like to be true.
+
+**Warning for next session:** `edgeOverBaseRatePp` has **0.10pp** of headroom over
+its 1.81 floor. The dataset is rewritten weekly and re-anchored to `Date.now()`,
+so the primary CI gate can breach on drift alone — observed directly: five days
+moved trades 3410 → 3394 and effective n 347 → 345 with no code change.
+
+**Next:** Q-085 (PBO) is the only thing standing between here and I5 being
+meetable at all. Q-102 is why no floor on this dataset is trustworthy.
