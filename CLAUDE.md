@@ -145,8 +145,13 @@ Add a runtime assertion, not just a comment.
 *Today:* the guard is a **property check with named gaps**, and both halves of
 I3's demand now have executing instances.
 `__tests__/architecture/syntheticContainment.ts` decides a module is synthetic
-because it lives in a fixture directory or **exports a binding annotated
-`Synthetic<…>`** — so a rename does not evade it. It is a pure function of a
+because it lives in a fixture directory or **calls `markSynthetic()`**, the one
+sanctioned constructor — so a rename does not evade it, and neither does an
+inferred return type. *(The first implementation keyed on the annotation text
+`: Synthetic<`, and red-team broke it in one line by letting TypeScript infer the
+return. Annotation text is not the type — the same false-header shape Q-079
+struck at the old guard, reintroduced one commit after removing it. A cast, the
+only other route to a branded value, is caught by `brand-cast`.)* It is a pure function of a
 virtual file set, which makes all seven Q-079 mutations **executable test cases**
 rather than a claim in a review document
 (`__tests__/architecture/synthetic-containment.test.ts`). Two rules were added
@@ -163,11 +168,27 @@ executing instance on the two boundaries the invariant names. `Q-096` removed th
 `darkPoolMarkers`/`newsMarkers` props and their drawing code outright, which
 turns mutation M-F2 from a detection problem into a type error.
 
-**Watched it fail, on the real tree, 2026-08-18.** M-B (a synthetic module named
-`demoPrices`, not `mockData`, feeding `lib/backtest/dataLoader.ts`) and M-E
-(fabricated OHLC in the live chart route) were applied to the working tree; the
-suite failed with `synthetic-import` and `inline-fabrication` respectively, then
-returned to 37/37 green on revert.
+**Watched it fail, on the real tree, 2026-08-18** — twice, because the first
+round was not enough. M-B (a synthetic module named `demoPrices`, not
+`mockData`) and M-E (fabricated OHLC in the live chart route) failed the suite as
+designed. **Adversarial review then found three further escapes that were green**,
+each verified by mutating the real tree: a `__tests__` fixture import (the
+fixture-directory rule had *zero reachable instances*, because the scan never
+included those directories, so the edge resolved to `null` and was silently
+skipped); a producer with an inferred return type; and a derived export
+(`export const X = generateDarkPoolPrints(…)`) laundering data out of an
+*allowlisted* page. All three are closed, each has a regression test, and each
+was re-mutated against the committed tree: fails on mutation, 43/43 green on
+revert.
+
+The runtime assertion moved for the same reason. Its first two call sites —
+`KLineChart` and `backtestInstrument` — sit behind parameters typed `Candle[]`
+and `OhlcvRow[]`, and `Synthetic<T>` is deliberately not assignable to `T`, so
+**tsc made them unfirable**: `assert(true, …)` one remove out. The firable
+instance is at the `r.json()` parse boundary in both chart fetches, where the
+type system has stopped protecting us; a test proves the marker survives a JSON
+round-trip. The typed sites are kept as belt-and-braces and are explicitly not
+claimed to fire.
 
 *Why PARTIAL and not ENFORCED:* the gap is named and tested. An **unbranded**
 fabricator — one returning invented rows without `markSynthetic` and without
