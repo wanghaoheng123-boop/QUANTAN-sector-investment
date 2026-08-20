@@ -283,33 +283,66 @@ Sub-tiers, which are not level:
   not a mechanism.
 
 **Because PBO does not exist, no strategy has ever met I5's bar — including the
-one shipped result.** The published DSR is **saturated at 1.0000**: the committed
-`scripts/benchmark-results.json` carries `deflatedSharpeN10 = 1` **and**
-`deflatedSharpeN100 = 1`, so a 10× change in the trial count already moves the
-headline by nothing. **`Q-081` as currently scoped would change the headline from
-1 to 1.** The 45/1053 arithmetic in the old text verifies exactly, but both are
-lower bounds and both are the wrong lever.
+one shipped result.** `Q-081`/`Q-099` (2026-08-21) corrected the headline and
+`quant-validator` then **REJECTED the claim of skill outright.** The correction
+took three passes, each one flattering:
 
-**The saturation is an artifact of sample size, and the repo names the honest one
-itself.** `scripts/benchmark-results.json` carries `nonOverlapStats.nTrades = 347`
-whose own note reads *"the honest effective n behind the pooled WR"*, while DSR is
-computed on `tradeStats.nTrades = 3410`, the overlapping count
-(`lib/quant/deflatedSharpe.ts:106,117`). Because `expectedMaxSharpe` scales as
-`1/√(T−1)` (`:117`), `T` and `nTrials` are coupled — and at the honest `T` the
-trial count stops being inert:
+| Headline | `T` used | value | why it was wrong |
+|---|---|---|---|
+| pre-`Q-081` | 3,394 *overlapping* trades | **1.0000** | saturated; provably unmoved by `nTrials` from 10 to 10¹² |
+| `Q-081` first pass | 345 non-overlapping | **0.4858** | removed only *within-instrument* overlap |
+| **current** | **n_eff = 114** | **0.0723** | discounts cross-sectional clustering (Kish DEFF) |
 
-| `T` | n=10 | n=45 | n=100 | n=1053 |
-|---|---|---|---|---|
-| 3410 (as published) | 1.0000 | 1.0000 | 1.0000 | 1.0000 |
-| **347 (honest effective n)** | 0.9709 | 0.8924 | 0.8282 | **0.5848** |
+De-overlapping was not enough: 56 names, many in the same sector, trading the
+same window, are correlated on the same dates, so trades sharing a calendar block
+are **one bet placed many times**. `lib/quant/effectiveSampleSize.ts` applies
+`DEFF = 1 + (m̄−1)·ρ`.
 
-**At the honest `T` the shipped result falls below any conventional bar at every
-trial count the registry supports.** So `Q-081` is not merely mis-scoped: fixing
-`nTrials` alone changes 1 to 1, but fixing `T` alone leaves multiplicity
-uncorrected. **The fix is joint.** The real caveat is narrower than the previous
-draft claimed — the distributional moments are not persisted, so the table
-assumes `g3=0, g4=3`; the direction and magnitude are robust, the third decimal
-is not.
+**But DSR was never the number that mattered.** It tests `SR > 0`, which a
+long-only strategy on a present-day survivor list in a bull window clears by
+construction — a straw-man null. The honest test differences each trade against
+an **equal-weight hold of the same 56 names over the same window**, so
+survivorship cancels in the difference:
+
+> **excess ≈ +0.11% per trade, t ≈ 0.17, against the |t| > 3.0 bar of Harvey,
+> Liu & Zhu (2016), "…and the Cross-Section of Expected Returns", RFS 29(1).**
+> The selection is **not statistically distinguishable from holding the
+> universe.**
+
+**Permitted wording, and it is narrow.** You may say: *"On a 56-name present-day
+survivor list over 2021–2026, BUY labels returned more per 20 days than
+unconditional exposure, but the excess is not statistically distinguishable from
+zero. Deflated Sharpe is 0.10–0.49 depending on how the effective sample is
+counted; PBO is not computed. No claim of skill is supported."*
+
+**Scope of the ban, stated precisely so it is enforceable.** It governs
+**user-visible claims and prose** — UI copy, docs, reports, chat answers. You may
+not present the strategy as having skill, edge, alpha or outperformance, and may
+not quote a DSR without the `n_eff` it was computed on. It does **not** rename
+internal measurements: `edgeOverBaseRatePp` and `FLOOR_EDGE_PP` are quantities,
+and renaming them would churn a CI gate without changing a claim.
+
+**The ban is violated on landing, and pretending otherwise would repeat the
+failure this section documents.** Four user-visible labels call an
+indistinguishable-from-zero excess "Alpha" —
+`components/backtest/KeyMetricsStrip.tsx:55` ("Alpha vs B&H"),
+`components/backtest/WalkForwardPanel.tsx:124` ("Strategy Alpha"),
+`components/backtest/InstrumentTable.tsx:67`,
+`components/backtest/AnalysisTab.tsx:108`. Naming a statistic after the
+conclusion you hoped for is exactly the calibration failure I5 exists to catch.
+→ `Q-103`.
+
+**The gate does not gate on DSR, deliberately.** The first version floored it at
+0.43 and `quant-validator` showed that **punished compliance**: DSR falls
+monotonically in `nTrials`, so roughly 700 further logged configurations — fewer
+than the single `T-0001` grid already on file — would have breached the floor,
+making "stop logging trials" the only way to keep CI green. That is the exact
+behaviour I5 exists to compel. A DSR near 0.5 is also at the steepest point of Φ,
+so drift alone moves it across any nearby threshold. **Floor a Sharpe or a z;
+never a probability near 0.5.** The gate now floors the non-overlapping Sharpe
+(invariant to `nTrials`) as a breakage guard, hard-fails when the deflated number
+is missing or the trial denominator was not counted, and prints the verdict above
+on every run.
 
 The previous claim that this is "the strongest area of the platform" is
 withdrawn. The good layer exists; the published headlines do not come from it.

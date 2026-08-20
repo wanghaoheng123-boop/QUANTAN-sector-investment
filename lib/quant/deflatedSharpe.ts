@@ -92,8 +92,21 @@ export function normInv(p: number): number {
  * Adjusts for track length, skewness and kurtosis (BLdP 2012, eq. 11).
  * Returns null when undefined (σ=0, T<2, non-finite inputs).
  */
-export function probabilisticSharpe(returns: number[], srBenchmark = 0): number | null {
-  const T = returns.length
+export function probabilisticSharpe(
+  returns: number[],
+  srBenchmark = 0,
+  /**
+   * Effective number of INDEPENDENT observations. Defaults to `returns.length`.
+   *
+   * Pass a smaller value when the series is clustered. `returns.length` counts
+   * rows; the z-statistic needs periods of independent information, and the two
+   * differ by the design effect whenever observations share a calendar block
+   * (see `lib/quant/effectiveSampleSize.ts`). Hardcoding `returns.length` here
+   * is what made the published DSR unable to express its own clustering.
+   */
+  effectiveT?: number,
+): number | null {
+  const T = effectiveT ?? returns.length
   if (T < 2) return null
   const sd = sampleStd(returns)
   if (!(sd > 0)) return null
@@ -103,6 +116,8 @@ export function probabilisticSharpe(returns: number[], srBenchmark = 0): number 
   if (!Number.isFinite(sr) || !Number.isFinite(g3) || !Number.isFinite(g4)) return null
   const denom = 1 - g3 * sr + ((g4 - 1) / 4) * sr * sr
   if (!(denom > 0)) return null
+  // sr, g3, g4 are estimated from ALL rows (more data is better for a moment
+  // estimate); only the INFORMATION COUNT in the z-statistic is discounted.
   const z = ((sr - srBenchmark) * Math.sqrt(T - 1)) / Math.sqrt(denom)
   return normCdf(z)
 }
@@ -123,8 +138,16 @@ export function expectedMaxSharpe(nTrials: number, T: number): number | null {
  * Deflated Sharpe Ratio: PSR evaluated against the expected max SR from
  * `nTrials` independent trials — P(true SR clears the multiple-testing bar).
  */
-export function deflatedSharpe(returns: number[], nTrials: number): number | null {
-  const sr0 = expectedMaxSharpe(nTrials, returns.length)
+export function deflatedSharpe(
+  returns: number[],
+  nTrials: number,
+  effectiveT?: number,
+): number | null {
+  // BOTH uses of T take the effective count. Clustering inflates SE(SR) in the
+  // PSR z AND inflates V[SR] under H0 in the expected-max bar, so discounting
+  // only one of them would be internally inconsistent.
+  const T = effectiveT ?? returns.length
+  const sr0 = expectedMaxSharpe(nTrials, T)
   if (sr0 == null) return null
-  return probabilisticSharpe(returns, sr0)
+  return probabilisticSharpe(returns, sr0, T)
 }
