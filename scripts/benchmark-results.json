@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-07-16T17:31:14.334Z",
+  "timestamp": "2026-08-20T17:09:02.603Z",
   "version": "v2.0-ssot-regime-production",
   "strategy": "resolveBacktestSignal (regime-only, QUANTAN_USE_ENHANCED_SIGNAL=0)",
   "metricNote": "Label win rate: 20d forward return after BUY; entry next close; gross and net after round-trip costs",
@@ -12,49 +12,64 @@
   "aggregate": {
     "totalInstruments": 56,
     "instrumentsWithTrades": 55,
-    "totalBuySignals": 3410,
-    "totalWins": 1969,
-    "totalLosses": 1441,
-    "aggregateWinRate": 57.74,
-    "aggregateNetWinRate": 56.72,
-    "avgWinRatePerInstrument": 55.34,
-    "avgReturn20d": 1.9834,
-    "avgNetReturn20d": 1.7634,
-    "expectancyGrossPct": 1.9834,
-    "expectancyNetPct": 1.7634,
+    "totalBuySignals": 3394,
+    "totalWins": 1964,
+    "totalLosses": 1430,
+    "aggregateWinRate": 57.87,
+    "aggregateNetWinRate": 56.78,
+    "avgWinRatePerInstrument": 55.52,
+    "avgReturn20d": 2.122,
+    "avgNetReturn20d": 1.902,
+    "expectancyGrossPct": 2.122,
+    "expectancyNetPct": 1.902,
     "avgHoldDays": 20
   },
   "tradeStats": {
-    "nTrades": 3410,
-    "perTradeSharpe": 0.1874,
-    "psrGtZero": 1,
-    "deflatedSharpeN10": 1,
-    "deflatedSharpeN100": 1,
-    "note": "Bailey-Lopez de Prado PSR/DSR on pooled per-trade 20d NET returns. Trades overlap (daily signals, 20d holds) so these are OPTIMISTIC upper bounds; DSR shown as an N=10/N=100 assumed-trials sensitivity band."
+    "nTrades": 3394,
+    "nTradesEffective": 345,
+    "perTradeSharpe": 0.2028,
+    "psrGtZero": 0.9996,
+    "deflatedSharpe": 0.4858,
+    "deflatedSharpeBand": [
+      0.4858,
+      0.8485
+    ],
+    "nTrials": {
+      "lower": 45,
+      "upper": 1053,
+      "registryRows": 9,
+      "uncertainTrials": [
+        "T-0001",
+        "T-0007",
+        "T-0008"
+      ]
+    },
+    "deflatedSharpeOverlappingOptimistic": 1,
+    "note": "Bailey-Lopez de Prado PSR/DSR. HEADLINE (deflatedSharpe) is computed on the NON-OVERLAPPING per-instrument sample (n=345) against nTrials=1053 counted from .quantlab/TRIAL_REGISTRY.jsonl. Band spans the registry interval [45, 1053] — both LOWER BOUNDS, since discarded-without-record configurations are absent by construction; T-0001 is flagged uncertain (Q-084). deflatedSharpeOverlappingOptimistic is the SAME statistic on the pooled overlapping series and is the number this benchmark published before Q-081: it saturates at 1.0000 and is insensitive to nTrials, which is why it was replaced."
   },
   "alwaysBuyBaseline": {
-    "nBars": 58420,
-    "netWinRatePct": 54.17,
-    "avgNetReturn20dPct": 1.0951,
+    "nBars": 58419,
+    "netWinRatePct": 54.87,
+    "avgNetReturn20dPct": 1.2196,
     "note": "Unconditional long exposure on this survivor universe/bull window. The strategy KPI is EDGE OVER THIS BASE RATE; note the CI net-WR floor (53.29) sits BELOW it — floor re-baseline is an owner decision tracked in the 2026-07-11 rethink."
   },
-  "edgeOverBaseRatePp": 2.55,
+  "edgeOverBaseRatePp": 1.91,
   "nonOverlapStats": {
-    "nTrades": 347,
-    "netWinRatePct": 55.62,
+    "nTrades": 345,
+    "netWinRatePct": 56.81,
     "wilson95Pct": [
-      50.36,
-      60.76
+      51.54,
+      61.94
     ],
     "note": "Greedy per-instrument non-overlapping sample (one trade per closed 20d window). This is the honest effective n behind the pooled WR; compare the Wilson CI to the always-buy base rate, not to 50%."
   },
   "perYearEdge": [
     {
       "year": "2022",
-      "signalTrades": 435,
-      "signalNetWR": 62.3,
-      "baseNetWR": 50.57,
-      "edgePp": 11.73
+      "signalTrades": 317,
+      "signalNetWR": 64.98,
+      "baseNetWR": 53.85,
+      "edgePp": 11.14
     },
     {
       "year": "2023",
@@ -79,33 +94,46 @@
     },
     {
       "year": "2026",
-      "signalTrades": 466,
+      "signalTrades": 568,
       "signalNetWR": 56.87,
-      "baseNetWR": 51.14,
-      "edgePp": 5.72
+      "baseNetWR": 52.73,
+      "edgePp": 4.13
     }
   ],
   "regimeBuckets": [
     {
       "zone": "FIRST_DIP",
-      "trades": 3068,
-      "netWinRate": 55.93,
-      "avgNetReturn20d": 1.5559
+      "trades": 3085,
+      "netWinRate": 56.14,
+      "avgNetReturn20d": 1.6888
     },
     {
       "zone": "DEEP_DIP",
-      "trades": 319,
-      "netWinRate": 65.2,
-      "avgNetReturn20d": 4.016
+      "trades": 291,
+      "netWinRate": 63.92,
+      "avgNetReturn20d": 4.3183
     },
     {
       "zone": "BEAR_ALERT",
-      "trades": 23,
-      "netWinRate": 43.48,
-      "avgNetReturn20d": -1.81
+      "trades": 18,
+      "netWinRate": 50,
+      "avgNetReturn20d": -0.6355
     }
   ],
   "byInstrument": [
+    {
+      "ticker": "PG",
+      "sector": "Consumer Staples",
+      "bars": 1254,
+      "buySignals": 29,
+      "wins": 28,
+      "losses": 1,
+      "winRate": 0.9655172413793104,
+      "netWinRate": 0.9310344827586207,
+      "avgReturn20d": 0.03525134353685776,
+      "avgNetReturn20d": 0.033051343536857763,
+      "bnhReturn": -0.002277759662705785
+    },
     {
       "ticker": "JPM",
       "sector": "Financials",
@@ -117,20 +145,7 @@
       "netWinRate": 0.9433962264150944,
       "avgReturn20d": 0.07811581496343334,
       "avgNetReturn20d": 0.07591581496343335,
-      "bnhReturn": 1.1617090550255582
-    },
-    {
-      "ticker": "WMT",
-      "sector": "Consumer Staples",
-      "bars": 1254,
-      "buySignals": 18,
-      "wins": 16,
-      "losses": 2,
-      "winRate": 0.8888888888888888,
-      "netWinRate": 0.8888888888888888,
-      "avgReturn20d": 0.0555437151168332,
-      "avgNetReturn20d": 0.05334371511683319,
-      "bnhReturn": 1.4306444738013497
+      "bnhReturn": 1.3109356667233896
     },
     {
       "ticker": "CAT",
@@ -143,7 +158,7 @@
       "netWinRate": 0.8666666666666667,
       "avgReturn20d": 0.09408469673011374,
       "avgNetReturn20d": 0.09188469673011376,
-      "bnhReturn": 3.4259025156331857
+      "bnhReturn": 3.013165280764861
     },
     {
       "ticker": "MCD",
@@ -156,20 +171,20 @@
       "netWinRate": 0.8636363636363636,
       "avgReturn20d": 0.01661518480100889,
       "avgNetReturn20d": 0.01441518480100889,
-      "bnhReturn": 0.16272180307627063
+      "bnhReturn": 0.13546690510376905
     },
     {
       "ticker": "SLB",
       "sector": "Energy",
       "bars": 1254,
-      "buySignals": 121,
-      "wins": 99,
-      "losses": 22,
-      "winRate": 0.8181818181818182,
-      "netWinRate": 0.8181818181818182,
-      "avgReturn20d": 0.09330228304934242,
-      "avgNetReturn20d": 0.09110228304934236,
-      "bnhReturn": 0.5602743341789391
+      "buySignals": 118,
+      "wins": 98,
+      "losses": 20,
+      "winRate": 0.8305084745762712,
+      "netWinRate": 0.8305084745762712,
+      "avgReturn20d": 0.09664493663288055,
+      "avgNetReturn20d": 0.09444493663288049,
+      "bnhReturn": 0.9775652593464466
     },
     {
       "ticker": "GE",
@@ -182,59 +197,59 @@
       "netWinRate": 0.8,
       "avgReturn20d": 0.10314819767521007,
       "avgNetReturn20d": 0.10094819767521004,
-      "bnhReturn": 4.592142586214636
+      "bnhReturn": 4.818580585700968
     },
     {
-      "ticker": "PG",
-      "sector": "Consumer Staples",
+      "ticker": "CVX",
+      "sector": "Energy",
       "bars": 1254,
-      "buySignals": 35,
+      "buySignals": 36,
       "wins": 28,
-      "losses": 7,
-      "winRate": 0.8,
-      "netWinRate": 0.7714285714285715,
-      "avgReturn20d": 0.025172835713686753,
-      "avgNetReturn20d": 0.02297283571368676,
-      "bnhReturn": 0.07351969026563461
-    },
-    {
-      "ticker": "TSLA",
-      "sector": "Consumer Disc.",
-      "bars": 1254,
-      "buySignals": 145,
-      "wins": 112,
-      "losses": 33,
-      "winRate": 0.7724137931034483,
-      "netWinRate": 0.7586206896551724,
-      "avgReturn20d": 0.08134912762022174,
-      "avgNetReturn20d": 0.07914912762022176,
-      "bnhReturn": 0.8297783851104856
+      "losses": 8,
+      "winRate": 0.7777777777777778,
+      "netWinRate": 0.75,
+      "avgReturn20d": 0.08213371429763723,
+      "avgNetReturn20d": 0.07993371429763724,
+      "bnhReturn": 0.9855057414354123
     },
     {
       "ticker": "ABBV",
       "sector": "Healthcare",
       "bars": 1254,
-      "buySignals": 162,
-      "wins": 123,
+      "buySignals": 163,
+      "wins": 124,
       "losses": 39,
-      "winRate": 0.7592592592592593,
-      "netWinRate": 0.7469135802469136,
-      "avgReturn20d": 0.0362932187125659,
-      "avgNetReturn20d": 0.03409321871256591,
-      "bnhReturn": 1.1039775602243977
+      "winRate": 0.7607361963190185,
+      "netWinRate": 0.7484662576687117,
+      "avgReturn20d": 0.03676644991066775,
+      "avgNetReturn20d": 0.03456644991066776,
+      "bnhReturn": 1.0847400892472085
     },
     {
       "ticker": "COP",
       "sector": "Energy",
       "bars": 1254,
-      "buySignals": 90,
-      "wins": 67,
+      "buySignals": 95,
+      "wins": 72,
       "losses": 23,
-      "winRate": 0.7444444444444445,
-      "netWinRate": 0.7111111111111111,
-      "avgReturn20d": 0.04341865282387372,
-      "avgNetReturn20d": 0.04121865282387369,
-      "bnhReturn": 0.8338379178347813
+      "winRate": 0.7578947368421053,
+      "netWinRate": 0.7263157894736842,
+      "avgReturn20d": 0.048261933667401634,
+      "avgNetReturn20d": 0.0460619336674016,
+      "bnhReturn": 1.3253851378360242
+    },
+    {
+      "ticker": "AVGO",
+      "sector": "Technology",
+      "bars": 1254,
+      "buySignals": 48,
+      "wins": 35,
+      "losses": 13,
+      "winRate": 0.7291666666666666,
+      "netWinRate": 0.7291666666666666,
+      "avgReturn20d": 0.17487394432995995,
+      "avgNetReturn20d": 0.17267394432995997,
+      "bnhReturn": 7.209697183846671
     },
     {
       "ticker": "EOG",
@@ -247,46 +262,46 @@
       "netWinRate": 0.7244897959183674,
       "avgReturn20d": 0.05345354058943914,
       "avgNetReturn20d": 0.05125354058943912,
-      "bnhReturn": 0.6209355815561769
-    },
-    {
-      "ticker": "CVX",
-      "sector": "Energy",
-      "bars": 1254,
-      "buySignals": 29,
-      "wins": 21,
-      "losses": 8,
-      "winRate": 0.7241379310344828,
-      "netWinRate": 0.6896551724137931,
-      "avgReturn20d": 0.06853987568363815,
-      "avgNetReturn20d": 0.06633987568363815,
-      "bnhReturn": 0.6972961933850734
-    },
-    {
-      "ticker": "AEP",
-      "sector": "Utilities",
-      "bars": 1254,
-      "buySignals": 52,
-      "wins": 37,
-      "losses": 15,
-      "winRate": 0.7115384615384616,
-      "netWinRate": 0.7115384615384616,
-      "avgReturn20d": 0.03439033847319904,
-      "avgNetReturn20d": 0.032190338473199034,
-      "bnhReturn": 0.588808025221039
+      "bnhReturn": 1.1617401541838503
     },
     {
       "ticker": "RTX",
       "sector": "Industrials",
       "bars": 1254,
-      "buySignals": 65,
-      "wins": 46,
-      "losses": 19,
-      "winRate": 0.7076923076923077,
-      "netWinRate": 0.7076923076923077,
-      "avgReturn20d": 0.02078579114069845,
-      "avgNetReturn20d": 0.018585791140698454,
-      "bnhReturn": 1.2961442455339924
+      "buySignals": 63,
+      "wins": 45,
+      "losses": 18,
+      "winRate": 0.7142857142857143,
+      "netWinRate": 0.7142857142857143,
+      "avgReturn20d": 0.022127949724181736,
+      "avgNetReturn20d": 0.019927949724181732,
+      "bnhReturn": 1.5744140359012295
+    },
+    {
+      "ticker": "BRK.B",
+      "sector": "Financials",
+      "bars": 1254,
+      "buySignals": 27,
+      "wins": 19,
+      "losses": 8,
+      "winRate": 0.7037037037037037,
+      "netWinRate": 0.7037037037037037,
+      "avgReturn20d": 0.017165597996513956,
+      "avgNetReturn20d": 0.014965597996513957,
+      "bnhReturn": 0.7434451336497829
+    },
+    {
+      "ticker": "TSLA",
+      "sector": "Consumer Disc.",
+      "bars": 1254,
+      "buySignals": 158,
+      "wins": 111,
+      "losses": 47,
+      "winRate": 0.7025316455696202,
+      "netWinRate": 0.689873417721519,
+      "avgReturn20d": 0.061072208792061225,
+      "avgNetReturn20d": 0.058872208792061224,
+      "bnhReturn": 0.5424283196667569
     },
     {
       "ticker": "BTC",
@@ -299,7 +314,7 @@
       "netWinRate": 0.7005988023952096,
       "avgReturn20d": 0.05543854544436707,
       "avgNetReturn20d": 0.05323854544436711,
-      "bnhReturn": 0.9496651732855088
+      "bnhReturn": 0.40600997446952514
     },
     {
       "ticker": "XOM",
@@ -312,12 +327,25 @@
       "netWinRate": 0.6867469879518072,
       "avgReturn20d": 0.023723025830143293,
       "avgNetReturn20d": 0.021523025830143303,
-      "bnhReturn": 1.2812089757920244
+      "bnhReturn": 1.881569513072032
+    },
+    {
+      "ticker": "WMT",
+      "sector": "Consumer Staples",
+      "bars": 1254,
+      "buySignals": 33,
+      "wins": 23,
+      "losses": 10,
+      "winRate": 0.696969696969697,
+      "netWinRate": 0.6363636363636364,
+      "avgReturn20d": 0.029552323660350176,
+      "avgNetReturn20d": 0.027352323660350175,
+      "bnhReturn": 1.2946913615029108
     },
     {
       "ticker": "EQIX",
       "sector": "Real Estate",
-      "bars": 1254,
+      "bars": 1253,
       "buySignals": 88,
       "wins": 60,
       "losses": 28,
@@ -325,7 +353,7 @@
       "netWinRate": 0.6704545454545454,
       "avgReturn20d": 0.021147387732162598,
       "avgNetReturn20d": 0.018947387732162622,
-      "bnhReturn": 0.2772283108981321
+      "bnhReturn": 0.33134412345379904
     },
     {
       "ticker": "AMD",
@@ -338,7 +366,20 @@
       "netWinRate": 0.6461538461538462,
       "avgReturn20d": 0.044908358248380846,
       "avgNetReturn20d": 0.04270835824838086,
-      "bnhReturn": 5.18092179752453
+      "bnhReturn": 3.78235427969605
+    },
+    {
+      "ticker": "AEP",
+      "sector": "Utilities",
+      "bars": 1254,
+      "buySignals": 46,
+      "wins": 31,
+      "losses": 15,
+      "winRate": 0.6739130434782609,
+      "netWinRate": 0.6739130434782609,
+      "avgReturn20d": 0.03376715272886295,
+      "avgNetReturn20d": 0.03156715272886294,
+      "bnhReturn": 0.38723213169949355
     },
     {
       "ticker": "V",
@@ -351,7 +392,7 @@
       "netWinRate": 0.6567164179104478,
       "avgReturn20d": 0.025672199530475386,
       "avgNetReturn20d": 0.023472199530475375,
-      "bnhReturn": 0.43994220108105386
+      "bnhReturn": 0.5526798097976612
     },
     {
       "ticker": "APD",
@@ -364,20 +405,7 @@
       "netWinRate": 0.6451612903225806,
       "avgReturn20d": 0.0063488102139277495,
       "avgNetReturn20d": 0.004148810213927746,
-      "bnhReturn": 0.03693835757399293
-    },
-    {
-      "ticker": "AVGO",
-      "sector": "Technology",
-      "bars": 1254,
-      "buySignals": 67,
-      "wins": 44,
-      "losses": 23,
-      "winRate": 0.6567164179104478,
-      "netWinRate": 0.6567164179104478,
-      "avgReturn20d": 0.11785909156546101,
-      "avgNetReturn20d": 0.11565909156546099,
-      "bnhReturn": 7.263672096665582
+      "bnhReturn": 0.09793538680197453
     },
     {
       "ticker": "LLY",
@@ -390,7 +418,7 @@
       "netWinRate": 0.6216216216216216,
       "avgReturn20d": 0.03755912563942583,
       "avgNetReturn20d": 0.035359125639425816,
-      "bnhReturn": 4.051338464255104
+      "bnhReturn": 3.327527670998766
     },
     {
       "ticker": "BAC",
@@ -403,33 +431,7 @@
       "netWinRate": 0.6440677966101694,
       "avgReturn20d": 0.036235463871202724,
       "avgNetReturn20d": 0.03403546387120272,
-      "bnhReturn": 0.49698939426130195
-    },
-    {
-      "ticker": "PEP",
-      "sector": "Consumer Staples",
-      "bars": 1254,
-      "buySignals": 42,
-      "wins": 27,
-      "losses": 15,
-      "winRate": 0.6428571428571429,
-      "netWinRate": 0.6190476190476191,
-      "avgReturn20d": 0.009565042909518115,
-      "avgNetReturn20d": 0.007365042909518116,
-      "bnhReturn": -0.1018567020606846
-    },
-    {
-      "ticker": "BRK.B",
-      "sector": "Financials",
-      "bars": 1254,
-      "buySignals": 33,
-      "wins": 21,
-      "losses": 12,
-      "winRate": 0.6363636363636364,
-      "netWinRate": 0.6363636363636364,
-      "avgReturn20d": 0.014321488606307645,
-      "avgNetReturn20d": 0.012121488606307643,
-      "bnhReturn": 0.7682389834337671
+      "bnhReturn": 0.5694815678823473
     },
     {
       "ticker": "MA",
@@ -442,7 +444,7 @@
       "netWinRate": 0.6060606060606061,
       "avgReturn20d": 0.038692414437630496,
       "avgNetReturn20d": 0.03649241443763051,
-      "bnhReturn": 0.372755471487486
+      "bnhReturn": 0.5672988486867393
     },
     {
       "ticker": "DUK",
@@ -455,7 +457,20 @@
       "netWinRate": 0.631578947368421,
       "avgReturn20d": -0.009809330101919018,
       "avgNetReturn20d": -0.012009330101919019,
-      "bnhReturn": 0.2358909176163646
+      "bnhReturn": 0.15049669689217804
+    },
+    {
+      "ticker": "HON",
+      "sector": "Industrials",
+      "bars": 1254,
+      "buySignals": 86,
+      "wins": 54,
+      "losses": 32,
+      "winRate": 0.627906976744186,
+      "netWinRate": 0.6046511627906976,
+      "avgReturn20d": 0.012299745959673303,
+      "avgNetReturn20d": 0.010099745959673298,
+      "bnhReturn": 0.022634712495092017
     },
     {
       "ticker": "AMT",
@@ -468,46 +483,33 @@
       "netWinRate": 0.625,
       "avgReturn20d": 0.005758678742511029,
       "avgNetReturn20d": 0.0035586787425110344,
-      "bnhReturn": -0.3947151219733466
-    },
-    {
-      "ticker": "HON",
-      "sector": "Industrials",
-      "bars": 1254,
-      "buySignals": 78,
-      "wins": 47,
-      "losses": 31,
-      "winRate": 0.6025641025641025,
-      "netWinRate": 0.5769230769230769,
-      "avgReturn20d": 0.008385720622074374,
-      "avgNetReturn20d": 0.0061857206220743725,
-      "bnhReturn": 0.022227955359603195
-    },
-    {
-      "ticker": "PCG",
-      "sector": "Utilities",
-      "bars": 1254,
-      "buySignals": 62,
-      "wins": 37,
-      "losses": 25,
-      "winRate": 0.5967741935483871,
-      "netWinRate": 0.5806451612903226,
-      "avgReturn20d": 0.017556852234590345,
-      "avgNetReturn20d": 0.015356852234590343,
-      "bnhReturn": 0.7187187657334787
+      "bnhReturn": -0.38721947935965595
     },
     {
       "ticker": "AMZN",
       "sector": "Consumer Disc.",
       "bars": 1254,
-      "buySignals": 54,
-      "wins": 32,
-      "losses": 22,
-      "winRate": 0.5925925925925926,
-      "netWinRate": 0.5740740740740741,
-      "avgReturn20d": 0.013794529686815082,
-      "avgNetReturn20d": 0.01159452968681508,
-      "bnhReturn": 0.3343268072052942
+      "buySignals": 57,
+      "wins": 33,
+      "losses": 24,
+      "winRate": 0.5789473684210527,
+      "netWinRate": 0.5614035087719298,
+      "avgReturn20d": 0.013097360213183041,
+      "avgNetReturn20d": 0.010897360213183039,
+      "bnhReturn": 0.6203159954270137
+    },
+    {
+      "ticker": "PEP",
+      "sector": "Consumer Staples",
+      "bars": 1254,
+      "buySignals": 35,
+      "wins": 20,
+      "losses": 15,
+      "winRate": 0.5714285714285714,
+      "netWinRate": 0.5428571428571428,
+      "avgReturn20d": -0.0020340380780733977,
+      "avgNetReturn20d": -0.004234038078073395,
+      "bnhReturn": -0.10835972939662358
     },
     {
       "ticker": "GOOGL",
@@ -520,20 +522,7 @@
       "netWinRate": 0.5454545454545454,
       "avgReturn20d": 0.013017099543543215,
       "avgNetReturn20d": 0.010817099543543214,
-      "bnhReturn": 1.8048985959718782
-    },
-    {
-      "ticker": "COST",
-      "sector": "Consumer Staples",
-      "bars": 1254,
-      "buySignals": 70,
-      "wins": 38,
-      "losses": 32,
-      "winRate": 0.5428571428571428,
-      "netWinRate": 0.5285714285714286,
-      "avgReturn20d": 0.007851568641327125,
-      "avgNetReturn20d": 0.005651568641327122,
-      "bnhReturn": 1.2508966872091418
+      "bnhReturn": 1.5310712700228934
     },
     {
       "ticker": "META",
@@ -546,59 +535,98 @@
       "netWinRate": 0.5294117647058824,
       "avgReturn20d": 0.025630823000629882,
       "avgNetReturn20d": 0.023430823000629892,
-      "bnhReturn": 0.9006788858903979
-    },
-    {
-      "ticker": "UNH",
-      "sector": "Healthcare",
-      "bars": 1254,
-      "buySignals": 63,
-      "wins": 33,
-      "losses": 30,
-      "winRate": 0.5238095238095238,
-      "netWinRate": 0.5238095238095238,
-      "avgReturn20d": -0.011998489207833998,
-      "avgNetReturn20d": -0.014198489207833998,
-      "bnhReturn": 0.014526655631806966
-    },
-    {
-      "ticker": "SO",
-      "sector": "Utilities",
-      "bars": 1254,
-      "buySignals": 85,
-      "wins": 44,
-      "losses": 41,
-      "winRate": 0.5176470588235295,
-      "netWinRate": 0.5176470588235295,
-      "avgReturn20d": 0.002242989011226197,
-      "avgNetReturn20d": 0.00004298901122619923,
-      "bnhReturn": 0.5586892789780641
+      "bnhReturn": 0.6455571362772217
     },
     {
       "ticker": "NEE",
       "sector": "Utilities",
       "bars": 1254,
-      "buySignals": 53,
-      "wins": 26,
-      "losses": 27,
-      "winRate": 0.49056603773584906,
-      "netWinRate": 0.4716981132075472,
-      "avgReturn20d": 0.002863112895551038,
-      "avgNetReturn20d": 0.0006631128955510357,
-      "bnhReturn": 0.17499329905575287
+      "buySignals": 57,
+      "wins": 29,
+      "losses": 28,
+      "winRate": 0.5087719298245614,
+      "netWinRate": 0.49122807017543857,
+      "avgReturn20d": 0.004089289251531651,
+      "avgNetReturn20d": 0.0018892892515316483,
+      "bnhReturn": 0.026560307065868045
+    },
+    {
+      "ticker": "COST",
+      "sector": "Consumer Staples",
+      "bars": 1254,
+      "buySignals": 61,
+      "wins": 31,
+      "losses": 30,
+      "winRate": 0.5081967213114754,
+      "netWinRate": 0.4918032786885246,
+      "avgReturn20d": 0.004535340342124236,
+      "avgNetReturn20d": 0.0023353403421242425,
+      "bnhReturn": 1.124729149239351
+    },
+    {
+      "ticker": "PCG",
+      "sector": "Utilities",
+      "bars": 1254,
+      "buySignals": 48,
+      "wins": 24,
+      "losses": 24,
+      "winRate": 0.5,
+      "netWinRate": 0.4791666666666667,
+      "avgReturn20d": 0.008064196730609324,
+      "avgNetReturn20d": 0.005864196730609328,
+      "bnhReturn": 0.9539978016397139
     },
     {
       "ticker": "FCX",
       "sector": "Materials",
       "bars": 1254,
-      "buySignals": 120,
+      "buySignals": 110,
       "wins": 54,
-      "losses": 66,
-      "winRate": 0.45,
-      "netWinRate": 0.43333333333333335,
-      "avgReturn20d": 0.00897904519654623,
-      "avgNetReturn20d": 0.006779045196546227,
-      "bnhReturn": 0.7218024418119866
+      "losses": 56,
+      "winRate": 0.4909090909090909,
+      "netWinRate": 0.4727272727272727,
+      "avgReturn20d": 0.0258300355503948,
+      "avgNetReturn20d": 0.02363003555039481,
+      "bnhReturn": 0.9155862753541096
+    },
+    {
+      "ticker": "DOW",
+      "sector": "Materials",
+      "bars": 1254,
+      "buySignals": 60,
+      "wins": 29,
+      "losses": 31,
+      "winRate": 0.48333333333333334,
+      "netWinRate": 0.48333333333333334,
+      "avgReturn20d": 0.0034521032174986144,
+      "avgNetReturn20d": 0.0012521032174986197,
+      "bnhReturn": -0.5013641628943653
+    },
+    {
+      "ticker": "UNH",
+      "sector": "Healthcare",
+      "bars": 1254,
+      "buySignals": 58,
+      "wins": 28,
+      "losses": 30,
+      "winRate": 0.4827586206896552,
+      "netWinRate": 0.4827586206896552,
+      "avgReturn20d": -0.02388259945844504,
+      "avgNetReturn20d": -0.02608259945844504,
+      "bnhReturn": -0.047536601666738176
+    },
+    {
+      "ticker": "SO",
+      "sector": "Utilities",
+      "bars": 1254,
+      "buySignals": 79,
+      "wins": 38,
+      "losses": 41,
+      "winRate": 0.4810126582278481,
+      "netWinRate": 0.4810126582278481,
+      "avgReturn20d": -0.0027376788383715062,
+      "avgNetReturn20d": -0.004937678838371507,
+      "bnhReturn": 0.396538861003103
     },
     {
       "ticker": "SPG",
@@ -611,20 +639,33 @@
       "netWinRate": 0.4393939393939394,
       "avgReturn20d": -0.0066880312061818395,
       "avgNetReturn20d": -0.008888031206181833,
-      "bnhReturn": 0.7279046143103362
+      "bnhReturn": 0.7139957909992559
+    },
+    {
+      "ticker": "NEM",
+      "sector": "Materials",
+      "bars": 1254,
+      "buySignals": 94,
+      "wins": 41,
+      "losses": 53,
+      "winRate": 0.43617021276595747,
+      "netWinRate": 0.43617021276595747,
+      "avgReturn20d": -0.007052415004601935,
+      "avgNetReturn20d": -0.00925241500460191,
+      "bnhReturn": 1.000679594208504
     },
     {
       "ticker": "KO",
       "sector": "Consumer Staples",
       "bars": 1254,
-      "buySignals": 96,
-      "wins": 42,
+      "buySignals": 94,
+      "wins": 40,
       "losses": 54,
-      "winRate": 0.4375,
-      "netWinRate": 0.4166666666666667,
-      "avgReturn20d": -0.0029403879403754243,
-      "avgNetReturn20d": -0.005140387940375418,
-      "bnhReturn": 0.5174481492027789
+      "winRate": 0.425531914893617,
+      "netWinRate": 0.40425531914893614,
+      "avgReturn20d": -0.004062414618400851,
+      "avgNetReturn20d": -0.006262414618400846,
+      "bnhReturn": 0.5312500166493425
     },
     {
       "ticker": "MRK",
@@ -637,20 +678,7 @@
       "netWinRate": 0.35051546391752575,
       "avgReturn20d": -0.02297128337543669,
       "avgNetReturn20d": -0.025171283375436684,
-      "bnhReturn": 0.591805179022891
-    },
-    {
-      "ticker": "NEM",
-      "sector": "Materials",
-      "bars": 1254,
-      "buySignals": 82,
-      "wins": 30,
-      "losses": 52,
-      "winRate": 0.36585365853658536,
-      "netWinRate": 0.36585365853658536,
-      "avgReturn20d": -0.05071720821736682,
-      "avgNetReturn20d": -0.05291720821736685,
-      "bnhReturn": 0.5037084191519838
+      "bnhReturn": 0.7232017402335913
     },
     {
       "ticker": "NVDA",
@@ -663,7 +691,7 @@
       "netWinRate": 0.358974358974359,
       "avgReturn20d": 0.0017716624996270002,
       "avgNetReturn20d": -0.0004283375003730181,
-      "bnhReturn": 9.417778109326775
+      "bnhReturn": 10.571590170792884
     },
     {
       "ticker": "MSFT",
@@ -676,7 +704,7 @@
       "netWinRate": 0.3235294117647059,
       "avgReturn20d": -0.030499803270169264,
       "avgNetReturn20d": -0.03269980327016924,
-      "bnhReturn": 0.37056015035266604
+      "bnhReturn": 0.6903235177893393
     },
     {
       "ticker": "UNP",
@@ -689,20 +717,7 @@
       "netWinRate": 0.3333333333333333,
       "avgReturn20d": 0.0004920830417518983,
       "avgNetReturn20d": -0.0017079169582481016,
-      "bnhReturn": 0.309243548883403
-    },
-    {
-      "ticker": "DOW",
-      "sector": "Materials",
-      "bars": 1254,
-      "buySignals": 49,
-      "wins": 16,
-      "losses": 33,
-      "winRate": 0.32653061224489793,
-      "netWinRate": 0.32653061224489793,
-      "avgReturn20d": -0.017861648903161526,
-      "avgNetReturn20d": -0.02006164890316153,
-      "bnhReturn": -0.5370015895788556
+      "bnhReturn": 0.30027447038943017
     },
     {
       "ticker": "T",
@@ -715,7 +730,7 @@
       "netWinRate": 0.2972972972972973,
       "avgReturn20d": -0.016610129555336608,
       "avgNetReturn20d": -0.01881012955533661,
-      "bnhReturn": -0.010395567354520433
+      "bnhReturn": 0.1690088748451455
     },
     {
       "ticker": "HD",
@@ -728,7 +743,7 @@
       "netWinRate": 0.2926829268292683,
       "avgReturn20d": -0.021159294161603875,
       "avgNetReturn20d": -0.023359294161603872,
-      "bnhReturn": 0.08279451509438648
+      "bnhReturn": 0.0564613728809431
     },
     {
       "ticker": "JNJ",
@@ -741,7 +756,7 @@
       "netWinRate": 0.23076923076923078,
       "avgReturn20d": -0.011518761557717873,
       "avgNetReturn20d": -0.013718761557717871,
-      "bnhReturn": 0.5181662698648434
+      "bnhReturn": 0.4506603016252859
     },
     {
       "ticker": "DIS",
@@ -754,7 +769,7 @@
       "netWinRate": 0.20634920634920634,
       "avgReturn20d": -0.047453760149438536,
       "avgNetReturn20d": -0.04965376014943853,
-      "bnhReturn": -0.47933566063454963
+      "bnhReturn": -0.39231076971274026
     },
     {
       "ticker": "AAPL",
@@ -767,7 +782,7 @@
       "netWinRate": 0.2,
       "avgReturn20d": -0.03381880487511999,
       "avgNetReturn20d": -0.036018804875119985,
-      "bnhReturn": 1.1650646020713356
+      "bnhReturn": 1.0369531107447314
     },
     {
       "ticker": "NFLX",
@@ -780,7 +795,7 @@
       "netWinRate": 0.17142857142857143,
       "avgReturn20d": -0.033018266664654544,
       "avgNetReturn20d": -0.03521826666465454,
-      "bnhReturn": 0.35699492620154
+      "bnhReturn": 0.5062343259686858
     },
     {
       "ticker": "NKE",
@@ -793,7 +808,7 @@
       "netWinRate": 0.09523809523809523,
       "avgReturn20d": -0.0936270413100586,
       "avgNetReturn20d": -0.0958270413100586,
-      "bnhReturn": -0.7254161771307583
+      "bnhReturn": -0.761338341332291
     },
     {
       "ticker": "LIN",
@@ -806,7 +821,7 @@
       "netWinRate": 0.09375,
       "avgReturn20d": -0.04681227522288708,
       "avgNetReturn20d": -0.04901227522288707,
-      "bnhReturn": 0.8286275569347383
+      "bnhReturn": 0.5496276555569238
     },
     {
       "ticker": "PLD",
@@ -819,7 +834,7 @@
       "netWinRate": 0.07142857142857142,
       "avgReturn20d": -0.08839987605322233,
       "avgNetReturn20d": -0.09059987605322237,
-      "bnhReturn": 0.12148709842119336
+      "bnhReturn": 0.0518347020683921
     },
     {
       "ticker": "WELL",
@@ -832,7 +847,7 @@
       "netWinRate": null,
       "avgReturn20d": null,
       "avgNetReturn20d": null,
-      "bnhReturn": 1.6628721753169395
+      "bnhReturn": 1.7517234998197613
     }
   ]
 }
