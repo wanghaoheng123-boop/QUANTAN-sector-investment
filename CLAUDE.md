@@ -191,11 +191,25 @@ default-export laundering out of an *allowlisted* file, and a re-export bridge i
 as an allowlist of module names, one level up. Everything not a fixture is now
 production, and the scan enumerates nothing.
 
-All are closed, each has a regression test, and each was re-mutated against the
-committed tree: fails on mutation, 54/54 green on revert. **The recurring defect
-across all three rounds was not any single rule — it was a rule that was correct
-and unreachable.** Twice the scan simply never visited the directory the rule
-governed, so the suite stayed green and the rule had zero instances.
+A third pass broke it again: leak matching was **line-bounded**, so
+`export const X = { rows: gen(…) }` escaped simply by being reformatted across
+three lines; and the **extension set was an allowlist**, so `.json` — which
+`lib/backtest/dataLoader.ts` loads the entire price universe from — was neither
+an offender nor a resolvable target, and its edges were silently dropped.
+
+All are closed or named, each with a regression test, and each re-mutated against
+the committed tree: fails on mutation, 64/64 green on revert.
+
+**The recurring defect across all three rounds was never a wrong rule — it was a
+rule that was correct and unreachable.** Three times the scan simply never
+visited the thing the rule governed (a fixture directory, a top-level directory,
+a file extension), so the suite stayed green with the rule at zero instances.
+**When a guard is green, ask what it visited before you ask what it decided.**
+
+*Two false claims in this document's own supporting code were struck in the
+process* — that `markSynthetic()` made every other cast a `brand-cast` violation,
+and a cross-reference to a residual that the referenced block did not contain.
+Both are the sin the package exists to remove, committed while removing it.
 
 The runtime assertion moved for the same reason. Its first two call sites —
 `KLineChart` and `backtestInstrument` — sit behind parameters typed `Candle[]`
@@ -206,11 +220,14 @@ type system has stopped protecting us; a test proves the marker survives a JSON
 round-trip. The typed sites are kept as belt-and-braces and are explicitly not
 claimed to fire.
 
-*Why PARTIAL and not ENFORCED:* the gap is named and tested. An **unbranded**
-fabricator — one returning invented rows without `markSynthetic` and without
-`Math.random` — is invisible to static analysis, and
-`synthetic-containment.test.ts` asserts that escape explicitly in its
-"what this guard CANNOT do" block rather than leaving it implied. I3 claims
+*Why PARTIAL and not ENFORCED:* the gaps are named and **executable**. The
+"what this guard CANNOT do" block asserts each one as a passing test, so a green
+run cannot be read as a proof: an **unbranded** fabricator (invented rows with no
+`markSynthetic` and no `Math.random`); a synthetic value returned from deep
+inside an exported function body; alias chains of three or more links; a cast
+laundered through an `any`-typed intermediate; the unguarded non-chart
+`r.json()` sites; and the **backstop scope** — the runtime assertion covers
+exactly four sites, none of them in `lib/quant`, `lib/data` or `app/api`. I3 claims
 *any* such path is a P0 defect; the mechanism covers many paths, not all. The
 runtime assertions and the structural removal are the second and third layers
 precisely because the first is not a proof. → `Q-089` (product decision on the
