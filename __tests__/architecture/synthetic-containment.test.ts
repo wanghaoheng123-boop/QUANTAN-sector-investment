@@ -60,8 +60,27 @@ function walk(dir: string, out: string[] = []): string[] {
 }
 
 const rel = (f: string) => relative(ROOT, f).split(sep).join('/')
-const realFiles: VirtualFile[] = DEFAULT_OPTIONS.productionDirs
-  .flatMap((d) => walk(join(ROOT, d)))
+
+/**
+ * The scanned set must include the FIXTURE directories, not just production.
+ *
+ * This is the shape of red-team finding RT-1, and it is worth stating plainly
+ * because it is the subtlest failure in this file's history: if `__tests__/` is
+ * absent from the set, `resolveSpecifier` cannot resolve an import that points
+ * there, returns `null`, and the analyser silently skips the edge. The
+ * fixture-directory rule then has ZERO reachable instances on the real tree
+ * while every test still passes — because the virtual `BASE` hand-includes a
+ * fixture. Green and inert, one more time.
+ *
+ * `isProduction()` remains the violation DOMAIN, so fixture files are resolvable
+ * targets without themselves being scanned as offenders.
+ */
+const SCAN_DIRS = [...DEFAULT_OPTIONS.productionDirs, '__tests__', 'tests']
+const rootModules = readdirSync(ROOT)
+  .filter((f) => /\.(ts|tsx|mjs|js)$/.test(f))
+  .map((f) => join(ROOT, f))
+
+const realFiles: VirtualFile[] = [...SCAN_DIRS.flatMap((d) => walk(join(ROOT, d))), ...rootModules]
   .map((f) => ({ path: rel(f), source: readFileSync(f, 'utf8') }))
 
 const opts = { ...DEFAULT_OPTIONS, allowlist: ALLOWLIST }
@@ -243,12 +262,19 @@ describe('I3 — the seven Q-079 mutations (six of these escaped the old guard)'
     // could ever have caught it. Q-096 removed the props and their drawing
     // code, which makes the mutation a type error rather than a detection
     // problem. Structural beats detective.
+    // Primary assertion is BEHAVIOURAL, not nominal. Asserting the absence of
+    // the string `darkPoolMarkers` would be a name blocklist — the exact defect
+    // this whole package exists to remove — and a sink renamed `flowMarkers`
+    // would sail past it (red-team RT-4). `setMarkers` is lightweight-charts'
+    // only marker-plotting API, so its absence is the property that matters.
+    const noMarkerPlotting = realFiles.filter((f) => /\.setMarkers\s*\(/.test(f.source))
+    expect(noMarkerPlotting.map((f) => f.path)).toEqual([])
+
     const chart = readFileSync(join(ROOT, 'components/KLineChart.tsx'), 'utf8')
     const hook = readFileSync(join(ROOT, 'hooks/useKLineChart.ts'), 'utf8')
     for (const src of [chart, hook]) {
       expect(src).not.toMatch(/darkPoolMarkers/)
       expect(src).not.toMatch(/newsMarkers/)
-      expect(src).not.toMatch(/interface\s+DarkPoolMarker/)
     }
   })
 
@@ -261,6 +287,78 @@ describe('I3 — the seven Q-079 mutations (six of these escaped the old guard)'
       }),
     )
     expect(v.map((x) => x.rule)).toContain('brand-cast')
+  })
+})
+
+describe('I3 — the three escapes red-team found (all were green before)', () => {
+  it('RT-1: a real __tests__ fixture imported into lib/ is resolvable and caught', () => {
+    // Previously escaped because __tests__/ was not in the scanned set, so the
+    // edge resolved to null and was skipped. Asserted against the REAL file
+    // set, not the virtual one — that distinction is the whole finding.
+    expect(realFiles.some((f) => f.path.startsWith('__tests__/'))).toBe(true)
+    const fixture = realFiles.find((f) => f.path.startsWith('__tests__/'))!
+    expect(isSyntheticModule(fixture, DEFAULT_OPTIONS.brandModule)).toBe(true)
+
+    const v = analyse(
+      [...realFiles, {
+        path: 'lib/quant/__probe.ts',
+        source: `import { X } from '../../__tests__/architecture/syntheticContainment'\nexport const y = X`,
+      }],
+      opts,
+    )
+    expect(v.some((x) => x.file === 'lib/quant/__probe.ts')).toBe(true)
+  })
+
+  it('RT-2: a producer with an INFERRED return type is caught', () => {
+    // The old rule matched the annotation text `: Synthetic<`. Dropping the
+    // annotation made the module invisible and every downstream rule blind.
+    const inferred: VirtualFile = {
+      path: 'lib/demoPrices.ts',
+      source: `import { markSynthetic } from './synthetic'
+               export function demoRows() { return markSynthetic([{ close: 1 }]) }`,
+    }
+    expect(isSyntheticModule(inferred, 'lib/synthetic.ts')).toBe(true)
+
+    const v = run(
+      mutate(inferred, {
+        path: 'lib/backtest/dataLoader.ts',
+        source: `import { demoRows } from '../demoPrices'\nexport function loadRows() { return demoRows() }`,
+      }),
+    )
+    expect(v.map((x) => x.rule)).toContain('synthetic-import')
+  })
+
+  it('RT-2b: a CONSUMER holding a Synthetic<…> prop is not misclassified', () => {
+    // The annotation rule flagged components/DarkPoolPanel.tsx, which only
+    // receives branded data. Over-flagging erodes the allowlist's meaning.
+    const consumer: VirtualFile = {
+      path: 'components/DarkPoolPanel.tsx',
+      source: `import { unwrapSynthetic, type Synthetic } from '@/lib/synthetic'
+               export default function Panel(p: { prints: Synthetic<Row[]> }) {
+                 return unwrapSynthetic(p.prints, 'DarkPoolPanel')
+               }`,
+    }
+    expect(isSyntheticModule(consumer, 'lib/synthetic.ts')).toBe(false)
+  })
+
+  it('RT-8: an ALLOWLISTED file cannot re-publish synthetic data as a derived export', () => {
+    // `export const LAUNDERED = generateDarkPoolPrints('AAPL')` in an
+    // allowlisted page was green. The allowlist grants import permission, never
+    // permission to re-publish.
+    const v = run(
+      mutate({
+        path: 'app/stock/[ticker]/page.tsx',
+        source: `import { generateDarkPoolPrints } from '@/lib/mockData'
+                 export const LAUNDERED_PRINTS = generateDarkPoolPrints('AAPL')
+                 export default function Page() { return null }`,
+      }),
+      new Set(['app/stock/[ticker]/page.tsx']),
+    )
+    expect(v.map((x) => x.rule)).toContain('synthetic-reexport')
+  })
+
+  it('RT-9: root-level modules such as middleware.ts are inside the analyser', () => {
+    expect(realFiles.some((f) => f.path === 'middleware.ts')).toBe(true)
   })
 })
 
@@ -312,28 +410,49 @@ describe('I3 — the real repository is contained', () => {
   })
 })
 
-describe('I3 — the runtime assertion has executing instances', () => {
-  it('assertNotSynthetic is called at the chart boundary and the backtest boundary', () => {
-    // Q-079 found this function exported with ZERO production call sites, so
-    // I3's "add a runtime assertion, not just a comment" clause had no
-    // executing instance anywhere. These are the instances.
-    const chart = readFileSync(join(ROOT, 'components/KLineChart.tsx'), 'utf8')
-    const core = readFileSync(join(ROOT, 'lib/backtest/core.ts'), 'utf8')
-    expect(chart).toMatch(/assertNotSynthetic\(\s*candles/)
-    expect(core).toMatch(/assertNotSynthetic\(\s*rows/)
+describe('I3 — the runtime assertion has a FIRABLE executing instance', () => {
+  it('guards the JSON boundary, where the type system has stopped protecting us', () => {
+    // Red-team RT-3: the assertions inside KLineChart and backtestInstrument sit
+    // behind parameters typed `Candle[]` / `OhlcvRow[]`, and `Synthetic<T>` is
+    // deliberately NOT assignable to `T`. tsc therefore prevents a branded value
+    // from ever reaching them — which makes those two call sites unfirable by
+    // construction. That is Q-088's `assert(true, …)` one remove out, and it is
+    // exactly the shape this project keeps shipping.
+    //
+    // `r.json()` returns `any`. THAT is where a marker can actually arrive, so
+    // that is where the guard has to be.
+    for (const page of ['app/stock/[ticker]/page.tsx', 'app/sector/[slug]/page.tsx']) {
+      const src = readFileSync(join(ROOT, page), 'utf8')
+      expect(src).toMatch(/assertNotSynthetic\(data\?*\.?c?a?n?d?l?e?s?,/)
+    }
   })
 
-  it('it actually throws on branded data — verified by calling it', () => {
+  it('the marker SURVIVES a JSON round-trip, so the boundary guard can fire', () => {
+    // The whole argument for guarding at the parse boundary rests on this: if
+    // the marker did not survive serialisation there would be nothing to catch.
+    const overWire = JSON.parse(JSON.stringify(markSynthetic([{ close: 1 }])))
+    expect(overWire.__SYNTHETIC__).toBe(true)
+    expect(() => assertNotSynthetic(overWire, 'chart API response')).toThrow(/\[I3\]/)
+  })
+
+  it('it throws on branded data and passes real data through', () => {
     expect(() => assertNotSynthetic(markSynthetic([{ close: 1 }]), 'test')).toThrow(/\[I3\]/)
-  })
-
-  it('it passes real data through untouched', () => {
     expect(() => assertNotSynthetic([{ close: 1 }], 'test')).not.toThrow()
   })
 
+  it('the defence-in-depth sites exist, but are NOT claimed to be firable', () => {
+    // Kept deliberately: they cost nothing and would catch a future rewire that
+    // widens those parameter types. Recorded here as belt-and-braces so the
+    // ledger does not again claim more than the evidence supports.
+    expect(readFileSync(join(ROOT, 'components/KLineChart.tsx'), 'utf8')).toMatch(
+      /assertNotSynthetic\(\s*candles/,
+    )
+    expect(readFileSync(join(ROOT, 'lib/backtest/core.ts'), 'utf8')).toMatch(
+      /assertNotSynthetic\(\s*rows/,
+    )
+  })
+
   it('unwrapSynthetic inspects the value, so a rewire of real data fails closed', () => {
-    // The previous assertSyntheticAccepted(true, …) took a hardcoded literal
-    // and could never fire.
     expect(() => unwrapSynthetic([{ close: 1 }] as never, 'test')).toThrow(/\[I3\]/)
     expect(unwrapSynthetic(markSynthetic([7]), 'test')).toEqual([7])
   })

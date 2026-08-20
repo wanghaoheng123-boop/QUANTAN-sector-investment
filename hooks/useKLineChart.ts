@@ -20,9 +20,6 @@ import type {
   HistogramData,
   LineData,
   Time,
-  SeriesMarker,
-  SeriesMarkerPosition,
-  SeriesMarkerShape,
 } from 'lightweight-charts'
 import {
   CHART_EMA_COLORS,

@@ -25,12 +25,20 @@
  *
  * A module is synthetic here because of what it IS:
  *   1. it lives in a test/fixture directory, or
- *   2. it EXPORTS a binding annotated `Synthetic<…>` — i.e. it is a producer of
- *      branded synthetic values.
+ *   2. it CALLS `markSynthetic()` — i.e. it constructs branded values.
  *
- * Rule 2 is the load-bearing one. `lib/mockData.ts` qualifies via
- * `export function generateDarkPoolPrints(…): Synthetic<DarkPoolPrint[]>`, and
- * it still qualifies after any rename, because the brand is in the type.
+ * Rule 2 is the load-bearing one, and it keys on the CONSTRUCTOR rather than on
+ * a type annotation. An earlier draft of this file matched `: Synthetic<…>` in
+ * the source text; red-team broke it in one line by letting TypeScript INFER the
+ * return type (`export function demoRows() { return markSynthetic([]) }`), which
+ * is the same false-header shape Q-079 struck at the old guard. Annotation text
+ * is not the type.
+ *
+ * `markSynthetic()` is the ONE sanctioned constructor of a branded value, and
+ * the only other way in — a cast — is caught by `brand-cast`. So "calls the
+ * constructor" closes the producer surface in a way "mentions the type name"
+ * cannot, and it no longer misclassifies a CONSUMER that merely holds a
+ * `Synthetic<…>` prop (`components/DarkPoolPanel.tsx`).
  *
  * RESIDUAL LIMITS, stated rather than papered over:
  *  - A producer that returns raw fabricated values without the brand is invisible
@@ -98,8 +106,7 @@ export function stripComments(src: string): string {
 export function isSyntheticModule(file: VirtualFile, brandModule: string): boolean {
   if (SYNTHETIC_DIR.test(file.path)) return true
   if (file.path === brandModule) return false // defines the brand; is not branded data
-  const code = stripComments(file.source)
-  return /\bexport\b/.test(code) && /:\s*Synthetic\s*</.test(code)
+  return /\bmarkSynthetic\s*\(/.test(stripComments(file.source))
 }
 
 interface Specifier {
@@ -113,7 +120,7 @@ interface Specifier {
 export function extractSpecifiers(code: string): Specifier[] {
   const out: Specifier[] = []
 
-  const staticRe = /\b(import|export)\b([\s\S]{0,400}?)\bfrom\s*['"]([^'"]+)['"]/g
+  const staticRe = /\b(import|export)\b([\s\S]{0,800}?)\bfrom\s*['"]([^'"]+)['"]/g
   for (const m of code.matchAll(staticRe)) {
     out.push({ raw: m[3], reexport: m[1] === 'export', clause: m[2] })
   }
@@ -175,6 +182,30 @@ export function clauseBindings(clause: string): string[] {
   return names.filter(Boolean)
 }
 
+/**
+ * Exports that leak a synthetic binding out of the module's public surface.
+ *
+ * Covers the bare `export { B }` re-export AND the derived form
+ * `export const X = B(...)`, which red-team used to walk synthetic prints
+ * straight out of an ALLOWLISTED page. The allowlist grants permission to
+ * IMPORT, never permission to re-publish.
+ *
+ * RESIDUAL, named rather than implied: a value returned from deep inside an
+ * exported function body is not tracked — that needs real data-flow analysis,
+ * not regex. The runtime assertions are the layer for that.
+ */
+export function exportedLeaks(code: string, bindings: readonly string[]): string[] {
+  const leaks = new Set<string>()
+  const bare = bareExportedNames(code)
+  for (const b of bindings) if (bare.has(b)) leaks.add(b)
+  for (const m of code.matchAll(/\bexport\s+(?:const|let|var)\s+(\w+)[^=\n]*=\s*([^\n]*)/g)) {
+    for (const b of bindings) {
+      if (new RegExp(`\\b${b}\\b`).test(m[2])) leaks.add(m[1])
+    }
+  }
+  return [...leaks]
+}
+
 /** Names re-exported by a bare `export { … }` clause (no `from`). */
 export function bareExportedNames(code: string): Set<string> {
   const out = new Set<string>()
@@ -194,14 +225,18 @@ export function analyse(files: readonly VirtualFile[], opts: AnalyseOptions): Vi
   const synthetic = new Set(
     files.filter((f) => isSyntheticModule(f, opts.brandModule)).map((f) => f.path),
   )
-  const isProduction = (p: string) =>
-    opts.productionDirs.some((d) => p === d || p.startsWith(d + '/')) && !SYNTHETIC_DIR.test(p)
+  const isProduction = (p: string) => {
+    if (SYNTHETIC_DIR.test(p)) return false
+    // Root-level modules are production: `middleware.ts` runs on every request
+    // and was outside the analyser entirely until red-team pointed it out.
+    if (!p.includes('/')) return /\.(ts|tsx|mjs|js)$/.test(p)
+    return opts.productionDirs.some((d) => p === d || p.startsWith(d + '/'))
+  }
 
   for (const f of files) {
     if (!isProduction(f.path)) continue
     const code = stripComments(f.source)
     const allowed = opts.allowlist.has(f.path)
-    const bareExports = bareExportedNames(code)
 
     for (const spec of extractSpecifiers(code)) {
       if (spec.raw === null) {
@@ -230,12 +265,12 @@ export function analyse(files: readonly VirtualFile[], opts: AnalyseOptions): Vi
         // re-export it by name with a bare `export { … }`. There is no `from`
         // clause to match, so a specifier-only rule never sees it — this is the
         // shape mutation M-C used.
-        const leaked = clauseBindings(spec.clause).filter((n) => bareExports.has(n))
+        const leaked = exportedLeaks(code, clauseBindings(spec.clause))
         if (leaked.length > 0) {
           violations.push({
             rule: 'synthetic-reexport',
             file: f.path,
-            detail: `re-exports ${leaked.join(', ')} sourced from synthetic module '${target}'`,
+            detail: `exports ${leaked.join(', ')}, derived from synthetic module '${target}' — the allowlist grants import permission, not permission to re-publish`,
           })
         }
         if (!allowed) {

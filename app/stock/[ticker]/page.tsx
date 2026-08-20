@@ -19,7 +19,7 @@ import { useLiveQuote } from '@/hooks/useLiveQuote'
 import MaxPainGauge from '@/components/options/MaxPainGauge'
 import FlowScanner from '@/components/options/FlowScanner'
 import { generateDarkPoolPrints } from '@/lib/mockData'
-import { markSynthetic, unwrapSynthetic, type Synthetic } from '@/lib/synthetic'
+import { markSynthetic, unwrapSynthetic, assertNotSynthetic, type Synthetic } from '@/lib/synthetic'
 import { DarkPoolPrint, SECTORS } from '@/lib/sectors'
 import type { DarkPoolAnalysis } from '@/lib/darkpool'
 import { buildVisFromIndicatorPreset, type ChartEmaKey } from '@/lib/chartEma'
@@ -109,6 +109,13 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
       })
       .then((data) => {
         if (signal?.aborted) return
+        // I3 — the FIRABLE boundary. `r.json()` is `any`, so the type system
+        // has stopped protecting us here: a payload carrying `__SYNTHETIC__`
+        // would flow straight into the chart. The assertions deeper in
+        // (KLineChart, backtestInstrument) sit behind typed parameters and
+        // therefore cannot fire in practice — red-team RT-3. This one can.
+        assertNotSynthetic(data, 'chart API response')
+        assertNotSynthetic(data?.candles, 'chart API candles')
         if (data.error) {
           throw new Error(typeof data.error === 'string' ? data.error : 'Chart data unavailable')
         }
