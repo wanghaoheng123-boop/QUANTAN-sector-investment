@@ -145,13 +145,20 @@ Add a runtime assertion, not just a comment.
 *Today:* the guard is a **property check with named gaps**, and both halves of
 I3's demand now have executing instances.
 `__tests__/architecture/syntheticContainment.ts` decides a module is synthetic
-because it lives in a fixture directory or **calls `markSynthetic()`**, the one
-sanctioned constructor — so a rename does not evade it, and neither does an
-inferred return type. *(The first implementation keyed on the annotation text
-`: Synthetic<`, and red-team broke it in one line by letting TypeScript infer the
-return. Annotation text is not the type — the same false-header shape Q-079
-struck at the old guard, reintroduced one commit after removing it. A cast, the
-only other route to a branded value, is caught by `brand-cast`.)* It is a pure function of a
+because it lives in a fixture directory, because it **resolves the brand
+constructor through the import graph** (any alias, any number of re-export hops),
+or because it constructs the marker shape directly.
+
+*Three drafts of that sentence were false, which is the lesson worth keeping.*
+The first matched the annotation text `: Synthetic<` — defeated by letting
+TypeScript infer the return type. The second matched `markSynthetic(` — defeated
+by `import { markSynthetic as mk }`, by a second-hop re-export, and by
+`const f = markSynthetic`. **Replacing one source-text match with another is not
+a property; only resolution is.** The third problem was deeper: `Synthetic<T>`
+was a plain **structural** interface, so `{ __SYNTHETIC__: true, value }`
+satisfied it with *no cast at all* — meaning `markSynthetic()` was never the only
+constructor and `brand-cast` never had to fire. `lib/synthetic.ts` now carries an
+unnameable `unique symbol`, which makes the forgery a type error. It is a pure function of a
 virtual file set, which makes all seven Q-079 mutations **executable test cases**
 rather than a claim in a review document
 (`__tests__/architecture/synthetic-containment.test.ts`). Two rules were added
@@ -168,8 +175,8 @@ executing instance on the two boundaries the invariant names. `Q-096` removed th
 `darkPoolMarkers`/`newsMarkers` props and their drawing code outright, which
 turns mutation M-F2 from a detection problem into a type error.
 
-**Watched it fail, on the real tree, 2026-08-18** — twice, because the first
-round was not enough. M-B (a synthetic module named `demoPrices`, not
+**Watched it fail, on the real tree, 2026-08-18** — across three rounds, because
+neither of the first two was enough. M-B (a synthetic module named `demoPrices`, not
 `mockData`) and M-E (fabricated OHLC in the live chart route) failed the suite as
 designed. **Adversarial review then found three further escapes that were green**,
 each verified by mutating the real tree: a `__tests__` fixture import (the
@@ -177,9 +184,18 @@ fixture-directory rule had *zero reachable instances*, because the scan never
 included those directories, so the edge resolved to `null` and was silently
 skipped); a producer with an inferred return type; and a derived export
 (`export const X = generateDarkPoolPrints(…)`) laundering data out of an
-*allowlisted* page. All three are closed, each has a regression test, and each
-was re-mutated against the committed tree: fails on mutation, 43/43 green on
-revert.
+*allowlisted* page. A second review then broke the fixes again: aliased and
+second-hop constructor imports, the structural forgery above, namespace and
+default-export laundering out of an *allowlisted* file, and a re-export bridge in
+`src/` — because production was an **allowlist of directories**, the same defect
+as an allowlist of module names, one level up. Everything not a fixture is now
+production, and the scan enumerates nothing.
+
+All are closed, each has a regression test, and each was re-mutated against the
+committed tree: fails on mutation, 54/54 green on revert. **The recurring defect
+across all three rounds was not any single rule — it was a rule that was correct
+and unreachable.** Twice the scan simply never visited the directory the rule
+governed, so the suite stayed green and the rule had zero instances.
 
 The runtime assertion moved for the same reason. Its first two call sites —
 `KLineChart` and `backtestInstrument` — sit behind parameters typed `Candle[]`
