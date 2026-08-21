@@ -2222,7 +2222,7 @@
     "title": "I1/I2: provenance and staleness flags are built and read by nobody",
     "domain": "Frontend/UX",
     "priority": "P1",
-    "status": "pending",
+    "status": "partial",
     "files": [
       "lib/data/mergeQuotes.ts",
       "components/DataFreshnessIndicator.tsx",
@@ -2239,7 +2239,8 @@
       "npm run test"
     ],
     "notes_2026_08_17": "Q-079 audit. Same green-and-inert shape as the Q-088 lesson: the plumbing exists and nothing consumes it. lib/data/mergeQuotes.ts:18-28 builds per-field QuoteProvenance on every quote and grep '.provenance' across components/ app/ hooks/ returns ZERO consumers. _cached:true (app/api/chart/[ticker]/route.ts:60) has 8 producers and 0 consumers - the cache substitution happens and the flag dies in the JSON. app/api/options/[ticker]/route.ts:82-86 emits dataProvenance{delayedMinutes:15,realtime:false} with a comment promising a DELAYED badge no component renders. DataFreshnessIndicator.tsx:66-71 is correct but mounted on 2 of 16 pages (app/desk/page.tsx:163, app/sector/[slug]/page.tsx:345). Declared blind spot from that audit: hooks/ SWR keepPreviousData was not checked and is the most likely undiscovered I2 violation.",
-    "blocked_by": []
+    "blocked_by": [],
+    "notes_2026_08_21": "PARTIAL. The I2 CACHE-SUBSTITUTION clause is CLOSED and I2 moves VIOLATED -> PARTIAL: all three routes that set `_cached: true` (chart, btc/metrics, btc/liquidations) now have a consumer that renders it, and `cached` outranks every freshness state including 'Live' - a cached value with a recent timestamp would otherwise render green and pulsing, which is worse than no indicator. The guard asserts the property PER PRODUCER (an aggregate check passes while two of three routes stay silent) and strips comments, which was necessary: the first version matched `_cached` in the explanatory comments the consuming pages carry, so deleting the actual read left it green - caught by mutation, not by reading. STILL OPEN, and the reason I2 is not better than PARTIAL: DataFreshnessIndicator is mounted on 2 of 16 pages, and hooks/ SWR keepPreviousData is the audit's declared blind spot and most likely remaining violation. THE I1 HALF IS UNTOUCHED - lib/data/mergeQuotes.ts still builds per-field QuoteProvenance with zero consumers, and the full 5-tuple does not exist, so I1 stays ASPIRATIONAL."
   },
   {
     "id": "Q-102",

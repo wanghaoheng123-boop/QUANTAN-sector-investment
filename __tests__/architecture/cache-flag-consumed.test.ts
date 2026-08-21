@@ -33,9 +33,23 @@ function walk(dir: string, out: string[] = []): string[] {
 }
 
 const rel = (f: string) => relative(ROOT, f).split(sep).join('/')
+
+/**
+ * Comments stripped, and this is load-bearing rather than tidiness.
+ *
+ * The first version of this file matched `_cached` against RAW source. Every
+ * page that consumes the flag also carries a comment EXPLAINING the flag — so
+ * deleting the actual read (`data._cached` -> `false`) left the comment behind
+ * and the guard stayed green. Verified by mutation: it did not fail until this
+ * was added. A guard that matches prose about the behaviour instead of the
+ * behaviour is the same defect this repo has now hit in four packages.
+ */
+const stripComments = (src: string) =>
+  src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1')
+
 const files = ['app', 'components', 'hooks', 'lib']
   .flatMap((d) => walk(join(ROOT, d)))
-  .map((f) => ({ path: rel(f), source: readFileSync(f, 'utf8') }))
+  .map((f) => ({ path: rel(f), source: stripComments(readFileSync(f, 'utf8')) }))
 
 /** Routes that SET the flag — i.e. can serve a stored copy in place of a fetch. */
 const producers = files.filter(
@@ -45,6 +59,17 @@ const producers = files.filter(
 const consumers = files.filter(
   (f) => !f.path.startsWith('app/api/') && /_cached/.test(f.source),
 )
+
+describe('I2 — the matcher reads behaviour, not prose about behaviour', () => {
+  it('a file that only MENTIONS the flag in a comment is not a consumer', () => {
+    const commentOnly = stripComments(`// we should read _cached here one day\nexport const x = 1`)
+    expect(/_cached/.test(commentOnly)).toBe(false)
+  })
+
+  it('a file that actually reads the flag is a consumer', () => {
+    expect(/_cached/.test(stripComments('const c = data._cached === true'))).toBe(true)
+  })
+})
 
 describe('I2 — the scan is reachable', () => {
   it('finds the API routes that can serve a cached value', () => {
