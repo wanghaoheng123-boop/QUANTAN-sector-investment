@@ -2246,7 +2246,7 @@
     "title": "I4: weekly in-place history rewrite and a rolling survivor universe make benchmark floors non-reproducible",
     "domain": "Data/Integrity",
     "priority": "P1",
-    "status": "pending",
+    "status": "partial",
     "files": [
       "scripts/fetchBacktestData.mjs",
       ".github/workflows/refresh-data.yml",
@@ -2263,7 +2263,8 @@
       "npm run test"
     ],
     "notes_2026_08_17": "Q-079 audit, feeds Q-080. scripts/fetchBacktestData.mjs:116-122 writeFileSync over the entire history every Sunday via refresh-data.yml, pushed to main - so both floors in reviews/invariants-baseline.md are non-reproducible and a vendor restatement presents as signal drift. Universe is a rolling present-day survivor list (:12-68 hardcoded names, :71 PERIOD_DAYS=1825 re-anchored to Date.now()), window ~2021-2026 not a fixed historical span. AFFIRMATIVE NEGATIVE worth keeping: fundamentals reach NO backtest or signal path today - they are UI-only (app/api/fundamentals/[ticker]/route.ts:68, lib/briefs/sectorBrief.ts:214) - so this needs a tripwire, not a migration. LATENT, not live: lib/backtest/walkForward.ts:157-159 has embargo 0 against 60-day holds, but all 16 call sites are in __tests__/; the live OOS path lib/optimize/gridSearch.ts:347 applies embargo 5 and is tested.",
-    "blocked_by": []
+    "blocked_by": [],
+    "notes_2026_08_21": "PARTIAL (PR #160). THREE of four criteria delivered; the fourth is honestly short. DONE: (2) the window start is PINNED at both fetch sites - `period1: new Date(Date.now() - PERIOD_DAYS*86400000)` re-anchored every run so the oldest bars silently dropped out weekly. Pinned to 2021-08-17, which is exactly where all 56 committed fixtures already begin, so the change is a NO-OP for existing data; a rounder date would have added ~3 weeks of history and moved every benchmark number while the primary edge gate sits 0.10pp above its floor. (3) fundamentals tripwire added, reachability-checked with a positive control and a vacuity check. (4) a vendor restatement is now detectable AS a restatement: scripts/lib/dataVintage.mjs splits a refresh into appended/restated/missing and fails closed on the latter two with a message saying it is a data event, not signal drift. SHORT OF (1): history is append-only IN PRACTICE (pinned start + appending end), so a past run is reproducible over a PREFIX \u2014 but not byte-identically, because each refresh legitimately adds bars. True reproducibility needs content-addressed snapshots per run, with the benchmark recording which snapshot it consumed. Fixtures now carry windowStart, a content fingerprint and per-refresh vintage counts, which is the substrate for that but not the thing itself. Remainder tracked here rather than closed."
   },
   {
     "id": "Q-103",
