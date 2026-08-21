@@ -105,7 +105,7 @@ describe('computeResearchScore — exact pillar arithmetic', () => {
     expect(r.pillars[1].detail).toBe('strong ROE · healthy margins · low leverage')
     expect(r.pillars[2].detail).toContain('RSI oversold')
     expect(r.pillars[2].detail).toContain('trend supportive')
-    expect(r.pillars[3].detail).toBe('Outperforming SPY in window (+10.0%).')
+    expect(r.pillars[3].detail).toBe('Higher return than SPY in window (+10.0%).')
   })
 
   it('bearish composite: penalties stack exactly', () => {
