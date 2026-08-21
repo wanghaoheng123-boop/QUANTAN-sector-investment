@@ -937,3 +937,54 @@ moved trades 3410 → 3394 and effective n 347 → 345 with no code change.
 
 **Next:** Q-085 (PBO) is the only thing standing between here and I5 being
 meetable at all. Q-102 is why no floor on this dataset is trustworthy.
+
+---
+
+## 2026-08-21 — UI honesty (Q-103), deterministic fabrication (Q-104), data vintage (Q-102)
+
+Shipped as #158 (`9fbdbf9`), #159 (`21881d0`), #160 (`05aa3be`).
+
+**The lesson, and it is the same one again: my guard was green because its
+extractor never visited the text.** Red-team ran my own extraction pipeline over
+four files containing the banned word in rendered copy — all four returned
+nothing, while the suite read 88/88. The tell was my "positive control": it
+asserted `BANNED.test('Alpha vs B&H')`, validating the **decider** while the
+**visitor** returned an empty list for every file. Q-098's reachability defect,
+one package later, in a new costume.
+
+Then **I blinded it twice more while fixing it**, both caught empirically rather
+than by reasoning: rejecting text containing `;` hid a live disclaimer, because
+prose uses semicolons; and rejecting the word `return` would have hidden
+essentially all of this product's copy, because it is a *finance app* whose UI
+says "annualised return" everywhere. **Every filter in a guard shrinks what it
+visits — prefer over-matching and let the offender list be the judge.**
+
+What the repaired guard then found: two `sr-only` captions still saying "alpha"
+in the very files whose visible headers I had just renamed (sighted users read
+"Excess", screen-reader users read "alpha"), and a glossary **tooltip** claiming
+*"Positive alpha = strategy adds value beyond beta exposure"* — doubly wrong,
+since the figure has no beta adjustment and the excess measures t≈0.17.
+
+**Q-104** closed a sibling gap: I3's fabrication rule keyed on `Math.random()`,
+so a live route building its whole input from `Math.sin(i/10)` — with all five
+factors as multiples of it — rendered a degenerate regression undetected. The new
+rule is a property (elements read the array *index*, not data), scoped by a
+second property (the series can *escape* the module), so a self-contained golden
+script is exempt without appearing in any list.
+
+**Q-102** pinned the backtest window. It had been re-anchored to `Date.now()`, so
+old bars dropped out weekly — I watched it happen mid-session. Pinned to
+`2021-08-17`, exactly where all 56 fixtures already start, so the change is a
+no-op for existing data rather than a gate-breaking jump. Marked **partial**:
+byte-identical reproducibility needs content-addressed snapshots, and saying
+otherwise would be the overclaim this project keeps punishing.
+
+**My own process failures, both from trusting a shell exit status.** `npm run
+test | tail && git commit` masked a red suite — a pipeline reports the *last*
+command's status. And a heredoc's `SyntaxError` fell through to the `git` line
+below it, so a commit message announced work it did not contain. Both corrected
+and named in their commit messages; every gate since uses `set -o pipefail` and
+`&&` between steps.
+
+**Next:** Q-101 and Q-080 are agent-actionable. Q-085 (PBO) still stands between
+the platform and I5 being meetable at all.
