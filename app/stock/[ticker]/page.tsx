@@ -21,6 +21,7 @@ import FlowScanner from '@/components/options/FlowScanner'
 import { generateDarkPoolPrints } from '@/lib/mockData'
 import { markSynthetic, unwrapSynthetic, assertNotSynthetic, type Synthetic } from '@/lib/synthetic'
 import { DarkPoolPrint, SECTORS } from '@/lib/sectors'
+import { DataFreshnessIndicator } from '@/components/DataFreshnessIndicator'
 import type { DarkPoolAnalysis } from '@/lib/darkpool'
 import { buildVisFromIndicatorPreset, type ChartEmaKey } from '@/lib/chartEma'
 import { STOCK_CHART_RANGES, isStockIntradayPollRange, chartBarKindLabel } from '@/lib/chartYahoo'
@@ -77,6 +78,7 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
   const [activeIndicator, setActiveIndicator] = useState('ema')
   const [loading, setLoading]           = useState(true)
   const [chartError, setChartError]     = useState<string | null>(null)
+  const [chartCached, setChartCached]   = useState(false)
   // Indicator visibility state. The page owns this; the sidebar IndicatorPanel
   // and the preset row write it, and it flows down into `indicatorConfig`.
   // Both activeIndicator (preset) and vis (individual toggles) feed into indicatorConfig.
@@ -116,6 +118,11 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
         // therefore cannot fire in practice — red-team RT-3. This one can.
         assertNotSynthetic(data, 'chart API response')
         assertNotSynthetic(data?.candles, 'chart API candles')
+        // I2 — the cache flag finally has a consumer. Three API routes set
+        // `_cached: true` and NOTHING read it, so a stored copy was served in
+        // place of a live fetch with no visible flag. That is the clause the
+        // Q-079 audit rated I2 VIOLATED on.
+        setChartCached(data._cached === true)
         if (data.error) {
           throw new Error(typeof data.error === 'string' ? data.error : 'Chart data unavailable')
         }
@@ -457,6 +464,7 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
                           announcing every SSE tick is an aria-live anti-pattern. */}
                       {quoteError && <span role="status" aria-live="polite" className="text-amber-400/70">QUOTE DEGRADED</span>}
                       <span>{chartBarKindLabel(activeRange)} BARS</span>
+                      {chartCached && <DataFreshnessIndicator cached label="chart" />}
                     </div>
                   </div>
                   {loading && candles.length === 0 ? (

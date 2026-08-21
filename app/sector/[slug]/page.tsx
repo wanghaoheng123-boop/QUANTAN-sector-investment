@@ -67,6 +67,7 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
   const [activeRange, setActiveRange] = useState('6M')
   const [quoteError, setQuoteError] = useState<string | null>(null)
   const [chartError, setChartError] = useState<string | null>(null)
+  const [chartCached, setChartCached] = useState(false)
   const [chartLoading, setChartLoading] = useState(true)
 
   // Phase 14 wave 18: AbortSignal-aware fetch. Prior code was vulnerable to
@@ -91,6 +92,11 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
           // therefore cannot fire in practice — red-team RT-3. This one can.
           assertNotSynthetic(data, 'chart API response')
           assertNotSynthetic(data?.candles, 'chart API candles')
+          // I2 — the cache flag finally has a consumer. Three API routes set
+          // `_cached: true` and NOTHING read it, so a stored copy was served in
+          // place of a live fetch with no visible flag. That is the clause the
+          // Q-079 audit rated I2 VIOLATED on.
+          setChartCached(data._cached === true)
           if (data.error) {
             throw new Error(typeof data.error === 'string' ? data.error : 'Chart data unavailable')
           }
@@ -497,6 +503,11 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
                   </div>
                 ) : candles.length > 0 ? (
                   <ChartErrorBoundary label={sector.etf} fallbackHeight={480}>
+                    {chartCached && (
+                      <div className="mb-1 flex justify-end">
+                        <DataFreshnessIndicator cached label="chart" />
+                      </div>
+                    )}
                     <KLineChart
                       candles={candles}
                       color={sector.color}

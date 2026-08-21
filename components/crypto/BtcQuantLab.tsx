@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { DataFreshnessIndicator } from '@/components/DataFreshnessIndicator'
 import {
   BtcCandle,
   calcRSI,
@@ -97,6 +98,11 @@ export default function BtcQuantLab({ candles }: Props) {
   const [liqLoading, setLiqLoading] = useState(false)
   const [metricsFetchedAt, setMetricsFetchedAt] = useState<string | null>(null)
   const [liqFetchedAt, setLiqFetchedAt] = useState<string | null>(null)
+  // I2 — these routes serve a stored copy when the upstream exchange call fails
+  // or is rate-limited, and both set `_cached: true`. Nothing read it, so a
+  // cached derivatives figure was displayed identically to a live one.
+  const [metricsCached, setMetricsCached] = useState(false)
+  const [liqCached, setLiqCached] = useState(false)
 
   // F3 (WS-F): guard against setState-after-unmount. The 30s/60s pollers below
   // clearInterval on cleanup (no NEW fetches after unmount), but an in-flight
@@ -119,6 +125,7 @@ export default function BtcQuantLab({ candles }: Props) {
       if (!mountedRef.current) return
       if (mr.ok) {
         setMetrics(mr.data as MetricsData)
+        setMetricsCached((mr.data as { _cached?: boolean })?._cached === true)
         setMetricsFetchedAt(new Date().toLocaleTimeString())
       } else {
         setDerivativesError((prev) => {
@@ -140,6 +147,7 @@ export default function BtcQuantLab({ candles }: Props) {
       if (!mountedRef.current) return
       if (lr.ok) {
         setLiq(lr.data as LiqData)
+        setLiqCached((lr.data as { _cached?: boolean })?._cached === true)
         setLiqFetchedAt(new Date().toLocaleTimeString())
       } else {
         setDerivativesError((prev) => {
@@ -387,7 +395,7 @@ export default function BtcQuantLab({ candles }: Props) {
             <MetricCard
               label="Data Source"
               value={metricsLoading ? 'Refreshing…' : metrics?.source?.includes('Unavailable') ? 'Unavailable' : (metrics?.source ?? '—')}
-              sub={metricsFetchedAt ? `Updated ${metricsFetchedAt}` : undefined}
+              sub={metricsFetchedAt ? `Updated ${metricsFetchedAt}${metricsCached ? ' (cached)' : ''}` : undefined}
               color="text-slate-400"
             />
           </div>
@@ -396,7 +404,12 @@ export default function BtcQuantLab({ candles }: Props) {
         {activeMetricTab === 'liquidations' && (
           <div>
             {liqLoading && <div className="text-[10px] text-slate-400 mb-2">Refreshing liquidations data…</div>}
-          {liqFetchedAt && <div className="text-[10px] text-slate-400 mb-2">Last updated: {formatFreshness(liq?.fetchedAt)}</div>}
+          {liqFetchedAt && (
+            <div className="text-[10px] text-slate-400 mb-2 flex items-center gap-2">
+              <span>Last updated: {formatFreshness(liq?.fetchedAt)}</span>
+              {liqCached && <DataFreshnessIndicator cached compact />}
+            </div>
+          )}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <MetricCard
                 label="Large Trades (24h)"
