@@ -122,20 +122,34 @@ DELAYED badge that no component renders. **Not PARTIAL: PARTIAL requires a
 mechanism on some paths, and the consumer count is zero, not few.** Numbers
 render today with no provenance and no `—`. → `Q-101`.
 
-### I2 — Fail closed, never fail silent · VIOLATED *(was PARTIAL; corrected 2026-08-17)*
+### I2 — Fail closed, never fail silent · PARTIAL *(VIOLATED 2026-08-17; cache clause closed by `Q-101` 2026-08-21)*
 Stale data displays as STALE with age. Missing data displays as MISSING.
 Never forward-fill into a live quote. Never substitute a cached value for a
 live one without a visible flag. A broken feed must degrade the UI, not
 invisibly poison it.
 *Today:* the two halves sit at different tiers, so the heading takes the worse.
-**Staleness · PARTIAL:** `components/DataFreshnessIndicator.tsx:66-71` correctly
-renders `Stale — refresh` with age, but is mounted on **2 of 16 pages**
-(`app/desk/page.tsx:163`, `app/sector/[slug]/page.tsx:345`).
-**Cache substitution · VIOLATED:** the flag `_cached`
-(`app/api/chart/[ticker]/route.ts:60`) appears at **7 sites, 3 of which set it,
-with zero consumers** — so a cached value *is* substituted for a live one with no
-visible flag, which is precisely what I2 names and forbids. That is a live path
-doing the opposite, not merely a missing mechanism. → `Q-101`.
+**Staleness · PARTIAL, and this half is why I2 is no better than PARTIAL:**
+`components/DataFreshnessIndicator.tsx` correctly renders `Stale — refresh` with
+age, but is mounted on **2 of 16 pages** (`app/desk/page.tsx:163`,
+`app/sector/[slug]/page.tsx:352`). The audit's declared blind spot also stands:
+`hooks/` SWR `keepPreviousData` is unchecked and is the most likely remaining I2
+violation. → `Q-101`.
+
+**Cache substitution · CLOSED by `Q-101` (2026-08-21).** `_cached` was set by
+three routes and read by **nobody** — the substitution happened and the flag died
+in the JSON, which is what made this half VIOLATED. All three now have a consumer
+that shows it: both chart pages set `chartCached` from the payload, and
+`components/crypto/BtcQuantLab.tsx` marks the metrics card and the liquidations
+panel. **`cached` outranks every freshness state including "Live"** — a cached
+value with a recent timestamp would otherwise render green and pulsing, telling
+the user it is live, which is worse than showing nothing; the test asserts branch
+ORDERING, not mere presence.
+`__tests__/architecture/cache-flag-consumed.test.ts` asserts the property **per
+producer**, because an aggregate check stays green while two of three routes
+still serve stored copies silently — and it **strips comments**, because the
+first version matched `_cached` in the explanatory comments the consuming pages
+carry, so deleting the actual read left it green. That was caught by mutation,
+not by reading.
 
 ### I3 — No synthetic data crosses the boundary · PARTIAL *(VIOLATED 2026-08-17; closed to PARTIAL by `Q-098` 2026-08-18)*
 Mock/fixture/synthetic data is permitted only in `__tests__/` and `tests/` and
