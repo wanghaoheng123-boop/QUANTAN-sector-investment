@@ -171,11 +171,18 @@ export const METRIC_GLOSSARY: Record<string, MetricMeta> = {
   },
 
   // -------- Returns & Sizing --------
-  alpha: {
-    label: 'Alpha',
-    definition: 'Excess return of a strategy over a passive buy-and-hold benchmark on the same instruments.',
-    range: 'Typically -10% to +20% annual.',
-    howToUse: 'Positive alpha = strategy adds value beyond beta exposure. >5% annual is meaningful in equities. Persistently negative alpha = strategy not worth the friction.',
+  excessVsBuyHold: {
+    // Keyed on the display concept, not the data field. The old copy read
+    // "Positive alpha = strategy adds value beyond beta exposure", which was
+    // doubly wrong: this figure carries NO beta adjustment, and on this
+    // platform's own measurement the excess is not distinguishable from zero
+    // (t ~ 0.17 against a bar of 3.0). See CLAUDE.md I5, Q-103.
+    label: 'Excess vs Buy & Hold',
+    definition:
+      'Raw difference between the strategy return and a passive buy-and-hold of the same instruments over the same window. Not risk-adjusted and not beta-adjusted — it is a subtraction, not a measure of skill.',
+    range: 'A TOTAL-window difference, not annualised — over a ~5-year backtest it spans tens of percent, and is frequently indistinguishable from zero.',
+    howToUse:
+      'Treat a positive value as a description of one historical window, not as evidence of skill: a difference this noisy needs a significance test before it means anything, and on this universe the measured excess is not statistically distinguishable from zero. A persistently negative value is the more actionable signal.',
   },
   annualizedReturn: {
     label: 'Annualized Return (CAGR)',

@@ -35,11 +35,20 @@ function fmtRatio(v: number | null): string {
 }
 
 export function KeyMetricsStrip({ portfolio, instrumentCount }: KeyMetricsStripProps) {
-  // Displayed Sharpe heuristic: avgAnnReturn / maxPortfolioDd. NOT the
-  // canonical (Rp - Rf) / σ; this is the same simplified ratio the
-  // pre-extract code shipped. Preserve verbatim to avoid regression.
-  const displayedSharpe =
-    portfolio.avgAnnReturn > 0 && portfolio.maxPortfolioDd > 0
+  // annualised return / max drawdown — a MAR (Calmar) ratio, NOT a Sharpe.
+  // It was labelled "Sharpe Ratio" in the UI while the comment here admitted it
+  // was not one (Q-079, Q-103). The label now matches the arithmetic.
+  //
+  // The `> 0` guard on the return was removed deliberately. It made the negative
+  // branch UNREACHABLE, so a LOSING portfolio rendered an em dash instead of a
+  // negative ratio — the worst outcome silently displayed as "no data".
+  //
+  // Residual, stated rather than implied: `fmtRatio` handles null and Infinity
+  // but not NaN, and the old `avgAnnReturn > 0` test incidentally swallowed a
+  // NaN numerator. Nothing in the engine currently produces one
+  // (`truePortfolioAnnReturn`, engine.ts:152), so this is latent, not live.
+  const displayedMar =
+    portfolio.maxPortfolioDd > 0
       ? portfolio.avgAnnReturn / (portfolio.maxPortfolioDd || 1)
       : null
 
@@ -52,7 +61,11 @@ export function KeyMetricsStrip({ portfolio, instrumentCount }: KeyMetricsStripP
         color={portfolio.avgReturn >= 0 ? 'text-emerald-400' : 'text-red-400'}
       />
       <BacktestMetricCard
-        label="Alpha vs B&H"
+        // NOT "Alpha": this is the raw arithmetic difference
+        // (`truePortfolioReturn - bnhAvg`, engine.ts:213), carrying no
+        // risk adjustment and no significance test. Naming it alpha asserts
+        // skill the measurement does not establish — see CLAUDE.md I5.
+        label="Excess vs B&H"
         value={fmtPct(portfolio.alpha)}
         // F-2 (2026-07-06): B&H is measured over the SAME end-aligned common
         // window as the portfolio return — say so, since the number moved.
@@ -60,14 +73,14 @@ export function KeyMetricsStrip({ portfolio, instrumentCount }: KeyMetricsStripP
         color={portfolio.alpha > 0 ? 'text-cyan-400' : 'text-orange-400'}
       />
       <BacktestMetricCard
-        label="Sharpe Ratio"
-        value={fmtRatio(displayedSharpe)}
-        sub="Risk-adj return"
+        label="Return / Max DD"
+        value={fmtRatio(displayedMar)}
+        sub="Ann. return ÷ max drawdown"
         // Color the Sharpe card by the displayed Sharpe value, not alpha.
         // Pre-fix the card was painted by `portfolio.alpha > 0` which made
         // a strong Sharpe + weak alpha portfolio look grey/bad and the
         // reverse case look cyan/good — visual-label mismatch.
-        color={displayedSharpe == null ? 'text-slate-400' : displayedSharpe >= 1 ? 'text-cyan-400' : displayedSharpe >= 0 ? 'text-amber-400' : 'text-red-400'}
+        color={displayedMar == null ? 'text-slate-400' : displayedMar >= 1 ? 'text-cyan-400' : displayedMar >= 0 ? 'text-amber-400' : 'text-red-400'}
       />
       <BacktestMetricCard
         label="Max Drawdown"

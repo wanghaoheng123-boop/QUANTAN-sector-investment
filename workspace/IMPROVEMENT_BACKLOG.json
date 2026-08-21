@@ -2270,7 +2270,7 @@
     "title": "UI labels an indistinguishable-from-zero excess as \"Alpha\"",
     "domain": "Frontend/UX",
     "priority": "P1",
-    "status": "pending",
+    "status": "done",
     "files": [
       "components/backtest/KeyMetricsStrip.tsx",
       "components/backtest/WalkForwardPanel.tsx",
@@ -2286,6 +2286,27 @@
       "npm run typecheck",
       "npm run test"
     ],
-    "notes_2026_08_21": "Found by red-team on Q-081/Q-099 (finding Q081-RT-5). Four labels call the excess over buy-and-hold 'Alpha': KeyMetricsStrip.tsx:55 'Alpha vs B&H', WalkForwardPanel.tsx:124 'Strategy Alpha', InstrumentTable.tsx:67, AnalysisTab.tsx:108. The measured excess over an equal-weight hold of the same universe has t=0.17 against a |t|>3 bar \u2014 NOT distinguishable from zero \u2014 so 'Alpha' names a conclusion the data does not support. CLAUDE.md I5 now bans skill wording in user-visible copy and names these four as violated on landing rather than pretending compliance. Related: the Q-079 audit also found KeyMetricsStrip.tsx:63 labels annReturn/maxDD as 'Sharpe Ratio' and its negative branch is unreachable (tracked in Q-099 notes)."
+    "notes_2026_08_21": "DONE (PR #158). Four filed labels fixed, plus THREE the ticket did not name, all found by the new guard once its extractor was repaired: two sr-only table captions (sighted users read 'Excess', screen-reader users read 'alpha'), a glossary TOOLTIP reading 'Positive alpha = strategy adds value beyond beta exposure' (doubly wrong - no beta adjustment exists, and the measured excess is t~0.17), and 'Outperforming SPY in window' in researchScore. The 'Sharpe Ratio' card that computed annReturn/maxDD is now 'Return / Max DD', and its unreachable negative branch (losing portfolios rendered an em dash) is fixed. The guard has NO exemption list: two internal identifiers were RENAMED rather than carved out."
+  },
+  {
+    "id": "Q-104",
+    "title": "I3 inline-fabrication keys on Math.random() and misses deterministic fabrication",
+    "domain": "Testing",
+    "priority": "P1",
+    "status": "pending",
+    "files": [
+      "__tests__/architecture/syntheticContainment.ts",
+      "app/portfolio/factor-attribution/page.tsx"
+    ],
+    "acceptance_criteria": [
+      "A live route that synthesises its input series deterministically (Math.sin, index arithmetic, hardcoded generators) is detected",
+      "The factor-attribution demo route is removed, gated behind a non-production flag, or fed measured data",
+      "The rule does not false-positive on legitimate mathematical use of Math.sin/Math.cos in indicator or statistics code"
+    ],
+    "verify_commands": [
+      "npx vitest run __tests__/architecture",
+      "npm run typecheck"
+    ],
+    "notes_2026_08_21": "Found by red-team on Q-103. app/portfolio/factor-attribution/page.tsx:4 builds its ENTIRE input from 0.001 + Math.sin(i/10)*0.002 and derives all five factors as scalar multiples of it, so the regression is degenerate by construction, then renders an intercept and factor loadings on a LIVE app route. I3's inline-fabrication rule matches Math.random() only, so the guard is blind to it. Mitigated in #158 by an unmissable 'every number on this page is fabricated' banner, but the DETECTION gap is open. Note the tension: Math.sin is legitimate in indicator math, so this needs a data-flow property (a fabricated series reaching a render or a model) rather than another name match \u2014 the exact lesson from Q-098's three rounds."
   }
 ]

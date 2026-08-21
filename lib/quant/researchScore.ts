@@ -157,9 +157,9 @@ function rsScore(excess: number | null): PillarScore {
   let s = 50 + ann * 120
   const detail =
     ann > 0.05
-      ? `Outperforming SPY in window (+${(ann * 100).toFixed(1)}%).`
+      ? `Higher return than SPY in window (+${(ann * 100).toFixed(1)}%).`
       : ann < -0.05
-        ? `Underperforming SPY (${(ann * 100).toFixed(1)}%).`
+        ? `Lower return than SPY in window (${(ann * 100).toFixed(1)}%).`
         : 'In line with SPY.'
   return { name: 'Relative strength (vs SPY)', score: clamp01(s), detail }
 }

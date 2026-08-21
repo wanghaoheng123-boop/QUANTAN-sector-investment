@@ -64,7 +64,9 @@ export default function InstrumentTable({ results, sectorColors }: Props) {
     { key: 'maxDrawdown', label: 'Max DD', align: 'text-right', metricKey: 'maxDrawdown' },
     { key: 'winRate', label: 'Win Rate', align: 'text-right', metricKey: 'winRate' },
     { key: 'totalTrades', label: 'Trades', align: 'text-right' },
-    { key: 'excessReturn', label: 'Alpha', align: 'text-right', metricKey: 'alpha' },
+    // 'Excess', not 'Alpha' — a raw return difference with no risk adjustment
+    // and no significance test (CLAUDE.md I5, Q-103).
+    { key: 'excessReturn', label: 'Excess', align: 'text-right', metricKey: 'excessVsBuyHold' },
   ]
 
   return (
@@ -84,7 +86,7 @@ export default function InstrumentTable({ results, sectorColors }: Props) {
       <div className="overflow-x-auto rounded-xl border border-slate-800">
         <table className="w-full text-xs">
           {/* F6.4 (Phase 13 S2): caption + scope for screen readers — WCAG 1.3.1. */}
-          <caption className="sr-only">Per-instrument backtest results — ticker, sector, total return, annualized return, Sharpe ratio, max drawdown, win rate, trade count, and alpha vs benchmark. Click any column header to sort.</caption>
+          <caption className="sr-only">Per-instrument backtest results — ticker, sector, total return, annualized return, Sharpe ratio, max drawdown, win rate, trade count, and excess vs benchmark. Click any column header to sort.</caption>
           <thead className="bg-slate-900 border-b border-slate-800">
             <tr>
               {cols.map(col => (
