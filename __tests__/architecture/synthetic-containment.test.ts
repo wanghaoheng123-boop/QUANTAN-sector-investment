@@ -38,6 +38,7 @@ import { readFileSync, readdirSync, statSync, existsSync } from 'fs'
 import { join, relative, sep } from 'path'
 import {
   analyse,
+  indexGeneratedSeries,
   isSyntheticModule,
   classifySynthetic,
   SCANNABLE,
@@ -580,6 +581,69 @@ export default function Page() {
     expect(SCANNABLE.test('x.json')).toBe(true)
     expect(SCANNABLE.test('x.cjs')).toBe(true)
     expect(realFiles.some((f) => f.path.endsWith('.json'))).toBe(true)
+  })
+})
+
+describe('I3 — deterministic fabrication (Q-104): a series built from its own index', () => {
+  it('M-H: the exact defect — an input series invented from the index, then rendered', () => {
+    // app/portfolio/factor-attribution/page.tsx built its whole input from
+    // `0.001 + Math.sin(i / 10) * 0.002` and rendered a regression on it, with
+    // ZERO violations reported: inline-fabrication keys on Math.random().
+    const v = run(
+      mutate({
+        path: 'app/portfolio/demo/page.tsx',
+        source: `export default function Page() {
+                   const rows = Array.from({ length: 60 }, (_, i) => 0.001 + Math.sin(i / 10) * 0.002)
+                   return <div>{rows.length}</div>
+                 }`,
+      }),
+    )
+    expect(v.map((x) => x.rule)).toContain('index-generated-series')
+  })
+
+  it('catches the spread-Array form too', () => {
+    expect(indexGeneratedSeries('const xs = [...Array(50)].map((_, i) => i * 0.5)')).toBe(true)
+  })
+
+  it('does NOT fire on Math.sin applied to REAL input — it is a property, not a name', () => {
+    // Matching `Math.sin` would have been a name blocklist for the third time.
+    // Math.sin is legitimate in indicator maths; the defect is reading the
+    // INDEX instead of the data.
+    expect(indexGeneratedSeries('const smoothed = closes.map((c) => Math.sin(c) * 2)')).toBe(false)
+    expect(indexGeneratedSeries('const xs = Array.from({ length: n }, (_, i) => rows[i].close)')).toBe(true)
+  })
+
+  it('does NOT fire on a mapped transform that ignores the index', () => {
+    expect(indexGeneratedSeries('const doubled = Array.from({ length: n }, () => 0)')).toBe(false)
+  })
+
+  it('exempts a self-contained assertion script by PROPERTY, not by name', () => {
+    // scripts/verify-indicator-math.mjs builds a deterministic ramp to assert
+    // RSI behaviour. It exports nothing and renders nothing, so the series
+    // reaches assertions and stops — no escape surface, no finding.
+    const v = run(
+      mutate({
+        path: 'scripts/verify-math.mjs',
+        source: `const up = Array.from({ length: 40 }, (_, i) => 100 + i * 0.5)
+                 assert(calcRSI(up, 14).at(-1) > 90)`,
+      }),
+    )
+    expect(v.map((x) => x.rule)).not.toContain('index-generated-series')
+  })
+
+  it('but DOES fire once that same script exports the fabricated series', () => {
+    const v = run(
+      mutate({
+        path: 'scripts/verify-math.mjs',
+        source: `export const up = Array.from({ length: 40 }, (_, i) => 100 + i * 0.5)`,
+      }),
+    )
+    expect(v.map((x) => x.rule)).toContain('index-generated-series')
+  })
+
+  it('exempts the fixture module — generating series is what it is FOR', () => {
+    const v = run(BASE)
+    expect(v).toEqual([])
   })
 })
 

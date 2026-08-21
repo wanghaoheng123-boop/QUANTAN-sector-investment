@@ -35,6 +35,14 @@ const ROOT = join(__dirname, '../..')
  * glossary file, and it was GREEN while three live "Alpha" surfaces remained.
  */
 const SCAN_DIRS = ['app', 'components', 'lib', 'hooks'] as const
+/**
+ * Static pages are product surface too. `public/launcher.html` is SERVED at
+ * /launcher.html and carried "Cyan / outperform — alpha vs B&H" through the
+ * whole of Q-103, because the scan looked only at TypeScript. Whether an
+ * unlinked static page "counts" is exactly the judgement call that leaves a
+ * guard with a hole in it — so it counts.
+ */
+const STATIC_DIRS = ['public'] as const
 
 function walk(dir: string, out: string[] = []): string[] {
   if (!existsSync(dir)) return out
@@ -42,7 +50,7 @@ function walk(dir: string, out: string[] = []): string[] {
     if (entry === 'node_modules' || entry === '.next' || entry.startsWith('.')) continue
     const full = join(dir, entry)
     if (statSync(full).isDirectory()) walk(full, out)
-    else if (/\.tsx?$/.test(entry)) out.push(full)
+    else if (/\.(tsx?|html)$/.test(entry)) out.push(full)
   }
   return out
 }
@@ -51,7 +59,7 @@ const rel = (f: string) => relative(ROOT, f).split(sep).join('/')
 const stripComments = (src: string) =>
   src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1')
 
-const files = SCAN_DIRS.flatMap((d) => walk(join(ROOT, d))).map((f) => ({
+const files = [...SCAN_DIRS, ...STATIC_DIRS].flatMap((d) => walk(join(ROOT, d))).map((f) => ({
   path: rel(f),
   source: stripComments(readFileSync(f, 'utf8')),
 }))
@@ -120,7 +128,11 @@ describe('I5 — the skill-wording ban is REACHABLE (the guard must visit the te
 
   it('spans every source directory, not a hand-picked UI list', () => {
     const dirs = new Set(files.map((f) => f.path.split('/')[0]))
-    for (const d of SCAN_DIRS) expect(dirs.has(d)).toBe(true)
+    for (const d of [...SCAN_DIRS, ...STATIC_DIRS]) expect(dirs.has(d)).toBe(true)
+  })
+
+  it('reaches served static pages, not only TypeScript', () => {
+    expect(files.some((f) => f.path.endsWith('.html'))).toBe(true)
   })
 
   it('EXTRACTS long JSX text — the sr-only captions the first version skipped', () => {
