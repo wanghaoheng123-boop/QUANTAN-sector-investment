@@ -988,3 +988,44 @@ and named in their commit messages; every gate since uses `set -o pipefail` and
 
 **Next:** Q-101 and Q-080 are agent-actionable. Q-085 (PBO) still stands between
 the platform and I5 being meetable at all.
+
+---
+
+## 2026-08-21 — Q-101: the cache flag finally has consumers
+
+Shipped as #162 (`7cb8fd5`). **I2 moves VIOLATED → PARTIAL** — the second
+invariant to move in the good direction this session, each with the failing
+artifact exhibited.
+
+`_cached: true` was set by three API routes and read by **nobody**. A stored copy
+was served in place of a live fetch with no visible flag, which is precisely what
+I2 forbids. All three producers now have a consumer that shows it.
+
+**The design point worth keeping: cached outranks every freshness state,
+including "Live".** A cached value with a recent timestamp would otherwise render
+green and pulsing — telling the user it is live when it is a stored copy. That is
+worse than showing nothing, so the test asserts branch *ordering*, not presence.
+
+**Two guard defects, both found by mutating rather than reading.** The check was
+*aggregate* (some consumer, somewhere) when the property is *per producer* — one
+wired route satisfies it while two others stay silent. And the matcher read
+**comments**: every consuming page carries a comment explaining the flag, so
+deleting the actual read left the comment behind and the guard stayed green.
+**Four packages running, the same defect: matching prose about the behaviour
+instead of the behaviour.**
+
+**My third shell failure, in a shape my own note didn't cover.** I had adopted
+`&&` between every step of the shell *chain* — but the heredocs sat *above* it,
+separated by newlines. One asserted out, never wrote `CLAUDE.md`, and the
+fully-`&&`-ed chain below it pushed a commit claiming the tier had moved. **A
+`&&`-safe chain does not protect the heredocs above it.** The rule that covers
+all three occurrences: open every multi-step command with `set -euo pipefail`.
+
+**Marked PARTIAL, not done.** The staleness half is unchanged (2 of 16 pages,
+plus the SWR blind spot), and the I1 provenance half is untouched — still zero
+consumers, so I1 stays ASPIRATIONAL.
+
+**Tier board:** I1 ASP · I2 PARTIAL · I3 PARTIAL · I4 ASP · I5 VIOLATED ·
+I6 ASP · I7 VIOLATED · I8 VIOLATED. **Still no invariant is ENFORCED**, and
+Q-097 still makes every green check in this repo advisory — including all of
+this session's.
