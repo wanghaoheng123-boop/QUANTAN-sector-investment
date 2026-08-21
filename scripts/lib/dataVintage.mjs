@@ -27,8 +27,16 @@
  * APPEND-ONLY in practice: new bars arrive, old bars never vanish. That is what
  * makes a past benchmark run reproducible — you can always recompute over a
  * prefix, which a sliding window makes impossible.
+ *
+ * The date is not arbitrary: all 56 committed fixtures begin on exactly
+ * 2021-08-17, so pinning here makes this change a NO-OP for the data already on
+ * disk. A rounder date would have pulled in ~3 extra weeks of history on the
+ * next refresh and moved every benchmark number — and the primary edge gate
+ * currently sits 0.10pp above its floor, so that would likely have turned CI red
+ * on a Sunday bot push that nobody was watching. Change this constant only
+ * deliberately, and re-baseline the floors in the same PR when you do.
  */
-export const WINDOW_START = '2021-08-01'
+export const WINDOW_START = '2021-08-17'
 
 /** A bar is identified by its date; the OHLCV is the value that must not change. */
 const KEY = (c) => String(c.time ?? c.date ?? '')
