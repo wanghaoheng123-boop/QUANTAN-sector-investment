@@ -2,6 +2,7 @@ import { writeFileSync, mkdirSync, readFileSync, existsSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import { WINDOW_START, assessRefresh, seriesFingerprint } from './lib/dataVintage.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -68,7 +69,14 @@ const TICKERS = [
 ];
 
 const OUTPUT_DIR = path.resolve(__dirname, 'backtestData');
-const PERIOD_DAYS = 1825; // 5 years
+// PERIOD_DAYS is retained only for the log line and the BTC path's shape.
+// The WINDOW START IS PINNED (Q-102): `new Date(Date.now() - PERIOD_DAYS * ...)`
+// re-anchored the window every run, so the oldest bars silently dropped out each
+// week and no past benchmark run could be reproduced. Observed 2026-08-21:
+// regenerating five days after the committed run moved totalBuySignals
+// 3410 -> 3394 with no code change. A pinned start makes the history
+// append-only in practice — new bars arrive, old bars never vanish.
+const PERIOD_DAYS = 1825; // 5 years — descriptive now, not the anchor
 
 // ── Fixture integrity floors (R2 mitigation) ──────────────────────────────
 // The benchmark needs >= 252 rows per instrument (200-bar warmup + signal
@@ -113,10 +121,41 @@ function saveResult(ticker, sector, candles) {
     }
   }
 
+  // ── Q-102: a restatement is a DATA EVENT, not signal drift ───────────────
+  //
+  // The previous save overwrote the whole series unconditionally, so a vendor
+  // revising a 2023 close was absorbed silently and surfaced later as a moved
+  // win rate. Appends are normal and pass; a changed or vanished historical bar
+  // fails closed (I2) so a human sees it before it reaches a benchmark.
+  let vintage = { appended: candles.length, restated: 0, missing: 0 };
+  if (existsSync(filePath)) {
+    try {
+      const prev = JSON.parse(readFileSync(filePath, 'utf8'));
+      const verdict = assessRefresh(prev.candles, candles);
+      vintage = { appended: verdict.appended, restated: verdict.restated, missing: verdict.missing };
+      if (!verdict.ok) {
+        throw new Error(`REFUSED to save ${ticker}: ${verdict.reasons.join(' | ')}`);
+      }
+      if (verdict.appended > 0) {
+        console.log(`[${ticker}] +${verdict.appended} new bar(s), 0 restated`);
+      }
+    } catch (e) {
+      if (e instanceof Error && e.message.startsWith('REFUSED')) throw e;
+      console.warn(`[${ticker}] vintage check skipped (${e.message})`);
+    }
+  }
+
   const output = {
     ticker,
     sector,
     fetchedAt: new Date().toISOString(),
+    // Vintage identity: the window this series claims to cover and a
+    // fingerprint of its contents. Without these a "reproducible" run is a
+    // claim nobody can check.
+    windowStart: WINDOW_START,
+    fingerprint: seriesFingerprint(candles),
+    rows: candles.length,
+    vintage,
     candles,
   };
   writeFileSync(filePath, JSON.stringify(output, null, 2), 'utf8');
@@ -159,7 +198,7 @@ function clampPartialFinalBar(candles, ticker) {
 
 async function fetchYahoo(ticker, sector) {
   const result = await yf.chart(ticker, {
-    period1: new Date(Date.now() - PERIOD_DAYS * 86400000),
+    period1: new Date(WINDOW_START),
     interval: '1d',
   });
 
@@ -197,7 +236,7 @@ async function fetchYahoo(ticker, sector) {
 async function fetchBTC(sector = 'Crypto') {
   // Use Yahoo Finance BTC-USD (supports full 5-year history)
   const result = await yf.chart('BTC-USD', {
-    period1: new Date(Date.now() - PERIOD_DAYS * 86400000),
+    period1: new Date(WINDOW_START),
     interval: '1d',
   });
 
