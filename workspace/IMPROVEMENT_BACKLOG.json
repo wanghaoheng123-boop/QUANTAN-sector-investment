@@ -2293,7 +2293,7 @@
     "title": "I3 inline-fabrication keys on Math.random() and misses deterministic fabrication",
     "domain": "Testing",
     "priority": "P1",
-    "status": "pending",
+    "status": "done",
     "files": [
       "__tests__/architecture/syntheticContainment.ts",
       "app/portfolio/factor-attribution/page.tsx"
@@ -2307,6 +2307,7 @@
       "npx vitest run __tests__/architecture",
       "npm run typecheck"
     ],
-    "notes_2026_08_21": "Found by red-team on Q-103. app/portfolio/factor-attribution/page.tsx:4 builds its ENTIRE input from 0.001 + Math.sin(i/10)*0.002 and derives all five factors as scalar multiples of it, so the regression is degenerate by construction, then renders an intercept and factor loadings on a LIVE app route. I3's inline-fabrication rule matches Math.random() only, so the guard is blind to it. Mitigated in #158 by an unmissable 'every number on this page is fabricated' banner, but the DETECTION gap is open. Note the tension: Math.sin is legitimate in indicator math, so this needs a data-flow property (a fabricated series reaching a render or a model) rather than another name match \u2014 the exact lesson from Q-098's three rounds."
+    "notes_2026_08_21": "Found by red-team on Q-103. app/portfolio/factor-attribution/page.tsx:4 builds its ENTIRE input from 0.001 + Math.sin(i/10)*0.002 and derives all five factors as scalar multiples of it, so the regression is degenerate by construction, then renders an intercept and factor loadings on a LIVE app route. I3's inline-fabrication rule matches Math.random() only, so the guard is blind to it. Mitigated in #158 by an unmissable 'every number on this page is fabricated' banner, but the DETECTION gap is open. Note the tension: Math.sin is legitimate in indicator math, so this needs a data-flow property (a fabricated series reaching a render or a model) rather than another name match \u2014 the exact lesson from Q-098's three rounds.",
+    "notes_2026_08_21b": "DONE same day it was filed. The rule is a PROPERTY - an array whose elements read the ARRAY INDEX rather than input data, i.e. a series invented rather than measured. Matching Math.sin would have been a name blocklist for the third time in this repo, and Math.sin is legitimate in indicator maths. Verified against the whole tree BEFORE implementing: exactly two matches. Scoped by a SECOND property rather than an exemption list - it fires only where the series can ESCAPE the module (exports or renders) and skips modules already classified synthetic, which correctly exempts scripts/verify-indicator-math.mjs (zero exports, five asserts, self-described golden tests). The factor-attribution page no longer fabricates; it reports unavailable and says what a working version would need. Watched to fail on the real tree, 71/71 green on revert."
   }
 ]

@@ -67,6 +67,7 @@ export type Rule =
   | 'synthetic-reexport'
   | 'opaque-specifier'
   | 'inline-fabrication'
+  | 'index-generated-series'
   | 'article-literal'
   | 'brand-cast'
 
@@ -288,6 +289,34 @@ export function parseClause(clause: string): {
   return { named, namespaceAs: ns ? ns[1] : null, typeOnly }
 }
 
+/**
+ * An array whose ELEMENTS are computed from the ARRAY INDEX — a series invented
+ * rather than measured.
+ *
+ * `inline-fabrication` keys on `Math.random()`, so it was blind to DETERMINISTIC
+ * fabrication: `app/portfolio/factor-attribution/page.tsx` built its entire input
+ * from `0.001 + Math.sin(i / 10) * 0.002` and rendered a regression on a live
+ * route with zero violations reported (Q-104).
+ *
+ * Matching `Math.sin` would have been the same defect a third time — it is a
+ * name, and `Math.sin` is legitimate in indicator maths. The PROPERTY is that
+ * the element expression reads the index instead of input data. Verified against
+ * the whole tree: exactly two matches, the offending route and `lib/mockData.ts`
+ * (already synthetic, so exempt by classification rather than by exception).
+ */
+export function indexGeneratedSeries(code: string): boolean {
+  const CTORS =
+    /(?:Array\.from\s*\(\s*\{\s*length[^)]*\}\s*,\s*\(\s*(?:_|\w+)\s*,\s*(\w+)\s*\)\s*=>|\[\s*\.\.\.\s*Array\s*\([^)]*\)\s*\]\s*\.map\s*\(\s*\(\s*(?:_|\w+)\s*,\s*(\w+)\s*\)\s*=>)/g
+  for (const m of code.matchAll(CTORS)) {
+    const idx = m[1] ?? m[2]
+    if (!idx) continue
+    // Look at the element expression only — the next ~200 chars after the arrow.
+    const body = code.slice(m.index! + m[0].length, m.index! + m[0].length + 200)
+    if (new RegExp(`\\b${idx}\\b`).test(body)) return true
+  }
+  return false
+}
+
 /** Local binding names introduced by an import clause, e.g. `{ a, b as c }` → [a, c]. */
 export function clauseBindings(clause: string): string[] {
   const names: string[] = []
@@ -496,6 +525,27 @@ export function analyse(files: readonly VirtualFile[], opts: AnalyseOptions): Vi
         rule: 'inline-fabrication',
         file: f.path,
         detail: 'Math.random() in a live data path — values reaching a chart, signal or backtest must be measured, not generated',
+      })
+    }
+
+    // Skip modules already classified synthetic: generating series is what a
+    // fixture module is FOR, and it is contained by the import rules above.
+    //
+    // Fire only where the fabricated series can ESCAPE the module — it exports
+    // something, or it renders. `scripts/verify-indicator-math.mjs` builds a
+    // deterministic ramp to assert RSI behaviour, exports nothing and renders
+    // nothing, so the series reaches assertions and stops. That is a golden
+    // test, not a leak, and it is excluded by a PROPERTY (no escape surface)
+    // rather than by name.
+    const canEscape = /\bexport\b/.test(code) || /return\s*\(?\s*</.test(code)
+    if (!synthetic.has(f.path) && canEscape && indexGeneratedSeries(code)) {
+      violations.push({
+        rule: 'index-generated-series',
+        file: f.path,
+        detail:
+          'builds an array from its own index — a series invented rather than measured. ' +
+          'If this is fixture data it belongs behind the synthetic brand; if it reaches a render, ' +
+          'a chart, a signal or a model, it is an I3 defect.',
       })
     }
 
