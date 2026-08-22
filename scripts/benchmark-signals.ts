@@ -302,6 +302,20 @@ const excessSharpe = excessSd > 0 ? excessMean / excessSd : null
 /** t-statistic on the EFFECTIVE sample. Harvey-Liu-Zhu (2016) bar is |t| > 3.0. */
 const excessT = excessSharpe == null ? null : excessSharpe * Math.sqrt(Math.max(1, nEff))
 
+// ── I5: PBO, produced by `npm run pbo` (Q-085) ──────────────────────────────
+// Read, not recomputed: CSCV over the parameter grid costs minutes, so it is a
+// separate producer whose output is reported here WITH ITS VINTAGE. Reporting a
+// stale PBO as current would be the same defect as an unread flag.
+const pboPath = join(__dirname, 'pbo-results.json')
+const pboReport = existsSync(pboPath)
+  ? (JSON.parse(readFileSync(pboPath, 'utf8')) as {
+      pbo: number
+      splits: number
+      configurations: number
+      computedAt: string
+    })
+  : null
+
 const psr = probabilisticSharpe(netRetsEffective, 0, nEff)
 const dsrLower = deflatedSharpe(netRetsEffective, trials.lower, nEff)
 const dsrUpper = deflatedSharpe(netRetsEffective, trials.upper, nEff)
@@ -440,6 +454,9 @@ const benchmark = {
         ? null
         : [Number(dsrUpper.toFixed(4)), Number(dsrLower.toFixed(4))],
     nTrials: { lower: trials.lower, upper: trials.upper, registryRows: trials.rows, uncertainTrials: trials.uncertain },
+    pbo: pboReport
+      ? { value: pboReport.pbo, splits: pboReport.splits, configurations: pboReport.configurations, computedAt: pboReport.computedAt }
+      : null,
     // The two superseded headlines, kept so the correction is auditable.
     supersededHeadlines: {
       atRawNonOverlapN: dsrAtRawNonOverlap == null ? null : Number(dsrAtRawNonOverlap.toFixed(4)),
@@ -623,6 +640,16 @@ if (benchmark.tradeStats.nTrials.registryRows === 0) {
   console.error('\nFAIL (I5): the trial registry contributed zero rows, so nTrials was not counted.')
   process.exit(1)
 }
+if (benchmark.tradeStats.pbo == null) {
+  // I5 names PBO explicitly. Before Q-085 it had no implementation at all, which
+  // is what made the invariant unmeetable by construction — so its absence is a
+  // hard failure now, not a warning someone scrolls past.
+  console.error(
+    '\nFAIL (I5): no PBO on file. I5 requires a Probability of Backtest Overfitting. ' +
+      'Run `npm run pbo` to produce scripts/pbo-results.json.',
+  )
+  process.exit(1)
+}
 
 const tStat = benchmark.tradeStats.excessOverMarket.tStat
 if (tStat != null && tStat < HARMFUL_T) {
@@ -645,7 +672,11 @@ console.log(
     'I5 status — REPORTED, NOT CERTIFIED:',
     `  deflated Sharpe        ${dsrPublished} (n_eff=${benchmark.tradeStats.nEffective}, nTrials=${benchmark.tradeStats.nTrials.upper})`,
     `  excess over market     t=${tStat} against a |t| > ${HLZ_SIGNIFICANCE_BAR} bar (Harvey-Liu-Zhu 2016)`,
-    `  PBO / CSCV             NOT IMPLEMENTED (Q-085) — I5 is unmet by construction`,
+    pboReport
+      ? `  PBO (CSCV)             ${pboReport.pbo} over ${pboReport.splits} splits, ${pboReport.configurations} configs` +
+        ` — computed ${pboReport.computedAt.slice(0, 10)} by npm run pbo` +
+        (pboReport.pbo >= 0.5 ? '  [AT OR ABOVE THE NO-SKILL NULL]' : '')
+      : `  PBO (CSCV)             MISSING — run npm run pbo. I5 requires it.`,
     tStat != null && Math.abs(tStat) < HLZ_SIGNIFICANCE_BAR
       ? '  => NO CLAIM OF SKILL IS SUPPORTED. The selection is not statistically distinguishable'
         + '\n     from holding the same universe over the same windows.'

@@ -1841,7 +1841,7 @@
     "title": "Reconcile the Loop-1 grid size: 1024 declared vs 16 reported",
     "domain": "Quant/Research",
     "priority": "P2",
-    "status": "pending",
+    "status": "done",
     "files": [
       "lib/optimize/parameterSets.ts",
       "scripts/optimize-grid.ts",
@@ -1855,14 +1855,15 @@
       "npm run optimize:grid"
     ],
     "blocked_by": [],
-    "notes_2026_08_15": "LOOP1_GRID declares slopeThreshold(4) x buyWScoreThreshold(4) x sellWScoreThreshold(4) x confidenceThreshold(4) x atrStopMultiplier(4) = 1024 combinations, but the run output reports totalCombinations=16 (13 valid) per instrument. LOOP2_GRID by contrast matches its own docstring exactly (4x4x3x2x3=288), so this is specific to Loop 1. Until resolved, any multiplicity correction using T-0001 is provisional \u2014 the denominator differs by ~64x, which is not a rounding question."
+    "notes_2026_08_15": "LOOP1_GRID declares slopeThreshold(4) x buyWScoreThreshold(4) x sellWScoreThreshold(4) x confidenceThreshold(4) x atrStopMultiplier(4) = 1024 combinations, but the run output reports totalCombinations=16 (13 valid) per instrument. LOOP2_GRID by contrast matches its own docstring exactly (4x4x3x2x3=288), so this is specific to Loop 1. Until resolved, any multiplicity correction using T-0001 is provisional \u2014 the denominator differs by ~64x, which is not a rounding question.",
+    "notes_2026_08_22": "RESOLVED 2026-08-22 during Q-085, and the answer was in the code all along. LOOP1_GRID declares 4^5=1024 but lib/optimize/gridSearch.ts:70-83 generateGrid() iterates ONLY slopeThreshold x atrStopMultiplier = 16, holding three legacy fields fixed because simpleBacktestSlice never reads them; its own comment calls this an HONESTY FIX. The reported 16 is correct. T-0001 now carries effective_grid:16 and uncertain:false, and lib/quant/trialRegistry.ts prefers effective_grid. CONSEQUENCE, IN THE FLATTERING DIRECTION: nTrials drops from an upper bound of 1053 to a known 46, so DSR rises 0.0723 -> 0.3439. Applied because it is correct \u2014 deflating against multiplicity never incurred is as wrong as ignoring multiplicity that was. Verdict unchanged: still nowhere near a bar."
   },
   {
     "id": "Q-085",
     "title": "Implement Probability of Backtest Overfitting (PBO) via CSCV",
     "domain": "Quant/Research",
     "priority": "P2",
-    "status": "pending",
+    "status": "done",
     "files": [
       "lib/quant/"
     ],
@@ -1879,7 +1880,8 @@
       "Q-081"
     ],
     "notes_2026_08_15": "Confirmed absent 2026-08-15: no pbo/cscv implementation anywhere in lib/ or scripts/. DSR exists (lib/quant/deflatedSharpe.ts) but is only half the multiplicity story \u2014 DSR deflates a Sharpe, PBO estimates the probability that the selected configuration is overfit relative to the alternatives. Blocked on Q-081 because both need an honest trial count to mean anything.",
-    "notes_2026_08_21": "ELEVATED IN IMPORTANCE by Q-099: PBO/CSCV is now the ONLY thing standing between the platform and I5 being meetable at all. The benchmark prints 'PBO / CSCV NOT IMPLEMENTED (Q-085) \u2014 I5 is unmet by construction' on every run."
+    "notes_2026_08_21": "ELEVATED IN IMPORTANCE by Q-099: PBO/CSCV is now the ONLY thing standing between the platform and I5 being meetable at all. The benchmark prints 'PBO / CSCV NOT IMPLEMENTED (Q-085) \u2014 I5 is unmet by construction' on every run.",
+    "notes_2026_08_22": "DONE. lib/quant/pbo.ts implements CSCV (Bailey, Borwein, Lopez de Prado & Zhu 2017) with 23 tests including calibration against known ground truth: genuine skill -> PBO ~0, pure noise -> PBO ~0.5, textbook overfit -> PBO 1. `npm run pbo` is the PRODUCER, because an algorithm with no producer is the built-and-inert defect found in four packages this session. MEASURED PBO = 0.67, ABOVE the no-skill null. The benchmark now hard-fails when no PBO is on file. CAUGHT A FABRICATED RESULT EN ROUTE: the first producer varied BacktestConfig.confidenceThreshold/stopLossPct and returned PBO=1 with median logit exactly 0 \u2014 the signature of TIES. A probe showed the engine never reads those fields as decisions, so all 18 'configurations' were byte-identical. The producer now refuses to publish when the columns are not distinct."
   },
   {
     "id": "Q-086",
@@ -2311,5 +2313,26 @@
     ],
     "notes_2026_08_21": "Found by red-team on Q-103. app/portfolio/factor-attribution/page.tsx:4 builds its ENTIRE input from 0.001 + Math.sin(i/10)*0.002 and derives all five factors as scalar multiples of it, so the regression is degenerate by construction, then renders an intercept and factor loadings on a LIVE app route. I3's inline-fabrication rule matches Math.random() only, so the guard is blind to it. Mitigated in #158 by an unmissable 'every number on this page is fabricated' banner, but the DETECTION gap is open. Note the tension: Math.sin is legitimate in indicator math, so this needs a data-flow property (a fabricated series reaching a render or a model) rather than another name match \u2014 the exact lesson from Q-098's three rounds.",
     "notes_2026_08_21b": "DONE same day it was filed. The rule is a PROPERTY - an array whose elements read the ARRAY INDEX rather than input data, i.e. a series invented rather than measured. Matching Math.sin would have been a name blocklist for the third time in this repo, and Math.sin is legitimate in indicator maths. Verified against the whole tree BEFORE implementing: exactly two matches. Scoped by a SECOND property rather than an exemption list - it fires only where the series can ESCAPE the module (exports or renders) and skips modules already classified synthetic, which correctly exempts scripts/verify-indicator-math.mjs (zero exports, five asserts, self-described golden tests). The factor-attribution page no longer fabricates; it reports unavailable and says what a working version would need. Watched to fail on the real tree, 71/71 green on revert."
+  },
+  {
+    "id": "Q-105",
+    "title": "BacktestConfig.confidenceThreshold and stopLossPct are dead configuration",
+    "domain": "Quant/Research",
+    "priority": "P2",
+    "status": "pending",
+    "files": [
+      "lib/backtest/signalTypes.ts",
+      "lib/backtest/core.ts"
+    ],
+    "acceptance_criteria": [
+      "Either the engine reads confidenceThreshold as a decision, or the field is removed from BacktestConfig",
+      "stopLossPct either bounds the ATR-adaptive stop as documented or is removed",
+      "A test fails if a BacktestConfig field can be varied without changing any backtest output"
+    ],
+    "verify_commands": [
+      "npm run typecheck",
+      "npm run test"
+    ],
+    "notes_2026_08_22": "Found while building the Q-085 PBO producer. An 18-configuration grid over confidenceThreshold (40-65) and stopLossPct (0.06-0.14) produced BYTE-IDENTICAL trades on every instrument, and PBO came back exactly 1 with a median logit of 0 \u2014 the signature of ties. lib/backtest/core.ts echoes both fields at :239/:479 and branches on neither; maxDrawdownCap IS used at :328. Dead configuration is worse than no configuration: it invites exactly the fabricated result this nearly published. The PBO producer now refuses to publish when grid columns are not distinct, which contains the symptom; this ticket is the cause."
   }
 ]

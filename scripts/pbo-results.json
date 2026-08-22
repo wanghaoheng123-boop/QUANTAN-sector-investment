@@ -1,0 +1,37 @@
+{
+  "computedAt": "2026-08-22T08:34:27.490Z",
+  "method": "CSCV over contiguous price blocks; per-block performance = mean per-instrument Sharpe",
+  "grid": {
+    "live": {
+      "slopeThreshold": [
+        0.003,
+        0.005,
+        0.008,
+        0.01
+      ],
+      "atrStopMultiplier": [
+        1.2,
+        1.5,
+        2,
+        2.5
+      ]
+    },
+    "inertHeldFixed": [
+      "buyWScoreThreshold",
+      "sellWScoreThreshold",
+      "confidenceThreshold"
+    ],
+    "note": "Only the two dimensions simpleBacktestSlice consumes are varied. The other three are legacy enhanced-signal parameters the evaluator never reads (lib/optimize/gridSearch.ts:70-83); iterating them inflates the count while producing identical columns. This is the resolution of the 1024-vs-16 discrepancy recorded as UNRESOLVED against T-0001 (Q-084)."
+  },
+  "configurations": 16,
+  "distinctColumns": 16,
+  "blocks": 4,
+  "splits": 6,
+  "instruments": 56,
+  "thinCells": 0,
+  "pbo": 0.6667,
+  "medianLogit": -0.6061,
+  "limitations": "Only 6 splits (C(4,2)), because simpleBacktestSlice needs >= 252 rows per block and the pinned window holds ~5 years. This is a COARSE estimate: with 6 splits the resolution of PBO is 1/6, so read it as a direction, not a decimal. BBLZ use S=16 where the sample allows.",
+  "interpretation": "PBO is the probability that a configuration selected as best IN-SAMPLE lands at or below the median OUT-OF-SAMPLE. 0.5 is the no-skill null. This measures the SELECTION PROCEDURE and is not on its own a claim of skill — see CLAUDE.md I5.",
+  "reference": "Bailey, Borwein, Lopez de Prado & Zhu (2017), The Probability of Backtest Overfitting, Journal of Computational Finance 20(4), 39-69."
+}
