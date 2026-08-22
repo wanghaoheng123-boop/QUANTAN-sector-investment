@@ -610,7 +610,12 @@ describe('I3 — deterministic fabrication (Q-104): a series built from its own 
     // Math.sin is legitimate in indicator maths; the defect is reading the
     // INDEX instead of the data.
     expect(indexGeneratedSeries('const smoothed = closes.map((c) => Math.sin(c) * 2)')).toBe(false)
-    expect(indexGeneratedSeries('const xs = Array.from({ length: n }, (_, i) => rows[i].close)')).toBe(true)
+    // Corrected: using the index to SUBSCRIPT real data is projection, not
+    // fabrication. The original assertion here said `true`, which encoded an
+    // over-fire as intended behaviour — and the rule then flagged
+    // `lib/quant/pbo.ts` for indexing its own block-performance matrix.
+    expect(indexGeneratedSeries('const xs = Array.from({ length: n }, (_, i) => rows[i].close)')).toBe(false)
+    expect(indexGeneratedSeries('const xs = Array.from({ length: n }, (_, i) => 0.001 + Math.sin(i / 10))')).toBe(true)
   })
 
   it('does NOT fire on a mapped transform that ignores the index', () => {
