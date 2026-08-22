@@ -1029,3 +1029,52 @@ consumers, so I1 stays ASPIRATIONAL.
 I6 ASP · I7 VIOLATED · I8 VIOLATED. **Still no invariant is ENFORCED**, and
 Q-097 still makes every green check in this repo advisory — including all of
 this session's.
+
+---
+
+## 2026-08-22 — Q-085: PBO exists, and I5 becomes meetable
+
+Shipped as #164 (`c8704af`). **I5 moves VIOLATED → PARTIAL** — the third
+invariant to move in the good direction this session (I3, I2, I5). Only I7 and
+I8 remain VIOLATED, and both are owner-gated.
+
+`lib/quant/pbo.ts` implements CSCV (Bailey, Borwein, López de Prado & Zhu 2017)
+with 23 tests calibrated against known ground truth — genuine skill → PBO ≈ 0,
+pure noise → ≈ 0.5, textbook overfit → 1. `npm run pbo` is its **producer**,
+because an algorithm with no producer is the built-and-inert defect this session
+found in four packages, and the benchmark now hard-fails when no PBO is on file.
+
+**Measured PBO = 0.67 — above the no-skill null.** Selecting the in-sample best
+configuration is no better than chance.
+
+**The near-miss is the useful part.** The first producer varied
+`confidenceThreshold` and `stopLossPct` and returned **PBO = 1 with a median
+logit of exactly 0**. That is the signature of *ties*, not overfitting — and a
+probe confirmed the engine reads neither field as a decision, so all 18
+"configurations" were byte-identical. **A suspiciously round statistic is a
+hypothesis about your input, not a finding about the world.** The producer now
+refuses to publish when the columns are not distinct.
+
+**Q-084 is resolved, and the answer was in the code all along** — `generateGrid`
+iterates only the two dimensions the evaluator consumes, so 16 is right and 1024
+counted three inert ones. Consequence: `nTrials` 1053 → **46**, DSR **0.0723 →
+0.3439**. That moves the headline in the **flattering** direction, which is
+exactly when to be most careful — applied because it is correct, and flagged
+loudly for the same reason. **Verdict unchanged**: nowhere near a bar, and the
+deciding test is still the excess over the market at t ≈ 0.17.
+
+**My own guard from the previous day over-fired**, and worse, one of my tests had
+**ratified** it: the Q-104 rule could not tell `rows[i].close` (projection) from
+`0.001 + Math.sin(i/10)` (fabrication), and flagged `pbo.ts` for indexing its own
+matrix. **A test that ratifies a bug is worse than no test — it makes the bug
+look deliberate to the next reader.**
+
+**And I pushed with three tests failing**, because I read a count from a grep
+instead of acting on it. Same shape as the pipe and heredoc failures: trusting a
+summary instead of a verdict. Also confirmed empirically that `set -e` does *not*
+reliably abort in this harness — verifying each write is the only defence that
+has actually worked.
+
+**Tier board:** I1 ASP · I2 PARTIAL · I3 PARTIAL · I4 ASP · I5 PARTIAL · I6 ASP ·
+I7 VIOLATED · I8 VIOLATED. Still **no invariant is ENFORCED**, and Q-097 makes
+every green check advisory — including all sixteen PRs merged this session.
