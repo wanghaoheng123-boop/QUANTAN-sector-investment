@@ -304,15 +304,38 @@ export function parseClause(clause: string): {
  * the whole tree: exactly two matches, the offending route and `lib/mockData.ts`
  * (already synthetic, so exempt by classification rather than by exception).
  */
+const MATH_FNS = new Set([
+  'sin', 'cos', 'tan', 'sqrt', 'pow', 'exp', 'log', 'abs', 'floor', 'ceil',
+  'round', 'random', 'PI', 'E', 'min', 'max', 'sign', 'trunc',
+])
+
 export function indexGeneratedSeries(code: string): boolean {
   const CTORS =
     /(?:Array\.from\s*\(\s*\{\s*length[^)]*\}\s*,\s*\(\s*(?:_|\w+)\s*,\s*(\w+)\s*\)\s*=>|\[\s*\.\.\.\s*Array\s*\([^)]*\)\s*\]\s*\.map\s*\(\s*\(\s*(?:_|\w+)\s*,\s*(\w+)\s*\)\s*=>)/g
   for (const m of code.matchAll(CTORS)) {
     const idx = m[1] ?? m[2]
     if (!idx) continue
-    // Look at the element expression only — the next ~200 chars after the arrow.
-    const body = code.slice(m.index! + m[0].length, m.index! + m[0].length + 200)
-    if (new RegExp(`\\b${idx}\\b`).test(body)) return true
+    // The element expression only — up to the first newline or closing paren.
+    const tail = code.slice(m.index! + m[0].length, m.index! + m[0].length + 200)
+    const expr = tail.split('\n')[0]
+    if (!new RegExp(`\\b${idx}\\b`).test(expr)) continue
+
+    // USING the index to SUBSCRIPT real data is not fabrication.
+    //
+    // `Array.from({length: n}, (_, i) => rows[i].close)` projects measured data;
+    // `(_, i) => 0.001 + Math.sin(i / 10)` invents it. The discriminator is
+    // whether the expression references anything OTHER than the index, `Math`
+    // and literals — a fabricated series has no data to refer to.
+    //
+    // Found when this rule fired on `lib/quant/pbo.ts`
+    // (`Array.from({length: nConfigs}, (_, n) => meanOver(isBlocks, n))`), which
+    // indexes real block performance. An earlier test of mine asserted that case
+    // SHOULD fire, which encoded the over-fire as intended behaviour.
+    const identifiers = expr.match(/[A-Za-z_$][A-Za-z0-9_$]*/g) ?? []
+    const referencesData = identifiers.some(
+      (id) => id !== idx && id !== 'Math' && !MATH_FNS.has(id),
+    )
+    if (!referencesData) return true
   }
   return false
 }

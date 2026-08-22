@@ -271,7 +271,7 @@ or signal path — they are UI-only (`app/api/fundamentals/[ticker]/route.ts:68`
 `lib/briefs/sectorBrief.ts:214`). `Q-080` should install a tripwire there, not a
 migration. → `Q-080`, `Q-102`.
 
-### I5 — Every claim of skill must survive the adversary · VIOLATED *(was PARTIAL; corrected 2026-08-17)*
+### I5 — Every claim of skill must survive the adversary · PARTIAL *(VIOLATED 2026-08-17; PBO built and the gate given teeth by `Q-085` 2026-08-22)*
 No strategy, factor, or model reaches the UI or the docs without out-of-sample
 results, Deflated Sharpe Ratio, Probability of Backtest Overfitting, and an
 entry in `.quantlab/TRIAL_REGISTRY.jsonl` recording how many configurations
@@ -290,11 +290,15 @@ Sub-tiers, which are not level:
   script and the number CI gates is full-sample.
 - **DSR · PARTIAL** — implemented correctly (`lib/quant/deflatedSharpe.ts`,
   Bailey & López de Prado), computed on exactly one path, **read by nothing**.
-- **PBO/CSCV · ASPIRATIONAL** — zero implementation. The 10 files matching
-  `cscv|combinatorial|pbo` are all prose. `Q-085`.
-- **Trial registry · ASPIRATIONAL** — 9 rows, all `backfilled:true`, all
-  `logged_at:2026-08-15`; no writer, no reader, no validator. A static file is
-  not a mechanism.
+- **PBO/CSCV · PARTIAL** *(was ASPIRATIONAL — `Q-085` built it)* —
+  `lib/quant/pbo.ts` implements CSCV (Bailey, Borwein, López de Prado & Zhu 2017)
+  and `npm run pbo` is its producer. **Measured PBO = 0.67**, i.e. *above* the
+  no-skill null: selecting the in-sample best configuration is no better than
+  chance. Coarse — 6 splits, because `simpleBacktestSlice` needs ≥252 rows per
+  block and the window holds ~5 years — so read it as a direction, not a decimal.
+- **Trial registry · PARTIAL** — `lib/quant/trialRegistry.ts` is the reader
+  `Q-081` added, and the benchmark hard-fails when the registry contributes zero
+  rows. Still no automatic writer; rows are appended by hand.
 
 **Because PBO does not exist, no strategy has ever met I5's bar — including the
 one shipped result.** `Q-081`/`Q-099` (2026-08-21) corrected the headline and
@@ -346,6 +350,23 @@ indistinguishable-from-zero excess "Alpha" —
 conclusion you hoped for is exactly the calibration failure I5 exists to catch.
 → `Q-103`.
 
+**`Q-084` is resolved, and the answer was in the code all along.** `T-0001`
+recorded `declared_grid: 1024` against `reported: 16` and flagged itself
+UNRESOLVED. `LOOP1_GRID` declares 4×4×4×4×4 = 1024, but
+`lib/optimize/gridSearch.ts:70-83` iterates **only** `slopeThreshold` ×
+`atrStopMultiplier` = **16**, holding three legacy fields fixed because
+`simpleBacktestSlice` never reads them — its own comment calls this an "honesty
+fix". So 16 is right and 1024 counts three inert dimensions.
+
+**That correction moves the headline in the FLATTERING direction, which is
+exactly when to be most careful.** The trial denominator drops from an upper
+bound of 1053 to a known **46**, and DSR rises **0.0723 → 0.3439**. It is applied
+because it is correct, not because it helps: deflating against multiplicity that
+was never incurred is as wrong as ignoring multiplicity that was. **The verdict
+is unchanged** — 0.34 is nowhere near a conventional bar, PBO is above the
+no-skill null, and the deciding test remains the excess over the market at
+t ≈ 0.17.
+
 **The gate does not gate on DSR, deliberately.** The first version floored it at
 0.43 and `quant-validator` showed that **punished compliance**: DSR falls
 monotonically in `nTrials`, so roughly 700 further logged configurations — fewer
@@ -355,8 +376,13 @@ behaviour I5 exists to compel. A DSR near 0.5 is also at the steepest point of �
 so drift alone moves it across any nearby threshold. **Floor a Sharpe or a z;
 never a probability near 0.5.** The gate now floors the non-overlapping Sharpe
 (invariant to `nTrials`) as a breakage guard, hard-fails when the deflated number
-is missing or the trial denominator was not counted, and prints the verdict above
-on every run.
+is missing, when the trial denominator was not counted, **or when no PBO is on
+file**, and prints the verdict above on every run.
+
+*Why PARTIAL and not better:* the gate enforces that the statistics EXIST and
+reports them; it does not block on their VALUES, and nothing gates the UI path at
+all. No CI job runs an OOS script. PBO is computed by a separate producer and
+read with its vintage, so it can go stale. Those are the named gaps.
 
 The previous claim that this is "the strongest area of the platform" is
 withdrawn. The good layer exists; the published headlines do not come from it.

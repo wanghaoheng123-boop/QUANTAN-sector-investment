@@ -107,7 +107,12 @@ export function generateGrid(grid: ParamGrid): GridPoint[] {
  * Uses inline simplified signal logic for speed (not resolveBacktestSignal SSOT).
  * Grid search of the enhanced signal would be 100× slower.
  */
-function simpleBacktestSlice(
+/**
+ * Exported for `scripts/compute-pbo.ts` (Q-085): PBO/CSCV needs the SAME
+ * evaluation the grid search selects on, or it would measure the overfitting of
+ * a procedure nobody runs.
+ */
+export function simpleBacktestSlice(
   rows: OhlcvRow[],
   startIdx: number,
   endIdx: number,

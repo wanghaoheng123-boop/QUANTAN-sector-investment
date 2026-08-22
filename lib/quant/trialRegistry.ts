@@ -30,6 +30,16 @@
 /** A configurations-tried record. Both fields are optional in the corpus. */
 export interface ConfigsTried {
   declared_grid?: number
+  /**
+   * Configurations the search ACTUALLY evaluated, where that differs from the
+   * declared grid because some dimensions are inert.
+   *
+   * T-0001 declared 4^5 = 1024 while `generateGrid` iterated only the two
+   * dimensions `simpleBacktestSlice` consumes — 4 x 4 = 16 — holding three
+   * legacy fields fixed. Counting 1024 would deflate the Sharpe against a
+   * multiplicity that was never incurred. When present, this is the denominator.
+   */
+  effective_grid?: number
   reported_total_combinations_per_instrument?: number
   uncertain?: boolean
 }
@@ -90,8 +100,11 @@ export function countTrials(rows: readonly TrialRow[]): TrialCount {
       typeof c.reported_total_combinations_per_instrument === 'number'
         ? c.reported_total_combinations_per_instrument
         : undefined
-    const lo = reported ?? declared ?? MIN_CONFIGS_PER_TRIAL
-    const hi = declared ?? lo
+    const effective = typeof c.effective_grid === 'number' ? c.effective_grid : undefined
+    // An EFFECTIVE count, where recorded, is authoritative for both ends: it is
+    // what was actually tried, so there is no interval left to express.
+    const lo = effective ?? reported ?? declared ?? MIN_CONFIGS_PER_TRIAL
+    const hi = effective ?? declared ?? lo
     lower += lo
     upper += Math.max(hi, lo)
     if (c.uncertain === true) uncertain.push(r.trial_id)

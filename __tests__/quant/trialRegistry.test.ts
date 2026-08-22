@@ -64,12 +64,18 @@ describe('trial registry — the real corpus', () => {
     expect(readTrialCount(readFileSync(REGISTRY, 'utf8')).rows).toBeGreaterThan(0)
   })
 
-  it('yields a band, not a point — T-0001 is unresolved (Q-084)', () => {
+  it('collapses to a POINT now that Q-084 is resolved', () => {
     const c = readTrialCount(readFileSync(REGISTRY, 'utf8'))
-    // Collapsing this to a single nTrials would reintroduce the invented
-    // denominator that Q-081 exists to remove.
-    expect(c.upper).toBeGreaterThan(c.lower)
-    expect(c.uncertain.length).toBeGreaterThan(0)
+    // This test previously asserted a BAND, because T-0001 recorded declared
+    // 1024 vs reported 16 and flagged itself unresolved. Q-085 found the answer
+    // in the code: generateGrid iterates only the two dimensions the evaluator
+    // consumes, so 16 is right and 1024 counted three inert ones. With an
+    // effective count on file there is no interval left to express.
+    //
+    // The band was never the goal — refusing to INVENT a denominator was. A
+    // counted point is strictly better than an honest interval.
+    expect(c.upper).toBe(c.lower)
+    expect(c.lower).toBeGreaterThan(0)
   })
 
   it('the counted denominator is what the published benchmark used', () => {
