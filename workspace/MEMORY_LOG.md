@@ -1078,3 +1078,53 @@ has actually worked.
 **Tier board:** I1 ASP · I2 PARTIAL · I3 PARTIAL · I4 ASP · I5 PARTIAL · I6 ASP ·
 I7 VIOLATED · I8 VIOLATED. Still **no invariant is ENFORCED**, and Q-097 makes
 every green check advisory — including all sixteen PRs merged this session.
+
+---
+
+## 2026-08-26 — Q-080: one security, one identity
+
+Shipped as #166 (`ab43153`). **I6 moves ASPIRATIONAL → PARTIAL** — the fourth
+invariant to move in the good direction across this session (I3, I2, I5, I6).
+Only I7 and I8 remain VIOLATED, and **both are owner-gated**.
+
+Identity was a lossy mangle whose two halves were **not inverses**:
+`dataLoader.ts:37` mapped `.`→`-` and `:143` mapped `-`→`.`. So the universe
+declared `BRK-B`, the fixture was `BRK-B.json`, and `availableTickers()` reported
+`BRK.B` — **one security with two identities depending on the path taken**. The
+reverse mangle was unconditional, so `BTC-USD` would have come back as
+`BTC.USD`, which is not a security. `sectorProfiles.ts` had its own
+`.replace('-', '.')` workaround that replaced only the *first* hyphen.
+
+`lib/data/securityId.ts` is now the SSOT, with a narrow stated rule — a trailing
+single letter is a share class, everything else is left alone — round-tripped
+against **every fixture on disk**, not just examples.
+
+**A guard of mine was decoration, and that is the lesson.** The first
+`assertNoIdCollisions` compared *symbols* and flagged `BRK.B` against `BRK-B` —
+but canonicalisation only ever merges symbols differing by the share-class
+separator, which by assumption *are* the same security. **It could never fail for
+a real reason.** One of its tests was even named *"throws when genuinely
+different symbols collapse"* while asserting `.not.toThrow()`. Rewritten to
+compare **attributes**, which can actually fail. **When writing a guard, ask what
+input would make it fail; if you cannot construct one, it is decoration.**
+
+The audit's other I6 note — that `verify-data-integrity.mjs` cannot detect a
+clean handover — is closed too. `scripts/lib/handoverDetect.mjs` is **wired into**
+that verifier and fires on NFLX 2022-04-20 and UNH 2025-04-17, both real crashes.
+WARN not FAIL, asking *"split, halt, or handover?"* because it cannot distinguish
+them.
+
+**A polling flaw worth keeping.** My CI poll treated "zero pending checks" as
+"all checks passed". On this PR the workflow had not yet *registered*, so the
+rollup was empty, pending was 0, and I read green with only Vercel present —
+the same visited-vs-decided defect as the guards. Also: `gh pr view --json
+statusCheckRollup` **under-reports**; it never showed the five CI checks even
+after they completed. `gh api .../commits/<sha>/check-runs` is authoritative.
+
+**PARTIAL, not better:** no FIGI/PermID/ISIN/CUSIP, so the key is a surrogate
+derived *from* the ticker and a reassignment yields the same id; no bitemporal
+mapping table; `warehouse.ts` still `PRIMARY KEY (ticker, date)`.
+
+**Tier board:** I1 ASP · I2 PARTIAL · I3 PARTIAL · I4 ASP · I5 PARTIAL ·
+I6 PARTIAL · I7 VIOLATED · I8 VIOLATED. **Still no invariant is ENFORCED**, and
+Q-097 makes every green check advisory — including all eighteen PRs this session.
