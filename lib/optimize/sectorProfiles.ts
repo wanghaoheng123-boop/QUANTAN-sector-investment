@@ -21,6 +21,8 @@
  * - Healthcare: Most robust sector for dip-buying. JNJ/LLY/ABBV all strong.
  */
 
+import { canonicalSecurityId } from '@/lib/data/securityId'
+
 export interface SectorProfile {
   sector: string
   tickers: string[]
@@ -260,8 +262,14 @@ export const SECTOR_PROFILES: Record<string, SectorProfile> = {
  */
 export function getProfileForTicker(ticker: string): SectorProfile {
   for (const profile of Object.values(SECTOR_PROFILES)) {
-    // Handle BRK.B vs BRK-B ticker variants
-    if (profile.tickers.includes(ticker) || profile.tickers.includes(ticker.replace('-', '.'))) {
+    // I6: compare CANONICAL identities rather than patching one convention into
+    // the other. The old `replace('-', '.')` replaced only the FIRST hyphen, so
+    // it would also have mangled a pair like BTC-USD.
+    const id = canonicalSecurityId(ticker)
+    if (
+      profile.tickers.includes(ticker) ||
+      (id != null && profile.tickers.some((t) => canonicalSecurityId(t) === id))
+    ) {
       return profile
     }
   }
