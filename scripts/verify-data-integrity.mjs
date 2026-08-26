@@ -23,6 +23,7 @@ import { readFileSync, readdirSync, existsSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import { detectTickerHandover, DEFAULT_SIGMAS } from './lib/handoverDetect.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const dataDir = path.join(__dirname, 'backtestData');
@@ -49,6 +50,23 @@ for (const f of readdirSync(dataDir).filter((x) => x.endsWith('.json'))) {
   const isCrypto = (d.sector ?? '').toLowerCase() === 'crypto' || ticker.startsWith('BTC');
   files++;
   rows += c.length;
+
+  // I6 — the check this verifier was explicitly missing. A reassigned ticker
+  // continues with no missing bars and no malformed rows, so every other check
+  // here passes while two issuers are spliced into one history. WARN, not FAIL:
+  // a genuine gap or an unadjusted split looks the same, so this asks a human to
+  // explain the bar rather than asserting what it is.
+  const handovers = detectTickerHandover(
+    c.map((r) => r.close),
+    c.map((r) => new Date(r.time * 1000).toISOString().slice(0, 10)),
+  );
+  for (const h of handovers) {
+    console.warn(
+      `WARN [${ticker}] unexplained ${h.gapRatio}x move on ${h.date} ` +
+        `(> ${DEFAULT_SIGMAS} sigma) — split, halt, or TICKER HANDOVER? I6 requires an explanation.`,
+    );
+    warnings++;
+  }
 
   const seen = new Set();
   for (let i = 0; i < c.length; i++) {

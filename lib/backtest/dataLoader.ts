@@ -9,6 +9,7 @@ import { readFileSync, existsSync, readdirSync } from 'fs'
 import { join } from 'path'
 import type { OhlcBar } from '@/lib/quant/indicators'
 import { getCandles, isWarehouseAvailable, warehouseTickers } from '@/lib/data/warehouse'
+import { canonicalSecurityId, dataFileNameFor, securityIdFromFileName } from '@/lib/data/securityId'
 
 // ─── OhlcvRow SSOT: canonical definition lives in ./core (includes optional
 //     `dividend?` field consumed by computeBuyAndHoldReturn). dataLoader.ts is
@@ -34,7 +35,11 @@ function dataDir(): string {
  * Returns null if file doesn't exist (ticker not pre-fetched yet).
  */
 export function loadLocalData(ticker: string): DataFile | null {
-  const safe = ticker.replace(/\./g, '-')  // BRK.B → BRK-B
+  // I6: identity goes through the SSOT. The old `replace(/\./g, '-')` had no
+  // correct inverse — see lib/data/securityId.ts.
+  const canonical = canonicalSecurityId(ticker)
+  if (canonical == null) return null
+  const safe = dataFileNameFor(canonical)
   const filePath = join(dataDir(), `${safe}.json`)
   if (!existsSync(filePath)) return null
   try {
@@ -140,7 +145,10 @@ export function availableTickers(): string[] {
   const dir = dataDir()
   if (existsSync(dir)) {
     for (const f of readdirSync(dir).filter((f) => f.endsWith('.json'))) {
-      warehouseSet.add(f.replace(/\.json$/, '').replace(/-/g, '.'))  // BRK-B → BRK.B
+      // The old blanket `replace(/-/g, '.')` turned BTC-USD into BTC.USD, which
+      // is not a security. This round-trips (I6).
+      const id = securityIdFromFileName(f.replace(/\.json$/, ''))
+      if (id != null) warehouseSet.add(id)
     }
   }
 

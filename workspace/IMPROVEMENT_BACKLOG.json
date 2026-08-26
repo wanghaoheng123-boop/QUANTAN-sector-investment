@@ -1751,7 +1751,7 @@
     "title": "Point-in-time correctness: bitemporal store, survivorship-free universe, permanent security IDs",
     "domain": "Data/Infrastructure",
     "priority": "P1",
-    "status": "pending",
+    "status": "partial",
     "files": [
       "lib/data/warehouse.ts",
       "lib/data/providers/",
@@ -1770,7 +1770,9 @@
     ],
     "blocked_by": [],
     "notes_2026_08_15": "Covers design invariants I4 and I6, both ASPIRATIONAL today. The 56-instrument universe is a hard-coded list of TODAY's large-cap survivors \u2014 scripts/optimize-grid.ts documents this inline as affecting EVERY metric it reports. Until this lands, every historical win rate, return and Sharpe in the platform is inflated by an unmeasured amount. Large; expect to slice it. Measuring the inflation is the highest-value first slice and is independently shippable.",
-    "notes_2026_08_17": "UNBLOCKED - Q-079 landed 2026-08-17. Scope refinements from that audit: I6 is TOTAL non-compliance (warehouse.ts:46-55 PRIMARY KEY (ticker,date); zero hits for figi|permId|securityId|isin|cusip repo-wide; identity is a lossy .replace() mangle at dataLoader.ts:37/:143 duplicated at benchmark-signals.ts:36). Fundamentals reach NO backtest or signal path, so the PIT work needs a TRIPWIRE there, not a migration. See also Q-102 for the data-vintage half."
+    "notes_2026_08_17": "UNBLOCKED - Q-079 landed 2026-08-17. Scope refinements from that audit: I6 is TOTAL non-compliance (warehouse.ts:46-55 PRIMARY KEY (ticker,date); zero hits for figi|permId|securityId|isin|cusip repo-wide; identity is a lossy .replace() mangle at dataLoader.ts:37/:143 duplicated at benchmark-signals.ts:36). Fundamentals reach NO backtest or signal path, so the PIT work needs a TRIPWIRE there, not a migration. See also Q-102 for the data-vintage half.",
+    "notes_2026_08_22": "PARTIAL \u2014 the I6 IDENTITY half is closed, the PERMANENCE half is not, and the split is stated rather than blurred. CLOSED: identity was a lossy mangle whose halves were not inverses (dataLoader .replace(/\\./g,'-') at :37 vs .replace(/-/g,'.') at :143), so the universe declared BRK-B, the fixture was BRK-B.json and availableTickers() reported BRK.B \u2014 ONE security with two identities depending on the path taken. The reverse mangle was unconditional, so BTC-USD would have come back as BTC.USD, which is not a security; sectorProfiles.ts had its own .replace('-','.') that replaced only the FIRST hyphen. lib/data/securityId.ts is now the SSOT (trailing single letter = share class, everything else untouched), round-trip tested against every fixture on disk, with assertNoIdCollisions guarding the assumption by failing when one id carries conflicting attributes. ALSO CLOSED: the audit's note that verify-data-integrity.mjs cannot detect a clean ticker handover \u2014 scripts/lib/handoverDetect.mjs is wired into it and currently warns on NFLX 2022-04-20 and UNH 2025-04-17, both real crashes, which is the point: it asks for an explanation rather than asserting a cause. NOT CLOSED: no FIGI/PermID/ISIN/CUSIP, so the key is an internal surrogate derived FROM the ticker and a reassignment still yields the same id; no bitemporal mapping table; warehouse.ts:46-55 is still PRIMARY KEY (ticker,date); the detector WARNS and cannot tell a handover from a split. The PIT/bitemporal half of this ticket (I4) is separately advanced by Q-102 and also partial.",
+    "notes_priority": "P1 retained: the permanence half is untouched and needs a licensed identifier."
   },
   {
     "id": "Q-081",

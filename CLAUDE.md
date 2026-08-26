@@ -387,17 +387,38 @@ read with its vintage, so it can go stale. Those are the named gaps.
 The previous claim that this is "the strongest area of the platform" is
 withdrawn. The good layer exists; the published headlines do not come from it.
 
-### I6 — Securities identified by permanent ID, never ticker · ASPIRATIONAL *(confirmed 2026-08-17)*
+### I6 — Securities identified by permanent ID, never ticker · PARTIAL *(ASPIRATIONAL 2026-08-17; identity made consistent by `Q-080` 2026-08-22)*
 Tickers are recycled and reassigned. Use FIGI/PermID/internal surrogate keys
 with a ticker→ID mapping table that is itself bitemporal.
-*Today:* total non-compliance, not partial. `lib/data/warehouse.ts:46-55` is
-`PRIMARY KEY (ticker, date)`, and grepping `figi|permId|securityId|isin|cusip`
-across `lib/ scripts/ app/ components/ hooks/ types/ __tests__/` returns **zero
-hits**. Identity is a lossy string mangle — `lib/backtest/dataLoader.ts:37`
-`.replace(/\./g,'-')`, inverted at `:143`, duplicated at
-`scripts/benchmark-signals.ts:36`. `verify-data-integrity.mjs` cannot detect a
-clean ticker handover: a reassignment would splice two issuers into one series.
-→ `Q-080`.
+*Today:* identity is now consistent, but it is still not PERMANENT.
+
+**Closed by `Q-080`.** Identity was a lossy mangle whose two halves were not
+inverses: `dataLoader.ts` mapped `.`→`-` one way and `-`→`.` the other, so the
+universe declared `BRK-B`, the fixture was `BRK-B.json`, and `availableTickers()`
+reported `BRK.B` — one security with two identities depending on the path taken.
+The reverse mangle was unconditional, so a genuine pair like `BTC-USD` came back
+as `BTC.USD`, which is not a security; `lib/optimize/sectorProfiles.ts` carried
+its own `.replace('-', '.')` workaround that replaced only the FIRST hyphen.
+`lib/data/securityId.ts` is now the SSOT: a trailing single letter is a share
+class and is canonicalised, anything else is left alone, and the round trip is
+tested against every fixture on disk. `assertNoIdCollisions` guards the
+assumption by failing when one id carries conflicting attributes.
+
+**Also closed:** the audit's note that `verify-data-integrity.mjs` "cannot detect
+a clean ticker handover". `scripts/lib/handoverDetect.mjs` flags moves outside
+the series' own distribution, and it is WIRED into that verifier — it currently
+warns on NFLX 2022-04-20 (0.65×) and UNH 2025-04-17 (0.78×), both real crashes,
+which is the point: it asks for an explanation rather than asserting a cause.
+
+*Why PARTIAL and not better — these are the gaps, not a hedge:*
+- **No permanent identifier.** There is still no FIGI, PermID, ISIN or CUSIP; the
+  key is an internal surrogate derived FROM the ticker, so a reassignment
+  produces the same id for a different issuer. Detection is a compensating
+  control, not a solution.
+- **No bitemporal mapping table.** I6 asks for one and there is none.
+- `lib/data/warehouse.ts:46-55` is still `PRIMARY KEY (ticker, date)`.
+- The handover detector WARNS and cannot distinguish a handover from a split or
+  a halt. → `Q-080`.
 
 ### I7 — Main is always deployable · VIOLATED *(was ENFORCED; corrected 2026-08-17)*
 Work on branches. CI must be green before merge. Never push a broken `main`.
