@@ -1245,3 +1245,40 @@ and serves a BUY/SELL banner, recorded as neither. And `CLAUDE.md` pointed at
 **Generalise: ask the adversary to falsify the CLAIMS, not just the
 implementation.** A review that only checks whether the code does what the diff
 says will miss the diff saying too much.
+
+### Round 3 — the walker was fine; the pre-processor was the blind spot
+
+`red-team` reproduced **seven** escapes on the real tree. The worst:
+`stripComments` applied JS comment syntax to `.py` and `.yml`, where a YAML glob
+forms a valid block comment — **2387 characters, lines 2 to 51 of a real
+workflow, deleted before any host was matched.** A host at line 41 was invisible;
+the same host at line 61 was caught.
+
+**And the test documenting this asserted the opposite of the measured
+behaviour** — it exercised the safe `#` half and never the block-comment half
+that did the damage, in a commit titled *"a false claim inside my own honesty
+block"*. **A passing test that ratifies a bug is worse than no test.**
+
+Masking comments with spaces instead of deleting them fixed the blinding *and*
+`file:line`: 18 of 46 register citations had pointed at unrelated code.
+
+**Two live market-data vendors were unregistered:** `wss://ws.kraken.com` and
+`wss://ws-feed.exchange.coinbase.com`, browser-direct from `'use client'` hooks,
+so the connection carries the end user's own IP. The matcher was anchored to
+`https?://` and never saw a streaming feed.
+
+**A live credential is committed to this public repo** — `start-universal.sh:12`,
+tracked since PR #41. Found only because this package widened the walk to `.sh`.
+Owner must revoke and rotate; removal does not remediate.
+
+**And I destroyed evidence with my own repair.** Two reviewers appended to
+`findings-ledger.csv` concurrently under the same ids; my dedupe kept the first
+occurrence and silently dropped ten compliance findings, because it assumed a
+duplicate id meant duplicate content. Recovered from context, restored as
+`Q100-14…23`, logged as `Q100-24`. **Reserve an id range per agent before
+dispatching parallel reviewers.**
+
+One fix overshot: naive protocol-relative matching invented vendors from Python's
+`total // 2`. The `//` form is guarded now, and the resulting gap is asserted as a
+test rather than hidden — **a guard that cries wolf gets its offender list
+ignored.**

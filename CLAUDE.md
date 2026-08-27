@@ -526,6 +526,26 @@ redistribution is the use market-data licences prohibit most explicitly. **The
 mechanism detects EGRESS; I8 governs EXPOSURE**, and the difference between those
 two sets is exactly this row. Logged as `Q100-12`.
 
+**Round 3 (red-team) broke it seven ways, and the worst was a pre-processor.**
+The walker was reachable; `stripComments` applied JS syntax to `.py` and `.yml`,
+where a YAML glob forms a valid block comment — **2387 characters, lines 2 to 51
+of a real workflow, were deleted before any host was matched.** A host at line 41
+was invisible while the same host at line 61 was caught, and the "CANNOT do" test
+documenting this exercised only the safe half and asserted the opposite of the
+measured behaviour. **A passing test that ratifies a bug is worse than no test.**
+Comments are masked per language now, which also fixed `file:line` — 18 of 46
+citations had pointed at unrelated code, in the artifact whose purpose is an
+auditable trail. `public/` was excluded while being the one directory served
+verbatim to end users. And **two live market-data vendors were unregistered** —
+`wss://ws.kraken.com` and `wss://ws-feed.exchange.coinbase.com`, browser-direct
+from `'use client'` hooks — because the matcher was anchored to `https?://` and
+never saw a streaming feed.
+
+**A live credential is committed to this public repository.** `start-universal.sh:12`
+holds an API token, tracked since PR #41 (2026-06-02). **Revoke and rotate — removal
+does not remediate, the value is in git history permanently.** Owner action, logged
+as `Q100-12`. Found only because this package widened the walk to `.sh`.
+
 Six vendors remain end-user-exposed with **no auth** — Yahoo
 (`app/api/prices/route.ts` + 13 route sites), CoinGecko (browser-direct at
 `components/crypto/hooks/useBtcCandles.ts:34`), Kraken, Coinbase, Bybit, OKX.
