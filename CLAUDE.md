@@ -50,6 +50,7 @@ exactly one home. **Do not create a second one.**
 | Measured performance floors | `reviews/invariants-baseline.md` | frozen; regressions need written approval |
 | Architecture decisions | `reviews/` (dated docs) + `DECISIONS` notes in `SESSION_STATE.json` | |
 | Research trial count | `.quantlab/TRIAL_REGISTRY.jsonl` | **the one new artifact**; see `.quantlab/README.md` |
+| Recorded vendor licence findings | `reviews/vendor-licence-register.json` | **not** the findings ledger — that holds unfixed *dangers*, this holds *findings* about what we reach out to. A vendor with no licence appears in both. Guarded by `__tests__/architecture/vendor-licence-register.test.ts` |
 | Deploy/ops runbook | `workspace/VERCEL_OPERATIONS.md` | |
 
 **Legacy, do not write to:** `.ai/`, `.quantan/memory/`, `coordination/`.
@@ -442,38 +443,74 @@ unavailable. → `Q-097` (owner action — repo settings).
 exists** — no `lint` script, no tracked config, not installed, zero workflow
 hits. The definition of done names a gate that cannot run. → `Q-093`.
 
-### I8 — Vendor terms are law · VIOLATED *(was UNVERIFIED; corrected 2026-08-17)*
+### I8 — Vendor terms are law · VIOLATED *(process half VIOLATED → PARTIAL by `Q-100` 2026-08-27; heading unchanged, and the reason matters)*
 Market data licences almost universally prohibit redistribution. Before any
 feature exposes vendor data to end users, confirm the licence permits it and
 record the finding. This is a business-ending risk, not a detail.
-*Today:* the invariant has two separable halves at different tiers. **The
-heading takes the worse one.** Do not read the UNVERIFIED half as covering the
-whole invariant — that reading is what kept this at UNVERIFIED for a year while
-the process failure ran live.
+*Today:* the invariant has two separable halves at different tiers, and neither
+half is the heading. Do not read the UNVERIFIED half as covering the whole
+invariant — that reading is what kept this at UNVERIFIED for a year while the
+process failure ran live.
 - **(a) The substantive licence question · UNVERIFIED.** No licence, account or
   agreement is visible in the repo for any vendor. This is a legal question about
   off-repo documents and **no agent can close it** — it needs the owner and
   external counsel. `Q-082`, `Q-083`.
-- **(b) The process requirement · VIOLATED.** "Confirm the licence permits it
-  **and record the finding**" has no mechanism anywhere — no checklist, PR
-  template, or CI check — and its trigger condition is live now with zero
-  recorded findings. PR #147 turned the stock-page news surface from synthetic to
-  **live Yahoo content** and descends from the commit that wrote I8; no licence
-  finding was recorded with it.
+- **(b) The process requirement · PARTIAL** *(was VIOLATED — `Q-100` built the
+  mechanism)*. "Confirm the licence permits it **and record the finding**" now has
+  an executing instance. `reviews/vendor-licence-register.json` holds **69
+  recorded findings** and `__tests__/architecture/vendor-licence-register.test.ts`
+  fails when this repo reaches a host, adds a dependency, or reads a host-bearing
+  environment variable with no row. **Watched it fail on the committed tree, six
+  mutations, green on revert.** `.github/PULL_REQUEST_TEMPLATE.md` is the advisory
+  half and says so.
 
-Scope is far wider than `yahoo-finance2`: **11 vendors**, six of them
-end-user-exposed with **no auth** — Yahoo (`app/api/prices/route.ts:131` + 12
-sites), CoinGecko (browser-direct at `hooks/useBtcCandles.ts:34`), Kraken,
-Coinbase, Bybit, OKX. `middleware.ts:119` matches all paths but its body
-(`:51-116`) only does CSP + CSRF, so ~19 public routes serve vendor data to
-anyone.
-*Correction to the previous text:* "the position has never been written down" is
-**false**. The *risk* was recorded in Phase 14 (`reviews/findings-ledger.csv`
-row F4.5, still `open`; `reviews/R7-security-compliance.md:213`); a licence
-*confirmation* never was. `reviews/PHASE-15-PLAN.md:44` records a compliance
-banner as "present" whose three required elements — research-only text, a ToS
-link, and a `YAHOO_RESEARCH_ONLY` kill flag — do not exist. → `Q-100`.
+**Why the heading stays VIOLATED, and it is not the worse-of-the-two rule.**
+Recording a finding is not confirming a licence. I8's operative word is
+*before* — six vendors are exposed to end users **right now** with no confirmation
+of any kind, which is the VIOLATED definition's **first** clause, "a live path
+actively does the opposite". That clause holds independently of whether a
+recording mechanism exists. The register makes the exposure visible; it does not
+undo it. **The heading moves when the exposure is licensed or withdrawn, and not
+before** — recording is the cheap half and taking credit for it would be exactly
+the calibration failure the PRIME DIRECTIVE exists to prevent.
 
+**`Q-100` found a vendor nobody had recorded, and it was invisible by
+construction.** `lib/data/bloomberg/bridgeClient.ts` is a **live, wired Bloomberg
+path** with **no URL literal and no vendor package** — the host arrives entirely
+through `BLOOMBERG_BRIDGE_URL`. `app/api/prices/route.ts:118-176` calls it, merges
+the result through `mergeYahooAndBloomberg`, and returns quotes tagged
+`dataSource:'bloomberg'` from a **public, unauthenticated** route. It is latent
+only because `.env.example:67` leaves the variable commented out — one environment
+variable from live. `scripts/bloomberg-bridge-example.py:19` carries the warning
+in its own docstring: comply with the Bloomberg Terminal Agreement and any Data
+Licence, and do not expose the service publicly without Bloomberg approval. We
+hold no such approval and had recorded none. Logged as `F8.1`.
+
+**The vendor count was understated and the shape was wrong.** Not 11 names but
+**four kinds of egress**, and the two obvious kinds miss the two biggest vendors:
+a URL scan misses **Yahoo** (21 modules, zero host literals) and both miss
+**Bloomberg**. A `.py` file holds `api.deepseek.com`, which a TypeScript-only scan
+never sees. **When a guard is green, ask what it VISITED before you ask what it
+decided** — this is the fourth package in which that was the defect.
+
+Six vendors remain end-user-exposed with **no auth** — Yahoo
+(`app/api/prices/route.ts` + 13 route sites), CoinGecko (browser-direct at
+`components/crypto/hooks/useBtcCandles.ts:34`), Kraken, Coinbase, Bybit, OKX.
+`middleware.ts:119` matches all paths but its body (`:51-116`) only does CSP +
+CSRF, so ~19 public routes serve vendor data to anyone.
+
+*Corrections to the previous text, both of which were this document's own:*
+"the position has never been written down" was **false** — the *risk* was recorded
+in Phase 14 (`reviews/findings-ledger.csv` row F4.5, still `open`;
+`reviews/R7-security-compliance.md:213`); a licence *confirmation* never was.
+And the claim that the compliance banner's "three required elements do not exist"
+was **wrong in both directions**: `components/ComplianceBanner.tsx` is real and
+mounted globally at `app/layout.tsx:100` and does say "Not investment advice",
+while the three elements of a vendor-*terms* banner — a research-only restriction
+on data USE, a link to the terms (zero `href`s in the component), and a
+`YAHOO_RESEARCH_ONLY` flag (zero occurrences repo-wide) — genuinely do not exist.
+A no-advice disclaimer is not a vendor-terms banner. `reviews/PHASE-15-PLAN.md:44`
+is corrected. → `Q-082`, `Q-083`, `Q-106`.
 ---
 
 ## RISK & VALUATION GATES
