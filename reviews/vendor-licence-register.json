@@ -1,0 +1,1269 @@
+{
+  "artifact": "vendor-licence-register",
+  "invariant": "I8 \u2014 Vendor terms are law",
+  "canonical_home": "reviews/vendor-licence-register.json (registered in the SSOT table in CLAUDE.md)",
+  "purpose": [
+    "I8 requires: 'Before any feature exposes vendor data to end users, confirm the licence permits it AND RECORD THE FINDING.' This file is where the finding is recorded.",
+    "Its guard is __tests__/architecture/vendor-licence-register.test.ts, which FAILS when this repository reaches a host, depends on a package, or reads a host-bearing environment variable that has no row here. That is the whole mechanism: an unregistered vendor is a red test, so the question is forced BEFORE the feature ships rather than a year afterwards."
+  ],
+  "THIS_IS_NOT_THE_FINDINGS_LEDGER": "reviews/findings-ledger.csv is the risk register \u2014 KNOWN UNFIXED DANGERS. This file is the licence register \u2014 RECORDED FINDINGS about what we reach out to. A vendor with no licence appears in BOTH, for different reasons, and the two must not be merged. F4.5 in the ledger is the standing risk; the yahoo-finance2 row here is the finding.",
+  "WHAT_A_ROW_DOES_NOT_MEAN": "A row means the question was asked and the answer was written down. It does NOT mean the consumption or the redistribution is permitted. Six market-data vendors carry licence_status NONE_NO_AGREEMENT \u2014 a fact \u2014 alongside redistribution_position UNRESOLVED, which is a legal question no agent can close. Reading a populated register as an all-clear would invert the purpose of the file.",
+  "WHAT_THE_GUARD_DOES_NOT_CHECK": "The guard checks that a judgement was RECORDED, never that it is CORRECT. Nothing stops a future author adding a market-data client and classifying it 'build-tooling'. What the guard buys is that the row appears in the diff with a name on it, which is the difference between an unexamined decision and a reviewed one.",
+  "licence_status_vocabulary": {
+    "NONE_NO_AGREEMENT": "Verified from the repo: no key, no account, no contract. A fact, not a verdict.",
+    "PERMITTED": "A licence has been read and permits this use. REQUIRES a non-empty licence_evidence field naming the document \u2014 the guard rejects the status without it, so it cannot be typed in to turn a test green.",
+    "RESTRICTED": "A licence exists and does NOT permit this use. The surface must be withdrawn.",
+    "UNVERIFIED": "Cannot be determined from the repo. A valid outcome, and preferable to a guess.",
+    "NOT_APPLICABLE": "Not a data vendor \u2014 assets, namespaces, first-party origins, outbound links, infrastructure, tooling."
+  },
+  "lifecycle": {
+    "active": "Still reachable from the tree. The guard asserts these are still detected.",
+    "withdrawn": "The surface was removed. Requires withdrawn_on and withdrawn_reason. The guard asserts a withdrawn row is NOT still detected \u2014 claiming a removal that did not happen is itself a violation."
+  },
+  "APPEND_ONLY": "Never delete a row. Withdrawing a surface is the good outcome I8 explicitly offers as the alternative to a finding; if withdrawal turned the guard red, deleting the audit trail would be the route to green. Mark it withdrawn instead.",
+  "open_and_owner_gated": [
+    "Q-082 \u2014 the substantive licence question for Yahoo, CoinGecko, Kraken, Coinbase, Bybit, OKX, FRED and the Bloomberg bridge. Owner + counsel.",
+    "Q-083 \u2014 MAS/FAA posture, tightly coupled because both turn on what end users are shown.",
+    "Q-097 \u2014 until main has branch protection, this guard's red is advisory like every other check in this repo."
+  ],
+  "entries": [
+    {
+      "kind": "npm-package",
+      "id": "yahoo-finance2",
+      "lifecycle": "active",
+      "classification": "market-data-vendor",
+      "vendor": "Yahoo Finance",
+      "end_user_exposed": true,
+      "authenticated": false,
+      "licence_status": "NONE_NO_AGREEMENT",
+      "finding": "yahoo-finance2 ^3.13.2 is an UNOFFICIAL community library consuming undocumented, unauthenticated Yahoo Finance endpoints. There is no API key, token or credential for Yahoo anywhere in .env.example and no commercial agreement exists between this project and Yahoo. The position is therefore not 'we may be on the wrong tier' \u2014 there is no licence to be within the terms of. Imported by 21 modules including 14 app/api routes. PR #147 turned the stock-page news surface from synthetic to LIVE Yahoo content, descends from the commit that wrote I8, and recorded no licence finding \u2014 that omission is the event that made I8's process half VIOLATED.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "package.json#dependencies",
+        "app/api/prices/route.ts",
+        "app/api/news/ticker/[ticker]/route.ts",
+        "lib/briefs/sectorBrief.ts"
+      ],
+      "routes_to": [
+        "Q-082",
+        "Q-083"
+      ],
+      "redistribution_position": "UNRESOLVED \u2014 the substantive redistribution question is routed to Q-082 (licence) and Q-083 (MAS/FAA). Counsel only. Recording this finding does NOT assert that the consumption or the redistribution is permitted.",
+      "cross_reference": "reviews/findings-ledger.csv F4.5 records the standing RISK. This row records the FINDING. Different artifacts; do not merge."
+    },
+    {
+      "kind": "http-host",
+      "id": "api.coingecko.com",
+      "lifecycle": "active",
+      "classification": "market-data-vendor",
+      "vendor": "CoinGecko",
+      "end_user_exposed": true,
+      "authenticated": false,
+      "licence_status": "NONE_NO_AGREEMENT",
+      "finding": "CoinGecko public REST endpoints are consumed with no API key and no account; there is no agreement of any kind. The data reaches end users through the crypto surfaces. Called BROWSER-DIRECT from components/crypto/hooks/useBtcCandles.ts:34, so the request carries the end user's IP and originates outside any server-side control we could apply. middleware.ts:119 matches all paths but its body (:51-116) performs only CSP and CSRF, so the serving routes are public and unauthenticated.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "app/api/crypto/btc/route.ts:78",
+        "app/api/crypto/btc/quote/route.ts:17",
+        "components/crypto/hooks/useBtcCandles.ts:34"
+      ],
+      "routes_to": [
+        "Q-082",
+        "Q-083"
+      ],
+      "redistribution_position": "UNRESOLVED \u2014 the substantive redistribution question is routed to Q-082 (licence) and Q-083 (MAS/FAA). Counsel only. Recording this finding does NOT assert that the consumption or the redistribution is permitted."
+    },
+    {
+      "kind": "http-host",
+      "id": "api.kraken.com",
+      "lifecycle": "active",
+      "classification": "market-data-vendor",
+      "vendor": "Kraken",
+      "end_user_exposed": true,
+      "authenticated": false,
+      "licence_status": "NONE_NO_AGREEMENT",
+      "finding": "Kraken public REST endpoints are consumed with no API key and no account; there is no agreement of any kind. The data reaches end users through the crypto surfaces. middleware.ts:119 matches all paths but its body (:51-116) performs only CSP and CSRF, so the serving routes are public and unauthenticated.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "app/api/crypto/btc/route.ts:4",
+        "scripts/verify-btc-ohlc-sample.mjs:2"
+      ],
+      "routes_to": [
+        "Q-082",
+        "Q-083"
+      ],
+      "redistribution_position": "UNRESOLVED \u2014 the substantive redistribution question is routed to Q-082 (licence) and Q-083 (MAS/FAA). Counsel only. Recording this finding does NOT assert that the consumption or the redistribution is permitted."
+    },
+    {
+      "kind": "http-host",
+      "id": "api.exchange.coinbase.com",
+      "lifecycle": "active",
+      "classification": "market-data-vendor",
+      "vendor": "Coinbase Exchange",
+      "end_user_exposed": true,
+      "authenticated": false,
+      "licence_status": "NONE_NO_AGREEMENT",
+      "finding": "Coinbase Exchange public REST endpoints are consumed with no API key and no account; there is no agreement of any kind. The data reaches end users through the crypto surfaces. middleware.ts:119 matches all paths but its body (:51-116) performs only CSP and CSRF, so the serving routes are public and unauthenticated.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "app/api/crypto/btc/route.ts:5"
+      ],
+      "routes_to": [
+        "Q-082",
+        "Q-083"
+      ],
+      "redistribution_position": "UNRESOLVED \u2014 the substantive redistribution question is routed to Q-082 (licence) and Q-083 (MAS/FAA). Counsel only. Recording this finding does NOT assert that the consumption or the redistribution is permitted."
+    },
+    {
+      "kind": "http-host",
+      "id": "api.bybit.com",
+      "lifecycle": "active",
+      "classification": "market-data-vendor",
+      "vendor": "Bybit",
+      "end_user_exposed": true,
+      "authenticated": false,
+      "licence_status": "NONE_NO_AGREEMENT",
+      "finding": "Bybit public REST endpoints are consumed with no API key and no account; there is no agreement of any kind. The data reaches end users through the crypto surfaces. middleware.ts:119 matches all paths but its body (:51-116) performs only CSP and CSRF, so the serving routes are public and unauthenticated.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "app/api/crypto/btc/metrics/route.ts:6"
+      ],
+      "routes_to": [
+        "Q-082",
+        "Q-083"
+      ],
+      "redistribution_position": "UNRESOLVED \u2014 the substantive redistribution question is routed to Q-082 (licence) and Q-083 (MAS/FAA). Counsel only. Recording this finding does NOT assert that the consumption or the redistribution is permitted."
+    },
+    {
+      "kind": "http-host",
+      "id": "www.okx.com",
+      "lifecycle": "active",
+      "classification": "market-data-vendor",
+      "vendor": "OKX",
+      "end_user_exposed": true,
+      "authenticated": false,
+      "licence_status": "NONE_NO_AGREEMENT",
+      "finding": "OKX public REST endpoints are consumed with no API key and no account; there is no agreement of any kind. The data reaches end users through the crypto surfaces. middleware.ts:119 matches all paths but its body (:51-116) performs only CSP and CSRF, so the serving routes are public and unauthenticated.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "app/api/crypto/btc/metrics/route.ts:7",
+        "app/api/crypto/btc/liquidations/route.ts:7"
+      ],
+      "routes_to": [
+        "Q-082",
+        "Q-083"
+      ],
+      "redistribution_position": "UNRESOLVED \u2014 the substantive redistribution question is routed to Q-082 (licence) and Q-083 (MAS/FAA). Counsel only. Recording this finding does NOT assert that the consumption or the redistribution is permitted."
+    },
+    {
+      "kind": "http-host",
+      "id": "fred.stlouisfed.org",
+      "lifecycle": "active",
+      "classification": "reference-data-vendor",
+      "vendor": "Federal Reserve Bank of St. Louis (FRED)",
+      "end_user_exposed": true,
+      "authenticated": false,
+      "licence_status": "UNVERIFIED",
+      "finding": "The risk-free rate series is fetched from the public FRED CSV endpoint with no key. FRED is a public-sector service, but series-level copyright varies by contributing source and this project has read no terms and recorded no permission. The value is not rendered raw; it is an input to Sharpe/Sortino, so a DERIVED form reaches the user. UNVERIFIED is the honest state \u2014 'it is a government site' is a guess, not a finding.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "lib/quant/riskFreeRate.ts:38"
+      ],
+      "routes_to": [
+        "Q-082"
+      ],
+      "redistribution_position": "UNRESOLVED \u2014 the substantive redistribution question is routed to Q-082 (licence) and Q-083 (MAS/FAA). Counsel only. Recording this finding does NOT assert that the consumption or the redistribution is permitted."
+    },
+    {
+      "kind": "http-host",
+      "id": "api.deepseek.com",
+      "lifecycle": "active",
+      "classification": "llm-vendor",
+      "vendor": "DeepSeek",
+      "end_user_exposed": false,
+      "authenticated": true,
+      "licence_status": "UNVERIFIED",
+      "finding": "LLM inference endpoint for the Python factor-mining sidecar, keyed by DEEPSEEK_BASE_URL / an operator-supplied API key. Not a market-data vendor and not wired into the Next.js tier, so no vendor MARKET data is redistributed through it. It is registered because a TypeScript-only scan would never have seen it \u2014 it lives in multi_agent_factor_mining/config.py, which is precisely why the walk covers executable source of any extension. Content SENT to this vendor (prompts derived from market data) is a separate question from content received, and is reviewed under Q-092.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "multi_agent_factor_mining/config.py:24",
+        "multi_agent_factor_mining/config.py:96"
+      ],
+      "routes_to": [
+        "Q-092",
+        "Q-082"
+      ]
+    },
+    {
+      "kind": "env-host",
+      "id": "BLOOMBERG_BRIDGE_URL",
+      "lifecycle": "active",
+      "classification": "market-data-vendor",
+      "vendor": "Bloomberg (via an operator-run bridge)",
+      "end_user_exposed": true,
+      "authenticated": true,
+      "licence_status": "UNVERIFIED",
+      "finding": "THE HIGHEST-SEVERITY ROW IN THIS FILE, and it was invisible to every earlier version of the guard. lib/data/bloomberg/bridgeClient.ts is a LIVE, WIRED Bloomberg data path with NO URL literal and NO vendor package \u2014 the host arrives entirely through this variable. app/api/prices/route.ts:118-176 calls fetchBloombergQuotesViaBridge, merges the result via mergeYahooAndBloomberg, and returns quotes tagged dataSource:'bloomberg' from a PUBLIC, UNAUTHENTICATED route. The variable is commented out at .env.example:67, so the path is latent on this deployment \u2014 one environment variable away from live. scripts/bloomberg-bridge-example.py:19 carries the operator warning in its own docstring: comply with the Bloomberg Terminal Agreement and any Data License, and do not expose the service to the public internet without Bloomberg approval. This repo holds no such approval and records none. NOT marked RESTRICTED: that would be a legal conclusion an agent may not draw, and the terms are not in the repository to read.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "lib/data/bloomberg/bridgeClient.ts:75",
+        "app/api/prices/route.ts:118",
+        "app/api/prices/route.ts:161",
+        ".env.example:67"
+      ],
+      "routes_to": [
+        "Q-082",
+        "Q-083"
+      ],
+      "redistribution_position": "UNRESOLVED \u2014 the substantive redistribution question is routed to Q-082 (licence) and Q-083 (MAS/FAA). Counsel only. Recording this finding does NOT assert that the consumption or the redistribution is permitted.",
+      "cross_reference": "Logged to reviews/findings-ledger.csv as a new row by Q-100."
+    },
+    {
+      "kind": "env-host",
+      "id": "TRADING_AGENTS_BASE",
+      "lifecycle": "active",
+      "classification": "operator-configured-sidecar",
+      "vendor": "self-hosted / operator supplied",
+      "end_user_exposed": false,
+      "authenticated": true,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Origin of the TradingAgents LLM sidecar. The operator chooses the destination; it serves no vendor market data. The route forwards a user-supplied LLM API key to this origin \u2014 reviewed under Q-092, not here.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "lib/trading-agents-config.ts:69"
+      ],
+      "routes_to": [
+        "Q-092"
+      ]
+    },
+    {
+      "kind": "env-host",
+      "id": "TRADING_AGENTS_FALLBACK_BASE",
+      "lifecycle": "active",
+      "classification": "operator-configured-sidecar",
+      "vendor": "self-hosted / operator supplied",
+      "end_user_exposed": false,
+      "authenticated": true,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Managed fallback origin for the same sidecar. Same position as TRADING_AGENTS_BASE.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "lib/trading-agents-config.ts:73"
+      ],
+      "routes_to": [
+        "Q-092"
+      ]
+    },
+    {
+      "kind": "env-host",
+      "id": "ML_SIDECAR_URL",
+      "lifecycle": "active",
+      "classification": "operator-configured-sidecar",
+      "vendor": "self-hosted (ml/server.py)",
+      "end_user_exposed": false,
+      "authenticated": true,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Optional Python ML sidecar; defaults to loopback. Serves model output derived from data we already hold, not vendor data.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "lib/ml/client.ts:3"
+      ],
+      "routes_to": [
+        "Q-092"
+      ]
+    },
+    {
+      "kind": "env-host",
+      "id": "QUANT_FRAMEWORK_URL",
+      "lifecycle": "active",
+      "classification": "operator-configured-sidecar",
+      "vendor": "self-hosted (quant_framework/)",
+      "end_user_exposed": false,
+      "authenticated": true,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "GARCH and regime-HMM sidecar; defaults to loopback. Computes on data we already hold.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "lib/quant/garchClient.ts:55",
+        "lib/quant/regimeHmmClient.ts:52"
+      ],
+      "routes_to": [
+        "Q-092"
+      ]
+    },
+    {
+      "kind": "env-host",
+      "id": "DEEPSEEK_BASE_URL",
+      "lifecycle": "active",
+      "classification": "llm-vendor",
+      "vendor": "DeepSeek",
+      "end_user_exposed": false,
+      "authenticated": true,
+      "licence_status": "UNVERIFIED",
+      "finding": "Overrides the DeepSeek base URL for the Python factor-mining sidecar. See the api.deepseek.com row.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "multi_agent_factor_mining/config.py:96"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "env-host",
+      "id": "KV_REST_API_URL",
+      "lifecycle": "active",
+      "classification": "infrastructure",
+      "vendor": "Upstash Redis (Vercel Marketplace)",
+      "end_user_exposed": false,
+      "authenticated": true,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Managed Redis REST endpoint for the distributed rate limiter and the shadow log. Infrastructure the operator provisions under their own agreement; it stores OUR data and returns no vendor market data. Unprovisioned today \u2014 Q-005.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "lib/api/rateLimit.ts:83",
+        "lib/shadowLog.ts:85"
+      ],
+      "routes_to": [
+        "Q-005"
+      ]
+    },
+    {
+      "kind": "env-host",
+      "id": "NEXTAUTH_URL",
+      "lifecycle": "active",
+      "classification": "first-party",
+      "vendor": "QUANTAN (self)",
+      "end_user_exposed": false,
+      "authenticated": true,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "This deployment's own canonical origin for auth callbacks.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "app/auth/signin/page.tsx:18"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "env-host",
+      "id": "NEXT_PUBLIC_APP_URL",
+      "lifecycle": "active",
+      "classification": "first-party",
+      "vendor": "QUANTAN (self)",
+      "end_user_exposed": false,
+      "authenticated": true,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "This deployment's own public origin.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "lib/appUrl.ts:3"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "env-host",
+      "id": "VERCEL_URL",
+      "lifecycle": "active",
+      "classification": "first-party",
+      "vendor": "QUANTAN (self)",
+      "end_user_exposed": false,
+      "authenticated": true,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Vercel-injected deployment origin.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "lib/appUrl.ts:5"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "env-host",
+      "id": "AUTH_BASE_URL",
+      "lifecycle": "active",
+      "classification": "first-party",
+      "vendor": "QUANTAN (self)",
+      "end_user_exposed": false,
+      "authenticated": true,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Base URL used by the auth-config verifier script.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "scripts/verify-auth-config.mjs:2"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "env-host",
+      "id": "SMOKE_BASE_URL",
+      "lifecycle": "active",
+      "classification": "first-party",
+      "vendor": "QUANTAN (self)",
+      "end_user_exposed": false,
+      "authenticated": true,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Target of the production smoke probe.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "scripts/smoke-production.mjs:2"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "env-host",
+      "id": "VERIFY_APP_BASE_URL",
+      "lifecycle": "active",
+      "classification": "first-party",
+      "vendor": "QUANTAN (self)",
+      "end_user_exposed": false,
+      "authenticated": true,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Target of the crypto/BTC verification scripts.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "scripts/diagnose-crypto.mjs:97",
+        "scripts/verify-btc-ohlc-sample.mjs:57"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "dynamic-host",
+      "id": "app/api/trading-agents/[ticker]/route.ts",
+      "lifecycle": "active",
+      "classification": "operator-configured-sidecar",
+      "vendor": "self-hosted / operator supplied",
+      "end_user_exposed": false,
+      "authenticated": true,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Builds the sidecar URL from TRADING_AGENTS_BASE rather than a literal, so the host is not knowable from source. Registered because an unregistered dynamic host is exactly how a vendor would enter unseen. See the TRADING_AGENTS_BASE row.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "app/api/trading-agents/[ticker]/route.ts:36"
+      ],
+      "routes_to": [
+        "Q-092"
+      ]
+    },
+    {
+      "kind": "dynamic-host",
+      "id": "server_trading_agents.py",
+      "lifecycle": "active",
+      "classification": "operator-configured-sidecar",
+      "vendor": "self-hosted",
+      "end_user_exposed": false,
+      "authenticated": true,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Interpolates the bind host/port into a startup banner in the Python sidecar. No outbound request; no vendor data.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "server_trading_agents.py:344"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "dynamic-host",
+      "id": "lib/appUrl.ts",
+      "lifecycle": "active",
+      "classification": "first-party",
+      "vendor": "QUANTAN (self)",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Builds this deployment's own origin from VERCEL_URL. First-party.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "lib/appUrl.ts:6"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "dynamic-host",
+      "id": "components/stock/LlmDeployAssistant.tsx",
+      "lifecycle": "active",
+      "classification": "outbound-link",
+      "vendor": "n/a (UI copy)",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Interpolates a host into user-facing setup instructions and deploy links. No request is issued from this code and no vendor data is received.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "components/stock/LlmDeployAssistant.tsx"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "dynamic-host",
+      "id": "components/stock/quantlab/tabs/LlmTab.tsx",
+      "lifecycle": "active",
+      "classification": "outbound-link",
+      "vendor": "n/a (UI copy)",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Interpolates a host into user-facing setup instructions and deploy links. No request is issued from this code and no vendor data is received.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "components/stock/quantlab/tabs/LlmTab.tsx"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "http-host",
+      "id": "fonts.googleapis.com",
+      "lifecycle": "active",
+      "classification": "asset-host",
+      "vendor": "Google Fonts",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Web-font stylesheet host, allow-listed in the CSP at middleware.ts:26. Delivers typefaces, not market data; the families carry their own open-source licences and no market-data question arises.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "app/layout.tsx:41",
+        "middleware.ts:26"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "http-host",
+      "id": "fonts.gstatic.com",
+      "lifecycle": "active",
+      "classification": "asset-host",
+      "vendor": "Google Fonts",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Font-file host paired with fonts.googleapis.com; CSP-allowed at middleware.ts:27.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "app/layout.tsx:42",
+        "middleware.ts:27"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "http-host",
+      "id": "www.w3.org",
+      "lifecycle": "active",
+      "classification": "xml-namespace",
+      "vendor": "n/a",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "The SVG namespace URI in components/Sparkline.tsx:44. An IDENTIFIER, not an address \u2014 no request is ever issued to it. Registered rather than silently skipped, because 'that looks like a namespace' is a judgement and judgements belong in the diff.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "components/Sparkline.tsx:44"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "http-host",
+      "id": "quantan.vercel.app",
+      "lifecycle": "active",
+      "classification": "first-party",
+      "vendor": "QUANTAN (self)",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "This project's own production origin.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "lib/appUrl.ts:11",
+        "scripts/smoke-production.mjs:2"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "http-host",
+      "id": "console.anthropic.com",
+      "lifecycle": "active",
+      "classification": "outbound-link",
+      "vendor": "Anthropic",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "A link telling the user where to obtain their OWN API key. No request from our code.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "components/stock/quantlab/tabs/LlmTab.tsx:164"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "http-host",
+      "id": "platform.openai.com",
+      "lifecycle": "active",
+      "classification": "outbound-link",
+      "vendor": "OpenAI",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Key-provisioning link in UI copy.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "components/stock/quantlab/tabs/LlmTab.tsx:155"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "http-host",
+      "id": "aistudio.google.com",
+      "lifecycle": "active",
+      "classification": "outbound-link",
+      "vendor": "Google AI Studio",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Key-provisioning link in UI copy.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "components/stock/quantlab/tabs/LlmTab.tsx:173"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "http-host",
+      "id": "github.com",
+      "lifecycle": "active",
+      "classification": "outbound-link",
+      "vendor": "GitHub",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Repository link in UI copy.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "components/stock/quantlab/tabs/LlmTab.tsx:133"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "http-host",
+      "id": "railway.app",
+      "lifecycle": "active",
+      "classification": "outbound-link",
+      "vendor": "Railway",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Deploy-your-own-sidecar link; the user deploys to their own account and we receive nothing.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "components/stock/LlmDeployAssistant.tsx:10"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "http-host",
+      "id": "docs.railway.app",
+      "lifecycle": "active",
+      "classification": "outbound-link",
+      "vendor": "Railway",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Documentation link in UI copy.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "components/stock/LlmDeployAssistant.tsx:11"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "http-host",
+      "id": "your-app.up.railway.app",
+      "lifecycle": "active",
+      "classification": "placeholder",
+      "vendor": "n/a",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Illustrative host inside a configuration error message. Not a real destination.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "app/api/trading-agents/[ticker]/route.ts:37"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "http-host",
+      "id": "your-deployment.vercel.app",
+      "lifecycle": "active",
+      "classification": "placeholder",
+      "vendor": "n/a",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Illustrative host in sign-in setup copy. Not a real destination.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "app/auth/signin/page.tsx:18"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "npm-package",
+      "id": "@ducanh2912/next-pwa",
+      "lifecycle": "active",
+      "classification": "build-tooling",
+      "vendor": "n/a",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Not a data vendor: service-worker/PWA build plugin. Enumerated rather than omitted: the register IS the enumeration, so a NEW dependency cannot enter without this question being answered. A shortlist of 'the vendor ones' would be an allowlist, which is the defect Q-098 found twice.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "package.json"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "npm-package",
+      "id": "@stryker-mutator/core",
+      "lifecycle": "active",
+      "classification": "test-tooling",
+      "vendor": "n/a",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Not a data vendor: mutation testing. Enumerated rather than omitted: the register IS the enumeration, so a NEW dependency cannot enter without this question being answered. A shortlist of 'the vendor ones' would be an allowlist, which is the defect Q-098 found twice.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "package.json"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "npm-package",
+      "id": "@stryker-mutator/vitest-runner",
+      "lifecycle": "active",
+      "classification": "test-tooling",
+      "vendor": "n/a",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Not a data vendor: mutation testing runner. Enumerated rather than omitted: the register IS the enumeration, so a NEW dependency cannot enter without this question being answered. A shortlist of 'the vendor ones' would be an allowlist, which is the defect Q-098 found twice.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "package.json"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "npm-package",
+      "id": "@testing-library/jest-dom",
+      "lifecycle": "active",
+      "classification": "test-tooling",
+      "vendor": "n/a",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Not a data vendor: DOM assertions. Enumerated rather than omitted: the register IS the enumeration, so a NEW dependency cannot enter without this question being answered. A shortlist of 'the vendor ones' would be an allowlist, which is the defect Q-098 found twice.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "package.json"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "npm-package",
+      "id": "@testing-library/react",
+      "lifecycle": "active",
+      "classification": "test-tooling",
+      "vendor": "n/a",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Not a data vendor: component test harness. Enumerated rather than omitted: the register IS the enumeration, so a NEW dependency cannot enter without this question being answered. A shortlist of 'the vendor ones' would be an allowlist, which is the defect Q-098 found twice.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "package.json"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "npm-package",
+      "id": "@testing-library/user-event",
+      "lifecycle": "active",
+      "classification": "test-tooling",
+      "vendor": "n/a",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Not a data vendor: interaction simulation. Enumerated rather than omitted: the register IS the enumeration, so a NEW dependency cannot enter without this question being answered. A shortlist of 'the vendor ones' would be an allowlist, which is the defect Q-098 found twice.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "package.json"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "npm-package",
+      "id": "@types/better-sqlite3",
+      "lifecycle": "active",
+      "classification": "type-definitions",
+      "vendor": "n/a",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Not a data vendor: compile-time types only. Enumerated rather than omitted: the register IS the enumeration, so a NEW dependency cannot enter without this question being answered. A shortlist of 'the vendor ones' would be an allowlist, which is the defect Q-098 found twice.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "package.json"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "npm-package",
+      "id": "@types/node",
+      "lifecycle": "active",
+      "classification": "type-definitions",
+      "vendor": "n/a",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Not a data vendor: compile-time types only. Enumerated rather than omitted: the register IS the enumeration, so a NEW dependency cannot enter without this question being answered. A shortlist of 'the vendor ones' would be an allowlist, which is the defect Q-098 found twice.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "package.json"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "npm-package",
+      "id": "@types/react",
+      "lifecycle": "active",
+      "classification": "type-definitions",
+      "vendor": "n/a",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Not a data vendor: compile-time types only. Enumerated rather than omitted: the register IS the enumeration, so a NEW dependency cannot enter without this question being answered. A shortlist of 'the vendor ones' would be an allowlist, which is the defect Q-098 found twice.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "package.json"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "npm-package",
+      "id": "@types/react-dom",
+      "lifecycle": "active",
+      "classification": "type-definitions",
+      "vendor": "n/a",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Not a data vendor: compile-time types only. Enumerated rather than omitted: the register IS the enumeration, so a NEW dependency cannot enter without this question being answered. A shortlist of 'the vendor ones' would be an allowlist, which is the defect Q-098 found twice.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "package.json"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "npm-package",
+      "id": "@vitejs/plugin-react",
+      "lifecycle": "active",
+      "classification": "build-tooling",
+      "vendor": "n/a",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Not a data vendor: test/build transform. Enumerated rather than omitted: the register IS the enumeration, so a NEW dependency cannot enter without this question being answered. A shortlist of 'the vendor ones' would be an allowlist, which is the defect Q-098 found twice.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "package.json"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "npm-package",
+      "id": "@vitest/coverage-v8",
+      "lifecycle": "active",
+      "classification": "test-tooling",
+      "vendor": "n/a",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Not a data vendor: coverage instrumentation. Enumerated rather than omitted: the register IS the enumeration, so a NEW dependency cannot enter without this question being answered. A shortlist of 'the vendor ones' would be an allowlist, which is the defect Q-098 found twice.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "package.json"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "npm-package",
+      "id": "autoprefixer",
+      "lifecycle": "active",
+      "classification": "build-tooling",
+      "vendor": "n/a",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Not a data vendor: CSS post-processing. Enumerated rather than omitted: the register IS the enumeration, so a NEW dependency cannot enter without this question being answered. A shortlist of 'the vendor ones' would be an allowlist, which is the defect Q-098 found twice.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "package.json"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "npm-package",
+      "id": "better-sqlite3",
+      "lifecycle": "active",
+      "classification": "native-module",
+      "vendor": "n/a",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Not a data vendor: embedded SQLite driver used by lib/data/warehouse.ts; talks to a file, not a network. Enumerated rather than omitted: the register IS the enumeration, so a NEW dependency cannot enter without this question being answered. A shortlist of 'the vendor ones' would be an allowlist, which is the defect Q-098 found twice.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "package.json"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "npm-package",
+      "id": "fast-check",
+      "lifecycle": "active",
+      "classification": "test-tooling",
+      "vendor": "n/a",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Not a data vendor: property-based testing. Enumerated rather than omitted: the register IS the enumeration, so a NEW dependency cannot enter without this question being answered. A shortlist of 'the vendor ones' would be an allowlist, which is the defect Q-098 found twice.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "package.json"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "npm-package",
+      "id": "jsdom",
+      "lifecycle": "active",
+      "classification": "test-tooling",
+      "vendor": "n/a",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Not a data vendor: DOM environment for component tests. Enumerated rather than omitted: the register IS the enumeration, so a NEW dependency cannot enter without this question being answered. A shortlist of 'the vendor ones' would be an allowlist, which is the defect Q-098 found twice.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "package.json"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "npm-package",
+      "id": "lightweight-charts",
+      "lifecycle": "active",
+      "classification": "ui-library",
+      "vendor": "n/a",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Not a data vendor: client-side chart renderer; receives data, never fetches it. Enumerated rather than omitted: the register IS the enumeration, so a NEW dependency cannot enter without this question being answered. A shortlist of 'the vendor ones' would be an allowlist, which is the defect Q-098 found twice.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "package.json"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "npm-package",
+      "id": "lucide-react",
+      "lifecycle": "active",
+      "classification": "ui-library",
+      "vendor": "n/a",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Not a data vendor: icon set. Enumerated rather than omitted: the register IS the enumeration, so a NEW dependency cannot enter without this question being answered. A shortlist of 'the vendor ones' would be an allowlist, which is the defect Q-098 found twice.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "package.json"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "npm-package",
+      "id": "next",
+      "lifecycle": "active",
+      "classification": "runtime-framework",
+      "vendor": "n/a",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Not a data vendor: the application framework. Enumerated rather than omitted: the register IS the enumeration, so a NEW dependency cannot enter without this question being answered. A shortlist of 'the vendor ones' would be an allowlist, which is the defect Q-098 found twice.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "package.json"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "npm-package",
+      "id": "next-auth",
+      "lifecycle": "active",
+      "classification": "runtime-framework",
+      "vendor": "n/a",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Not a data vendor: authentication; contacts an identity provider the operator configures, never a market-data vendor. Enumerated rather than omitted: the register IS the enumeration, so a NEW dependency cannot enter without this question being answered. A shortlist of 'the vendor ones' would be an allowlist, which is the defect Q-098 found twice.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "package.json"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "npm-package",
+      "id": "pathe",
+      "lifecycle": "active",
+      "classification": "build-tooling",
+      "vendor": "n/a",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Not a data vendor: path normalisation. Enumerated rather than omitted: the register IS the enumeration, so a NEW dependency cannot enter without this question being answered. A shortlist of 'the vendor ones' would be an allowlist, which is the defect Q-098 found twice.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "package.json"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "npm-package",
+      "id": "postcss",
+      "lifecycle": "active",
+      "classification": "build-tooling",
+      "vendor": "n/a",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Not a data vendor: CSS pipeline. Enumerated rather than omitted: the register IS the enumeration, so a NEW dependency cannot enter without this question being answered. A shortlist of 'the vendor ones' would be an allowlist, which is the defect Q-098 found twice.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "package.json"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "npm-package",
+      "id": "react",
+      "lifecycle": "active",
+      "classification": "runtime-framework",
+      "vendor": "n/a",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Not a data vendor: view layer. Enumerated rather than omitted: the register IS the enumeration, so a NEW dependency cannot enter without this question being answered. A shortlist of 'the vendor ones' would be an allowlist, which is the defect Q-098 found twice.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "package.json"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "npm-package",
+      "id": "react-dom",
+      "lifecycle": "active",
+      "classification": "runtime-framework",
+      "vendor": "n/a",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Not a data vendor: view layer. Enumerated rather than omitted: the register IS the enumeration, so a NEW dependency cannot enter without this question being answered. A shortlist of 'the vendor ones' would be an allowlist, which is the defect Q-098 found twice.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "package.json"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "npm-package",
+      "id": "swr",
+      "lifecycle": "active",
+      "classification": "runtime-framework",
+      "vendor": "n/a",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Not a data vendor: client cache/revalidation. It ISSUES requests but never chooses a host \u2014 the URL comes from the calling hook, which is where the http-host rows come from. Enumerated rather than omitted: the register IS the enumeration, so a NEW dependency cannot enter without this question being answered. A shortlist of 'the vendor ones' would be an allowlist, which is the defect Q-098 found twice.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "package.json"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "npm-package",
+      "id": "tailwindcss",
+      "lifecycle": "active",
+      "classification": "build-tooling",
+      "vendor": "n/a",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Not a data vendor: CSS framework. Enumerated rather than omitted: the register IS the enumeration, so a NEW dependency cannot enter without this question being answered. A shortlist of 'the vendor ones' would be an allowlist, which is the defect Q-098 found twice.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "package.json"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "npm-package",
+      "id": "tsx",
+      "lifecycle": "active",
+      "classification": "build-tooling",
+      "vendor": "n/a",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Not a data vendor: TypeScript script runner. Enumerated rather than omitted: the register IS the enumeration, so a NEW dependency cannot enter without this question being answered. A shortlist of 'the vendor ones' would be an allowlist, which is the defect Q-098 found twice.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "package.json"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "npm-package",
+      "id": "typescript",
+      "lifecycle": "active",
+      "classification": "build-tooling",
+      "vendor": "n/a",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Not a data vendor: compiler. Enumerated rather than omitted: the register IS the enumeration, so a NEW dependency cannot enter without this question being answered. A shortlist of 'the vendor ones' would be an allowlist, which is the defect Q-098 found twice.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "package.json"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "npm-package",
+      "id": "vercel",
+      "lifecycle": "active",
+      "classification": "deploy-tooling",
+      "vendor": "n/a",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Not a data vendor: deployment CLI; contacts Vercel's own API with the operator's credentials. Enumerated rather than omitted: the register IS the enumeration, so a NEW dependency cannot enter without this question being answered. A shortlist of 'the vendor ones' would be an allowlist, which is the defect Q-098 found twice.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "package.json"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "npm-package",
+      "id": "vite-tsconfig-paths",
+      "lifecycle": "active",
+      "classification": "build-tooling",
+      "vendor": "n/a",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Not a data vendor: path alias resolution. Enumerated rather than omitted: the register IS the enumeration, so a NEW dependency cannot enter without this question being answered. A shortlist of 'the vendor ones' would be an allowlist, which is the defect Q-098 found twice.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "package.json"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "npm-package",
+      "id": "vitest",
+      "lifecycle": "active",
+      "classification": "test-tooling",
+      "vendor": "n/a",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Not a data vendor: test runner. Enumerated rather than omitted: the register IS the enumeration, so a NEW dependency cannot enter without this question being answered. A shortlist of 'the vendor ones' would be an allowlist, which is the defect Q-098 found twice.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "package.json"
+      ],
+      "routes_to": []
+    }
+  ]
+}
