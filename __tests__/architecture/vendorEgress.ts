@@ -35,7 +35,13 @@
  * in a review document. See `vendor-licence-register.test.ts`.
  */
 
-export type EgressKind = 'http-host' | 'dynamic-host' | 'env-host' | 'npm-package'
+export type EgressKind =
+  | 'http-host'
+  | 'dynamic-host'
+  | 'env-host'
+  | 'npm-package'
+  | 'pip-package'
+  | 'published-data'
 
 export interface EgressPoint {
   kind: EgressKind
@@ -43,7 +49,8 @@ export interface EgressPoint {
    * `http-host` -> lowercased hostname.
    * `dynamic-host` -> the path of the file that builds a host at runtime.
    * `env-host`   -> the environment variable that supplies a host.
-   * `npm-package` -> the package name.
+   * `npm-package` / `pip-package` -> the package name.
+   * `published-data` -> a tracked path this repository REPUBLISHES.
    */
   id: string
   /** `path:line` for source hits, `package.json#<block>` for manifest hits. */
@@ -144,6 +151,56 @@ function envHostNames(source: string): { name: string; line: number }[] {
 }
 
 /**
+ * Python dependencies.
+ *
+ * Added after review, and the omission is instructive: this file already carried a
+ * test named "catches a vendor client added to devDependencies" — the second block
+ * of the manifest it read — while an entire SECOND MANIFEST went unvisited.
+ * `requirements.txt` declares `yfinance`, `akshare` and `tradingagents`, all
+ * vendor-bearing, none of them recorded. Reading one block of one manifest and
+ * calling it "every dependency" is the reachability defect with a narrower scope,
+ * not a different defect.
+ */
+function pipPackages(source: string): { name: string; line: number }[] {
+  const out: { name: string; line: number }[] = []
+  source.split('\n').forEach((raw, i) => {
+    const line = raw.split('#')[0].trim()
+    if (!line || line.startsWith('-')) return
+    // `pkg`, `pkg>=1.2`, `pkg[extra]>=1.2`, `pkg==1.0`
+    const m = /^([A-Za-z0-9._-]+)(\[[^\]]*\])?\s*([<>=!~].*)?$/.exec(line)
+    if (m) out.push({ name: m[1].toLowerCase(), line: i + 1 })
+  })
+  return out
+}
+
+/**
+ * Data this repository REPUBLISHES, as opposed to data it fetches.
+ *
+ * The mechanism above detects EGRESS. I8 governs EXPOSURE, and those are different
+ * sets — the difference contains the largest redistribution act in this project.
+ * `scripts/backtestData/` holds 57 tracked files, 13 MB of vendor-derived daily
+ * OHLCV, in a repository `gh repo view` reports as PUBLIC, and
+ * `.github/workflows/refresh-data.yml` stages and pushes a refreshed bulk copy
+ * every week from a bot, with every prior vintage retained in git objects forever.
+ *
+ * No host is reached, no dependency added, no environment variable read — so every
+ * earlier kind here is blind to it, while it is a more complete exposure of vendor
+ * data to end users than any UI surface in the platform.
+ *
+ * Detected as a property of the workflow: a path staged with `git add` in a file
+ * that also pushes.
+ */
+function publishedPaths(path: string, source: string): { target: string; line: number }[] {
+  if (!/\.ya?ml$/.test(path) || !/git\s+push/.test(source)) return []
+  const out: { target: string; line: number }[] = []
+  source.split('\n').forEach((line, i) => {
+    const m = /git\s+add\s+(?:-[A-Za-z]+\s+)*([^\s;&|]+)/.exec(line)
+    if (m && m[1] !== '.' && m[1] !== '-A') out.push({ target: m[1], line: i + 1 })
+  })
+  return out
+}
+
+/**
  * Detect every point at which this repository reaches a host it does not own, and
  * every third-party package that could reach one on its behalf.
  *
@@ -186,6 +243,16 @@ export function detectEgress(files: SourceFile[], manifest: Manifest = {}): Egre
 
     for (const { name, line } of envHostNames(stripComments(file.source))) {
       push({ kind: 'env-host', id: name, where: `${file.path}:${line}` })
+    }
+
+    if (/(^|\/)requirements[^/]*\.txt$/.test(file.path)) {
+      for (const { name, line } of pipPackages(file.source)) {
+        push({ kind: 'pip-package', id: name, where: `${file.path}:${line}` })
+      }
+    }
+
+    for (const { target, line } of publishedPaths(file.path, file.source)) {
+      push({ kind: 'published-data', id: target, where: `${file.path}:${line}` })
     }
   }
 

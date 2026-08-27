@@ -79,7 +79,7 @@ const IGNORED = new Set([
  * cost nothing to visit. The unvisited set is asserted in the CANNOT-do block, so
  * the boundary is a measurement rather than an assumption.
  */
-const EXECUTABLE = /(\.(tsx?|jsx?|mjs|cjs|py|ya?ml|sh|bash|toml)$|^(Dockerfile|Procfile)[^/]*$)/
+const EXECUTABLE = /(\.(tsx?|jsx?|mjs|cjs|py|ya?ml|sh|bash|toml)$|^(Dockerfile|Procfile)[^/]*$|^requirements[^/]*\.txt$)/
 
 function walk(dir: string, out: string[] = []): string[] {
   if (!existsSync(dir)) return out
@@ -146,6 +146,30 @@ describe('I8 — the scan is reachable', () => {
 
   it('detects a vendor reachable only from Python', () => {
     expect(has('http-host', 'api.deepseek.com')).toBe(true)
+  })
+
+  it('detects a vendor declared in a manifest that is not package.json', () => {
+    // Added after review. This file already had a test named "catches a vendor
+    // client added to devDependencies" — the second BLOCK of the manifest it read
+    // — while an entire second MANIFEST went unvisited. requirements.txt declares
+    // yfinance, akshare and tradingagents, none of them recorded.
+    expect(has('pip-package', 'yfinance')).toBe(true)
+    expect(has('pip-package', 'akshare')).toBe(true)
+  })
+
+  it('detects vendor data this repository REPUBLISHES, which reaches no host at all', () => {
+    // The mechanism detects EGRESS; I8 governs EXPOSURE. scripts/backtestData/ is
+    // 13 MB of Yahoo-derived OHLCV in a PUBLIC repo, pushed weekly by a bot. No
+    // host is reached, no dependency added, no env var read — every other kind
+    // here is blind to it, and it is a more complete exposure of vendor data than
+    // any UI surface in the platform.
+    expect(has('published-data', 'scripts/backtestData/')).toBe(true)
+  })
+
+  it('visits both requirements manifests', () => {
+    for (const p of ['requirements.txt', 'ml/requirements.txt']) {
+      expect(files.map((x) => x.path)).toContain(p)
+    }
   })
 
   it('finds enough distinct egress points to be worth checking', () => {
@@ -289,6 +313,26 @@ describe('I8 — the guard catches what it claims to catch', () => {
   it('catches a vendor client added to dependencies', () => {
     expect(unregistered(detectEgress([], { dependencies: { 'polygon.io-client': '^1.0.0' } })))
       .toContain('polygon.io-client')
+  })
+
+  it('catches a vendor client added to requirements.txt', () => {
+    expect(unregistered(detectEgress(f('requirements.txt', 'alpaca-trade-api>=3.0.0\n'))))
+      .toContain('alpaca-trade-api')
+  })
+
+  it('does NOT treat a pip comment or a -r include as a package', () => {
+    expect(unregistered(detectEgress(f('requirements.txt', '# polygon-api-client>=1.0\n-r other.txt\n'))))
+      .toEqual([])
+  })
+
+  it('catches a new data path staged and pushed by a workflow', () => {
+    expect(unregistered(detectEgress(f('.github/workflows/x.yml', '  git add data/vendorDump/\n  git push origin HEAD:main\n'))))
+      .toContain('data/vendorDump/')
+  })
+
+  it('does NOT fire on a workflow that stages without pushing', () => {
+    expect(unregistered(detectEgress(f('.github/workflows/x.yml', '  git add data/vendorDump/\n'))))
+      .toEqual([])
   })
 
   it('catches a new host-bearing environment variable', () => {

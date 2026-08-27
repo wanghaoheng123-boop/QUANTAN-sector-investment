@@ -38,8 +38,25 @@ host-bearing environment variable that it did not before?**
 ## Claims about skill (I5)
 
 - [ ] This PR makes no user-visible claim of skill, edge, alpha or outperformance.
-- [ ] Or: it does, and the deflated number is the headline, quoted with the
-      `n_eff` it was computed on.
+- [ ] It touches copy that already makes one, tracked under `Q-103`, and does not
+      make it worse.
+
+> There is no third option today, and an earlier draft of this template wrongly
+> implied one — that a claim is permissible if you quote DSR and `n_eff`. It is
+> not. On the measured evidence (PBO 0.67, *above* the no-skill null; excess over
+> the universe t ≈ 0.17), CLAUDE.md I5 states plainly: **"No claim of skill is
+> supported."** Only the permitted-wording paragraph in I5 may be used, verbatim.
+
+## Regulated advice (MAS/FAA — `Q-083`)
+
+- [ ] This PR adds or changes nothing a user could read as a personal
+      recommendation about a named security.
+- [ ] Or: it does, and it is listed in `Q-083` with its exact copy and its
+      disclaimer.
+
+> Displayed grades, valuations and BUY/SELL labels sit closer to the FAA/SFA
+> licensing line than anything else in the product. A collapsed global banner is
+> not a disclaimer on the surface that carries the claim.
 
 ## Gates run locally
 

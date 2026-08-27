@@ -459,10 +459,20 @@ process failure ran live.
   mechanism)*. "Confirm the licence permits it **and record the finding**" now has
   an executing instance. `reviews/vendor-licence-register.json` holds **69
   recorded findings** and `__tests__/architecture/vendor-licence-register.test.ts`
-  fails when this repo reaches a host, adds a dependency, or reads a host-bearing
-  environment variable with no row. **Watched it fail on the committed tree, six
-  mutations, green on revert.** `.github/PULL_REQUEST_TEMPLATE.md` is the advisory
-  half and says so.
+  fails when this repo reaches a host, adds a dependency (npm **or** pip), reads a
+  host-bearing environment variable, or **republishes vendor data**, with no row.
+  **Watched it fail on the committed tree, ten mutations, green on revert.**
+  `.github/PULL_REQUEST_TEMPLATE.md` is the advisory half and says so.
+  *The gaps, named because PARTIAL requires naming rather than gesturing:*
+  **exposure without new egress** — rendering an already-fetched vendor field on a
+  new surface reaches no host, adds no dependency and reads no variable, so nothing
+  fires; the `published-data` kind covers `git add` + `git push` in a workflow
+  (`.github/workflows/refresh-data.yml:135`) and **not** a human committing data by
+  hand. **Non-manifest dependencies** — `package.json` and `requirements*.txt` are
+  read; anything vendored, installed ad hoc, or pulled transitively is invisible.
+  **A host built by concatenation**, and **a variable that supplies a host without
+  being named like one**. Each is asserted as a passing test, so a green run is
+  never a proof.
 
 **Why the heading stays VIOLATED, and it is not the worse-of-the-two rule.**
 Recording a finding is not confirming a licence. I8's operative word is
@@ -484,7 +494,10 @@ only because `.env.example:67` leaves the variable commented out — one environ
 variable from live. `scripts/bloomberg-bridge-example.py:19` carries the warning
 in its own docstring: comply with the Bloomberg Terminal Agreement and any Data
 Licence, and do not expose the service publicly without Bloomberg approval. We
-hold no such approval and had recorded none. Logged as `F8.1`.
+hold no such approval and had recorded none. Logged as **`Q100-1`** —
+*not* `F8.1`, which an earlier draft of this paragraph cited and which is an
+unrelated testing row already `RESOLVED-STALE`. A CRITICAL finding that the
+constitution's own pointer sends you away from is not recorded; caught in review.
 
 **The audit's "11 vendors" is not disputed — the SHAPE of the enumeration is.**
 A count of names cannot be checked and cannot be maintained; the register counts
@@ -495,6 +508,23 @@ URL scan and a package scan miss **Bloomberg**. Two vendors the audit did not na
 that reason. **Ask what EVIDENCE the thing you are hunting leaves in source, then
 check that a detector matches each form of it.** This is the fourth package in
 which reachability, not the rule, was the defect.
+
+**Review round 2 falsified this package's own headline.** The first version claimed
+every vendor now had a finding. It did not: `requirements.txt:13,16,17` declares
+`tradingagents`, `yfinance` and `akshare` — `yfinance` being the TradingAgents
+sidecar's **default** vendor (`server_trading_agents.py:190`) — and the register
+read `package.json` only. *One manifest is not every manifest*, and the file even
+carried a test named "catches a vendor client added to devDependencies" while a
+second manifest went unvisited.
+
+**And the largest redistribution in this project reaches no host at all.**
+`scripts/backtestData/` is **57 tracked files, 13 MB** of Yahoo-derived daily OHLCV
+in a repository that is **PUBLIC**, and `.github/workflows/refresh-data.yml:135-137`
+stages and pushes a refreshed bulk copy to `main` **every week from a bot**, with
+every prior vintage retained in git objects permanently. Bulk historical
+redistribution is the use market-data licences prohibit most explicitly. **The
+mechanism detects EGRESS; I8 governs EXPOSURE**, and the difference between those
+two sets is exactly this row. Logged as `Q100-12`.
 
 Six vendors remain end-user-exposed with **no auth** — Yahoo
 (`app/api/prices/route.ts` + 13 route sites), CoinGecko (browser-direct at

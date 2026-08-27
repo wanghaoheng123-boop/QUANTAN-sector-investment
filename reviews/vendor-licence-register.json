@@ -8,7 +8,7 @@
   ],
   "THIS_IS_NOT_THE_FINDINGS_LEDGER": "reviews/findings-ledger.csv is the risk register \u2014 KNOWN UNFIXED DANGERS. This file is the licence register \u2014 RECORDED FINDINGS about what we reach out to. A vendor with no licence appears in BOTH, for different reasons, and the two must not be merged. F4.5 in the ledger is the standing risk; the yahoo-finance2 row here is the finding.",
   "WHAT_A_ROW_DOES_NOT_MEAN": "A row means the question was asked and the answer was written down. It does NOT mean the consumption or the redistribution is permitted. Six market-data vendors carry licence_status NONE_NO_AGREEMENT \u2014 a fact \u2014 alongside redistribution_position UNRESOLVED, which is a legal question no agent can close. Reading a populated register as an all-clear would invert the purpose of the file.",
-  "WHAT_THE_GUARD_DOES_NOT_CHECK": "The guard checks that a judgement was RECORDED, never that it is CORRECT. Nothing stops a future author adding a market-data client and classifying it 'build-tooling'. What the guard buys is that the row appears in the diff with a name on it, which is the difference between an unexamined decision and a reviewed one.",
+  "WHAT_THE_GUARD_DOES_NOT_CHECK": "The guard checks that a judgement was RECORDED, never that it is CORRECT. Nothing stops a future author adding a market-data client and classifying it 'build-tooling'. What the guard buys is that the row appears in the diff with a name on it, which is the difference between an unexamined decision and a reviewed one. NAMED GAPS, because PARTIAL requires gaps named rather than gestured at: (1) EXPOSURE WITHOUT NEW EGRESS \u2014 rendering an already-fetched vendor field on a new surface reaches no host, adds no dependency and reads no env var, so no detector fires; the published-data kind covers only the workflow-push case, not a human committing data by hand. (2) NON-MANIFEST DEPENDENCIES \u2014 package.json and requirements*.txt are read; a vendor vendored into the tree, installed ad hoc, or pulled transitively is invisible. (3) A host assembled by string concatenation. (4) An environment variable that supplies a host but is not named like one.",
   "licence_status_vocabulary": {
     "NONE_NO_AGREEMENT": "Verified from the repo: no key, no account, no contract. A fact, not a verdict.",
     "PERMITTED": "A licence has been read and permits this use. REQUIRES a non-empty licence_evidence field naming the document \u2014 the guard rejects the status without it, so it cannot be typed in to turn a test green.",
@@ -171,10 +171,10 @@
       "authenticated": false,
       "licence_status": "UNVERIFIED",
       "finding": "The risk-free rate series is fetched from the public FRED CSV endpoint with no key. FRED is a public-sector service, but series-level copyright varies by contributing source and this project has read no terms and recorded no permission. The value is not rendered raw; it is an input to Sharpe/Sortino, so a DERIVED form reaches the user. UNVERIFIED is the honest state \u2014 'it is a government site' is a guess, not a finding.",
-      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_by": "Q-100 review round 2 (security-compliance) \u2014 corrected 2026-08-27",
       "recorded_on": "2026-08-27",
       "evidence": [
-        "lib/quant/riskFreeRate.ts:38"
+        "lib/quant/riskFreeRate.ts:68"
       ],
       "routes_to": [
         "Q-082"
@@ -209,61 +209,69 @@
       "classification": "market-data-vendor",
       "vendor": "Bloomberg (via an operator-run bridge)",
       "end_user_exposed": true,
-      "authenticated": true,
+      "authenticated": false,
       "licence_status": "UNVERIFIED",
-      "finding": "THE HIGHEST-SEVERITY ROW IN THIS FILE, and it was invisible to every earlier version of the guard. lib/data/bloomberg/bridgeClient.ts is a LIVE, WIRED Bloomberg data path with NO URL literal and NO vendor package \u2014 the host arrives entirely through this variable. app/api/prices/route.ts:118-176 calls fetchBloombergQuotesViaBridge, merges the result via mergeYahooAndBloomberg, and returns quotes tagged dataSource:'bloomberg' from a PUBLIC, UNAUTHENTICATED route. The variable is commented out at .env.example:67, so the path is latent on this deployment \u2014 one environment variable away from live. scripts/bloomberg-bridge-example.py:19 carries the operator warning in its own docstring: comply with the Bloomberg Terminal Agreement and any Data License, and do not expose the service to the public internet without Bloomberg approval. This repo holds no such approval and records none. NOT marked RESTRICTED: that would be a legal conclusion an agent may not draw, and the terms are not in the repository to read.",
-      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "finding": "THE HIGHEST-SEVERITY EGRESS ROW, and it was invisible to every earlier version of the guard. lib/data/bloomberg/bridgeClient.ts is a LIVE, WIRED Bloomberg path with NO URL literal and NO vendor package \u2014 the host arrives entirely through this variable. TWO routes expose it, not one: app/api/prices/route.ts:118-176 merges quotes tagged dataSource:'bloomberg', and app/api/fundamentals/[ticker]/route.ts:125-129 fetches the bridge and returns priceSources.bloomberg, which components/stock/quantlab/tabs/SummaryTab.tsx:32-35 renders as a LABELLED 'Bloomberg spot' price \u2014 while :130-131 makes displayPrice Bloomberg-derived and feeds it to buildFundamentalsPayload, so the numbers also propagate UNLABELLED into computed fundamentals. Both routes are PUBLIC (app/api/prices/route.ts:63 says so explicitly) and both set shared-cache headers (s-maxage 3 and 120), so enabling this redistributes terminal-derived data into a CDN intermediary, not merely to one caller. CORRECTION to the first version of this row: it recorded authenticated:true, which described the OUTBOUND X-Bridge-Secret and not the surface we serve. CORRECTION 2: it claimed the path is 'latent because .env.example:67 comments it out'. .env.example has no bearing on Vercel's environment \u2014 whether BLOOMBERG_BRIDGE_URL is set in production is NOT OBSERVABLE FROM THE REPO and is owner-answerable in thirty seconds. Asserting an unobservable deployment state is precisely the error this file exists to prevent. scripts/bloomberg-bridge-example.py:19 carries the operator warning in its own docstring, so ignorance is not available as a defence. NOT marked RESTRICTED: that would be a legal conclusion an agent may not draw, and the terms are not in the repository to read.",
+      "recorded_by": "Q-100 review round 2 (security-compliance) \u2014 corrected 2026-08-27",
       "recorded_on": "2026-08-27",
       "evidence": [
         "lib/data/bloomberg/bridgeClient.ts:75",
         "app/api/prices/route.ts:118",
         "app/api/prices/route.ts:161",
-        ".env.example:67"
+        "app/api/fundamentals/[ticker]/route.ts:125",
+        "components/stock/quantlab/tabs/SummaryTab.tsx:32",
+        "app/api/bloomberg-bridge/health/route.ts:22"
       ],
       "routes_to": [
         "Q-082",
         "Q-083"
       ],
       "redistribution_position": "UNRESOLVED \u2014 the substantive redistribution question is routed to Q-082 (licence) and Q-083 (MAS/FAA). Counsel only. Recording this finding does NOT assert that the consumption or the redistribution is permitted.",
-      "cross_reference": "Logged to reviews/findings-ledger.csv as a new row by Q-100."
+      "cross_reference": "reviews/findings-ledger.csv rows Q100-1, Q100-3, Q100-4, Q100-5."
     },
     {
       "kind": "env-host",
       "id": "TRADING_AGENTS_BASE",
       "lifecycle": "active",
-      "classification": "operator-configured-sidecar",
+      "classification": "llm-credential-path",
       "vendor": "self-hosted / operator supplied",
-      "end_user_exposed": false,
-      "authenticated": true,
-      "licence_status": "NOT_APPLICABLE",
-      "finding": "Origin of the TradingAgents LLM sidecar. The operator chooses the destination; it serves no vendor market data. The route forwards a user-supplied LLM API key to this origin \u2014 reviewed under Q-092, not here.",
-      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "end_user_exposed": true,
+      "authenticated": false,
+      "licence_status": "UNVERIFIED",
+      "finding": "CORRECTED after review; the first version said end_user_exposed:false, authenticated:true and NOT_APPLICABLE, and all three were wrong. Auth on this route is POST-ONLY (app/api/trading-agents/[ticker]/route.ts:189-197); the GET at :56-87 is rate-limited but UNAUTHENTICATED and returns the cached analysis to anyone. That analysis is yfinance-derived and is rendered as a BUY/SELL 'Final decision' banner at components/stock/quantlab/tabs/LlmTab.tsx:399-412. Separately, :317-319 forwards the END USER'S OWN LLM API KEY (held in sessionStorage, components/stock/quantlab/hooks/useQuantLabLlm.ts:180) to an operator-chosen third-party origin \u2014 including a 'managed fallback' the user never selected. Whether the LLM vendors' key-confidentiality terms are engaged by that is an I8 question, and NOT_APPLICABLE was answering it. Routing this solely to Q-092 was a misfile: Q-092's acceptance criteria are prompt-injection only and cannot reach it.",
+      "recorded_by": "Q-100 review round 2 (security-compliance) \u2014 corrected 2026-08-27",
       "recorded_on": "2026-08-27",
       "evidence": [
         "lib/trading-agents-config.ts:69"
       ],
       "routes_to": [
+        "Q-082",
+        "Q-083",
         "Q-092"
-      ]
+      ],
+      "redistribution_position": "UNRESOLVED \u2014 the substantive redistribution question is routed to Q-082 (licence) and Q-083 (MAS/FAA). Counsel only. Recording this finding does NOT assert that the consumption or the redistribution is permitted."
     },
     {
       "kind": "env-host",
       "id": "TRADING_AGENTS_FALLBACK_BASE",
       "lifecycle": "active",
-      "classification": "operator-configured-sidecar",
+      "classification": "llm-credential-path",
       "vendor": "self-hosted / operator supplied",
-      "end_user_exposed": false,
-      "authenticated": true,
-      "licence_status": "NOT_APPLICABLE",
-      "finding": "Managed fallback origin for the same sidecar. Same position as TRADING_AGENTS_BASE.",
-      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "end_user_exposed": true,
+      "authenticated": false,
+      "licence_status": "UNVERIFIED",
+      "finding": "CORRECTED after review; the first version said end_user_exposed:false, authenticated:true and NOT_APPLICABLE, and all three were wrong. Auth on this route is POST-ONLY (app/api/trading-agents/[ticker]/route.ts:189-197); the GET at :56-87 is rate-limited but UNAUTHENTICATED and returns the cached analysis to anyone. That analysis is yfinance-derived and is rendered as a BUY/SELL 'Final decision' banner at components/stock/quantlab/tabs/LlmTab.tsx:399-412. Separately, :317-319 forwards the END USER'S OWN LLM API KEY (held in sessionStorage, components/stock/quantlab/hooks/useQuantLabLlm.ts:180) to an operator-chosen third-party origin \u2014 including a 'managed fallback' the user never selected. Whether the LLM vendors' key-confidentiality terms are engaged by that is an I8 question, and NOT_APPLICABLE was answering it. Routing this solely to Q-092 was a misfile: Q-092's acceptance criteria are prompt-injection only and cannot reach it.",
+      "recorded_by": "Q-100 review round 2 (security-compliance) \u2014 corrected 2026-08-27",
       "recorded_on": "2026-08-27",
       "evidence": [
         "lib/trading-agents-config.ts:73"
       ],
       "routes_to": [
+        "Q-082",
+        "Q-083",
         "Q-092"
-      ]
+      ],
+      "redistribution_position": "UNRESOLVED \u2014 the substantive redistribution question is routed to Q-082 (licence) and Q-083 (MAS/FAA). Counsel only. Recording this finding does NOT assert that the consumption or the redistribution is permitted."
     },
     {
       "kind": "env-host",
@@ -330,8 +338,8 @@
       "end_user_exposed": false,
       "authenticated": true,
       "licence_status": "NOT_APPLICABLE",
-      "finding": "Managed Redis REST endpoint for the distributed rate limiter and the shadow log. Infrastructure the operator provisions under their own agreement; it stores OUR data and returns no vendor market data. Unprovisioned today \u2014 Q-005.",
-      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "finding": "Managed Redis REST endpoint for the distributed rate limiter and the shadow log. Infrastructure the operator provisions under their own agreement; it returns no vendor market data, so NOT_APPLICABLE holds FOR I8. CORRECTION: the first version said 'it stores OUR data'. It stores END USERS' RAW IP ADDRESSES \u2014 lib/api/rateLimit.ts:131 reads x-forwarded-for and :137 returns `${routeName}:${ip}`, used verbatim as the Redis key at :85. That is a data-protection question, not a market-data-licence one, and is noted here rather than adjudicated. Unprovisioned today \u2014 Q-005.",
+      "recorded_by": "Q-100 review round 2 (security-compliance) \u2014 corrected 2026-08-27",
       "recorded_on": "2026-08-27",
       "evidence": [
         "lib/api/rateLimit.ts:83",
@@ -448,20 +456,23 @@
       "kind": "dynamic-host",
       "id": "app/api/trading-agents/[ticker]/route.ts",
       "lifecycle": "active",
-      "classification": "operator-configured-sidecar",
+      "classification": "llm-credential-path",
       "vendor": "self-hosted / operator supplied",
-      "end_user_exposed": false,
-      "authenticated": true,
-      "licence_status": "NOT_APPLICABLE",
-      "finding": "Builds the sidecar URL from TRADING_AGENTS_BASE rather than a literal, so the host is not knowable from source. Registered because an unregistered dynamic host is exactly how a vendor would enter unseen. See the TRADING_AGENTS_BASE row.",
-      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "end_user_exposed": true,
+      "authenticated": false,
+      "licence_status": "UNVERIFIED",
+      "finding": "CORRECTED after review; the first version said end_user_exposed:false, authenticated:true and NOT_APPLICABLE, and all three were wrong. Auth on this route is POST-ONLY (app/api/trading-agents/[ticker]/route.ts:189-197); the GET at :56-87 is rate-limited but UNAUTHENTICATED and returns the cached analysis to anyone. That analysis is yfinance-derived and is rendered as a BUY/SELL 'Final decision' banner at components/stock/quantlab/tabs/LlmTab.tsx:399-412. Separately, :317-319 forwards the END USER'S OWN LLM API KEY (held in sessionStorage, components/stock/quantlab/hooks/useQuantLabLlm.ts:180) to an operator-chosen third-party origin \u2014 including a 'managed fallback' the user never selected. Whether the LLM vendors' key-confidentiality terms are engaged by that is an I8 question, and NOT_APPLICABLE was answering it. Routing this solely to Q-092 was a misfile: Q-092's acceptance criteria are prompt-injection only and cannot reach it.",
+      "recorded_by": "Q-100 review round 2 (security-compliance) \u2014 corrected 2026-08-27",
       "recorded_on": "2026-08-27",
       "evidence": [
         "app/api/trading-agents/[ticker]/route.ts:36"
       ],
       "routes_to": [
+        "Q-082",
+        "Q-083",
         "Q-092"
-      ]
+      ],
+      "redistribution_position": "UNRESOLVED \u2014 the substantive redistribution question is routed to Q-082 (licence) and Q-083 (MAS/FAA). Counsel only. Recording this finding does NOT assert that the consumption or the redistribution is permitted."
     },
     {
       "kind": "dynamic-host",
@@ -617,7 +628,10 @@
       "evidence": [
         "components/stock/quantlab/tabs/LlmTab.tsx:164"
       ],
-      "routes_to": []
+      "routes_to": [
+        "Q-082"
+      ],
+      "cross_reference": "These links exist so the user fetches their OWN key and pastes it into our UI; the key is then forwarded server-side to an operator-chosen origin. The licence question attaches to that forwarding, recorded on the TRADING_AGENTS_BASE row, not to the hyperlink."
     },
     {
       "kind": "http-host",
@@ -634,7 +648,10 @@
       "evidence": [
         "components/stock/quantlab/tabs/LlmTab.tsx:155"
       ],
-      "routes_to": []
+      "routes_to": [
+        "Q-082"
+      ],
+      "cross_reference": "These links exist so the user fetches their OWN key and pastes it into our UI; the key is then forwarded server-side to an operator-chosen origin. The licence question attaches to that forwarding, recorded on the TRADING_AGENTS_BASE row, not to the hyperlink."
     },
     {
       "kind": "http-host",
@@ -651,7 +668,10 @@
       "evidence": [
         "components/stock/quantlab/tabs/LlmTab.tsx:173"
       ],
-      "routes_to": []
+      "routes_to": [
+        "Q-082"
+      ],
+      "cross_reference": "These links exist so the user fetches their OWN key and pastes it into our UI; the key is then forwarded server-side to an operator-chosen origin. The licence question attaches to that forwarding, recorded on the TRADING_AGENTS_BASE row, not to the hyperlink."
     },
     {
       "kind": "http-host",
@@ -1264,6 +1284,319 @@
         "package.json"
       ],
       "routes_to": []
+    },
+    {
+      "kind": "pip-package",
+      "id": "yfinance",
+      "lifecycle": "active",
+      "classification": "market-data-vendor",
+      "vendor": "Yahoo Finance (via yfinance)",
+      "end_user_exposed": true,
+      "authenticated": false,
+      "licence_status": "NONE_NO_AGREEMENT",
+      "finding": "UNOFFICIAL community client for the same undocumented, unauthenticated Yahoo endpoints as yahoo-finance2, with no key and no agreement. Declared in BOTH requirements.txt:16 and ml/requirements.txt:7, and it is the TradingAgents sidecar's DEFAULT data vendor (server_trading_agents.py:190). Its output reaches end users: app/api/trading-agents/[ticker]/route.ts GET is rate-limited but UNAUTHENTICATED and returns the cached analysis, which components/stock/quantlab/tabs/LlmTab.tsx renders as a decision banner. MISSED by the first version of this register, which read package.json and called it every dependency.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "requirements.txt"
+      ],
+      "routes_to": [
+        "Q-082",
+        "Q-083"
+      ],
+      "redistribution_position": "UNRESOLVED \u2014 the substantive redistribution question is routed to Q-082 (licence) and Q-083 (MAS/FAA). Counsel only. Recording this finding does NOT assert that the consumption or the redistribution is permitted."
+    },
+    {
+      "kind": "pip-package",
+      "id": "akshare",
+      "lifecycle": "active",
+      "classification": "market-data-vendor",
+      "vendor": "AKShare (Chinese market data aggregator)",
+      "end_user_exposed": true,
+      "authenticated": false,
+      "licence_status": "NONE_NO_AGREEMENT",
+      "finding": "Declared at requirements.txt:17 with no key and no agreement. AKShare aggregates from exchange and broker sources whose own terms are not visible here, so the licence chain is longer than one hop, not shorter. Reachable through the same sidecar surface as yfinance.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "requirements.txt"
+      ],
+      "routes_to": [
+        "Q-082",
+        "Q-083"
+      ],
+      "redistribution_position": "UNRESOLVED \u2014 the substantive redistribution question is routed to Q-082 (licence) and Q-083 (MAS/FAA). Counsel only. Recording this finding does NOT assert that the consumption or the redistribution is permitted."
+    },
+    {
+      "kind": "pip-package",
+      "id": "tradingagents",
+      "lifecycle": "active",
+      "classification": "llm-vendor",
+      "vendor": "TradingAgents (LLM multi-agent framework)",
+      "end_user_exposed": true,
+      "authenticated": false,
+      "licence_status": "UNVERIFIED",
+      "finding": "Declared at requirements.txt:13. Not a data vendor itself, but the framework through which yfinance data and user-supplied LLM keys are combined; its output is what reaches end users unauthenticated. Recorded because the exposure travels through it.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "requirements.txt"
+      ],
+      "routes_to": [
+        "Q-082",
+        "Q-083"
+      ],
+      "redistribution_position": "UNRESOLVED \u2014 the substantive redistribution question is routed to Q-082 (licence) and Q-083 (MAS/FAA). Counsel only. Recording this finding does NOT assert that the consumption or the redistribution is permitted."
+    },
+    {
+      "kind": "pip-package",
+      "id": "fastapi",
+      "lifecycle": "active",
+      "classification": "runtime-framework",
+      "vendor": "n/a",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "web framework. Not a data vendor: scientific/serving library. Enumerated because requirements.txt is a manifest and reading only package.json is how yfinance and akshare went unrecorded.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "requirements.txt"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "pip-package",
+      "id": "uvicorn",
+      "lifecycle": "active",
+      "classification": "runtime-framework",
+      "vendor": "n/a",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "ASGI server. Not a data vendor: scientific/serving library. Enumerated because requirements.txt is a manifest and reading only package.json is how yfinance and akshare went unrecorded.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "requirements.txt"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "pip-package",
+      "id": "pydantic",
+      "lifecycle": "active",
+      "classification": "runtime-framework",
+      "vendor": "n/a",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "validation. Not a data vendor: scientific/serving library. Enumerated because requirements.txt is a manifest and reading only package.json is how yfinance and akshare went unrecorded.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "requirements.txt"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "pip-package",
+      "id": "numpy",
+      "lifecycle": "active",
+      "classification": "runtime-framework",
+      "vendor": "n/a",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "numerics. Not a data vendor: scientific/serving library. Enumerated because requirements.txt is a manifest and reading only package.json is how yfinance and akshare went unrecorded.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "requirements.txt"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "pip-package",
+      "id": "pandas",
+      "lifecycle": "active",
+      "classification": "runtime-framework",
+      "vendor": "n/a",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "dataframes. Not a data vendor: scientific/serving library. Enumerated because requirements.txt is a manifest and reading only package.json is how yfinance and akshare went unrecorded.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "requirements.txt"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "pip-package",
+      "id": "scipy",
+      "lifecycle": "active",
+      "classification": "runtime-framework",
+      "vendor": "n/a",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "scientific computing. Not a data vendor: scientific/serving library. Enumerated because requirements.txt is a manifest and reading only package.json is how yfinance and akshare went unrecorded.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "requirements.txt"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "pip-package",
+      "id": "gplearn",
+      "lifecycle": "active",
+      "classification": "runtime-framework",
+      "vendor": "n/a",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "symbolic regression. Not a data vendor: scientific/serving library. Enumerated because requirements.txt is a manifest and reading only package.json is how yfinance and akshare went unrecorded.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "requirements.txt"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "pip-package",
+      "id": "arch",
+      "lifecycle": "active",
+      "classification": "runtime-framework",
+      "vendor": "n/a",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "GARCH estimation. Not a data vendor: scientific/serving library. Enumerated because requirements.txt is a manifest and reading only package.json is how yfinance and akshare went unrecorded.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "requirements.txt"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "pip-package",
+      "id": "matplotlib",
+      "lifecycle": "active",
+      "classification": "runtime-framework",
+      "vendor": "n/a",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "plotting. Not a data vendor: scientific/serving library. Enumerated because requirements.txt is a manifest and reading only package.json is how yfinance and akshare went unrecorded.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "requirements.txt"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "pip-package",
+      "id": "pytest",
+      "lifecycle": "active",
+      "classification": "build-tooling",
+      "vendor": "n/a",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "test runner. Not a data vendor: scientific/serving library. Enumerated because requirements.txt is a manifest and reading only package.json is how yfinance and akshare went unrecorded.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "requirements.txt"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "pip-package",
+      "id": "requests",
+      "lifecycle": "active",
+      "classification": "runtime-framework",
+      "vendor": "n/a",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "HTTP client library \u2014 issues requests but never chooses a host; the caller supplies it. Not a data vendor: scientific/serving library. Enumerated because requirements.txt is a manifest and reading only package.json is how yfinance and akshare went unrecorded.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "requirements.txt"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "pip-package",
+      "id": "scikit-learn",
+      "lifecycle": "active",
+      "classification": "runtime-framework",
+      "vendor": "n/a",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "machine learning. Not a data vendor: scientific/serving library. Enumerated because requirements.txt is a manifest and reading only package.json is how yfinance and akshare went unrecorded.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "requirements.txt"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "pip-package",
+      "id": "xgboost",
+      "lifecycle": "active",
+      "classification": "runtime-framework",
+      "vendor": "n/a",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "gradient boosting. Not a data vendor: scientific/serving library. Enumerated because requirements.txt is a manifest and reading only package.json is how yfinance and akshare went unrecorded.",
+      "recorded_by": "Q-100 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "requirements.txt"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "published-data",
+      "id": "scripts/backtestData/",
+      "lifecycle": "active",
+      "classification": "market-data-vendor",
+      "vendor": "Yahoo Finance (bulk historical, republished)",
+      "end_user_exposed": true,
+      "authenticated": false,
+      "licence_status": "NONE_NO_AGREEMENT",
+      "finding": "THE LARGEST AND MOST LITERAL REDISTRIBUTION ACT IN THIS PROJECT, and every other detector kind is blind to it. 57 tracked files, 13 MB, roughly five years of Yahoo-derived daily OHLCV per name (scripts/backtestData/AAPL.json carries ticker, sector, fetchedAt 2026-08-16 and raw candles). The repository is PUBLIC. .github/workflows/refresh-data.yml:135-137 stages scripts/backtestData/ and pushes to main WEEKLY from a bot, and every prior vintage is retained in git objects permanently, so withdrawal would require history rewriting rather than a delete. Bulk historical redistribution is the use market-data licences prohibit most explicitly. Recording this changed the shape of the whole package: the mechanism detects EGRESS, and I8 governs EXPOSURE \u2014 the difference is exactly this row.",
+      "recorded_by": "Q-100 review round 2 (security-compliance) \u2014 corrected 2026-08-27",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        ".github/workflows/refresh-data.yml:135",
+        ".github/workflows/refresh-data.yml:137",
+        "scripts/backtestData/AAPL.json"
+      ],
+      "routes_to": [
+        "Q-082",
+        "Q-083",
+        "Q-102"
+      ],
+      "redistribution_position": "UNRESOLVED \u2014 the substantive redistribution question is routed to Q-082 (licence) and Q-083 (MAS/FAA). Counsel only. Recording this finding does NOT assert that the consumption or the redistribution is permitted.",
+      "cross_reference": "Logged to reviews/findings-ledger.csv as Q100-12. Interacts with Q-102 (the weekly in-place history rewrite)."
     }
-  ]
+  ],
+  "field_definitions": {
+    "end_user_exposed": "TRUE when vendor-derived content can be obtained by an end user of this platform through ANY path \u2014 a route, a shared CDN cache, or a published artifact \u2014 regardless of whether it is labelled as vendor data. It is NOT 'is there a UI component for it'. Left undefined in the first version of this file, which produced systematic understatement.",
+    "authenticated": "Describes the SURFACE WE SERVE: does a caller need to authenticate to obtain this data from us? It does NOT describe the credential we send outbound. Outbound credentials are recorded in the finding text. Conflating the two is how BLOOMBERG_BRIDGE_URL came to read authenticated:true while app/api/prices/route.ts:63 says 'Public endpoint, no authentication required'."
+  }
 }
