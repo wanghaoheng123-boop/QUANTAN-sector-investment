@@ -1216,3 +1216,32 @@ revert. **Verification:** typecheck clean, 1805 tests / 17 skipped (+52),
 I6 PARTIAL · I7 VIOLATED · I8 VIOLATED (process half PARTIAL). **Still no
 invariant is ENFORCED**, and Q-097 makes every green check advisory — including
 this guard's red.
+
+### Round 2 — the review falsified my headline, not my code
+
+`security-compliance` blocked on four objections. **Every one was a sentence I
+wrote, not a line I shipped.**
+
+**"Every vendor now has a finding" was false.** `requirements.txt` declares
+`tradingagents`, `yfinance` and `akshare` — `yfinance` is the sidecar's *default*
+vendor — and my register read `package.json` only. The file already carried a test
+named *"catches a vendor client added to devDependencies"*: I had checked the
+second **block** of the manifest I read while a second **manifest** went unvisited.
+**Fifth instance of the reachability defect, inside the guard written to teach it.**
+
+**And the largest redistribution in this project reaches no host at all.**
+`scripts/backtestData/` is 57 tracked files, 13 MB of Yahoo-derived daily OHLCV,
+in a **public** repository, with a bot pushing a refreshed bulk copy to `main`
+every week and every prior vintage kept in git objects forever. Bulk historical
+redistribution is the use market-data licences prohibit most explicitly.
+**My mechanism detects EGRESS; I8 governs EXPOSURE.** Those are different sets and
+the difference contained the worst case.
+
+Two fields — `end_user_exposed`, `authenticated` — were never *defined*, which
+produced systematic understatement: the trading-agents `GET` is unauthenticated
+and serves a BUY/SELL banner, recorded as neither. And `CLAUDE.md` pointed at
+`F8.1` for the CRITICAL Bloomberg finding — an unrelated, already-resolved row.
+
+**Generalise: ask the adversary to falsify the CLAIMS, not just the
+implementation.** A review that only checks whether the code does what the diff
+says will miss the diff saying too much.

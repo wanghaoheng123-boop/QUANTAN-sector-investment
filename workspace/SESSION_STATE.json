@@ -666,13 +666,23 @@
       "Named blind spots, asserted as PASSING tests so a green run is never a proof: a host assembled by concatenation; an env var not named like a host; a vendor behind a transitive dependency.",
       "Q-097 makes this guard's red advisory like every other check in the repo."
     ],
-    "verification": "typecheck clean; 1805 tests pass / 17 skipped (+52); check:ci exit 0. CI verified BY NAME against the commit check-runs API \u2014 typecheck/test/coverage/benchmark/Vercel all success on afce9a1; re-verified on the final head.",
+    "verification": "typecheck clean; 1818 tests pass / 17 skipped (+65 from this package); check:ci exit 0. TEN mutations watched failing on the committed tree, green on revert. CI verified BY NAME against the commit check-runs API.",
     "tier_board": "I1 ASPIRATIONAL \u00b7 I2 PARTIAL \u00b7 I3 PARTIAL \u00b7 I4 ASPIRATIONAL \u00b7 I5 PARTIAL \u00b7 I6 PARTIAL \u00b7 I7 VIOLATED \u00b7 I8 VIOLATED (process half PARTIAL). Still NO invariant is ENFORCED.",
     "OWNER_NEEDS_YOU": [
       "Q-097 (P0) \u2014 branch protection on main. Repo settings; an agent should not change them. Required checks now available by name: typecheck, test, coverage, benchmark, and the Vercel build.",
       "Q-082 + Q-083 (P0/P1) \u2014 the substantive licence and MAS/FAA questions. Counsel. The register now hands them a complete enumeration of what to ask about.",
       "Q100-1 (CRITICAL) \u2014 decide the Bloomberg bridge: kill flag, auth requirement, or removal.",
       "Q-005 (P0) \u2014 Redis provisioning via the Vercel Marketplace (Vercel KV no longer exists)."
-    ]
+    ],
+    "REVIEW_ROUND_2_FALSIFIED_MY_HEADLINE": {
+      "who": "security-compliance agent, four blocking objections, all confirmed against the tree before acting",
+      "1_every_vendor_has_a_finding_was_FALSE": "requirements.txt:13,16,17 declares tradingagents, yfinance, akshare \u2014 yfinance is the TradingAgents sidecar's DEFAULT vendor (server_trading_agents.py:190) \u2014 and my register read package.json ONLY. ONE MANIFEST IS NOT EVERY MANIFEST. The file even carried a test named 'catches a vendor client added to devDependencies' \u2014 the second BLOCK of the manifest it read \u2014 while a second MANIFEST went unvisited. Fifth instance of the reachability defect, in the guard built to teach the lesson.",
+      "2_the_biggest_redistribution_REACHES_NO_HOST": "scripts/backtestData/ \u2014 57 tracked files, 13MB of Yahoo-derived daily OHLCV, repo visibility PUBLIC, and .github/workflows/refresh-data.yml:135-137 pushes a refreshed bulk copy to main WEEKLY from a bot with every prior vintage retained in git objects forever. Bulk historical redistribution is the use market-data licences prohibit most explicitly. THE MECHANISM DETECTS EGRESS; I8 GOVERNS EXPOSURE \u2014 those are different sets and the difference contains this. New detector kind published-data (git add + git push in a workflow). Logged Q100-12 CRITICAL.",
+      "3_two_fields_were_never_defined": "end_user_exposed and authenticated had no definitions, which produced SYSTEMATIC understatement rather than two typos. The trading-agents GET is rate-limited but UNAUTHENTICATED (:56-87; auth is POST-only at :189-197) and returns yfinance-derived analysis rendered as a BUY/SELL 'Final decision' banner \u2014 recorded as neither exposed nor unauthenticated. BLOOMBERG_BRIDGE_URL's authenticated:true described the OUTBOUND X-Bridge-Secret, not the public route we serve (app/api/prices/route.ts:63 says 'Public endpoint, no authentication required').",
+      "4_wrong_cross_reference_in_the_tier_paragraph": "CLAUDE.md cited F8.1 for the CRITICAL Bloomberg finding. F8.1 is an unrelated testing row, already RESOLVED-STALE. The real row is Q100-1. This is verbatim the sin I3's own text confesses to, committed in the paragraph announcing a tier move.",
+      "also": "The (b) PARTIAL sub-tier asserted a tier whose definition requires gaps named as file:line while naming none of the gaps where these misses lived. Bloomberg's surface widened to a second route (app/api/fundamentals \u2014 a LABELLED 'Bloomberg spot' price, and displayPrice propagating UNLABELLED into computed fundamentals, both with shared-cache headers so it redistributes into a CDN) and the health endpoint. The '.env.example proves it is latent' claim withdrawn as UNOBSERVABLE. The LLM-credential path reclassified off NOT_APPLICABLE and rerouted from Q-092, whose acceptance criteria are prompt-injection only and structurally cannot answer it.",
+      "GENERALISE": "A review that only checks whether the code does what the diff says will miss the diff SAYING TOO MUCH. Every blocking objection here was a sentence I wrote, not a line of code I shipped. Ask an adversary to falsify the CLAIMS, not just the implementation."
+    },
+    "ledger_rows": "Q100-1 (CRITICAL Bloomberg), Q100-2 (HIGH six vendors), Q100-3..Q100-11 (review round 2), Q100-12 (CRITICAL public bulk republication)."
   }
 }
