@@ -61,11 +61,25 @@ const IGNORED = new Set([
 ])
 
 /**
- * Executable source of ANY extension, which is the property that matters — not a
- * list of the extensions we happened to think of. `.py` was added because it had
- * to be: a whole vendor lived there.
+ * Executable source. THIS IS AN EXTENSION LIST, and an earlier draft of this
+ * comment claimed it was not — "any extension, not a list of the ones we happened
+ * to think of" — which was false while sitting inside the honesty block of a guard
+ * built to remove false claims. Struck, because writing one is easier than
+ * noticing one.
+ *
+ * The list is defensible on a property and the property is stated so it can be
+ * argued with: **only executable text can issue a request.** Markdown, JSON,
+ * `.snap` and log files hold plenty of URLs — a sweep on 2026-08-27 found 28
+ * hosts across `.md`, `.json` (npm lockfile funding links), `.txt` and `.snap` —
+ * and not one of them can fetch anything. Registering prose would bury the rows
+ * that matter, which is its own failure.
+ *
+ * Where that reasoning is thin, it is widened rather than argued: `.sh`, `.toml`,
+ * `Dockerfile` and `Procfile` can all reach a vendor, have no instances today, and
+ * cost nothing to visit. The unvisited set is asserted in the CANNOT-do block, so
+ * the boundary is a measurement rather than an assumption.
  */
-const EXECUTABLE = /\.(tsx?|jsx?|mjs|cjs|py|ya?ml)$/
+const EXECUTABLE = /(\.(tsx?|jsx?|mjs|cjs|py|ya?ml|sh|bash|toml)$|^(Dockerfile|Procfile)[^/]*$)/
 
 function walk(dir: string, out: string[] = []): string[] {
   if (!existsSync(dir)) return out
@@ -185,22 +199,38 @@ describe('I8 — every vendor this repository reaches is recorded', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
+/** The six the Q-079 audit named as end-user-exposed with no auth. */
+const NAMED_MARKET_DATA_VENDORS = [
+  'yahoo-finance2', 'api.coingecko.com', 'api.kraken.com',
+  'api.exchange.coinbase.com', 'api.bybit.com', 'www.okx.com',
+]
+
 describe('I8 — the register has not been quietly softened', () => {
   const entries = register.entries
   const exposed = entries.filter((e) => e.end_user_exposed && e.lifecycle === 'active')
 
-  it('still records that market data reaches end users', () => {
-    // If this ever drops to zero, either the surfaces were withdrawn (in which
-    // case the rows say `withdrawn` and this is correct) or someone flipped a
-    // boolean. The count is asserted so the second cannot happen quietly.
-    expect(exposed.length).toBeGreaterThanOrEqual(6)
+  it('accounts for every named market-data vendor — exposed, or withdrawn on the record', () => {
+    // NOT a count. An earlier version asserted `exposed.length >= 6`, which goes
+    // RED as a reward for withdrawing a vendor surface — the good outcome — and
+    // whose fix would be editing the floor down. That is the compliance-punishing
+    // shape solved in `checkRegister`, reintroduced one level up: the lifecycle
+    // made withdrawal safe for the gate while this assertion still punished it.
+    //
+    // The property that actually matters: a named vendor cannot quietly stop being
+    // accounted for. Either it is live and exposed, or its withdrawal is recorded
+    // with a date and a reason.
+    const unaccounted = NAMED_MARKET_DATA_VENDORS.filter((id) => {
+      const row = entries.find((e) => e.id === id)
+      if (!row) return true
+      if (row.lifecycle === 'withdrawn') return !(row.withdrawn_on && row.withdrawn_reason?.trim())
+      return !row.end_user_exposed
+    })
+    expect(unaccounted).toEqual([])
   })
 
   it('names the six unauthenticated market-data vendors the audit found', () => {
     const ids = new Set(entries.filter((e) => e.classification === 'market-data-vendor').map((e) => e.id))
-    for (const id of ['yahoo-finance2', 'api.coingecko.com', 'api.kraken.com', 'api.exchange.coinbase.com', 'api.bybit.com', 'www.okx.com']) {
-      expect(ids).toContain(id)
-    }
+    for (const id of NAMED_MARKET_DATA_VENDORS) expect(ids).toContain(id)
   })
 
   it('does not claim a licence anywhere, because none has been produced', () => {
@@ -390,6 +420,33 @@ describe('I8 — what this guard CANNOT do', () => {
     const exposed = register.entries.filter((e) => e.end_user_exposed && e.lifecycle === 'active')
     expect(exposed.length).toBeGreaterThan(0)
     for (const e of exposed) expect(e.redistribution_position).toMatch(/UNRESOLVED|Q-082/)
+  })
+
+  it.each(['README.md', 'package-lock.json', 'notes.txt', 'x.test.tsx.snap'])(
+    'CANNOT see a host in %s — the walk visits executable text only',
+    (name) => {
+      // Asserted rather than assumed, so the boundary of the walk is a
+      // measurement. If one of these ever becomes executable, this test is where
+      // the decision gets revisited.
+      expect(EXECUTABLE.test(name)).toBe(false)
+    },
+  )
+
+  it('DOES visit the shell and container formats that can reach a vendor', () => {
+    // No instances today. Visited anyway, because "there are none right now" is
+    // the reasoning that left .json unvisited in Q-098.
+    for (const n of ['deploy.sh', 'Dockerfile', 'Procfile', 'pyproject.toml']) {
+      expect(EXECUTABLE.test(n)).toBe(true)
+    }
+  })
+
+  it('CANNOT strip Python or YAML comments — it uses JS comment syntax', () => {
+    // stripComments handles // and /* */. A `#` comment in .py or .yml survives,
+    // so a host mentioned there would be DETECTED and demand a register row. That
+    // is noise rather than a hole — over-matching, in the safe direction — and no
+    // instance exists today (api.deepseek.com was found on real code lines).
+    expect(unregistered(detectEgress(f('x.py', '# see https://api.example.com/docs'))))
+      .toContain('api.example.com')
   })
 
   it('CANNOT stop a merge — main has no branch protection until Q-097 lands', () => {
