@@ -41,7 +41,21 @@ Captured 2026-05-23, post wave 41 (PR #16, commit `7321b54`).
 | `any` casts (justified + unjustified) | 5 files / ~7 sites | ≤ 5 sites, all with `// reason:` comment + reviewer ack |
 | Silent `.catch(() => {})` | 0 in lib/app/components | 0 (enforced) |
 | Circular imports | 0 (madge verified) | 0 |
-| Yahoo TOS compliance banner | present | retained until Polygon migration complete |
+| Yahoo TOS compliance banner | **partly present — corrected 2026-08-27 (Q-100)** | see the note below; do not read this row as compliance |
+
+> **Correction (Q-100, 2026-08-27).** This row read "present", and that was
+> wrong in both directions, which is why it is being restated rather than simply
+> struck. **What exists:** `components/ComplianceBanner.tsx` is real and is
+> mounted globally at `app/layout.tsx:100`; it says "Not investment advice" and
+> notes that data is delayed or aggregated per the provider. **What does not
+> exist:** none of the three elements a Yahoo *terms* banner would need — a
+> research-only restriction on data USE (as opposed to a no-advice disclaimer), a
+> link to the vendor's terms (the component contains zero `href`s), and a
+> `YAHOO_RESEARCH_ONLY` kill flag (zero occurrences repo-wide, re-verified
+> 2026-08-27). A general no-advice disclaimer is not a vendor-terms banner, and
+> recording it as one is how an unexamined licence position looked handled for a
+> year. The recorded position now lives in
+> `reviews/vendor-licence-register.json`; the three missing elements are `Q-106`.
 
 **Re-freeze trigger:** when **F1.4** (FRED RFR) and **F1.5** (dividend-aware B&H) land, the WR baseline shifts because Sharpe / Sortino / Buy-and-Hold comparisons change. C2 (Algorithm Lead) re-runs benchmark on the post-merge tip and updates this row with sign-off. Pre-merge gate uses the *old* floor; post-merge floor becomes the new measurement.
 
