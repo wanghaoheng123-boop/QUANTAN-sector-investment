@@ -486,12 +486,15 @@ in its own docstring: comply with the Bloomberg Terminal Agreement and any Data
 Licence, and do not expose the service publicly without Bloomberg approval. We
 hold no such approval and had recorded none. Logged as `F8.1`.
 
-**The vendor count was understated and the shape was wrong.** Not 11 names but
-**four kinds of egress**, and the two obvious kinds miss the two biggest vendors:
-a URL scan misses **Yahoo** (21 modules, zero host literals) and both miss
-**Bloomberg**. A `.py` file holds `api.deepseek.com`, which a TypeScript-only scan
-never sees. **When a guard is green, ask what it VISITED before you ask what it
-decided** — this is the fourth package in which that was the defect.
+**The audit's "11 vendors" is not disputed — the SHAPE of the enumeration is.**
+A count of names cannot be checked and cannot be maintained; the register counts
+**four kinds of egress evidence**, and the two obvious kinds miss the two biggest
+vendors. A URL scan misses **Yahoo** (21 modules, zero host literals), and both a
+URL scan and a package scan miss **Bloomberg**. Two vendors the audit did not name
+— Bloomberg and DeepSeek — were invisible to name-based enumeration for exactly
+that reason. **Ask what EVIDENCE the thing you are hunting leaves in source, then
+check that a detector matches each form of it.** This is the fourth package in
+which reachability, not the rule, was the defect.
 
 Six vendors remain end-user-exposed with **no auth** — Yahoo
 (`app/api/prices/route.ts` + 13 route sites), CoinGecko (browser-direct at
