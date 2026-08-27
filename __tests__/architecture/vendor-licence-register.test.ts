@@ -57,8 +57,21 @@ const ROOT = join(__dirname, '../..')
  */
 const IGNORED = new Set([
   'node_modules', '.next', 'coverage', 'dist', 'build', '.git',
-  '__pycache__', 'venv', '.venv', 'public', '__tests__', 'tests',
+  '__pycache__', 'venv', '.venv', '__tests__', 'tests',
 ])
+
+/**
+ * `public/` USED to be in the set above, and red-team was right that it should not
+ * be: it is the one directory served verbatim to end users, and `public/sw.js` is a
+ * service worker executing in the end user's browser — I8's trigger condition
+ * exactly. It is visited now.
+ *
+ * What is excluded instead is generated PWA output, on the same property that
+ * excludes `.next`: emitted by the build, untracked by git, regenerated every time.
+ * `public/workbox-*.js` is a minified vendor bundle whose incidental URLs
+ * (`bit.ly`) would bury the rows that matter. Excluded by what it IS, not by name.
+ */
+const GENERATED = /^(sw\.js|workbox-[a-f0-9]+\.js)(\.map)?$/
 
 /**
  * Executable source. THIS IS AN EXTENSION LIST, and an earlier draft of this
@@ -89,7 +102,7 @@ function walk(dir: string, out: string[] = []): string[] {
     if (statSync(full).isDirectory()) {
       if (entry.startsWith('.') && entry !== '.github') continue
       walk(full, out)
-    } else if (EXECUTABLE.test(entry)) out.push(full)
+    } else if (EXECUTABLE.test(entry) && !GENERATED.test(entry)) out.push(full)
   }
   return out
 }
@@ -223,10 +236,21 @@ describe('I8 — every vendor this repository reaches is recorded', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-/** The six the Q-079 audit named as end-user-exposed with no auth. */
+/**
+ * Every market-data vendor on the record, pinned by id.
+ *
+ * The first version pinned only the six the Q-079 audit named, which left every
+ * later row silently softenable: red-team flipped `end_user_exposed` to false and
+ * deleted `redistribution_position` on `BLOOMBERG_BRIDGE_URL` — the CRITICAL row —
+ * and the suite stayed green, because one boolean silenced three assertions at
+ * once. A pinned list that does not grow with the register protects only history.
+ */
 const NAMED_MARKET_DATA_VENDORS = [
   'yahoo-finance2', 'api.coingecko.com', 'api.kraken.com',
   'api.exchange.coinbase.com', 'api.bybit.com', 'www.okx.com',
+  'ws.kraken.com', 'ws-feed.exchange.coinbase.com',
+  'yfinance', 'akshare', 'BLOOMBERG_BRIDGE_URL', 'scripts/backtestData/',
+  'fred.stlouisfed.org',
 ]
 
 describe('I8 — the register has not been quietly softened', () => {
@@ -252,8 +276,11 @@ describe('I8 — the register has not been quietly softened', () => {
     expect(unaccounted).toEqual([])
   })
 
-  it('names the six unauthenticated market-data vendors the audit found', () => {
-    const ids = new Set(entries.filter((e) => e.classification === 'market-data-vendor').map((e) => e.id))
+  it('keeps every pinned vendor classified as a vendor', () => {
+    // Classification is checked, not just presence: reclassifying www.okx.com as
+    // `build-tooling` was a live escape from the count-based version.
+    const VENDOR_CLASSES = new Set(['market-data-vendor', 'reference-data-vendor', 'llm-vendor', 'llm-credential-path'])
+    const ids = new Set(entries.filter((e) => VENDOR_CLASSES.has(e.classification)).map((e) => e.id))
     for (const id of NAMED_MARKET_DATA_VENDORS) expect(ids).toContain(id)
   })
 
@@ -426,8 +453,12 @@ describe('I8 — what this guard CANNOT do', () => {
     checkRegister(pts, register.entries).filter((v) => v.rule === 'unregistered').map((v) => v.id)
 
   it('CANNOT see a host assembled by concatenation from fragments', () => {
-    // No `https://` literal survives, so nothing matches. The register cannot
-    // record what the source never spells.
+    // Briefly, an unguarded protocol-relative branch DID catch this, via the `//`
+    // inside the `'ps://'` fragment. That branch was removed because it also
+    // invented vendors from Python's integer division and from YAML globs — a
+    // guard that cries wolf on `total // 2` gets its offender list ignored, which
+    // is a worse failure than this gap. The `//` must now follow a string or
+    // expression boundary, and `:` is not one. Stated as the trade it is.
     expect(unregistered(detectEgress(f('lib/x.ts', `const u = 'htt' + 'ps://' + 'api.hidden.example'`))))
       .toEqual([])
   })
@@ -484,13 +515,64 @@ describe('I8 — what this guard CANNOT do', () => {
     }
   })
 
-  it('CANNOT strip Python or YAML comments — it uses JS comment syntax', () => {
-    // stripComments handles // and /* */. A `#` comment in .py or .yml survives,
-    // so a host mentioned there would be DETECTED and demand a register row. That
-    // is noise rather than a hole — over-matching, in the safe direction — and no
-    // instance exists today (api.deepseek.com was found on real code lines).
-    expect(unregistered(detectEgress(f('x.py', '# see https://api.example.com/docs'))))
-      .toContain('api.example.com')
+  it('DOES strip hash comments in Python and YAML — this test used to assert the opposite', () => {
+    // The previous version of this test claimed the masker was JS-only, called that
+    // "over-matching, in the safe direction", and shipped in a commit titled "a
+    // false claim inside my own honesty block". All three sub-claims were false.
+    // It exercised only the `#` half and never the block-comment half that did the
+    // damage: a YAML glob formed a JS block comment and deleted 2387 characters —
+    // lines 2 to 51 — of a real workflow, so a host planted at line 41 was
+    // invisible while the same host at line 61 was caught. A PASSING TEST THAT
+    // RATIFIES A BUG IS WORSE THAN NO TEST; it makes the bug look deliberate.
+    expect(unregistered(detectEgress(f('x.py', '# see https://api.example.com/docs')))).toEqual([])
+    expect(unregistered(detectEgress(f('x.yml', '# https://api.example.com/docs')))).toEqual([])
+  })
+
+  it('is not blinded by a YAML glob that looks like a block comment', () => {
+    const yaml = ['mutate:', '  - "lib/quant/' + '**"', '  - "' + '**/' + '*.spec.ts"',
+                  '  FEED: "https://api.polygon.io/v2/aggs"'].join('\n')
+    expect(unregistered(detectEgress(f('.github/workflows/x.yml', yaml)))).toContain('api.polygon.io')
+  })
+
+  it('keeps file:line honest across a comment, because comments are MASKED not deleted', () => {
+    // where was computed on the processed source, so 18 of 46 register citations
+    // pointed at unrelated code — in the artifact whose whole purpose is an
+    // auditable trail.
+    const src = ['/*', ' * a block comment', ' * spanning several lines', ' */',
+                 "const u = 'https://api.polygon.io/v2'"].join('\n')
+    const pts = detectEgress(f('lib/x.ts', src))
+    expect(pts.find((x) => x.id === 'api.polygon.io')?.where).toBe('lib/x.ts:5')
+  })
+
+  it('catches a wss:// market-data feed', () => {
+    expect(unregistered(detectEgress(f('components/x.ts', `const W = 'wss://stream.vendor.example/v2'`))))
+      .toContain('stream.vendor.example')
+  })
+
+  it('does NOT invent a vendor from Python integer division or a YAML glob', () => {
+    expect(unregistered(detectEgress(f('x.py', 'n = total // 2')))).toEqual([])
+    expect(unregistered(detectEgress(f('x.yml', '  - "' + '**/' + '*.ts"')))).toEqual([])
+  })
+
+  it('does NOT read a query-string @ as userinfo', () => {
+    // `?family=Inter:wght@300;400` registered a vendor called `300`.
+    const ids = unregistered(detectEgress(f('app/x.tsx', `const u='https://fonts.example.com/css2?family=Inter:wght@300;400'`)))
+    expect(ids).not.toContain('300')
+    expect(ids).toContain('fonts.example.com')
+  })
+
+  it('catches a vendor client hidden in overrides or optionalDependencies', () => {
+    expect(unregistered(detectEgress([], { optionalDependencies: { 'alpha-vantage': '^2.4.0' } })))
+      .toContain('alpha-vantage')
+    expect(unregistered(detectEgress([], { overrides: { 'innocent-name': 'npm:vendor-client@1' } })))
+      .toContain('innocent-name')
+  })
+
+  it('catches a destructured env read and a shell export', () => {
+    expect(unregistered(detectEgress(f('lib/x.ts', 'const { REFINITIV_BASE_URL } = process.env'))))
+      .toContain('REFINITIV_BASE_URL')
+    expect(unregistered(detectEgress(f('start.sh', 'export FACTSET_ENDPOINT="https://x"'))))
+      .toContain('FACTSET_ENDPOINT')
   })
 
   it('CANNOT stop a merge — main has no branch protection until Q-097 lands', () => {

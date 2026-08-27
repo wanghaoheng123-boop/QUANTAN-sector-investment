@@ -62,20 +62,53 @@ export interface SourceFile {
   source: string
 }
 
+/**
+ * A package manifest. Deliberately an index signature rather than named blocks:
+ * the first version declared `dependencies` and `devDependencies` and that WAS the
+ * hole — `optionalDependencies` is installed by default, and `overrides` can point
+ * an innocuous name at a vendor client via the `npm:other@1` form. Typing the
+ * blocks by name would have made adding one an edit here as well as there.
+ */
 export interface Manifest {
-  dependencies?: Record<string, string>
-  devDependencies?: Record<string, string>
+  [block: string]: Record<string, string> | undefined
 }
 
 /**
- * Comments stripped before matching, for the reason Q-101 recorded: a guard that
- * matches prose about the behaviour instead of the behaviour is green when the
- * behaviour is deleted. Here the direction is reversed — a host in a comment is
- * documentation, not egress, and registering documentation would bury the real
- * rows in noise.
+ * Neutralise comments WITHOUT moving anything.
+ *
+ * Two defects here, both found by red-team, both worse than they look.
+ *
+ * **It was JS-only, and it ran on Python and YAML.** A YAML glob ending in a
+ * double star, followed later by a double star and a slash, is a perfectly good JS
+ * block comment — so the naive block-comment regex deleted **2387 characters, lines
+ * 2 to 51, of `.github/workflows/stryker-weekly.yml`**, plus 161 more across five
+ * `.py` files. (Spelled out in words on purpose: the first draft of this very
+ * paragraph wrote the sequence literally and closed its own JSDoc block, which is
+ * the defect reproducing itself inside its own explanation.)
+ * A vendor host inside that span was invisible while the walker happily *visited*
+ * the file. The rule was reachable; the PRE-PROCESSOR blinded it. And the
+ * "CANNOT do" test that documented this asserted the safe half (`#`) while the
+ * half that did the damage went untested — a passing test that ratified the bug.
+ *
+ * **It DELETED, so every line number after a comment was wrong.** `where` is
+ * computed on the processed source, so 18 of 46 register citations pointed at
+ * unrelated code — in the one artifact whose entire purpose is an auditable trail.
+ *
+ * Masking with spaces fixes both at once: comment bodies stop matching, and every
+ * offset and newline survives, so `file:line` stays true.
  */
-export const stripComments = (src: string): string =>
-  src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1')
+const maskWith = (src: string, re: RegExp): string =>
+  src.replace(re, (m) => m.replace(/[^\n]/g, ' '))
+
+export const stripComments = (src: string, path = ''): string => {
+  // Hash-comment languages. `#` inside a string is masked too; that costs a
+  // detection we never had, and over-masking here cannot hide a host that the
+  // hash-language files actually fetch from — those are assignments, not comments.
+  if (/\.(py|ya?ml|sh|bash|toml)$/.test(path) || /^(Dockerfile|Procfile|requirements)/.test(path)) {
+    return maskWith(src, /#[^\n]*/g)
+  }
+  return maskWith(maskWith(src, /\/\*[\s\S]*?\*\//g), /(^|[^:])\/\/[^\n]*/g)
+}
 
 /**
  * Loopback is excluded as a PROPERTY, not as a named allowlist.
@@ -99,7 +132,14 @@ const isLoopback = (host: string): boolean =>
  * the hit to `dynamic-host` rather than inventing a vendor called `${base}`.
  */
 function hostnameOf(raw: string): string | null {
-  const authority = raw.split(/[/?#]/)[0].toLowerCase()
+  // Authority FIRST, then userinfo. Doing it the other way round split on an `@`
+  // anywhere in the URL, so a Google Fonts query (`?family=…:wght@300;400`)
+  // registered a vendor called `300`. Userinfo only exists before the first slash.
+  const authorityRaw = raw.split(/[/?#]/)[0]
+  const withoutUserinfo = authorityRaw.includes('@')
+    ? authorityRaw.slice(authorityRaw.lastIndexOf('@') + 1)
+    : authorityRaw
+  const authority = withoutUserinfo.toLowerCase()
   // Strip the port BEFORE anything else. Without this `http://localhost:3000`
   // fails the hostname shape (a colon is not a legal host character), returns
   // null, and is reported as a DYNAMIC host — so four loopback sites, including
@@ -140,11 +180,24 @@ function envHostNames(source: string): { name: string; line: number }[] {
   source.split('\n').forEach((line, i) => {
     // JS/TS: process.env.NAME and process.env['NAME']
     // Python: os.environ.get("NAME"), os.environ["NAME"], os.getenv("NAME")
-    const re = /(?:process\.env\.([A-Z0-9_]+)|process\.env\[['"]([A-Z0-9_]+)['"]\]|os\.environ(?:\.get)?\(?\[?['"]([A-Z0-9_]+)['"]|os\.getenv\(\s*['"]([A-Z0-9_]+)['"])/g
+    // Shell `export NAME=` and `NAME=` are included because the walk was widened
+    // to .sh; a variable the walker can see but the matcher cannot is the
+    // reachability defect with the roles reversed.
+    const re = /(?:process\.env\.([A-Z0-9_]+)|process\.env\[['"]([A-Z0-9_]+)['"]\]|os\.environ(?:\.get)?\(?\[?['"]([A-Z0-9_]+)['"]|os\.getenv\(\s*['"]([A-Z0-9_]+)['"]|^\s*(?:export\s+)?([A-Z][A-Z0-9_]{2,})\s*=)/g
     let m: RegExpExecArray | null
     while ((m = re.exec(line)) !== null) {
-      const name = m[1] ?? m[2] ?? m[3] ?? m[4]
+      const name = m[1] ?? m[2] ?? m[3] ?? m[4] ?? m[5]
       if (name && HOST_BEARING_NAME.test(name)) out.push({ name, line: i + 1 })
+    }
+    // `const { VENDOR_BASE_URL } = process.env` — the destructured read, which the
+    // dotted-access matcher never saw.
+    const d = /(?:const|let|var)\s*\{([^}]*)\}\s*=\s*process\.env/g
+    let dm: RegExpExecArray | null
+    while ((dm = d.exec(line)) !== null) {
+      for (const part of dm[1].split(',')) {
+        const name = part.split(':')[0].trim()
+        if (/^[A-Z0-9_]+$/.test(name) && HOST_BEARING_NAME.test(name)) out.push({ name, line: i + 1 })
+      }
     }
   })
   return out
@@ -219,13 +272,23 @@ export function detectEgress(files: SourceFile[], manifest: Manifest = {}): Egre
   }
 
   for (const file of files) {
-    const lines = stripComments(file.source).split('\n')
+    const lines = stripComments(file.source, file.path).split('\n')
     lines.forEach((line, i) => {
       const where = `${file.path}:${i + 1}`
       // Match the scheme plus everything up to the first delimiter that cannot
       // appear in a URL. Template holes are captured deliberately so they can be
       // classified as dynamic rather than silently dropped.
-      const re = /\bhttps?:\/\/([^\s'"`)\],;<>]*)/gi
+      // Schemes that FETCH, plus the protocol-relative form the scheme-anchored
+      // version missed. `wss:` is listed explicitly rather than caught by accident:
+      // `wss://ws.kraken.com` and `wss://ws-feed.exchange.coinbase.com` are live
+      // browser-direct market-data feeds that every earlier version of this file
+      // was blind to.
+      //
+      // The bare `//` form is guarded on BOTH sides, because an unguarded one is
+      // worse than not having it: Python's integer division (`total // 2`) and a
+      // YAML glob both produced phantom vendors on the real tree. It must follow a
+      // string or expression boundary and precede something host-shaped.
+      const re = /(?:\b(?:https?|wss?):\/\/|(?<=['"`(=,\s])\/\/(?=[a-z0-9][a-z0-9.-]*\.[a-z]{2,}))([^\s'"`)\],;<>]*)/gi
       let m: RegExpExecArray | null
       while ((m = re.exec(line)) !== null) {
         const raw = m[1]
@@ -241,7 +304,7 @@ export function detectEgress(files: SourceFile[], manifest: Manifest = {}): Egre
       }
     })
 
-    for (const { name, line } of envHostNames(stripComments(file.source))) {
+    for (const { name, line } of envHostNames(stripComments(file.source, file.path))) {
       push({ kind: 'env-host', id: name, where: `${file.path}:${line}` })
     }
 
@@ -256,9 +319,12 @@ export function detectEgress(files: SourceFile[], manifest: Manifest = {}): Egre
     }
   }
 
-  // Both blocks. Reading only `dependencies` leaves a constructible hole: add a
-  // vendor client to `devDependencies`, import it from `lib/`, ship green.
-  for (const block of ['dependencies', 'devDependencies'] as const) {
+  // EVERY block. Reading two named blocks left the same hole one key over:
+  // `optionalDependencies` is installed by default, and `overrides` can redirect an
+  // innocuous name to a vendor client via `"pkg": "npm:other@1"`. Enumerating the
+  // manifest's own keys means a block npm adds later is covered without an edit.
+  const DEP_BLOCKS = Object.keys(manifest).filter((k) => /[Dd]ependencies$|^overrides$/.test(k))
+  for (const block of DEP_BLOCKS) {
     const names = Object.keys(manifest[block] ?? {}).sort()
     for (const name of names) {
       push({ kind: 'npm-package', id: name, where: `package.json#${block}` })
@@ -316,6 +382,17 @@ export interface RegisterEntry {
   licence_evidence?: string
   withdrawn_on?: string
   withdrawn_reason?: string
+  /**
+   * Required on `dynamic-host` rows: how many unresolvable host expressions this
+   * file contained when the finding was recorded.
+   *
+   * Without it a registered dynamic-host file is a LAUNDERING VEHICLE. `lib/appUrl.ts`
+   * is recorded as first-party; appending `fetch(`https://${h}.polygon.io/v2`)` to it
+   * added a second dynamic site, the row still matched on the file path, and the
+   * suite stayed green. Counting sites rather than pinning line numbers survives a
+   * reformat while still refusing a new one.
+   */
+  dynamic_sites?: number
   cross_reference?: string
 }
 
@@ -399,7 +476,17 @@ export function checkRegister(points: EgressPoint[], entries: RegisterEntry[]): 
       v.push({ rule: 'restricted-but-active', kind: e.kind, id: e.id, detail: 'a licence recorded as NOT permitting this use, with the surface still live. Withdraw the surface.' })
     }
 
-    // 6. Anything users can see carries the redistribution question explicitly, so
+    // 6. A registered dynamic-host file may not quietly grow new ones.
+    if (e.kind === 'dynamic-host' && e.lifecycle === 'active') {
+      const actual = detected.get(key(e.kind, e.id))?.length ?? 0
+      if (typeof e.dynamic_sites !== 'number') {
+        v.push({ rule: 'dynamic-sites-unrecorded', kind: e.kind, id: e.id, detail: 'dynamic-host rows must record dynamic_sites, or the file launders every later unresolvable host' })
+      } else if (actual > e.dynamic_sites) {
+        v.push({ rule: 'dynamic-sites-increased', kind: e.kind, id: e.id, detail: `recorded ${e.dynamic_sites} unresolvable host expressions, found ${actual}. A new one was added to an already-registered file.` })
+      }
+    }
+
+    // 7. Anything users can see carries the redistribution question explicitly, so
     //    that "we never thought about it" and "we thought about it and it is open"
     //    cannot be confused for one another.
     if (e.end_user_exposed && !e.redistribution_position?.trim()) {

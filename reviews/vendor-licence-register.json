@@ -24,7 +24,8 @@
   "open_and_owner_gated": [
     "Q-082 \u2014 the substantive licence question for Yahoo, CoinGecko, Kraken, Coinbase, Bybit, OKX, FRED and the Bloomberg bridge. Owner + counsel.",
     "Q-083 \u2014 MAS/FAA posture, tightly coupled because both turn on what end users are shown.",
-    "Q-097 \u2014 until main has branch protection, this guard's red is advisory like every other check in this repo."
+    "Q-097 \u2014 until main has branch protection, this guard's red is advisory like every other check in this repo.",
+    "reviews/findings-ledger.csv Q100-12 \u2014 a live-format API credential is COMMITTED at start-universal.sh:12 in a PUBLIC repository, tracked since PR #41 (2026-06-02). REVOKE AND ROTATE FIRST; removing the line does not remediate, because the value is in git history permanently. Owner action; no agent should touch it."
   ],
   "entries": [
     {
@@ -472,7 +473,8 @@
         "Q-083",
         "Q-092"
       ],
-      "redistribution_position": "UNRESOLVED \u2014 the substantive redistribution question is routed to Q-082 (licence) and Q-083 (MAS/FAA). Counsel only. Recording this finding does NOT assert that the consumption or the redistribution is permitted."
+      "redistribution_position": "UNRESOLVED \u2014 the substantive redistribution question is routed to Q-082 (licence) and Q-083 (MAS/FAA). Counsel only. Recording this finding does NOT assert that the consumption or the redistribution is permitted.",
+      "dynamic_sites": 3
     },
     {
       "kind": "dynamic-host",
@@ -489,7 +491,8 @@
       "evidence": [
         "server_trading_agents.py:344"
       ],
-      "routes_to": []
+      "routes_to": [],
+      "dynamic_sites": 1
     },
     {
       "kind": "dynamic-host",
@@ -506,7 +509,8 @@
       "evidence": [
         "lib/appUrl.ts:6"
       ],
-      "routes_to": []
+      "routes_to": [],
+      "dynamic_sites": 1
     },
     {
       "kind": "dynamic-host",
@@ -523,7 +527,8 @@
       "evidence": [
         "components/stock/LlmDeployAssistant.tsx"
       ],
-      "routes_to": []
+      "routes_to": [],
+      "dynamic_sites": 2
     },
     {
       "kind": "dynamic-host",
@@ -540,7 +545,8 @@
       "evidence": [
         "components/stock/quantlab/tabs/LlmTab.tsx"
       ],
-      "routes_to": []
+      "routes_to": [],
+      "dynamic_sites": 1
     },
     {
       "kind": "http-host",
@@ -1593,6 +1599,85 @@
       ],
       "redistribution_position": "UNRESOLVED \u2014 the substantive redistribution question is routed to Q-082 (licence) and Q-083 (MAS/FAA). Counsel only. Recording this finding does NOT assert that the consumption or the redistribution is permitted.",
       "cross_reference": "Logged to reviews/findings-ledger.csv as Q100-12. Interacts with Q-102 (the weekly in-place history rewrite)."
+    },
+    {
+      "lifecycle": "active",
+      "recorded_by": "Q-100 review round 3 (red-team) \u2014 recorded 2026-08-27",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "components/crypto/hooks/useBtcKlineWs.ts:7"
+      ],
+      "routes_to": [
+        "Q-082",
+        "Q-083"
+      ],
+      "kind": "http-host",
+      "id": "ws.kraken.com",
+      "classification": "market-data-vendor",
+      "vendor": "Kraken (WebSocket v2)",
+      "end_user_exposed": true,
+      "authenticated": false,
+      "licence_status": "NONE_NO_AGREEMENT",
+      "finding": "A LIVE, BROWSER-DIRECT Kraken (WebSocket v2) streaming feed, opened from a 'use client' hook, so the connection carries the END USER'S OWN IP and originates entirely outside any server-side control we could apply. No key, no account, no agreement. MISSED by every earlier version of this guard because the matcher was anchored to https?:// and this is wss://. Streaming feeds are the surface market-data licences price separately from snapshots, so this is not a smaller case of the REST rows \u2014 it is a distinct one.",
+      "redistribution_position": "UNRESOLVED \u2014 routed to Q-082 (licence) and Q-083 (MAS/FAA). Counsel only. Recording this finding does NOT assert that the consumption or the redistribution is permitted."
+    },
+    {
+      "lifecycle": "active",
+      "recorded_by": "Q-100 review round 3 (red-team) \u2014 recorded 2026-08-27",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "components/crypto/hooks/useBtcPriceWs.ts:6"
+      ],
+      "routes_to": [
+        "Q-082",
+        "Q-083"
+      ],
+      "kind": "http-host",
+      "id": "ws-feed.exchange.coinbase.com",
+      "classification": "market-data-vendor",
+      "vendor": "Coinbase Exchange (WebSocket feed)",
+      "end_user_exposed": true,
+      "authenticated": false,
+      "licence_status": "NONE_NO_AGREEMENT",
+      "finding": "A LIVE, BROWSER-DIRECT Coinbase Exchange (WebSocket feed) streaming feed, opened from a 'use client' hook, so the connection carries the END USER'S OWN IP and originates entirely outside any server-side control we could apply. No key, no account, no agreement. MISSED by every earlier version of this guard because the matcher was anchored to https?:// and this is wss://. Streaming feeds are the surface market-data licences price separately from snapshots, so this is not a smaller case of the REST rows \u2014 it is a distinct one.",
+      "redistribution_position": "UNRESOLVED \u2014 routed to Q-082 (licence) and Q-083 (MAS/FAA). Counsel only. Recording this finding does NOT assert that the consumption or the redistribution is permitted."
+    },
+    {
+      "lifecycle": "active",
+      "recorded_by": "Q-100 review round 3 (red-team) \u2014 recorded 2026-08-27",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "start-universal.sh:11"
+      ],
+      "routes_to": [
+        "Q-082"
+      ],
+      "kind": "env-host",
+      "id": "ANTHROPIC_BASE_URL",
+      "classification": "llm-vendor",
+      "vendor": "DeepSeek (via an Anthropic-protocol shim)",
+      "end_user_exposed": false,
+      "authenticated": true,
+      "licence_status": "UNVERIFIED",
+      "finding": "start-universal.sh:11 exports this to https://api.deepseek.com/anthropic, pointing Anthropic-protocol clients at DeepSeek's compatibility endpoint. A developer-tooling variable, not an application path \u2014 nothing under app/ or lib/ reads it. Recorded because it is host-bearing and was a LIVE GAP: 13 other such variables had rows and this one did not, because the matcher only understood process.env and os.environ, never a shell export, while the walk had just been widened to visit shell scripts. A variable the walker can see but the matcher cannot is the reachability defect with the roles reversed. SEE ALSO ledger row Q100-12: a live-format credential is committed one line below this one.",
+      "cross_reference": "reviews/findings-ledger.csv Q100-12 \u2014 committed credential, CRITICAL, owner action."
+    },
+    {
+      "lifecycle": "active",
+      "recorded_by": "Q-100 review round 3 (red-team) \u2014 recorded 2026-08-27",
+      "recorded_on": "2026-08-27",
+      "evidence": [
+        "package.json#overrides"
+      ],
+      "routes_to": [],
+      "kind": "npm-package",
+      "id": "uuid",
+      "classification": "build-tooling",
+      "vendor": "n/a",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Pinned at ^11.1.1 in package.json#overrides. Not a data vendor. Recorded because `overrides` was an unread manifest block, and the npm:other@1 form lets an override REDIRECT an innocuous package name to a vendor client \u2014 the same hole as devDependencies, one key over."
     }
   ],
   "field_definitions": {
