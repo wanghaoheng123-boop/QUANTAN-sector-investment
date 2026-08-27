@@ -1128,3 +1128,91 @@ mapping table; `warehouse.ts` still `PRIMARY KEY (ticker, date)`.
 **Tier board:** I1 ASP · I2 PARTIAL · I3 PARTIAL · I4 ASP · I5 PARTIAL ·
 I6 PARTIAL · I7 VIOLATED · I8 VIOLATED. **Still no invariant is ENFORCED**, and
 Q-097 makes every green check advisory — including all eighteen PRs this session.
+
+---
+
+## 2026-08-27 — Q-100: the question is finally asked before the feature ships
+
+Shipped as PR #168. **I8's PROCESS half moves VIOLATED → PARTIAL. The heading
+stays VIOLATED, and that was argued rather than defaulted.**
+
+I8 says *"confirm the licence permits it **and record the finding**."* The audit
+rated the recording half VIOLATED, and the reason was never that anyone disagreed
+with the rule — **nothing anywhere asked the question.** No checklist, no PR
+template, no check. PR #147 turned the stock-page news surface from synthetic to
+live Yahoo content, descends from the commit that wrote I8, and recorded nothing.
+
+`reviews/vendor-licence-register.json` now holds **69 recorded findings**, and
+`__tests__/architecture/vendor-licence-register.test.ts` fails when this repo
+reaches a host, adds a dependency, or reads a host-bearing environment variable
+with no row.
+
+### The lesson, and it is the fourth time in this shape
+
+The obvious implementation scans URL literals. On this repo that finds CoinGecko,
+Kraken, Coinbase, Bybit, OKX and FRED — and **misses Yahoo entirely**: 21 modules,
+zero host literals, because it arrives as an npm dependency. Widening the walk to
+`.py` found `api.deepseek.com`. Widening to environment-variable names found
+`BLOOMBERG_BRIDGE_URL`.
+
+**Ask what EVIDENCE the thing you are hunting leaves in source, then check that a
+detector matches each form of it.** A rule that is correct and unreachable is
+indistinguishable from a rule that works — this is the fourth package where
+reachability, not the rule, was the defect (Q-098, Q-103, Q-080, now Q-100).
+
+### What that widening found — Q100-1, CRITICAL
+
+`lib/data/bloomberg/bridgeClient.ts` is a **live, wired Bloomberg path with no URL
+literal and no vendor package.** The host arrives entirely through
+`BLOOMBERG_BRIDGE_URL`. `app/api/prices/route.ts:118-176` calls it, merges the
+result through `mergeYahooAndBloomberg`, and returns quotes tagged
+`dataSource:'bloomberg'` from a **public, unauthenticated** route. Latent only
+because `.env.example:67` leaves the variable commented out — **one environment
+variable from live**. `scripts/bloomberg-bridge-example.py:19` carries the warning
+in its own docstring: comply with the Bloomberg Terminal Agreement, do not expose
+the bridge publicly without approval. We hold no approval and had recorded none.
+
+Not marked `RESTRICTED` — that would be a legal conclusion an agent may not draw.
+
+### Two near-misses, kept as regression tests
+
+A typo'd character class `[$among{}…]` rejected **every hostname containing
+a/m/o/n/g**, including `api.coingecko.com`. And port-bearing hosts
+(`localhost:3000`) failed the hostname shape and were misfiled as dynamic hosts.
+Either would have been **green while detecting nothing**. Both were caught by
+running the detector over the real tree and *reading the output* — never by
+re-reading the regex.
+
+### The compliance-punishing gate, avoided on the way in
+
+The obvious staleness rule — *every register row must still be reachable* — goes
+**red exactly when someone withdraws a vendor surface**, which is the good outcome
+I8 explicitly offers as the alternative to a finding. The route to green would be
+deleting the audit trail. Same shape as the DSR floor that made "stop logging
+trials" the way to pass CI. Rows carry a lifecycle instead; only `active` rows
+must be reachable, and a `withdrawn` row still being reached is its own violation.
+
+### Why the heading did not move
+
+Recording a finding is not confirming a licence. I8's operative word is *before* —
+six vendors are exposed to end users **right now** with no confirmation, which is
+the VIOLATED definition's **first** clause, and holds independently of whether a
+recording mechanism exists. The register makes the exposure visible; it does not
+undo it. **Taking credit for the cheap half is exactly the calibration failure the
+PRIME DIRECTIVE exists to prevent.**
+
+Two of this document's own claims were corrected in the process: the compliance
+banner's "three required elements do not exist" was wrong in **both** directions
+(the banner is real and mounted and does say "Not investment advice"; what is
+missing is a vendor-*terms* banner — `Q-106`), and a first draft of my own
+correction claimed the audit's vendor count was "understated", which I could not
+verify against what it was counting. Struck and narrowed.
+
+**Watched it fail:** six mutations on the committed tree, all failing, green on
+revert. **Verification:** typecheck clean, 1805 tests / 17 skipped (+52),
+`check:ci` exit 0, CI verified **by name** against the commit check-runs API.
+
+**Tier board:** I1 ASP · I2 PARTIAL · I3 PARTIAL · I4 ASP · I5 PARTIAL ·
+I6 PARTIAL · I7 VIOLATED · I8 VIOLATED (process half PARTIAL). **Still no
+invariant is ENFORCED**, and Q-097 makes every green check advisory — including
+this guard's red.
