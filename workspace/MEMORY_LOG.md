@@ -1128,3 +1128,157 @@ mapping table; `warehouse.ts` still `PRIMARY KEY (ticker, date)`.
 **Tier board:** I1 ASP · I2 PARTIAL · I3 PARTIAL · I4 ASP · I5 PARTIAL ·
 I6 PARTIAL · I7 VIOLATED · I8 VIOLATED. **Still no invariant is ENFORCED**, and
 Q-097 makes every green check advisory — including all eighteen PRs this session.
+
+---
+
+## 2026-08-27 — Q-100: the question is finally asked before the feature ships
+
+Shipped as PR #168. **I8's PROCESS half moves VIOLATED → PARTIAL. The heading
+stays VIOLATED, and that was argued rather than defaulted.**
+
+I8 says *"confirm the licence permits it **and record the finding**."* The audit
+rated the recording half VIOLATED, and the reason was never that anyone disagreed
+with the rule — **nothing anywhere asked the question.** No checklist, no PR
+template, no check. PR #147 turned the stock-page news surface from synthetic to
+live Yahoo content, descends from the commit that wrote I8, and recorded nothing.
+
+`reviews/vendor-licence-register.json` now holds **69 recorded findings**, and
+`__tests__/architecture/vendor-licence-register.test.ts` fails when this repo
+reaches a host, adds a dependency, or reads a host-bearing environment variable
+with no row.
+
+### The lesson, and it is the fourth time in this shape
+
+The obvious implementation scans URL literals. On this repo that finds CoinGecko,
+Kraken, Coinbase, Bybit, OKX and FRED — and **misses Yahoo entirely**: 21 modules,
+zero host literals, because it arrives as an npm dependency. Widening the walk to
+`.py` found `api.deepseek.com`. Widening to environment-variable names found
+`BLOOMBERG_BRIDGE_URL`.
+
+**Ask what EVIDENCE the thing you are hunting leaves in source, then check that a
+detector matches each form of it.** A rule that is correct and unreachable is
+indistinguishable from a rule that works — this is the fourth package where
+reachability, not the rule, was the defect (Q-098, Q-103, Q-080, now Q-100).
+
+### What that widening found — Q100-1, CRITICAL
+
+`lib/data/bloomberg/bridgeClient.ts` is a **live, wired Bloomberg path with no URL
+literal and no vendor package.** The host arrives entirely through
+`BLOOMBERG_BRIDGE_URL`. `app/api/prices/route.ts:118-176` calls it, merges the
+result through `mergeYahooAndBloomberg`, and returns quotes tagged
+`dataSource:'bloomberg'` from a **public, unauthenticated** route. Latent only
+because `.env.example:67` leaves the variable commented out — **one environment
+variable from live**. `scripts/bloomberg-bridge-example.py:19` carries the warning
+in its own docstring: comply with the Bloomberg Terminal Agreement, do not expose
+the bridge publicly without approval. We hold no approval and had recorded none.
+
+Not marked `RESTRICTED` — that would be a legal conclusion an agent may not draw.
+
+### Two near-misses, kept as regression tests
+
+A typo'd character class `[$among{}…]` rejected **every hostname containing
+a/m/o/n/g**, including `api.coingecko.com`. And port-bearing hosts
+(`localhost:3000`) failed the hostname shape and were misfiled as dynamic hosts.
+Either would have been **green while detecting nothing**. Both were caught by
+running the detector over the real tree and *reading the output* — never by
+re-reading the regex.
+
+### The compliance-punishing gate, avoided on the way in
+
+The obvious staleness rule — *every register row must still be reachable* — goes
+**red exactly when someone withdraws a vendor surface**, which is the good outcome
+I8 explicitly offers as the alternative to a finding. The route to green would be
+deleting the audit trail. Same shape as the DSR floor that made "stop logging
+trials" the way to pass CI. Rows carry a lifecycle instead; only `active` rows
+must be reachable, and a `withdrawn` row still being reached is its own violation.
+
+### Why the heading did not move
+
+Recording a finding is not confirming a licence. I8's operative word is *before* —
+six vendors are exposed to end users **right now** with no confirmation, which is
+the VIOLATED definition's **first** clause, and holds independently of whether a
+recording mechanism exists. The register makes the exposure visible; it does not
+undo it. **Taking credit for the cheap half is exactly the calibration failure the
+PRIME DIRECTIVE exists to prevent.**
+
+Two of this document's own claims were corrected in the process: the compliance
+banner's "three required elements do not exist" was wrong in **both** directions
+(the banner is real and mounted and does say "Not investment advice"; what is
+missing is a vendor-*terms* banner — `Q-106`), and a first draft of my own
+correction claimed the audit's vendor count was "understated", which I could not
+verify against what it was counting. Struck and narrowed.
+
+**Watched it fail:** six mutations on the committed tree, all failing, green on
+revert. **Verification:** typecheck clean, 1805 tests / 17 skipped (+52),
+`check:ci` exit 0, CI verified **by name** against the commit check-runs API.
+
+**Tier board:** I1 ASP · I2 PARTIAL · I3 PARTIAL · I4 ASP · I5 PARTIAL ·
+I6 PARTIAL · I7 VIOLATED · I8 VIOLATED (process half PARTIAL). **Still no
+invariant is ENFORCED**, and Q-097 makes every green check advisory — including
+this guard's red.
+
+### Round 2 — the review falsified my headline, not my code
+
+`security-compliance` blocked on four objections. **Every one was a sentence I
+wrote, not a line I shipped.**
+
+**"Every vendor now has a finding" was false.** `requirements.txt` declares
+`tradingagents`, `yfinance` and `akshare` — `yfinance` is the sidecar's *default*
+vendor — and my register read `package.json` only. The file already carried a test
+named *"catches a vendor client added to devDependencies"*: I had checked the
+second **block** of the manifest I read while a second **manifest** went unvisited.
+**Fifth instance of the reachability defect, inside the guard written to teach it.**
+
+**And the largest redistribution in this project reaches no host at all.**
+`scripts/backtestData/` is 57 tracked files, 13 MB of Yahoo-derived daily OHLCV,
+in a **public** repository, with a bot pushing a refreshed bulk copy to `main`
+every week and every prior vintage kept in git objects forever. Bulk historical
+redistribution is the use market-data licences prohibit most explicitly.
+**My mechanism detects EGRESS; I8 governs EXPOSURE.** Those are different sets and
+the difference contained the worst case.
+
+Two fields — `end_user_exposed`, `authenticated` — were never *defined*, which
+produced systematic understatement: the trading-agents `GET` is unauthenticated
+and serves a BUY/SELL banner, recorded as neither. And `CLAUDE.md` pointed at
+`F8.1` for the CRITICAL Bloomberg finding — an unrelated, already-resolved row.
+
+**Generalise: ask the adversary to falsify the CLAIMS, not just the
+implementation.** A review that only checks whether the code does what the diff
+says will miss the diff saying too much.
+
+### Round 3 — the walker was fine; the pre-processor was the blind spot
+
+`red-team` reproduced **seven** escapes on the real tree. The worst:
+`stripComments` applied JS comment syntax to `.py` and `.yml`, where a YAML glob
+forms a valid block comment — **2387 characters, lines 2 to 51 of a real
+workflow, deleted before any host was matched.** A host at line 41 was invisible;
+the same host at line 61 was caught.
+
+**And the test documenting this asserted the opposite of the measured
+behaviour** — it exercised the safe `#` half and never the block-comment half
+that did the damage, in a commit titled *"a false claim inside my own honesty
+block"*. **A passing test that ratifies a bug is worse than no test.**
+
+Masking comments with spaces instead of deleting them fixed the blinding *and*
+`file:line`: 18 of 46 register citations had pointed at unrelated code.
+
+**Two live market-data vendors were unregistered:** `wss://ws.kraken.com` and
+`wss://ws-feed.exchange.coinbase.com`, browser-direct from `'use client'` hooks,
+so the connection carries the end user's own IP. The matcher was anchored to
+`https?://` and never saw a streaming feed.
+
+**A live credential is committed to this public repo** — `start-universal.sh:12`,
+tracked since PR #41. Found only because this package widened the walk to `.sh`.
+Owner must revoke and rotate; removal does not remediate.
+
+**And I destroyed evidence with my own repair.** Two reviewers appended to
+`findings-ledger.csv` concurrently under the same ids; my dedupe kept the first
+occurrence and silently dropped ten compliance findings, because it assumed a
+duplicate id meant duplicate content. Recovered from context, restored as
+`Q100-14…23`, logged as `Q100-24`. **Reserve an id range per agent before
+dispatching parallel reviewers.**
+
+One fix overshot: naive protocol-relative matching invented vendors from Python's
+`total // 2`. The `//` form is guarded now, and the resulting gap is asserted as a
+test rather than hidden — **a guard that cries wolf gets its offender list
+ignored.**

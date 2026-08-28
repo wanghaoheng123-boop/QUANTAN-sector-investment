@@ -2200,7 +2200,7 @@
     "title": "I8 process gate absent: 11 vendors, 6 end-user-exposed with no auth, zero recorded licence findings",
     "domain": "Security/Compliance",
     "priority": "P0",
-    "status": "pending",
+    "status": "partial",
     "files": [
       "components/ComplianceBanner.tsx",
       "middleware.ts",
@@ -2219,7 +2219,8 @@
     "notes_2026_08_17": "Q-079 audit. I8 splits: (a) the substantive licence question is UNVERIFIED and closable only by the owner with counsel; (b) the PROCESS half - 'confirm the licence permits it AND RECORD THE FINDING' - is VIOLATED, with no mechanism anywhere and the trigger live now. PR #147 turned the stock-page news surface from synthetic to LIVE Yahoo content and descends from the commit that wrote I8; no licence finding was recorded with it. Six vendors are end-user-exposed with no auth: Yahoo (app/api/prices/route.ts:131 +12 sites), CoinGecko (browser-direct hooks/useBtcCandles.ts:34), Kraken, Coinbase, Bybit, OKX. middleware.ts:119 matches all paths but its body :51-116 only does CSP+CSRF, so ~19 public routes serve vendor data to anyone. CORRECTION to CLAUDE.md's old premise: the position HAS been written down as a RISK (findings-ledger F4.5, still open since Phase 14; reviews/R7-security-compliance.md:213) - what was never recorded is a licence CONFIRMATION. Routes with Q-082 and Q-083.",
     "blocked_by": [
       "Q-082"
-    ]
+    ],
+    "notes_2026_08_27": "PARTIAL 2026-08-27 (PR pending). Criterion 2 CLOSED: the mechanism exists and has teeth \u2014 reviews/vendor-licence-register.json holds 69 recorded findings and __tests__/architecture/vendor-licence-register.test.ts fails when the repo reaches a host, adds a dependency, or reads a host-bearing env var with no row. WATCHED IT FAIL on the committed tree across six mutations, green on revert. .github/PULL_REQUEST_TEMPLATE.md is the advisory half and says so. Criterion 3 CLOSED: reviews/PHASE-15-PLAN.md:44 corrected \u2014 and the correction went BOTH ways, because CLAUDE.md's own claim that the banner's three elements 'do not exist' was wrong: the banner is real and globally mounted and does say 'Not investment advice'. What is missing is a vendor-TERMS banner, which is Q-106. Criterion 1 is met only in the RECORDING sense, and even that was OVER-CLAIMED in the first version: review round 2 found requirements.txt (yfinance, akshare, tradingagents) unread and scripts/backtestData/ \u2014 13MB of Yahoo OHLCV republished WEEKLY to a PUBLIC repo \u2014 undetectable, because the mechanism detects EGRESS and I8 governs EXPOSURE. Both are now recorded and detected. Criterion 4 is untouched. Both remain owner + counsel via Q-082/Q-083, which is why I8's HEADING stays VIOLATED. NEW CRITICAL FINDING: lib/data/bloomberg/bridgeClient.ts is a live Bloomberg path with no URL literal and no vendor package (host from BLOOMBERG_BRIDGE_URL), merged into a public unauthenticated /api/prices response. Logged as ledger rows Q100-1/Q100-2. The guard's own blind spots are asserted as passing tests, not described in prose: concatenated hosts, env vars not named like hosts, transitive dependencies, and the fact that it checks a judgement was RECORDED, never that it is CORRECT. REVIEW ROUND 2 (security-compliance) blocked on four falsified claims, all fixed: the 'every vendor' headline; PARTIAL asserted without naming gaps; end_user_exposed/authenticated undefined, which made the trading-agents GET read as authenticated when it is public and yfinance-derived BUY/SELL output reaches anyone; and a cross-reference to F8.1, a resolved row, for the CRITICAL Bloomberg finding."
   },
   {
     "id": "Q-101",
@@ -2336,5 +2337,30 @@
       "npm run test"
     ],
     "notes_2026_08_22": "Found while building the Q-085 PBO producer. An 18-configuration grid over confidenceThreshold (40-65) and stopLossPct (0.06-0.14) produced BYTE-IDENTICAL trades on every instrument, and PBO came back exactly 1 with a median logit of 0 \u2014 the signature of ties. lib/backtest/core.ts echoes both fields at :239/:479 and branches on neither; maxDrawdownCap IS used at :328. Dead configuration is worse than no configuration: it invites exactly the fabricated result this nearly published. The PBO producer now refuses to publish when grid columns are not distinct, which contains the symptom; this ticket is the cause."
+  },
+  {
+    "id": "Q-106",
+    "title": "Vendor-terms banner and kill flag: the three elements PHASE-15-PLAN recorded as present",
+    "domain": "Security/Compliance",
+    "priority": "P2",
+    "status": "pending",
+    "files": [
+      "components/ComplianceBanner.tsx",
+      "app/layout.tsx",
+      "lib/data/providers/",
+      "app/api/prices/route.ts"
+    ],
+    "acceptance_criteria": [
+      "A research-only restriction on data USE is stated to the user, distinct from the existing no-advice disclaimer",
+      "A link to the vendor's terms is present (ComplianceBanner.tsx currently contains zero hrefs)",
+      "A YAHOO_RESEARCH_ONLY kill flag exists and, when set, makes Yahoo-derived surfaces render unavailable rather than silently degrading (zero occurrences repo-wide as of 2026-08-27)",
+      "The flag is exercised by a test that watches a surface actually go dark"
+    ],
+    "verify_commands": [
+      "grep -rn 'YAHOO_RESEARCH_ONLY' --include='*.ts' --include='*.tsx' .",
+      "npx vitest run __tests__/architecture/vendor-licence-register.test.ts"
+    ],
+    "blocked_by": [],
+    "notes_2026_08_27": "Split out of Q-100 deliberately. Q-100 built the PROCESS gate (record the finding); this is a MITIGATION (limit the exposure) and touches 14+ Yahoo route sites plus user-visible copy, so bundling it would have made the process gate hostage to a product decision. A kill flag is the cheapest real answer to a cease-and-desist and is worth having before it is needed. NOTE the copy is user-visible and therefore routes through Q-083 (MAS/FAA) before shipping. Do NOT resolve this by reading vendor terms and forming a view \u2014 that is Q-082."
   }
 ]
