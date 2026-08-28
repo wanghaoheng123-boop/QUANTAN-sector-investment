@@ -1282,3 +1282,16 @@ One fix overshot: naive protocol-relative matching invented vendors from Python'
 `total // 2`. The `//` form is guarded now, and the resulting gap is asserted as a
 test rather than hidden — **a guard that cries wolf gets its offender list
 ignored.**
+
+**MERGED** 2026-08-28 as `5e3407e` (PR #168, squash). Merging is the production
+deploy. Six checks green by name on the PR head before merge; main CI and a
+ten-minute production smoke watched after.
+
+**Q-100 stays PARTIAL.** Criteria 2 and 3 close — the mechanism exists, with teeth
+and with its gaps named as executable tests. Criteria 1 and 4 are owner + counsel,
+and I8's heading stays **VIOLATED** because six vendors are exposed to end users
+right now with no licence confirmed. Recording is the cheap half.
+
+**Single most urgent item, and it is not this package:** a live-format API
+credential sits committed at `start-universal.sh:12` in a **public** repository,
+tracked since 2026-06-02. Revoke and rotate; removal does not remediate.

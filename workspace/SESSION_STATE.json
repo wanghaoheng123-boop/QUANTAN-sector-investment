@@ -644,7 +644,7 @@
   },
   "q100_vendor_licence_register_2026_08_27": {
     "directive": "owner: 'Analysis the issues leftover and resolve them (/sprint)'. Priority rule (a) \u2014 open P0. Of the four open P0s, Q-005 (Redis provisioning), Q-083 (legal opinion) and Q-097 (repo settings) are owner-gated. Q-100 splits, and its PROCESS half is fully agent-actionable.",
-    "status": "SHIPPED as PR #168. Q-100 marked PARTIAL, not done.",
+    "status": "MERGED as PR #168, squash 5e3407e, 2026-08-28T14:59:19Z. Merging IS the production deploy. All six checks were green BY NAME on the PR head af1e52c before merge, verified via the commit check-runs API (gh pr view --json statusCheckRollup under-reports on this repo). Q-100 remains PARTIAL, not done.",
     "result": "I8's PROCESS half moves VIOLATED -> PARTIAL. The HEADING deliberately stays VIOLATED \u2014 see heading_decision.",
     "the_defect": "I8 says 'confirm the licence permits it AND RECORD THE FINDING'. Nothing anywhere asked the question \u2014 no checklist, no PR template, no check. PR #147 turned the stock-page news surface from synthetic to live Yahoo content, descends from the commit that wrote I8, and recorded nothing.",
     "what_shipped": [
@@ -669,10 +669,12 @@
     "verification": "typecheck clean; 1825 tests pass / 17 skipped; check:ci exit 0. SEVENTEEN mutations across three adversarial rounds, all watched failing on the committed tree, green on revert.",
     "tier_board": "I1 ASPIRATIONAL \u00b7 I2 PARTIAL \u00b7 I3 PARTIAL \u00b7 I4 ASPIRATIONAL \u00b7 I5 PARTIAL \u00b7 I6 PARTIAL \u00b7 I7 VIOLATED \u00b7 I8 VIOLATED (process half PARTIAL). Still NO invariant is ENFORCED.",
     "OWNER_NEEDS_YOU": [
-      "Q-097 (P0) \u2014 branch protection on main. Repo settings; an agent should not change them. Required checks now available by name: typecheck, test, coverage, benchmark, and the Vercel build.",
-      "Q-082 + Q-083 (P0/P1) \u2014 the substantive licence and MAS/FAA questions. Counsel. The register now hands them a complete enumeration of what to ask about.",
-      "Q100-1 (CRITICAL) \u2014 decide the Bloomberg bridge: kill flag, auth requirement, or removal.",
-      "Q-005 (P0) \u2014 Redis provisioning via the Vercel Marketplace (Vercel KV no longer exists)."
+      "URGENT \u2014 reviews/findings-ledger.csv Q100-12: a live-format API credential is COMMITTED at start-universal.sh:12 in a PUBLIC repo, tracked since PR #41 (2026-06-02). REVOKE AND ROTATE. Removing the line does NOT remediate; the value is in git history permanently. No agent touched it.",
+      "Q-097 (P0) \u2014 branch protection on main. Repo settings; an agent should not change them. Required checks now exist BY NAME: typecheck, test, coverage, benchmark, smoke, and the Vercel build. Until this lands every green check in this repo, including the new I8 guard, is advisory.",
+      "Q100-15 \u2014 confirm whether BLOOMBERG_BRIDGE_URL is set in the Vercel project. Not observable from the repo; 30 seconds in the dashboard. Determines whether the Bloomberg redistribution path is live or latent.",
+      "Q100-1/3/5 \u2014 decide the Bloomberg bridge. Review recommended NOT a kill flag (the path is already off by default) and NOT removal (legitimate for a licensed operator), but: drop dataSource:'bloomberg' and priceSources.bloomberg from PUBLIC route payloads, and require an affirmative acknowledgement env before the merge runs. Product decision with a legal predicate.",
+      "Q-082 + Q-083 (P0/P1) \u2014 the substantive licence and MAS/FAA questions, for counsel. The register now hands them a complete enumeration of what to ask about, including the bulk public republication (Q100-23) they would otherwise never have been shown.",
+      "Q-005 (P0) \u2014 Redis provisioning via the Vercel Marketplace (Vercel KV no longer exists as a product)."
     ],
     "REVIEW_ROUND_2_FALSIFIED_MY_HEADLINE": {
       "who": "security-compliance agent, four blocking objections, all confirmed against the tree before acting",
