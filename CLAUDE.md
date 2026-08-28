@@ -546,11 +546,19 @@ holds an API token, tracked since PR #41 (2026-06-02). **Revoke and rotate — r
 does not remediate, the value is in git history permanently.** Owner action, logged
 as `Q100-12`. Found only because this package widened the walk to `.sh`.
 
-Six vendors remain end-user-exposed with **no auth** — Yahoo
-(`app/api/prices/route.ts` + 13 route sites), CoinGecko (browser-direct at
-`components/crypto/hooks/useBtcCandles.ts:34`), Kraken, Coinbase, Bybit, OKX.
+**Nine** third-party vendors are end-user-exposed with **no auth**, across
+**17 exposure points** — Yahoo (three ways: `yahoo-finance2` on 14 routes,
+`yfinance` in the Python sidecar, and the bulk republished `scripts/backtestData/`),
+CoinGecko, Kraken (REST **and** `wss://`), Coinbase (REST **and** `wss://`), Bybit,
+OKX, AKShare, FRED, and Bloomberg if `BLOOMBERG_BRIDGE_URL` is ever set.
 `middleware.ts:119` matches all paths but its body (`:51-116`) only does CSP +
 CSRF, so ~19 public routes serve vendor data to anyone.
+
+*This paragraph said "six" until the register was queried, and the register is
+the reason the number moved.* Do not maintain a count here — **the register is the
+count**, and it is derivable: rows with `end_user_exposed` true and `lifecycle`
+active. A hand-written total in prose is the artifact that goes stale silently,
+which is the whole argument for keeping the enumeration in a guarded file.
 
 *Corrections to the previous text, both of which were this document's own:*
 "the position has never been written down" was **false** — the *risk* was recorded
