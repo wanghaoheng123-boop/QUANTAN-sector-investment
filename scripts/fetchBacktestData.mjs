@@ -127,21 +127,41 @@ function saveResult(ticker, sector, candles) {
   // revising a 2023 close was absorbed silently and surfaced later as a moved
   // win rate. Appends are normal and pass; a changed or vanished historical bar
   // fails closed (I2) so a human sees it before it reaches a benchmark.
-  let vintage = { appended: candles.length, restated: 0, missing: 0 };
+  let vintage = { appended: candles.length, restated: 0, missing: 0, finalized: 0 };
   if (existsSync(filePath)) {
     try {
       const prev = JSON.parse(readFileSync(filePath, 'utf8'));
+      // Valid JSON of the WRONG SHAPE is the residual fail-open: assessRefresh
+      // called with `undefined` reports every incoming bar as an append and
+      // returns ok, so a fixture whose `candles` key was lost would be silently
+      // overwritten by a guard that believes it checked something. Found by
+      // probing the function directly rather than by reading it.
+      if (!Array.isArray(prev.candles) || prev.candles.length === 0) {
+        throw new Error(
+          `REFUSED to save ${ticker}: existing fixture has no usable candles array, so a refresh cannot be ` +
+            'proven to be append-only. Repair or delete the fixture deliberately.',
+        );
+      }
       const verdict = assessRefresh(prev.candles, candles);
-      vintage = { appended: verdict.appended, restated: verdict.restated, missing: verdict.missing };
+      vintage = { appended: verdict.appended, restated: verdict.restated, missing: verdict.missing, finalized: verdict.finalized };
       if (!verdict.ok) {
         throw new Error(`REFUSED to save ${ticker}: ${verdict.reasons.join(' | ')}`);
       }
-      if (verdict.appended > 0) {
-        console.log(`[${ticker}] +${verdict.appended} new bar(s), 0 restated`);
+      if (verdict.appended > 0 || verdict.finalized > 0) {
+        const fin = verdict.finalized > 0 ? `, ${verdict.finalized} volume finalization(s)` : '';
+        console.log(`[${ticker}] +${verdict.appended} new bar(s), 0 restated${fin}`);
       }
     } catch (e) {
       if (e instanceof Error && e.message.startsWith('REFUSED')) throw e;
-      console.warn(`[${ticker}] vintage check skipped (${e.message})`);
+      // FAIL CLOSED. This used to warn and continue, which meant an unreadable
+      // fixture SKIPPED the restatement check entirely and the fresh series
+      // overwrote it unverified — a guard whose whole purpose is I2 fail-closed,
+      // failing open on the one input it cannot evaluate. If the vintage cannot
+      // be established, that is exactly when overwriting is least safe.
+      throw new Error(
+        `REFUSED to save ${ticker}: existing fixture could not be read for the vintage check (${e.message}). ` +
+          'Cannot prove this refresh only appends. Repair or delete the fixture deliberately.',
+      );
     }
   }
 
