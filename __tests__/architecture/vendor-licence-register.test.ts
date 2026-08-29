@@ -92,7 +92,7 @@ const GENERATED = /^(sw\.js|workbox-[a-f0-9]+\.js)(\.map)?$/
  * cost nothing to visit. The unvisited set is asserted in the CANNOT-do block, so
  * the boundary is a measurement rather than an assumption.
  */
-const EXECUTABLE = /(\.(tsx?|jsx?|mjs|cjs|py|ya?ml|sh|bash|toml)$|^(Dockerfile|Procfile)[^/]*$|^requirements[^/]*\.txt$)/
+const EXECUTABLE = /(\.(tsx?|jsx?|mjs|cjs|py|ya?ml|sh|bash|toml|html?)$|^(Dockerfile|Procfile)[^/]*$|^requirements[^/]*\.txt$)/
 
 function walk(dir: string, out: string[] = []): string[] {
   if (!existsSync(dir)) return out
@@ -188,6 +188,19 @@ describe('I8 — the scan is reachable', () => {
   it('finds enough distinct egress points to be worth checking', () => {
     expect(detected.size).toBeGreaterThan(50)
   })
+
+  it.each(['app', 'lib', 'components', 'hooks', 'scripts', '.github', 'public'])(
+    'actually opens at least one file under %s',
+    (dir) => {
+      // ADMITTING A DIRECTORY IS NOT VISITING IT. `public/` was added to close a
+      // red-team finding and then visited ZERO files, because nothing in it
+      // matched the extension filter — a fix that was pure decoration, and the
+      // sixth instance of this class in this repository. Every admitted
+      // territory now has to prove it is non-empty, so the next one cannot be
+      // decoration either.
+      expect(files.filter((f) => f.path.startsWith(dir + '/')).length).toBeGreaterThan(0)
+    },
+  )
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -267,11 +280,18 @@ describe('I8 — the register has not been quietly softened', () => {
     // The property that actually matters: a named vendor cannot quietly stop being
     // accounted for. Either it is live and exposed, or its withdrawal is recorded
     // with a date and a reason.
+    // KIND-AWARE. `find(e => e.id === id)` ignored kind, so adding a withdrawn
+    // decoy row carrying the same id under a different kind satisfied the lookup
+    // while the real row was softened. Red-team demonstrated it on the CRITICAL
+    // Bloomberg row.
     const unaccounted = NAMED_MARKET_DATA_VENDORS.filter((id) => {
-      const row = entries.find((e) => e.id === id)
-      if (!row) return true
-      if (row.lifecycle === 'withdrawn') return !(row.withdrawn_on && row.withdrawn_reason?.trim())
-      return !row.end_user_exposed
+      const matches = entries.filter((e) => e.id === id)
+      if (matches.length === 0) return true
+      // Every row carrying this id must be accounted for, not merely the first.
+      return matches.some((row) => {
+        if (row.lifecycle === 'withdrawn') return !(row.withdrawn_on && row.withdrawn_reason?.trim())
+        return !row.end_user_exposed
+      })
     })
     expect(unaccounted).toEqual([])
   })
