@@ -1295,3 +1295,48 @@ right now with no licence confirmed. Recording is the cheap half.
 **Single most urgent item, and it is not this package:** a live-format API
 credential sits committed at `start-universal.sh:12` in a **public** repository,
 tracked since 2026-06-02. Revoke and rotate; removal does not remediate.
+
+---
+
+## 2026-08-29 — Q-107: the pipeline had been dead for 13 days
+
+Shipped as PR #170 (`bf271c0`). Five agents inspected in parallel; two live
+defects were found and fixed.
+
+**`refresh-data.yml` had been failing since 2026-08-23** — the first live run
+after `Q-102` shipped — and nobody knew, because **nothing alerts on a failed
+scheduled workflow**. The restatement guard refused **36 of 56 tickers**;
+`scripts/backtestData/` froze at the 2026-08-16 vintage while CI and the benchmark
+went on reading it.
+
+Every refusal was the same shape: the same most-recent bar, the **volume** field
+only, revised upward by 0.03–0.35%. That is consolidated tape settling as late
+prints report — normal, weekly, universal. **A guard that refuses normal vendor
+behaviour is not strict, it is broken**, and this one *deadlocked*: a refused
+ticker keeps the stale value the next fetch disagrees with, forever.
+
+This is the "measure the null before setting a floor" lesson in a new costume.
+Zero tolerance was chosen without asking what the vendor normally does.
+
+**The I8 masker was deleting evidence.** A `#` or `//` inside a *string literal*
+erased the rest of the line — including real vendor URLs. And the
+protocol-relative branch had **zero reachable inputs** in any JS/TS file, because
+the comment mask trigger was a strict superset of the branch's guard and ran
+first. Sixth instance of *correct and unreachable*, and its own CANNOT-do test
+explained the gap with a false reason.
+
+**My own fix from yesterday was decoration.** `public/` was admitted to the walk
+and visited **zero files**. Every admitted territory now has to prove it opens at
+least one file. Three phantom register rows also existed for two days, fabricated
+by the masker mangling JSX plus a bare `https://` in UI copy.
+
+**The coordination worked, and it is worth keeping.** Five agents, disjoint
+territories, **forbidden from writing the shared ledger**, one report file each;
+the lead merged findings sequentially. Zero collisions. Two days ago the same
+setup without that rule lost ten findings. Reserving id ranges narrows the
+failure; removing the shared write eliminates it.
+
+**Tomorrow (2026-08-30) the first unblocked refresh runs.** It pushes ~15 days of
+bars straight to `main` with no CI gate, into a primary gate with 0.10pp of
+headroom (`Q107-D5`). Nobody is watching it automatically. That is the single
+next action.
