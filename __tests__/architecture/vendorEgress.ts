@@ -97,17 +97,78 @@ export interface Manifest {
  * Masking with spaces fixes both at once: comment bodies stop matching, and every
  * offset and newline survives, so `file:line` stays true.
  */
-const maskWith = (src: string, re: RegExp): string =>
-  src.replace(re, (m) => m.replace(/[^\n]/g, ' '))
+/**
+ * Mask comment regions, tracking STRING STATE.
+ *
+ * The previous version was two regexes, and red-team showed the whole branch was
+ * dead as a result. `stripComments` masked `(^|[^:])//…` as a line comment, which
+ * is a STRICT SUPERSET of the contexts the protocol-relative URL branch accepts —
+ * so the mask always ran first and `//host` had **zero reachable inputs in any
+ * JS/TS file**. It worked only in `.py`/`.yml`, which is precisely where its two
+ * tests lived. A rule that is correct and unreachable, for the sixth time in this
+ * repository, and its own "CANNOT do" test explained the gap with a false reason.
+ *
+ * Worse, it was not merely latent: `String(x).split('//'); fetch('https://…')`
+ * masked away a REAL vendor URL on the same line, and `curl -H "X-Id: #1" https://…`
+ * did the same in shell. A `#` or `//` inside a string literal is not a comment,
+ * and a masker that cannot tell the difference deletes evidence.
+ *
+ * So this is a scanner, not a regex: it walks the source tracking quote state and
+ * masks only what is genuinely a comment. Masking preserves offsets (and newlines)
+ * so `file:line` citations stay true — that property is load-bearing and was itself
+ * a fix for 18 wrong citations.
+ */
+type CommentStyle = 'c-like' | 'hash'
 
-export const stripComments = (src: string, path = ''): string => {
-  // Hash-comment languages. `#` inside a string is masked too; that costs a
-  // detection we never had, and over-masking here cannot hide a host that the
-  // hash-language files actually fetch from — those are assignments, not comments.
-  if (/\.(py|ya?ml|sh|bash|toml)$/.test(path) || /^(Dockerfile|Procfile|requirements)/.test(path)) {
-    return maskWith(src, /#[^\n]*/g)
+function maskComments(src: string, style: CommentStyle): string {
+  const out = src.split('')
+  let i = 0
+  let quote: string | null = null // ' " or ` when inside a string
+  const blank = (from: number, to: number) => {
+    for (let k = from; k < to && k < out.length; k++) if (out[k] !== '\n') out[k] = ' '
   }
-  return maskWith(maskWith(src, /\/\*[\s\S]*?\*\//g), /(^|[^:])\/\/[^\n]*/g)
+
+  while (i < src.length) {
+    const c = src[i]
+    const n = src[i + 1]
+
+    if (quote) {
+      if (c === '\\') { i += 2; continue }          // escape
+      if (c === quote) quote = null
+      else if (quote !== '`' && c === '\n') quote = null // unterminated line string
+      i++
+      continue
+    }
+
+    if (c === "'" || c === '"' || (style === 'c-like' && c === '`')) { quote = c; i++; continue }
+
+    if (style === 'hash' && c === '#') {
+      const nl = src.indexOf('\n', i); const to = nl === -1 ? src.length : nl
+      blank(i, to); i = to; continue
+    }
+    if (style === 'c-like' && c === '/' && n === '/') {
+      const nl = src.indexOf('\n', i); const to = nl === -1 ? src.length : nl
+      blank(i, to); i = to; continue
+    }
+    if (style === 'c-like' && c === '/' && n === '*') {
+      const close = src.indexOf('*/', i + 2)
+      const to = close === -1 ? src.length : close + 2
+      blank(i, to); i = to; continue
+    }
+    i++
+  }
+  return out.join('')
+}
+
+/**
+ * Dispatch on the file's BASENAME extension. Dispatching on the full path treated
+ * `docker/Dockerfile` and `ml/requirements.txt` as JS because the prefix did not
+ * match — another red-team find.
+ */
+export const stripComments = (src: string, path = ''): string => {
+  const base = path.split('/').pop() ?? ''
+  const hash = /\.(py|ya?ml|sh|bash|toml)$/.test(base) || /^(Dockerfile|Procfile|requirements)/.test(base)
+  return maskComments(src, hash ? 'hash' : 'c-like')
 }
 
 /**
@@ -288,15 +349,24 @@ export function detectEgress(files: SourceFile[], manifest: Manifest = {}): Egre
       // worse than not having it: Python's integer division (`total // 2`) and a
       // YAML glob both produced phantom vendors on the real tree. It must follow a
       // string or expression boundary and precede something host-shaped.
+      // Column is carried into `where` for dynamic hosts (see below): push()
+      // dedupes on kind|id|where, so a line-granular key let a second assembled
+      // host be appended to an existing line without moving dynamic_sites.
       const re = /(?:\b(?:https?|wss?):\/\/|(?<=['"`(=,\s])\/\/(?=[a-z0-9][a-z0-9.-]*\.[a-z]{2,}))([^\s'"`)\],;<>]*)/gi
       let m: RegExpExecArray | null
       while ((m = re.exec(line)) !== null) {
         const raw = m[1]
         const host = hostnameOf(raw)
         if (host === null) {
-          // `https://${vercelHost}` and friends. The host is not knowable from
-          // source, so the FILE is the unit that must be registered.
-          push({ kind: 'dynamic-host', id: file.path, where })
+          // A BARE SCHEME IS NOT A DYNAMIC HOST. `<code>https://</code>` in setup
+          // copy has an empty authority; the old masker mangled JSX badly enough
+          // that two such phantoms were registered as real dynamic-host rows and
+          // sat in the register for two days. An assembled host leaves a mark —
+          // an interpolation delimiter — and a scheme mentioned in prose does not.
+          if (raw === '') continue
+          // `https://${vercelHost}` and friends: not knowable from source, so the
+          // FILE is the unit that must be registered.
+          push({ kind: 'dynamic-host', id: file.path, where: `${file.path}:${i + 1}:${m.index}` })
           continue
         }
         if (isLoopback(host)) continue

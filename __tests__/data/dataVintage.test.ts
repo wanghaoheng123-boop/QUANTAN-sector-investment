@@ -1,6 +1,13 @@
 import { describe, it, expect } from 'vitest'
 // Plain .mjs so the fetch script can import it without a TS build step.
-import { diffSeries, assessRefresh, seriesFingerprint, WINDOW_START } from '../../scripts/lib/dataVintage.mjs'
+import {
+  diffSeries,
+  assessRefresh,
+  seriesFingerprint,
+  WINDOW_START,
+  FINALIZATION_SESSIONS,
+  FINALIZATION_MAX_VOLUME_DRIFT,
+} from '../../scripts/lib/dataVintage.mjs'
 
 const bar = (time: number, close: number, extra: Record<string, number> = {}) => ({
   time, open: close, high: close + 1, low: close - 1, close, volume: 100, ...extra,
@@ -92,5 +99,121 @@ describe('I4 — the backtest window start is PINNED, not re-anchored', () => {
       .replace(/(^|[^:])\/\/.*$/gm, '$1')
     expect(src).not.toMatch(/period1:\s*new Date\(\s*Date\.now\(\)/)
     expect(src).toMatch(/period1:\s*new Date\(WINDOW_START\)/)
+  })
+})
+
+/**
+ * Volume finalization — the calibration that broke the pipeline.
+ *
+ * Shipped with zero tolerance, this guard refused **36 of 56 tickers** on its
+ * first live run (`refresh-data.yml` run 32670176978, 2026-08-23) and the weekly
+ * refresh then failed silently for 13 days while CI and the benchmark went on
+ * reading the frozen fixtures.
+ *
+ * Every refusal had the same shape: the SAME most-recent bar, the VOLUME field
+ * only, revised slightly upward. US consolidated tape volume settles for a few
+ * sessions after the close as late and off-exchange prints report. That is normal
+ * vendor behaviour, and a guard that refuses normal behaviour is not strict, it is
+ * broken — and worse, it DEADLOCKS: a refused ticker keeps its stale value, so the
+ * next week's fetch disagrees with it again, forever.
+ *
+ * The numbers below are the real ones from that run.
+ */
+describe('volume finalization is not a restatement — the defect that deadlocked the refresh', () => {
+  /** A series long enough that "recent" and "old" are meaningfully different. */
+  const series = (n: number) =>
+    Array.from({ length: n }, (_, i) => ({
+      time: 1000 + i, open: 10, high: 11, low: 9, close: 10, volume: 1_000_000,
+    }))
+
+  it('accepts the exact NVDA revision that refused the real run', () => {
+    const disk = series(300)
+    disk[disk.length - 1].volume = 75_504_000
+    const incoming = disk.map((c) => ({ ...c }))
+    incoming[incoming.length - 1].volume = 75_680_900 // +0.23%, the observed delta
+
+    const v = assessRefresh(disk, incoming)
+    expect(v.ok).toBe(true)
+    expect(v.finalized).toBe(1)
+    expect(v.restated).toBe(0)
+  })
+
+  it('still REFUSES a moved close on the very same recent bar', () => {
+    // Price is what I4 exists to protect. Recency buys volume nothing here.
+    const disk = series(300)
+    const incoming = disk.map((c) => ({ ...c }))
+    incoming[incoming.length - 1].close = 10.5
+
+    const v = assessRefresh(disk, incoming)
+    expect(v.ok).toBe(false)
+    expect(v.restated).toBe(1)
+    expect(v.reasons[0]).toMatch(/VENDOR RESTATEMENT/)
+  })
+
+  it('still REFUSES a volume revision on an OLD bar', () => {
+    // A 2023 volume revision is a genuine data event. Only the settling window
+    // is forgiven, and this is the assertion that keeps the window meaningful.
+    const disk = series(300)
+    const incoming = disk.map((c) => ({ ...c }))
+    incoming[0].volume = 1_002_000 // +0.2%, tiny — but ~300 sessions old
+
+    const v = assessRefresh(disk, incoming)
+    expect(v.ok).toBe(false)
+    expect(v.restated).toBe(1)
+  })
+
+  it('still REFUSES an absurd volume change on a recent bar', () => {
+    // Tripling is a bad fetch or the wrong security, not the tape settling.
+    const disk = series(300)
+    const incoming = disk.map((c) => ({ ...c }))
+    incoming[incoming.length - 1].volume *= 3
+
+    expect(assessRefresh(disk, incoming).ok).toBe(false)
+  })
+
+  it('draws the age boundary where it says it does', () => {
+    const disk = series(300)
+    const at = (ageFromEnd: number) => {
+      const incoming = disk.map((c) => ({ ...c }))
+      incoming[incoming.length - 1 - ageFromEnd].volume = 1_001_000 // +0.1%
+      return assessRefresh(disk, incoming)
+    }
+    expect(at(FINALIZATION_SESSIONS - 1).ok).toBe(true)  // inside the window
+    expect(at(FINALIZATION_SESSIONS).ok).toBe(false)     // one session past it
+  })
+
+  it('draws the magnitude boundary where it says it does', () => {
+    const disk = series(300)
+    const at = (frac: number) => {
+      const incoming = disk.map((c) => ({ ...c }))
+      incoming[incoming.length - 1].volume = 1_000_000 * (1 + frac)
+      return assessRefresh(disk, incoming)
+    }
+    expect(at(FINALIZATION_MAX_VOLUME_DRIFT * 0.9).ok).toBe(true)
+    expect(at(FINALIZATION_MAX_VOLUME_DRIFT * 1.1).ok).toBe(false)
+  })
+
+  it('the observed drift sits far from the bound, not on its edge', () => {
+    // Measured before the bound was set: the largest drift across all 36
+    // refusals was 0.35%. A floor a hair above the null is one this project has
+    // shipped before, and it does not survive contact with normal variation.
+    const OBSERVED_MAX_DRIFT = 0.0035
+    expect(FINALIZATION_MAX_VOLUME_DRIFT).toBeGreaterThan(OBSERVED_MAX_DRIFT * 10)
+  })
+
+  it('reports finalization rather than hiding it', () => {
+    // The difference between absorbing a change silently and accepting a named,
+    // known vendor behaviour is that the second one is COUNTED.
+    const disk = series(300)
+    const incoming = disk.map((c) => ({ ...c }))
+    incoming[incoming.length - 1].volume = 1_001_000
+    expect(assessRefresh(disk, incoming).finalized).toBe(1)
+  })
+
+  it('a missing bar is still HISTORY LOSS, untouched by any of this', () => {
+    const disk = series(300)
+    const v = assessRefresh(disk, disk.slice(0, -1))
+    expect(v.ok).toBe(false)
+    expect(v.reasons.join(' ')).toMatch(/HISTORY LOSS/)
   })
 })

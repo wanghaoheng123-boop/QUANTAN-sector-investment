@@ -456,7 +456,7 @@
     {
       "kind": "dynamic-host",
       "id": "app/api/trading-agents/[ticker]/route.ts",
-      "lifecycle": "active",
+      "lifecycle": "withdrawn",
       "classification": "llm-credential-path",
       "vendor": "self-hosted / operator supplied",
       "end_user_exposed": true,
@@ -474,7 +474,9 @@
         "Q-092"
       ],
       "redistribution_position": "UNRESOLVED \u2014 the substantive redistribution question is routed to Q-082 (licence) and Q-083 (MAS/FAA). Counsel only. Recording this finding does NOT assert that the consumption or the redistribution is permitted.",
-      "dynamic_sites": 3
+      "dynamic_sites": 0,
+      "withdrawn_on": "2026-08-29",
+      "withdrawn_reason": "NEVER REAL \u2014 a phantom row, not a removed surface. Two defects produced it together: the regex comment-masker mangled JSX badly enough to fabricate matches, and a BARE SCHEME in user-facing copy (`<code>https://</code>`, 'must use https:// in production') has an empty authority, which hostnameOf returned null for and the caller filed as a dynamic host. Both are fixed in Q-107; a bare scheme is now ignored and comments are masked by a string-aware scanner. Recorded as withdrawn rather than deleted because the register is append-only and a row that was wrong is part of the trail. The route's REAL exposure is unchanged and is recorded on the TRADING_AGENTS_BASE env-host row: the GET is unauthenticated and serves yfinance-derived output. Only this dynamic-host DETECTION was a phantom."
     },
     {
       "kind": "dynamic-host",
@@ -515,7 +517,7 @@
     {
       "kind": "dynamic-host",
       "id": "components/stock/LlmDeployAssistant.tsx",
-      "lifecycle": "active",
+      "lifecycle": "withdrawn",
       "classification": "outbound-link",
       "vendor": "n/a (UI copy)",
       "end_user_exposed": false,
@@ -528,12 +530,14 @@
         "components/stock/LlmDeployAssistant.tsx"
       ],
       "routes_to": [],
-      "dynamic_sites": 2
+      "dynamic_sites": 0,
+      "withdrawn_on": "2026-08-29",
+      "withdrawn_reason": "NEVER REAL \u2014 a phantom row, not a removed surface. Two defects produced it together: the regex comment-masker mangled JSX badly enough to fabricate matches, and a BARE SCHEME in user-facing copy (`<code>https://</code>`, 'must use https:// in production') has an empty authority, which hostnameOf returned null for and the caller filed as a dynamic host. Both are fixed in Q-107; a bare scheme is now ignored and comments are masked by a string-aware scanner. Recorded as withdrawn rather than deleted because the register is append-only and a row that was wrong is part of the trail. The file's real egress is recorded under the railway.app and docs.railway.app http-host rows."
     },
     {
       "kind": "dynamic-host",
       "id": "components/stock/quantlab/tabs/LlmTab.tsx",
-      "lifecycle": "active",
+      "lifecycle": "withdrawn",
       "classification": "outbound-link",
       "vendor": "n/a (UI copy)",
       "end_user_exposed": false,
@@ -546,7 +550,9 @@
         "components/stock/quantlab/tabs/LlmTab.tsx"
       ],
       "routes_to": [],
-      "dynamic_sites": 1
+      "dynamic_sites": 0,
+      "withdrawn_on": "2026-08-29",
+      "withdrawn_reason": "NEVER REAL \u2014 a phantom row, not a removed surface. Two defects produced it together: the regex comment-masker mangled JSX badly enough to fabricate matches, and a BARE SCHEME in user-facing copy (`<code>https://</code>`, 'must use https:// in production') has an empty authority, which hostnameOf returned null for and the caller filed as a dynamic host. Both are fixed in Q-107; a bare scheme is now ignored and comments are masked by a string-aware scanner. Recorded as withdrawn rather than deleted because the register is append-only and a row that was wrong is part of the trail. The file's real egress is recorded under the github.com, platform.openai.com, console.anthropic.com, aistudio.google.com and railway.app http-host rows."
     },
     {
       "kind": "http-host",
