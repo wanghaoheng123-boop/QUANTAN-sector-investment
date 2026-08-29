@@ -27,8 +27,21 @@ jobs:
       # scripts/fetchBacktestData.mjs already exits non-zero when a ticker
       # throws or trips an integrity floor (its `failed > 0` guard), so a hard
       # fetch failure fails this step and every step below it is skipped.
+      # Exit 2 means "some instruments were QUARANTINED by the vintage guard, and
+      # every fixture that WAS written is verified append-only". Those writes are
+      # safe to commit; the run still ends red at the end of the job so a human
+      # looks. Treating 2 as failure here is what discarded 55 clean refreshes and
+      # deadlocked the pipeline for a fortnight.
       - name: Refresh backtest data from Yahoo Finance
-        run: node scripts/fetchBacktestData.mjs
+        id: refresh
+        run: |
+          set +e
+          node scripts/fetchBacktestData.mjs
+          code=$?
+          set -e
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          if [ "$code" -eq 0 ] || [ "$code" -eq 2 ]; then exit 0; fi
+          exit $code
 
       # AL-6 (2026-08-15): the hole the guard above does NOT cover.
       #
@@ -135,3 +148,13 @@ jobs:
           git add scripts/backtestData/
           git commit -m "chore(data): weekly backtest data refresh ($(date -u +'%Y-%m-%d'))"
           git push origin HEAD:main
+
+      # Placed LAST, on purpose: the quarantined data has already been committed
+      # by the step above, and this turns the run red so the event is visible.
+      # Q107-O2 is still open — nothing NOTIFIES on a red scheduled run — so this
+      # is necessary and not yet sufficient.
+      - name: Fail the run if anything was quarantined
+        if: steps.refresh.outputs.code == '2'
+        run: |
+          echo "::error title=Vintage quarantine::One or more instruments were refused by the vintage guard. Clean fixtures were committed; investigate the named bars."
+          exit 1
