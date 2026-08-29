@@ -2362,5 +2362,67 @@
     ],
     "blocked_by": [],
     "notes_2026_08_27": "Split out of Q-100 deliberately. Q-100 built the PROCESS gate (record the finding); this is a MITIGATION (limit the exposure) and touches 14+ Yahoo route sites plus user-visible copy, so bundling it would have made the process gate hostage to a product decision. A kill flag is the cheapest real answer to a cease-and-desist and is worth having before it is needed. NOTE the copy is user-visible and therefore routes through Q-083 (MAS/FAA) before shipping. Do NOT resolve this by reading vendor terms and forming a view \u2014 that is Q-082."
+  },
+  {
+    "id": "Q-107",
+    "title": "Post-Q-100 rectification wave: data-refresh deadlock, guard masker, and the inspection backlog",
+    "domain": "Data/Integrity",
+    "priority": "P0",
+    "status": "partial",
+    "files": [
+      "scripts/lib/dataVintage.mjs",
+      "scripts/fetchBacktestData.mjs",
+      "__tests__/architecture/vendorEgress.ts",
+      "reviews/findings-ledger.csv"
+    ],
+    "acceptance_criteria": [
+      "The weekly data refresh completes (first unblocked run 2026-08-30)",
+      "Ten ledger rows that claimed OPEN for shipped fixes are corrected",
+      "The comment masker no longer deletes evidence and the protocol-relative branch is reachable",
+      "Every admitted walk territory proves it opens at least one file"
+    ],
+    "verify_commands": [
+      "npx vitest run __tests__/architecture/",
+      "npx vitest run __tests__/data/dataVintage.test.ts",
+      "gh run list --workflow=refresh-data.yml --limit 3"
+    ],
+    "notes_2026_08_29": "PARTIAL. LANDED: the Q-102 restatement guard had DEADLOCKED the weekly refresh since 2026-08-23 - 36 of 56 tickers refused over routine consolidated-tape volume finalization, data frozen 13 days, and it would have recurred every week because a refused ticker keeps the stale value the next fetch disagrees with. Fixed by discriminating on FIELD and AGE with measured constants. Also closed two fail-open holes in the same guard. Separately, the I8 comment masker was string-unaware and was DELETING EVIDENCE (a # or // inside a string erased the rest of the line, including real vendor URLs), and its protocol-relative branch had ZERO reachable inputs in any JS/TS file. Replaced with a quote-tracking scanner. NOT DONE, recorded in reviews/findings-ledger.csv: Q107-S9 (no import graph - a new route importing bridgeClient ships green; highest-value remaining guard work), Q107-D5 (baseline drift + a 0.10pp gate about to receive 15 days of bars), Q107-O2 (no alerting on scheduled-workflow failure - why this went unnoticed), Q107-O4 (benchmark job-name collision, a Q-097 foot-gun), Q107-F3/F9 (I1/I2 surfaces), Q107-R6/R7 (accepted and residual detector limits)."
+  },
+  {
+    "id": "Q-108",
+    "title": "Bloomberg exposure: gate at the client, do not strip the labels",
+    "domain": "Security/Compliance",
+    "priority": "P1",
+    "status": "pending",
+    "files": [
+      "lib/data/bloomberg/bridgeClient.ts",
+      "app/api/bloomberg-bridge/health/route.ts",
+      "app/api/fundamentals/[ticker]/route.ts",
+      "app/api/prices/route.ts"
+    ],
+    "acceptance_criteria": [
+      "An affirmative acknowledgement env is required before the bridge merge runs at all, checked ONCE in bridgeClient.ts rather than per route",
+      "The unauthenticated health route no longer discloses whether a bridge is configured",
+      "A test asserts zero outbound calls when the gate is closed - not merely that the result is null"
+    ],
+    "notes_2026_08_29": "Designed by security-compliance review, reviews/inbox-2026-08-29/security-compliance.md. THE PRIOR RECOMMENDATION WAS REJECTED ON REVIEW: 'drop the vendor-identifying fields from public payloads' is concealment, not remediation - the licence exposure is the DATA, not the label, and on fundamentals it would be provenance FALSIFICATION, since displayPrice is Bloomberg-derived and feeds DCF, bands, anchors, signal and researchScore unlabelled. Gate first; with the gate closed there is no Bloomberg data in either payload and the disclosure question does not arise. Gate in bridgeClient.ts because isBloombergBridgeConfigured() already has three callers and a per-route check is the reachability defect this repo has hit six times. NOTE: __tests__/data/bloombergBridge.test.ts:154-163 will go GREEN WHILE CEASING TO TEST ANYTHING - it returns null at the gate and never reaches the HTTP path it exists to exercise; the load-bearing assertion is expect(calls).toHaveLength(0). Adding runtime config to a route is static-analysis-only: the Vercel build is the gate, not tsc or vitest."
+  },
+  {
+    "id": "Q-109",
+    "title": "Compliance banner asserts a regulatory self-classification naming the wrong regimes",
+    "domain": "Security/Compliance",
+    "priority": "P1",
+    "status": "pending",
+    "files": [
+      "components/ComplianceBanner.tsx"
+    ],
+    "acceptance_criteria": [
+      "The MiFID II / SEC RIA clause is DELETED, not re-pointed at MAS",
+      "Remaining copy asserts only mechanical facts about what the product does",
+      "The 'market data is delayed or aggregated' claim is corrected or removed - it is false for the browser-direct crypto feeds"
+    ],
+    "owner_role": "Owner (PM)",
+    "human_blocker": "User-visible regulatory copy - routes through Q-083 before shipping",
+    "notes_2026_08_29": "components/ComplianceBanner.tsx:31-32 asserts the product does not provide recommendations 'regulated under MiFID II, SEC RIA, or equivalent regimes'. That is an unverified regulatory SELF-CLASSIFICATION which names two regimes that do not govern and omits MAS, which does. Review was explicit: DO NOT substitute MAS - writing 'not regulated under MAS' is the identical error against the regulator that actually bites. Delete the clause. Also :7 open=false hides the detail by default, and 'does not route or execute orders' is inherited unverified copy - grep before re-shipping it. Ledger Q100-22."
   }
 ]
