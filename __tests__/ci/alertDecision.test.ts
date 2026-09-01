@@ -11,7 +11,8 @@
  * an incident is an alert path nobody has tested.
  */
 import { describe, it, expect } from 'vitest'
-// @ts-expect-error — plain .mjs so the workflow can run it without a build step
+// Plain .mjs so the workflow can run it with no build step, same idiom as
+// scripts/lib/dataVintage.mjs.
 import { decideAlert, alertTitle, ALERT_MARKER } from '../../scripts/ci/alertDecision.mjs'
 
 const base = { workflow: 'refresh-data.yml', runUrl: 'https://example/run/1' }

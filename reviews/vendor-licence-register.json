@@ -1684,6 +1684,40 @@
       "authenticated": false,
       "licence_status": "NOT_APPLICABLE",
       "finding": "Pinned at ^11.1.1 in package.json#overrides. Not a data vendor. Recorded because `overrides` was an unread manifest block, and the npm:other@1 form lets an override REDIRECT an innocuous package name to a vendor client \u2014 the same hole as devDependencies, one key over."
+    },
+    {
+      "kind": "http-host",
+      "id": "api.github.com",
+      "lifecycle": "active",
+      "classification": "infrastructure",
+      "vendor": "GitHub",
+      "end_user_exposed": false,
+      "authenticated": true,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "GitHub's own REST API, called from scripts/ci/notify-scheduled-failure.mjs to open, comment on or close the scheduled-failure alert issue. Authenticated with the workflow's built-in GITHUB_TOKEN; runs only inside Actions, never in the application tier, and returns no vendor market data \u2014 it reads and writes this repository's own issues. Added by the Q107-O2 alerting work, and the I8 guard CAUGHT IT: this was the first new outbound call added to the repository since the guard shipped, and the suite went red until the row existed. Exactly the intended behaviour, on real new code rather than a mutation.",
+      "recorded_by": "Q107-O2 (lead) \u2014 recorded 2026-08-30",
+      "recorded_on": "2026-08-30",
+      "evidence": [
+        "scripts/ci/notify-scheduled-failure.mjs:13"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "env-host",
+      "id": "ALERT_RUN_URL",
+      "lifecycle": "active",
+      "classification": "first-party",
+      "vendor": "GitHub Actions (self)",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Host-bearing variable carrying this repository's own Actions run URL into the alert issue body. Composed by the workflow from github.server_url and github.repository; nothing is fetched from it. First-party. Added by the Q107-O2 alerting work, and the I8 guard CAUGHT IT: this was the first new outbound call added to the repository since the guard shipped, and the suite went red until the row existed. Exactly the intended behaviour, on real new code rather than a mutation.",
+      "recorded_by": "Q107-O2 (lead) \u2014 recorded 2026-08-30",
+      "recorded_on": "2026-08-30",
+      "evidence": [
+        "scripts/ci/notify-scheduled-failure.mjs:18"
+      ],
+      "routes_to": []
     }
   ],
   "field_definitions": {
