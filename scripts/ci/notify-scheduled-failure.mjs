@@ -43,11 +43,35 @@ const gh = async (path, init = {}) => {
  * Matched on TITLE plus the body marker rather than a label, because a label has
  * to exist first and a missing label would make the whole mechanism silently
  * no-op — the failure mode this package exists to remove.
+ *
+ * Two things the obvious one-liner gets wrong, both verified against this repo:
+ *
+ * - **`/issues` RETURNS PULL REQUESTS.** GitHub's issues endpoint includes PRs,
+ *   and right now every open item on this repository is a PR. They are filtered
+ *   explicitly; relying on the title+marker pair to exclude them would work by
+ *   luck rather than by rule.
+ * - **One page is not all pages.** Capped at 100, a busy backlog would hide the
+ *   existing alert and the runner would open a duplicate every week — the alert
+ *   fatigue this design exists to avoid. Paginated, with a bound so a runaway
+ *   listing cannot hang the job.
  */
+const MAX_PAGES = 10
+
 const findOpen = async () => {
-  const issues = await gh(`/repos/${repo}/issues?state=open&per_page=100`)
   const want = alertTitle(workflow)
-  return issues.find((i) => i.title === want && (i.body ?? '').includes(ALERT_MARKER)) ?? null
+  for (let page = 1; page <= MAX_PAGES; page++) {
+    const batch = await gh(`/repos/${repo}/issues?state=open&per_page=100&page=${page}`)
+    if (!Array.isArray(batch) || batch.length === 0) return null
+    const hit = batch.find(
+      (i) => !i.pull_request && i.title === want && (i.body ?? '').includes(ALERT_MARKER),
+    )
+    if (hit) return hit
+    if (batch.length < 100) return null
+  }
+  // Bounded rather than infinite, and LOUD about it: silently giving up here
+  // would open a duplicate issue and look like the mechanism working.
+  console.warn(`findOpen: scanned ${MAX_PAGES} pages without finding an existing alert; may create a duplicate`)
+  return null
 }
 
 const openIssue = await findOpen()

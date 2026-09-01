@@ -31,6 +31,11 @@ on:
 jobs:
   alert:
     runs-on: ubuntu-latest
+    # This repository's DEFAULT workflow permission is `read` (verified via
+    # /actions/permissions/workflow), so this block is not decoration — it is the
+    # only reason the token can write an issue at all. If an org policy ever
+    # forbids elevating, the runner 403s and exits 1, which turns the alert job
+    # red rather than failing silently. Loud beats absent.
     permissions:
       issues: write
     steps:
