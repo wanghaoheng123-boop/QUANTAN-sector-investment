@@ -62,3 +62,17 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - run: npx stryker run --mutate "${{ matrix.shard.mutate }}"
+
+  # Q107-O2: a scheduled workflow that fails silently is how this repo lost a
+  # fortnight of data. `always()` is load-bearing — without it this job is skipped
+  # on failure, which is precisely the case it exists for.
+  alert:
+    needs: [stryker]
+    if: always()
+    uses: ./.github/workflows/scheduled-failure-alert.yml
+    permissions:
+      issues: write
+    with:
+      workflow: stryker-weekly.yml
+      conclusion: ${{ needs.stryker.result }}
+      detail: ${{ 'The weekly mutation gate did not complete. A missing run is not a passing run.' }}

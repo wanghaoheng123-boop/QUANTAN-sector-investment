@@ -70,3 +70,17 @@ jobs:
 
             console.log('PASS');
           "
+
+  # Q107-O2: a scheduled workflow that fails silently is how this repo lost a
+  # fortnight of data. `always()` is load-bearing — without it this job is skipped
+  # on failure, which is precisely the case it exists for.
+  alert:
+    needs: [benchmark]
+    if: always()
+    uses: ./.github/workflows/scheduled-failure-alert.yml
+    permissions:
+      issues: write
+    with:
+      workflow: nightly-backtest.yml
+      conclusion: ${{ needs.benchmark.result }}
+      detail: ${{ 'The nightly benchmark did not complete.' }}

@@ -1,0 +1,48 @@
+# Reusable alert for scheduled workflows (Q107-O2).
+#
+# Called by every scheduled workflow that CAN fail, on both outcomes: a failure
+# opens or comments on an issue, and a success closes it. Both halves matter —
+# an alert that never clears trains people to ignore it.
+#
+# NOT wired into a11y-axe.yml, and that is deliberate rather than an oversight:
+# that job carries `continue-on-error: true` at JOB level, so its result is
+# always `success` and an `if: failure()` alert could never fire. Wiring it would
+# be decoration. Making a11y alertable means deciding it should gate, which is a
+# separate call.
+name: Scheduled failure alert
+
+on:
+  workflow_call:
+    inputs:
+      workflow:
+        description: Workflow file name being reported on
+        required: true
+        type: string
+      conclusion:
+        description: success | failure | cancelled | skipped
+        required: true
+        type: string
+      detail:
+        description: One line of context for the issue body
+        required: false
+        type: string
+        default: ''
+
+jobs:
+  alert:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+      - name: Open, update or close the alert issue
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ALERT_WORKFLOW: ${{ inputs.workflow }}
+          ALERT_CONCLUSION: ${{ inputs.conclusion }}
+          ALERT_DETAIL: ${{ inputs.detail }}
+          ALERT_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: node scripts/ci/notify-scheduled-failure.mjs
