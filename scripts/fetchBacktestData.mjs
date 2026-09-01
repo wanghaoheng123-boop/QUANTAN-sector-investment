@@ -280,34 +280,63 @@ async function main() {
 
   let success = 0;
   let failed  = 0;
+  /**
+   * QUARANTINED, not failed.
+   *
+   * A ticker the vintage guard REFUSED is in a different state from one whose
+   * fetch broke: its existing fixture is intact and untouched, and every other
+   * ticker's write is verified append-only. Folding both into `failed` meant one
+   * disputed bar discarded FIFTY-FIVE clean refreshes, every week, because the
+   * workflow gates its commit on `success()`. Measured on the real tree: 55 clean,
+   * 1 quarantined (BTC, a 1.9e-5 relative move in a daily open), and the whole
+   * batch was thrown away.
+   */
+  const quarantined = [];
 
-  for (const { ticker, sector } of TICKERS) {
+  const run = async (label, fn) => {
     try {
-      await fetchYahoo(ticker, sector);
+      await fn();
       success++;
     } catch (err) {
-      console.error(`[${ticker}] ERROR: ${err.message}`);
-      failed++;
+      const msg = err?.message ?? String(err);
+      if (msg.startsWith('REFUSED')) {
+        console.error(`::warning title=Quarantined ${label}::${msg}`);
+        quarantined.push(label);
+      } else {
+        console.error(`[${label}] ERROR: ${msg}`);
+        failed++;
+      }
     }
-  }
+  };
 
-  try {
-    await fetchBTC();
-    success++;
-  } catch (err) {
-    console.error(`[BTC] ERROR: ${err.message}`);
-    failed++;
-  }
+  for (const { ticker, sector } of TICKERS) await run(ticker, () => fetchYahoo(ticker, sector));
+  await run('BTC', fetchBTC);
 
-  console.log(`\nDone. Success: ${success}  |  Failed: ${failed}`);
+  console.log(`\nDone. Success: ${success}  |  Quarantined: ${quarantined.length}  |  Failed: ${failed}`);
 
-  // R2 mitigation: surface any failed/refused ticker as a non-zero exit so the
-  // refresh-data workflow goes RED and does NOT auto-commit a partial refresh.
-  // Good fixtures still updated above; the integrity guard kept degraded ones
-  // intact. The operator investigates the named failures before re-running.
+  // THREE outcomes, because two were not enough.
+  //
+  //   1  a real failure — a fetch broke or returned degraded data. Nothing should
+  //      be committed; the tree may be inconsistent.
+  //   2  every instrument either refreshed cleanly or was QUARANTINED by the
+  //      vintage guard. Each written fixture is verified append-only, so the run
+  //      SHOULD commit — and must still end RED, because a quarantine is a data
+  //      event a human has to look at.
+  //   0  all clean.
+  //
+  // Collapsing 2 into 1 is what deadlocked the pipeline: the refused ticker keeps
+  // the stale value that next week's fetch will disagree with again, so the batch
+  // never recovers on its own.
   if (failed > 0) {
     console.error(`\nFAIL: ${failed} instrument(s) did not refresh cleanly — see [TICKER] ERROR lines above. Refusing to exit 0.`);
     process.exit(1);
+  }
+  if (quarantined.length > 0) {
+    console.error(
+      `\nQUARANTINED: ${quarantined.join(', ')} — existing fixture(s) kept, ${success} other instrument(s) refreshed cleanly ` +
+        'and ARE safe to commit. Investigate the named bars; this run is red on purpose.',
+    );
+    process.exit(2);
   }
 }
 
