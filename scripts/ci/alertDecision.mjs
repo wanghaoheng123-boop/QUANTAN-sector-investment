@@ -32,27 +32,47 @@ export const ALERT_MARKER = '<!-- quantan-scheduled-alert -->'
 export const alertTitle = (workflow) => `Scheduled workflow failing: ${workflow}`
 
 /**
+ * Conclusions that mean "healthy". Everything else alerts.
+ *
+ * FAIL CLOSED, and the first version did not. It tested `conclusion === 'failure'`
+ * and returned `none` for anything else — so `timed_out`, `startup_failure`,
+ * `action_required`, an empty string from a broken expression, or any state
+ * GitHub adds later produced SILENCE from an alerting system. Silence is
+ * indistinguishable from health, which is the entire defect this package exists
+ * to fix; getting it backwards here would have been the bug wearing the fix's
+ * clothes. I2 says fail closed, and for an alerter the closed state is ALERT.
+ */
+const HEALTHY = 'success'
+
+/**
+ * Conclusions that are neither health nor failure: the run did not report on the
+ * pipeline at all. They must not alert (a cancelled run is not a broken one) and
+ * must not clear (it is not evidence of recovery either).
+ */
+const INCONCLUSIVE = new Set(['cancelled', 'skipped'])
+
+/**
  * @param {object} input
  * @param {string} input.workflow    workflow file name, e.g. 'refresh-data.yml'
- * @param {'success'|'failure'|'cancelled'|'skipped'} input.conclusion
+ * @param {string} input.conclusion  success | failure | cancelled | skipped | timed_out | …
  * @param {{number:number}|null} input.openIssue  existing open alert issue, if any
  * @param {string} input.runUrl
  * @param {string} [input.detail]    one line of context, e.g. the quarantine reason
+ * @param {string} [input.eventName] the triggering event; only a scheduled run may CLOSE
  * @returns {{action:'create'|'comment'|'close'|'none', title?:string, body?:string, issue?:number}}
  */
-export function decideAlert({ workflow, conclusion, openIssue, runUrl, detail }) {
-  const failed = conclusion === 'failure'
-
-  if (!failed) {
-    // `cancelled` and `skipped` deliberately do NOT close an open alert: a
-    // cancelled run is not evidence the pipeline recovered, and treating it as
-    // recovery would silently clear a live outage.
-    if (conclusion === 'success' && openIssue) {
+export function decideAlert({ workflow, conclusion, openIssue, runUrl, detail, eventName }) {
+  if (conclusion === HEALTHY) {
+    // Only a SCHEDULED run may close. A manual `workflow_dispatch` succeeds the
+    // moment someone re-runs it by hand, which says nothing about whether the
+    // schedule works — closing on it would clear a live outage on the strength of
+    // a human poking it once.
+    if (openIssue && (eventName === undefined || eventName === 'schedule')) {
       return {
         action: 'close',
         issue: openIssue.number,
         body:
-          `Recovered — \`${workflow}\` succeeded.\n\n${runUrl}\n\n` +
+          `Recovered — \`${workflow}\` succeeded on its schedule.\n\n${runUrl}\n\n` +
           'Closing automatically. If this reopens weekly, the underlying cause is not fixed; ' +
           'read the run history rather than the latest run.',
       }
@@ -60,16 +80,23 @@ export function decideAlert({ workflow, conclusion, openIssue, runUrl, detail })
     return { action: 'none' }
   }
 
+  if (INCONCLUSIVE.has(conclusion)) return { action: 'none' }
+
+  const unknown = conclusion !== 'failure'
   const context = detail ? `\n\n**What the run said:** ${detail}\n` : '\n'
   const body =
     `${ALERT_MARKER}\n\n` +
-    `\`${workflow}\` failed.\n\n${runUrl}\n${context}\n` +
+    `\`${workflow}\` did not succeed — conclusion \`${conclusion || '(empty)'}\`.\n\n${runUrl}\n${context}\n` +
+    (unknown
+      ? '> This conclusion is not one this alerter recognises. It is reported rather than ignored, ' +
+        'deliberately: for an alerting system the safe default is to speak.\n\n'
+      : '') +
     '---\n\n' +
     'This issue exists because a scheduled workflow can fail silently for weeks. ' +
     '`refresh-data.yml` did exactly that between 2026-08-23 and 2026-08-30 — the data ' +
     'pipeline was dead and the benchmark went on reading frozen fixtures.\n\n' +
-    '**It will close itself when the workflow next succeeds.** Repeated failures comment ' +
-    'here rather than opening new issues, so if this thread is long, the problem is old.'
+    '**It will close itself when the workflow next succeeds on schedule.** Repeated failures ' +
+    'comment here rather than opening new issues, so if this thread is long, the problem is old.'
 
   if (openIssue) return { action: 'comment', issue: openIssue.number, body }
   return { action: 'create', title: alertTitle(workflow), body }

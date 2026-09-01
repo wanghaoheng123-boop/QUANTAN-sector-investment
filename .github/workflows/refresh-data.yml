@@ -175,4 +175,4 @@ jobs:
     with:
       workflow: refresh-data.yml
       conclusion: ${{ needs.refresh.result }}
-      detail: ${{ ${{ needs.refresh.outputs.quarantine == '2' && 'Instruments were QUARANTINED by the vintage guard. Clean fixtures WERE committed; this red is deliberate. Investigate the named bars.' || 'The data refresh did not complete. scripts/backtestData/ is now staler than it should be, and the benchmark reads it.' }} }}
+      detail: ${{ needs.refresh.outputs.quarantine == '2' && 'Instruments were QUARANTINED by the vintage guard. Clean fixtures WERE committed; this red is deliberate. Investigate the named bars.' || 'The data refresh did not complete. scripts/backtestData/ is now staler than it should be, and the benchmark reads it.' }}

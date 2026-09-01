@@ -17,6 +17,7 @@ const workflow = process.env.ALERT_WORKFLOW
 const conclusion = process.env.ALERT_CONCLUSION
 const runUrl = process.env.ALERT_RUN_URL ?? ''
 const detail = process.env.ALERT_DETAIL ?? ''
+const eventName = process.env.ALERT_EVENT ?? undefined
 
 if (!token || !repo || !workflow || !conclusion) {
   console.error('notify-scheduled-failure: missing GITHUB_TOKEN / GITHUB_REPOSITORY / ALERT_WORKFLOW / ALERT_CONCLUSION')
@@ -75,7 +76,7 @@ const findOpen = async () => {
 }
 
 const openIssue = await findOpen()
-const d = decideAlert({ workflow, conclusion, openIssue, runUrl, detail })
+const d = decideAlert({ workflow, conclusion, openIssue, runUrl, detail, eventName })
 console.log(`alert decision for ${workflow} (${conclusion}): ${d.action}`)
 
 if (d.action === 'create') {

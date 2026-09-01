@@ -66,6 +66,29 @@ describe('scheduled failure alert — opens, dedupes, and clears itself', () => 
   })
 
   it('gives each workflow its own issue title, so two outages do not merge', () => {
-    expect(alertTitle('refresh-data.yml')).not.toBe(alertTitle('stryker-weekly.yml'))
+    // The previous version asserted alertTitle(a) !== alertTitle(b), which only
+    // says string concatenation is injective — a tautology, not a property of
+    // this system. What actually merges two outages is a CALLER passing the wrong
+    // `workflow` input, and that is checked in the architecture suite (M16).
+    // What belongs here is that the title carries the workflow identity, so a
+    // reader and the dedupe lookup can both tell which pipeline is down.
+    expect(alertTitle('refresh-data.yml')).toContain('refresh-data.yml')
+    expect(alertTitle('stryker-weekly.yml')).toContain('stryker-weekly.yml')
+  })
+
+  it('ALERTS on a conclusion it does not recognise, rather than going quiet', () => {
+    // Fail closed. The first version returned `none` for anything that was not
+    // exactly 'failure', so timed_out, startup_failure and an empty string from a
+    // broken expression all produced SILENCE from an alerter — the bug wearing
+    // the fix's clothes.
+    for (const conclusion of ['timed_out', 'startup_failure', 'action_required', '']) {
+      expect(decideAlert({ ...base, conclusion, openIssue: null }).action, conclusion).toBe('create')
+    }
+  })
+
+  it('only a SCHEDULED success closes the issue', () => {
+    // A manual re-run succeeding says nothing about whether the schedule works.
+    expect(decideAlert({ ...base, conclusion: 'success', openIssue: { number: 7 }, eventName: 'workflow_dispatch' }).action).toBe('none')
+    expect(decideAlert({ ...base, conclusion: 'success', openIssue: { number: 7 }, eventName: 'schedule' }).action).toBe('close')
   })
 })

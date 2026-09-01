@@ -37,6 +37,9 @@ jobs:
     # forbids elevating, the runner 403s and exits 1, which turns the alert job
     # red rather than failing silently. Loud beats absent.
     permissions:
+      # `contents: read` is REQUIRED, not tidiness: naming a permissions block
+      # zeroes every scope not listed, and this job runs actions/checkout.
+      contents: read
       issues: write
     steps:
       - uses: actions/checkout@v5
@@ -50,4 +53,5 @@ jobs:
           ALERT_CONCLUSION: ${{ inputs.conclusion }}
           ALERT_DETAIL: ${{ inputs.detail }}
           ALERT_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          ALERT_EVENT: ${{ github.event_name }}
         run: node scripts/ci/notify-scheduled-failure.mjs
