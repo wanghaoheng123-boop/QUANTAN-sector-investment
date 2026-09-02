@@ -188,6 +188,64 @@ describe('Q107-O2 — every scheduled workflow that can fail raises an alert', (
   })
 })
 
+/**
+ * Top-level `permissions:` scopes, if the workflow declares a block at all.
+ *
+ * Returns `null` when there is no block — which is NOT the same as an empty one.
+ * No block means the job inherits the repository default and may request what it
+ * likes; an empty-but-present block would be a ceiling of nothing.
+ */
+function workflowPermissions(f: string): Set<string> | null {
+  const lines = read(f).split('\n')
+  const at = lines.findIndex((l) => /^permissions:\s*$/.test(l))
+  if (at === -1) return null
+  const out = new Set<string>()
+  for (const line of lines.slice(at + 1)) {
+    if (/^\S/.test(line) && line.trim() !== '') break
+    const m = /^\s+([a-z-]+):\s*\S+/.exec(line)
+    if (m) out.add(m[1])
+  }
+  return out
+}
+
+/** Scopes the alert job asks for in a caller. */
+function alertPermissions(f: string): string[] {
+  const block = jobBlocks(f)['alert'] ?? ''
+  const at = block.indexOf('permissions:')
+  if (at === -1) return []
+  return [...block.slice(at).matchAll(/^\s+([a-z-]+):\s*(read|write)\s*$/gm)].map((m) => m[1])
+}
+
+describe('Q107-O2 — a workflow-level permissions block is a CEILING', () => {
+  it.each(['refresh-data.yml', 'nightly-backtest.yml', 'stryker-weekly.yml'])(
+    '%s allows every scope its alert job requests',
+    (f) => {
+      // THIS COST A LIVE BREAK, twice over. A top-level `permissions:` block is a
+      // ceiling, not a default: a job may narrow it and may never exceed it.
+      // `refresh-data.yml` declared `contents: write` at workflow level while the
+      // alert job asked for `issues: write`, so GitHub rejected the ENTIRE FILE —
+      // `startup_failure`, zero jobs, verified live on run 33646555241. The weekly
+      // refresh was dead on `main` for the third time in this package.
+      //
+      // The previous test asserted the alert job HAD `issues: write`. It did. What
+      // was never checked is whether the workflow permitted it to take effect —
+      // presence without reachability, one more time.
+      const ceiling = workflowPermissions(f)
+      if (ceiling === null) return // no block: the job inherits the repo default
+      const missing = alertPermissions(f).filter((p) => !ceiling.has(p))
+      expect(missing, `${f}: alert requests scopes outside the workflow ceiling`).toEqual([])
+    },
+  )
+
+  it('reads the ceiling and the request, rather than passing vacuously', () => {
+    // Reachability: if either extractor returned nothing the assertion above is
+    // empty-minus-empty and can never fail.
+    expect(workflowPermissions('refresh-data.yml')).not.toBeNull()
+    expect(workflowPermissions('refresh-data.yml')?.has('contents')).toBe(true)
+    expect(alertPermissions('refresh-data.yml')).toContain('issues')
+  })
+})
+
 describe('Q107-O2 — job parsing is real, not assumed', () => {
   it('finds the jobs in every workflow', () => {
     // Reachability: if jobBlocks returned {} the failable-job property collapses

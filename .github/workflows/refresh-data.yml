@@ -8,6 +8,12 @@ on:
 
 permissions:
   contents: write
+  # A workflow-level permissions block is a CEILING, not a default: a job may
+  # narrow it but never exceed it. The alert job requests `issues: write`, and
+  # without this line the whole FILE is rejected — GitHub reports
+  # `startup_failure` with zero jobs, which reads exactly like the unparseable
+  # workflow this package already shipped once. Verified live: run 33646555241.
+  issues: write
 
 jobs:
   refresh:
