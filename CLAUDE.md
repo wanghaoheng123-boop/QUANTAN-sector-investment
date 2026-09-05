@@ -341,15 +341,22 @@ not quote a DSR without the `n_eff` it was computed on. It does **not** rename
 internal measurements: `edgeOverBaseRatePp` and `FLOOR_EDGE_PP` are quantities,
 and renaming them would churn a CI gate without changing a claim.
 
-**The ban is violated on landing, and pretending otherwise would repeat the
-failure this section documents.** Four user-visible labels call an
-indistinguishable-from-zero excess "Alpha" —
-`components/backtest/KeyMetricsStrip.tsx:55` ("Alpha vs B&H"),
-`components/backtest/WalkForwardPanel.tsx:124` ("Strategy Alpha"),
-`components/backtest/InstrumentTable.tsx:67`,
-`components/backtest/AnalysisTab.tsx:108`. Naming a statistic after the
-conclusion you hoped for is exactly the calibration failure I5 exists to catch.
-→ `Q-103`.
+**The ban WAS violated on landing, and `Q-103` closed it — this paragraph is
+corrected 2026-09-05 because it still claimed a live violation that no longer
+exists.** Four user-visible labels called an indistinguishable-from-zero excess
+"Alpha" (`KeyMetricsStrip.tsx`, `WalkForwardPanel.tsx`, `InstrumentTable.tsx`,
+`AnalysisTab.tsx`). All four are gone: the only surviving occurrences of the word
+are two comments that say *not* "Alpha" and explain why
+(`KeyMetricsStrip.tsx:64`, `InstrumentTable.tsx:67`), and
+`__tests__/architecture/skill-wording.test.ts` is the executing guard — 12 tests,
+green, scanning rendered phrases rather than raw source so an interpolated label
+cannot hide.
+
+*Naming a statistic after the conclusion you hoped for is still exactly the
+calibration failure I5 exists to catch* — the rule stands, the instance is
+closed. **A constitution that reports a fixed violation as live is the same
+defect as one that reports a live violation as fixed:** it teaches the reader
+that its tier claims are not to be trusted, and then all of it is decoration.
 
 **`Q-084` is resolved, and the answer was in the code all along.** `T-0001`
 recorded `declared_grid: 1024` against `reported: 16` and flagged itself

@@ -58,6 +58,18 @@ if [ ${#FILES[@]} -eq 0 ]; then
   exit 1
 fi
 
+# MAKE LOCAL WEAKNESS LOUD. actionlint runs shellcheck over every `run:` block —
+# but ONLY when shellcheck is on PATH. GitHub's runners have it; a developer
+# machine often does not. That asymmetry means a locally-green run can be red in
+# CI for a finding you were never shown, which is how this very script passed
+# locally and failed on its first CI run. Silence about a weaker check is the
+# same false-negative shape the script exists to remove, so say it out loud.
+if ! command -v shellcheck >/dev/null 2>&1; then
+  echo "WARNING: shellcheck is not installed, so actionlint will SKIP linting of \`run:\` blocks."
+  echo "         CI has it, so this local run is WEAKER than CI. Install it (brew install shellcheck)"
+  echo "         if you want the same answer here that CI will give you."
+fi
+
 echo "Linting ${#FILES[@]} workflow file(s) with actionlint $("$BIN" --version | head -1)"
 "$BIN" -color "${FILES[@]}" || {
   code=$?
