@@ -626,12 +626,34 @@ export function maxDrawdown(closes: number[]): { maxDd: number; maxDdPct: number
   if (closes.length < 2) return null
   let peak = closes[0]
   let maxDd = 0
+  let maxDdPct = 0
   for (const c of closes) {
     if (c > peak) peak = c
     const dd = peak - c
     if (dd > maxDd) maxDd = dd
+    // The PERCENTAGE drawdown must be measured against the peak that was
+    // standing WHEN IT HAPPENED, and tracked independently of the absolute one.
+    //
+    // The previous version divided the largest absolute drop by the FINAL
+    // running peak, so any series that fell and then made a new high reported a
+    // fraction of its real risk — and it could only ever err downward. Measured
+    // on this repo's own fixtures before the fix:
+    //
+    //   NVDA  reported 23.4%  true 66.4%   (understated by 43.0pp)
+    //   META  reported 37.1%  true 76.7%   (understated by 39.6pp)
+    //   AMZN  reported 36.3%  true 55.7%   (understated by 19.5pp)
+    //
+    // That is the modal case for a 2021-2026 window: crash in 2022, recover by
+    // 2026. A risk number that is systematically reassuring is worse than no
+    // risk number, which is the PRIME DIRECTIVE's whole point.
+    //
+    // `maxDd` and `maxDdPct` may now come from DIFFERENT points in the series.
+    // That is correct: "largest dollar fall" and "largest proportional fall"
+    // are different questions and a low-priced peak can win the second without
+    // winning the first.
+    const ddPct = peak > 0 ? dd / peak : 0
+    if (ddPct > maxDdPct) maxDdPct = ddPct
   }
-  const maxDdPct = peak > 0 ? maxDd / peak : 0
   return { maxDd, maxDdPct }
 }
 

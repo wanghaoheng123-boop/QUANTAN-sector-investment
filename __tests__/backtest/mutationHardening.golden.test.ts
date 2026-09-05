@@ -126,7 +126,11 @@ describe('backtestInstrument — golden run (production signal path)', () => {
     const res = backtestInstrument('AAPL', 'Technology', dipRecover380())
     expect(res.totalTrades).toBe(1)
     expect(res.totalReturn).toBeCloseTo(0.052381, 5)
-    expect(res.annualizedReturn).toBeCloseTo(0.034437, 5)
+    // MIGRATION NOTE — Q110-Q1 (2026-09-05): `annualizedReturn` was compounded
+    // over rows.length (380) instead of the traded window rows.length−200 (180).
+    // This fixture's warmup is 53% of its history, so the correction is large
+    // here; over the 56 real fixtures it is a mean 0.082pp.
+    expect(res.annualizedReturn).toBeCloseTo(0.074093, 5) // was 0.034437 (380-bar window)
     expect(res.sharpeRatio).toBeCloseTo(4.219479, 4)
     expect(res.sortinoRatio).toBeCloseTo(9.386393, 4)
     expect(res.maxDrawdown).toBeCloseTo(0.000163, 5)
@@ -137,7 +141,12 @@ describe('backtestInstrument — golden run (production signal path)', () => {
     expect(res.equityCurve).toHaveLength(180)
     expect(res.bnhCurve).toHaveLength(180)
     expect(res.dailyReturns).toHaveLength(179)
-    expect(res.bnhReturn).toBeCloseTo(2.143494, 5)
+    // MIGRATION NOTE — Q110-Q1 (2026-09-05): B&H is now measured from bar 200,
+    // the first bar the strategy could act on, not bar 0. `excessReturn` had
+    // been subtracting 380 bars of market return from 180 bars of strategy
+    // return; on the 56 real fixtures that averaged 40.36pp and flipped the
+    // SIGN for UNH and PEP. See __tests__/backtest/excessReturnWindow.regression.test.ts.
+    expect(res.bnhReturn).toBeCloseTo(0.414719, 5) // was 2.143494 (full history)
     // excessReturn is DEFINED as totalReturn - bnhReturn
     expect(res.excessReturn).toBeCloseTo(res.totalReturn - res.bnhReturn, 10)
 
@@ -156,14 +165,18 @@ describe('backtestInstrument — golden run (production signal path)', () => {
     const res = backtestInstrument('AAPL', 'Technology', dipLoss380())
     expect(res.totalTrades).toBe(1)
     expect(res.totalReturn).toBeCloseTo(-0.025148, 5)
-    expect(res.annualizedReturn).toBeCloseTo(-0.016748, 5)
+    // MIGRATION NOTE — Q110-Q1: traded-window annualization (see the WIN golden).
+    expect(res.annualizedReturn).toBeCloseTo(-0.035029, 5) // was -0.016748
     expect(res.sharpeRatio).toBeCloseTo(-25.811418, 3)
     expect(res.sortinoRatio).toBeCloseTo(-13.532242, 3)
     expect(res.maxDrawdown).toBeCloseTo(0.025148, 5)
     expect(res.winRate).toBe(0)
     expect(res.profitFactor).toBe(0)
     expect(res.avgTradeReturn).toBeCloseTo(-0.167461, 5)
-    expect(res.bnhReturn).toBeCloseTo(0.671904, 5)
+    // MIGRATION NOTE — Q110-Q1: B&H from bar 200. The tail declines at −0.3%/bar
+    // after the crash, so over the traded window alone B&H is NEGATIVE — which
+    // the full-history number (+0.67) hid behind the pre-warmup run-up.
+    expect(res.bnhReturn).toBeCloseTo(-0.247565, 5) // was 0.671904 (full history)
     const t = res.closedTrades[0]
     expect(t.entryPrice).toBeCloseTo(211.979477, 5)
     expect(t.exitPrice).toBeCloseTo(176.48121, 5)
@@ -173,7 +186,10 @@ describe('backtestInstrument — golden run (production signal path)', () => {
   it('crypto annualization (365d) shifts annualized return + Sharpe on identical rows', () => {
     const res = backtestInstrument('BTC', 'Crypto', dipRecover380())
     expect(res.totalTrades).toBe(1)
-    expect(res.annualizedReturn).toBeCloseTo(0.050262, 5) // vs 0.034437 at 252d
+    // MIGRATION NOTE — Q110-Q1: traded-window annualization; the 365d-vs-252d
+    // RATIO this test exists to pin is unchanged (0.109077/0.074093 = 365/252
+    // in the exponent), only the window it is applied over.
+    expect(res.annualizedReturn).toBeCloseTo(0.109077, 5) // vs 0.074093 at 252d
     expect(res.sharpeRatio).toBeCloseTo(7.707472, 4) // vs 4.219479 at 252d
   })
 
@@ -194,7 +210,10 @@ describe('backtestInstrument — enhanced path (flag on) golden', () => {
     expect(res.totalReturn).toBe(0)
     expect(res.sharpeRatio).toBeNull()
     expect(res.sortinoRatio).toBeCloseTo(-15.874508, 4)
-    expect(res.bnhReturn).toBeCloseTo(2.143494, 5)
+    // MIGRATION NOTE — Q110-Q1: B&H is measured from bar 200, not bar 0. This
+    // fixture crashes ×0.64 at bar 300 and recovers, so the pre-warmup run-up
+    // that the old number carried was never available to the strategy.
+    expect(res.bnhReturn).toBeCloseTo(0.414719, 5) // was 2.143494 (full history)
     expect(res.confidenceAvg).toBe(0)
   })
 })
