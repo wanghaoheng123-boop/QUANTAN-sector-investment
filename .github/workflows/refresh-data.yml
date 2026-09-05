@@ -82,7 +82,6 @@ jobs:
       - name: Assert fixture freshness
         env:
           MAX_STALE_DAYS: '5'
-        env:
           QUARANTINED: ${{ steps.refresh.outputs.quarantined }}
         run: |
           node - <<'NODE'
