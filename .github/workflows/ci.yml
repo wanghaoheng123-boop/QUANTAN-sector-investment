@@ -116,3 +116,17 @@ jobs:
         run: npm run verify:data
       # Note: full check:smoke (production HTTP probes) is run on deploy, not on PR.
       # See package.json scripts for the canonical command list.
+
+  # Q107-A25: the only gate that reads GitHub Actions semantics.
+  #
+  # `tsc` and `vitest` cannot parse workflow YAML, and this project shipped FOUR
+  # rejected workflow files in a row while every other check was green — because
+  # a rejected workflow is ABSENT from the check set, not red in it. It appears
+  # as a run named after the file path with zero jobs, which no check-run query
+  # was looking at.
+  workflows:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Lint workflows with actionlint
+        run: npm run lint:workflows

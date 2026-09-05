@@ -72,9 +72,17 @@ jobs:
       # case (a Sunday 22:00 UTC run whose newest equity bar is Friday's open,
       # plus a holiday-shortened week); anything past that is a failed refresh,
       # not a quiet market.
+      # QUARANTINED tickers are held at their previous vintage ON PURPOSE, so a
+      # freshness check that does not know that reads them as a failed fetch. It
+      # did exactly that on run 33949824086: BTC was quarantined, this gate exited
+      # 1, `if: success()` skipped the commit, and all 55 clean refreshes were
+      # discarded — reproducing ONE GATE DOWNSTREAM the same amplifier the
+      # exit-code split was written to remove. A concept every gate in a chain
+      # must understand cannot live in only one of them.
       - name: Assert fixture freshness
         env:
           MAX_STALE_DAYS: '5'
+          QUARANTINED: ${{ steps.refresh.outputs.quarantined }}
         run: |
           node - <<'NODE'
           const { readdirSync, readFileSync } = require('node:fs')
@@ -93,6 +101,10 @@ jobs:
 
           const bad = []
           let newest = null
+          const held = []
+          const QUARANTINED = new Set(
+            (process.env.QUARANTINED || '').split(',').map((t) => t.trim()).filter(Boolean),
+          )
 
           for (const file of files) {
             const ticker = file.replace(/\.json$/, '')
@@ -114,13 +126,24 @@ jobs:
             const ageDays = (now - lastMs) / DAY_MS
             if (ageDays > MAX_STALE_DAYS) {
               const day = new Date(lastMs).toISOString().slice(0, 10)
-              bad.push(`${ticker}: newest bar ${day} is ${ageDays.toFixed(1)} days old`)
+              const line = `${ticker}: newest bar ${day} is ${ageDays.toFixed(1)} days old`
+              // Stale ON PURPOSE: the vintage guard kept the previous fixture
+              // rather than accept a disputed bar. Report it, never fail on it —
+              // failing here discards every OTHER ticker's clean refresh.
+              if (QUARANTINED.has(ticker)) held.push(line)
+              else bad.push(line)
             }
           }
 
           console.log(`Checked ${files.length} fixtures against a ${MAX_STALE_DAYS}-day ceiling.`)
           if (newest != null) {
             console.log(`Newest bar across all fixtures: ${new Date(newest).toISOString().slice(0, 10)}`)
+          }
+
+          if (held.length > 0) {
+            console.log(`\n${held.length} fixture(s) intentionally held by the vintage guard (NOT a failure):`)
+            for (const line of held) console.log(`  - ${line}`)
+            console.log(`The alert job reports these; they must not block the other tickers' commit.`)
           }
 
           if (bad.length > 0) {
@@ -188,4 +211,4 @@ jobs:
     with:
       workflow: refresh-data.yml
       conclusion: ${{ needs.refresh.result }}
-      detail: ${{ needs.refresh.outputs.quarantine == '2' && 'Instruments were QUARANTINED by the vintage guard. Clean fixtures WERE committed; this red is deliberate. Investigate the named bars.' || 'The data refresh did not complete. scripts/backtestData/ is now staler than it should be, and the benchmark reads it.' }}
+      detail: ${{ needs.refresh.outputs.quarantine == '2' && 'Instruments were QUARANTINED by the vintage guard and their previous fixtures kept; every OTHER ticker refreshed. This red is deliberate. Investigate the named bars.' || 'The data refresh did not complete. scripts/backtestData/ is now staler than it should be, and the benchmark reads it.' }}
