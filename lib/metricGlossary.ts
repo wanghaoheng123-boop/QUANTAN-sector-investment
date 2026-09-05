@@ -132,10 +132,29 @@ export const METRIC_GLOSSARY: Record<string, MetricMeta> = {
   },
   sortino: {
     label: 'Sortino Ratio',
-    definition: 'Like Sharpe but only penalises DOWNSIDE volatility (correct denominator: n_d, count of negative-return periods).',
-    range: 'Negative–6. Higher than Sharpe by ~30–50% typically.',
-    howToUse: 'More relevant than Sharpe for asymmetric strategies (long-only, momentum). >1.5 indicates good downside management.',
-    source: 'Sortino & van der Meer (1991)',
+    // Q110-Q4 (2026-09-05) — three user-visible claims struck, each unsupported.
+    //
+    // 1. "correct denominator: n_d" asserted a CORRECTNESS verdict that the
+    //    algebra reverses: LPM2 is an expectation over the full distribution,
+    //    so its sample analogue divides by N; n_d yields the conditional
+    //    shortfall severity instead. This implementation uses n_d — that is a
+    //    convention worth disclosing, and calling it "correct" was the platform
+    //    telling users a contested choice was settled.
+    // 2. "Higher than Sharpe by ~30-50% typically" — MEASURED across ten
+    //    instruments on the price path, the ratio ranges 0.57 to 5.88.
+    // 3. ">1.5 indicates good downside management" — an unsourced quality
+    //    threshold, which CLAUDE.md's house style forbids and which a
+    //    definitional change to the denominator alone could push a name across.
+    definition:
+      'Like Sharpe, but only downside deviation from the target return enters the denominator. ' +
+      'This implementation divides by the COUNT OF SHORTFALL PERIODS (n_d) rather than by all ' +
+      'periods (N), so it is not directly comparable to a Sortino quoted elsewhere.',
+    range: 'Unbounded. Not comparable across sources without knowing the denominator convention.',
+    howToUse:
+      'Read it against this platform\'s own history, not against a published threshold. ' +
+      'It is shown as — when the return series has no dispersion, which is what a strategy ' +
+      'that never opened a position produces.',
+    source: 'Sortino & van der Meer (1991); denominator convention documented in lib/quant/indicators.ts',
   },
   profitFactor: {
     label: 'Profit Factor',
