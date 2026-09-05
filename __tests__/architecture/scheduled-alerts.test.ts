@@ -237,6 +237,26 @@ describe('Q107-O2 — a workflow-level permissions block is a CEILING', () => {
     },
   )
 
+  it('the CALLER grants every scope the CALLED workflow asks for', () => {
+    // THE SAME CEILING RULE, ONE LEVEL DOWN, and it cost a second live break.
+    // A caller job's `permissions` is the ceiling for the reusable workflow it
+    // invokes, exactly as a workflow-level block is the ceiling for its jobs.
+    // Granting only `issues: write` zeroed `contents`, while the called job asks
+    // for `contents: read` to run actions/checkout — so GitHub rejected the whole
+    // file on EVERY wired workflow. nightly-backtest was dead for three days and
+    // nothing alerted, because the alerting is what was broken.
+    //
+    // The previous test compared workflow-level against job-level and stopped
+    // there. Checking one hop of a two-hop chain is not checking the chain.
+    const asks = alertPermissions(MECHANISM)
+    expect(asks.length, 'the called workflow declares no permissions — test would be vacuous').toBeGreaterThan(0)
+    for (const f of all.filter(wired)) {
+      const grants = alertPermissions(f)
+      expect(grants.length, `${f}: caller grants nothing`).toBeGreaterThan(0)
+      expect(asks.filter((a) => !grants.includes(a)), `${f}: called workflow asks for scopes the caller did not grant`).toEqual([])
+    }
+  })
+
   it('reads the ceiling and the request, rather than passing vacuously', () => {
     // Reachability: if either extractor returned nothing the assertion above is
     // empty-minus-empty and can never fail.
