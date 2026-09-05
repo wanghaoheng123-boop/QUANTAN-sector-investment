@@ -123,6 +123,21 @@ export function useLiveQuote(ticker: string | null): UseLiveQuoteResult {
     closedManuallyRef.current = false
     reconnectAttemptRef.current = 0
 
+    // RESET ON IDENTITY CHANGE. Without this the hook keeps returning the
+    // PREVIOUS ticker's quote until the new stream delivers its first message —
+    // so the page renders one security's live price under another security's
+    // name, with the freshness pill saying Live. That is the I2 failure in its
+    // worst form: not missing data, but confidently wrong data.
+    //
+    // The sibling hook `useLiveQuotes` already does this for the multi-ticker
+    // case and says so in a comment, which is what makes this a gap rather than
+    // a deliberate choice.
+    setQuote(null)
+    setMarketOpen(false)
+    setLastMessageAt(null)
+    setError(null)
+    setConnected(false)
+
     const cleanupTimer = () => {
       if (reconnectTimerRef.current) {
         clearTimeout(reconnectTimerRef.current)

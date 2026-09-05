@@ -9,13 +9,28 @@ n_eff=114/nTrials=46, the 0.10pp gate headroom, per-year edge sign. Those are se
 This is an audit of the **arithmetic and the code paths underneath them**.
 
 Everything below was traced in source; items marked CONFIRMED were additionally executed
-against the real tree (probes run under `scripts/_q110tmp/`, since deleted; `git status` clean).
+against the real tree (probes run under `scripts/_q110tmp/`, since deleted).
+
+> **⚠️ LEAD — ACTION REQUIRED, SHARED-WORKTREE ACCIDENT.** Commit `6246985`
+> ("fix(ci): my new gate failed its own first CI run…", Q107-A25) was made by another agent with a
+> whole-tree `git add`, and it swept up **two of my scratch probes**:
+> `scripts/_q110tmp/probe3.ts` and `scripts/_q110tmp/probe3.ts.bak`, 50 lines of throwaway
+> measurement code that must not ship. I have deleted them from the working tree and **the deletion
+> is currently staged** — include it in the next commit, or run
+> `git rm --cached -r scripts/_q110tmp` if the index has moved since. Do **not** `git restore` that
+> path; it would resurrect them.
+>
+> Cause worth recording: I created and deleted probes twice; the first cycle verified clean, the
+> second overlapped a concurrent whole-tree `add` from a parallel agent. The hard rule against
+> `git checkout` narrows this failure but does not close it — **any agent doing `git add -A` in a
+> shared worktree stages every other agent's in-flight scratch.** The wave protocol should require
+> path-scoped `git add` for exactly the same reason it requires disjoint territories.
 
 ---
 
 ## SECTION 1 — RANKED FINDINGS
 
-### Q110-Q1 — `excessReturn` compares a 1054-bar strategy against a 1254-bar buy-and-hold. Mean bias **20.81pp**, user-visible. CONFIRMED. HIGH.
+### Q110-Q1 — `excessReturn` compares a 1054-bar strategy against a 1254-bar buy-and-hold. Mean bias **+8.81pp**, mean absolute error **40.93pp**, user-visible. CONFIRMED. HIGH.
 
 `lib/backtest/core.ts:422` `const bnhReturn = computeBuyAndHoldReturn(rows)` measures B&H from
 **row 0**. The strategy loop starts at **row 200** (`lib/backtest/core.ts:277`). `lib/backtest/core.ts:480`
@@ -28,20 +43,32 @@ average "compared MISMATCHED windows … skewing alpha"). **That fix was applied
 aggregate and never to the per-instrument field.** One result object now carries two B&H
 baselines with different start bars.
 
-Measured, all 56 fixtures, `backtestInstrument` on the committed data:
+Measured, all 56 fixtures, `backtestInstrument` on the committed data. **Both legs
+dividend-reinvested** — `bnhReturn` and `bnhCurve` use the identical share-accretion rule, so the
+delta below isolates the warmup shift and nothing else. (A first pass of this measurement compared
+`bnhReturn` against a *no-dividend* bar-200 close ratio and reported 20.81pp; that number
+double-counted the entire dividend contribution and is withdrawn. The corrected figure is 8.81pp.)
 
-| ticker | `bnhReturn` (bar 0) | B&H from bar 200 | delta |
+| ticker | `bnhReturn` (bar 0, div) | `bnhCurve` (bar 200, div) | delta |
 |---|---|---|---|
-| AVGO | 798.30% | 581.40% | **+216.90pp** |
-| ABBV | 147.09% | 69.99% | +77.10pp |
-| CAT | 335.93% | 289.35% | +46.58pp |
-| AMZN | 62.03% | 109.26% | −47.23pp |
-| BTC | 40.60% | 59.50% | −18.89pp |
-| **mean over 56** | | | **+20.81pp** |
+| NFLX | | | **−230.87pp** |
+| AVGO | 798.30% | 630.61% | **+167.69pp** |
+| GE | | | −162.17pp |
+| XOM | | | +153.54pp |
+| ABBV | 147.09% | 95.35% | +51.74pp |
+| AAPL | 108.76% | 106.04% | +2.72pp |
+| **mean over 56** | | | **+8.81pp** |
+| **mean absolute** | | | **40.93pp** |
+| **median absolute** | | | **21.35pp** |
 
-200 of 1254 bars is 16% of the sample, in a bull window. The error is systematic (positive mean),
-not noise, and it runs **against** the strategy — `excessReturn` is ~21pp too negative on average.
-That direction is why it has survived: nobody audits a number that makes them look worse.
+200 of 1254 bars is 16% of the sample. Signed 35/56 positive, so the bias is not one-directional —
+but the **dispersion is the finding**: the mean absolute error on a rendered per-instrument field is
+40.93pp, with individual instruments off by 150–230 percentage points. The sign flips depending on
+whether the name rose or fell during its own warmup, which means no reader can correct for it by
+eye.
+
+The mean runs **against** the strategy (`excessReturn` ~9pp too negative on average). That direction
+is why it has survived: nobody audits a number that makes them look worse.
 
 Rendered at `components/backtest/InstrumentTable.tsx:145` ("Excess"),
 `components/backtest/AnalysisTab.tsx:148`, and `components/backtest/WalkForwardPanel.tsx:126` —
@@ -52,16 +79,23 @@ Same root cause one line up: `lib/backtest/core.ts:419` `const years = days / an
 `days = rows.length` (1254), while returns only accrue over 1054 bars — `annualizedReturn` is
 deflated by the same warmup.
 
-**Proposed fix** (lead to verify; this moves a frozen number, so it needs an owner decision):
+**Proposed fix** (lead to verify; this moves a frozen number, so it needs an owner decision).
+Do **not** patch this as `computeBuyAndHoldReturn(rows.slice(200))` — that reseeds `shares = 1` at
+bar 200 and discards the warmup dividend base, so it would not equal `bnhCurve` and the two
+baselines could diverge again. Derive the scalar from the curve that is already correct:
 ```ts
-// lib/backtest/core.ts:422
-const WARMUP_BARS = 200   // must equal the loop start at :277
-const bnhReturn = computeBuyAndHoldReturn(rows.slice(WARMUP_BARS))
+// lib/backtest/core.ts:422 — ONE baseline, so the two cannot drift apart again
+const bnhReturn = bnhCurve.length > 1
+  ? bnhCurve[bnhCurve.length - 1] / bnhCurve[0] - 1
+  : 0
 // :419
+const WARMUP_BARS = 200   // must equal the loop start at :277
 const years = (rows.length - WARMUP_BARS) / annualization
 ```
-The `200` is currently a bare literal in three places (`:270`, `:277`, `:279`); extracting it is
-part of the fix, not cosmetic.
+That makes the F-2 alignment fix apply to both fields by construction, which is the actual defect:
+the fix landed on the aggregate (`engine.ts:192-208`) and never on the per-instrument scalar. The
+`200` is currently a bare literal in three places (`:270`, `:277`, `:279`); extracting it is part of
+the fix, not cosmetic.
 
 ---
 
@@ -189,7 +223,7 @@ Consumers: `lib/backtest/core.ts:464`, `lib/backtest/engine.ts:183`,
 
 ---
 
-### Q110-Q5 — `stochRsiArray` fabricates **11 literal `50`s** during the RSI warmup and seeds the K/D EMA entirely from them. CONFIRMED. MEDIUM.
+### Q110-Q5 — `stochRsiArray` fabricates **13 literal `50`s in `stoch`** (surfacing as 11 in the returned `k`) during the RSI warmup, and seeds the K/D EMA entirely from them. CONFIRMED. MEDIUM.
 
 `lib/quant/indicators.ts:482-486`:
 ```ts
@@ -207,13 +241,15 @@ reused for a *missing* one.
 
 Executed on a 60-bar series:
 ```
-first finite k index = 16      (first genuinely-valid stoch index is 2*14-1 = 27)
-k[16..26] = 50.00 50.00 50.00 50.00 50.00 50.00 50.00 50.00 50.00 50.00 50.00
+stoch[14..26] = 13 fabricated 50s   (first genuinely-valid stoch index is 2*14-1 = 27)
+first finite k index = 16
+k[16..26] = 50.00 50.00 50.00 50.00 50.00 50.00 50.00 50.00 50.00 50.00 50.00   (11 surface in k)
 k[27..]   = 58.06 51.02 32.70 16.35
 ```
-`smoothFinite` at `:496-503` takes `findIndex(Number.isFinite)` — which finds index 16, because the
-fabricated 50s *are* finite — and seeds the EMA from `mean(50,50,50)`. The K line's entire
-initialisation is synthetic.
+13 fabricated values enter `stoch`; `kSmooth = 3` consumes two into the EMA seed, so 11 surface in
+the returned `k`. `smoothFinite` at `:496-503` takes `findIndex(Number.isFinite)` — which finds
+index 14, because the fabricated 50s *are* finite — and seeds the EMA from `mean(50,50,50)`. The K
+line's entire initialisation is synthetic.
 
 This is a direct violation of the house rule that a missing value must never render as a number,
 on the indicator SSOT. Reaches the UI via `lib/quant/btc-indicators.ts:102` → BtcQuantLab. Impact
@@ -371,6 +407,28 @@ build a true ICC estimator.
 
 ---
 
+### Q110-Q19 — `relativeStrengthVsBenchmark` sorts with a comparator that returns **NaN** when both operands are null. CONFIRMED; zero callers. LOW.
+
+`lib/quant/relativeStrength.ts:153`:
+```ts
+rows.sort((a, b) => (b.pct1m ?? -Infinity) - (a.pct1m ?? -Infinity))
+```
+`-Infinity - (-Infinity)` is `NaN`. A comparator returning NaN makes the resulting order
+implementation-defined, and `:154` then stamps `rank: i + 1` onto that order — an authoritative-
+looking integer derived from undefined behaviour.
+
+Reachability is not pairwise, it is total: `pct1m` is null whenever `spy1mAgo` is null (`:142`,
+`:145`), and `spy1mAgo` is a single benchmark value shared by every row. So the failure mode is
+**every row null simultaneously** → every comparison NaN → the entire ranking is arbitrary, not one
+pair mis-ordered.
+
+Zero importers of `relativeStrengthVsBenchmark` across `lib/`, `app/`, `components/`, `scripts/`
+(only `alignCloses`, `logReturns`, `correlation`, `excessReturn` are imported from this module). So
+this is dead code — but it is a ranking function that hands out ranks, and it is the only NaN-capable
+comparator in the territory. Fix: sort nulls to the end explicitly, or return `null` ranks.
+
+---
+
 ### Q110-Q11 — Determinism: both producers enumerate the universe with unsorted `readdirSync`. CONFIRMED (mechanism); measured impact ~nil today. LOW.
 
 `scripts/benchmark-signals.ts:40` and `scripts/compute-pbo.ts:51` both drive instrument order off
@@ -385,7 +443,7 @@ much, today.** Order-sensitive decision points and their exposure:
   rounding boundary. Currently 16/16 distinct with wide separation. Not at risk.
 - `lib/quant/pbo.ts:183` argmax `isPerf[n] > isPerf[best]` — needs two configs tied to ~1e-16.
   Not at risk today.
-- `scripts/benchmark-signals.ts:534` `results.sort((a,b) => (b.winRate ?? 0) - (a.winRate ?? 0))`
+- `scripts/benchmark-signals.ts:516` `results.sort((a,b) => (b.winRate ?? 0) - (a.winRate ?? 0))`
   — a non-total comparator, so ties fall back to input order. **Checked: 0 exact `winRate` ties
   across all 56 instruments**, so `byInstrument` ordering in the published JSON is stable. (ES2019
   mandates a stable `Array.prototype.sort`, so the JS-engine hazard the brief raises is not live
@@ -400,7 +458,7 @@ alongside a genuine 0% instrument. Missing becomes zero, again.
 
 ---
 
-### Q110-Q12 — `simpleBacktestSlice` carries two dead accumulators; the CSCV grid is scored on 71 candidate entry bars per block. CONFIRMED. LOW-MEDIUM.
+### Q110-Q12 — `simpleBacktestSlice` carries two dead accumulators; the CSCV grid is scored on 72 candidate entry bars per block. CONFIRMED. LOW-MEDIUM.
 
 `lib/optimize/gridSearch.ts:183-184, 190, 218, 224`: `dailyRets` and `equity` are accumulated on
 every iteration (`equity *= (1 + ret * 0.15)` — a 15% Kelly proxy) and **never read**. Dead code in
@@ -409,9 +467,10 @@ but it is 40 lines of arithmetic that looks load-bearing and is not; a future re
 `equity` into the score would silently change what PBO measures.
 
 More substantive, and it bounds how much the published PBO can mean: `compute-pbo.ts:93` splits
-1254 rows into 4 blocks of 313. Inside `simpleBacktestSlice` entries run
-`for (let i = 220; i < closes.length - 21; i++)` (`:186`) — **71 candidate entry bars per block**,
-and `sharpe` is null below 5 trades (`:232`). `thinCells` came back **0**, so no cell was empty —
+1254 rows into 4 blocks of 313 (the last absorbs the remainder at 315). Inside `simpleBacktestSlice`
+entries run `for (let i = 220; i < closes.length - 21; i++)` (`:186`) — **72 candidate entry bars
+per block** (`i` = 220..291), 74 on the oversized last block, which is itself an instance of the
+unequal-block item below. `sharpe` is null below 5 trades (`:232`). `thinCells` came back **0**, so no cell was empty —
 but with 71 bars per cell the per-block Sharpes are extremely noisy, which matters more for reading
 PBO=0.6667 than the 6-split resolution the limitations note already flags. Worth adding to that
 note.
@@ -555,10 +614,24 @@ bars), and `lib/optimize/gridSearch.ts:207,211` (grid). All four use `i+1` entry
 the loop at `i < rows.length - HOLD - 1`, so the `Math.min(…, rows.length-1)` clamps are provably
 no-ops rather than silent last-bar reuse. No consumer indexes `rows[i]` for entry.
 
-**Indicator array alignment — clean, 8 of 8 array-returning variants.** `smaArray:31` (`out[i]`
-uses `values[i-period+1..i]`), `emaFull:112`, `rsiArray:131`, `bollingerArray:270`, `trueRange:321`,
-`atrArray:334`, `wilderSmoothing:521`, `adxArray:546`. Specifically checked the two that had
-history:
+**Indicator array alignment — 8 verified clean of 15 array-returning variants; 2 became findings;
+5 stated as unchecked.** Verified aligned (`out[i]` reflects bar `i`, no future input):
+`smaArray:31`, `emaFull:112`, `rsiArray:131`, `bollingerArray:270`, `trueRange:321`, `atrArray:334`,
+`wilderSmoothing:521`, `adxArray:546`. Became findings: `stochRsiArray:471` (Q110-Q5),
+`vwapArrayWindow:444` (Q110-Q15).
+
+**Not verified, stated so you do not read the above as covering them:** `obvArray:382`,
+`vwapArray:419`, `ema:95` (already documented as a deprecated footgun at `:83-93` — returns
+`length - period + 1`, element 0 ↔ bar `period-1`), `dailyReturns:617`, `macdArray`'s `histogram`
+lane. Of these, `dailyReturns:617` is the same footgun class as `ema()` and I did check its
+consumers rather than its internals: it returns length ≤ `n-1` **and skips** an entry whenever
+`closes[i-1] <= 0`, so its output length is input-dependent and it cannot be index-joined against
+the input at all. Its two consumers — `lib/quant/buildFundamentalsPayload.ts:271` and
+`app/api/analytics/[ticker]/route.ts:68` — both feed it into order-independent aggregate statistics
+(Sharpe, Sortino, max drawdown), so no live misalignment. It remains a trap for any future indexed
+use.
+
+Specifically checked the two alignment cases that had prior history:
 - `atrArray` — `trs[j]` is the TR at bar `j+1`; the seed lands at `out[period]` and the recursion
   writes `out[i+1]` after consuming `trs[i]`. Element `k` reflects bar `k`, not `k+1`. Clean.
 - `macdArray:230-232` — `validLine = line.slice(slow-1)`, `sigEma[k]` is anchored at validLine index
@@ -625,14 +698,57 @@ output timestamps (`benchmark-signals.ts:406`, `compute-pbo.ts:135`, `oos-walkfo
 (Q110-Q17), inert by default. Every `Object.keys`/`Object.entries` I found iterates a
 literal-declared record whose insertion order is fixed in source.
 
-**`Array.sort` comparator sweep.** Five comparators in the territory:
-`benchmark-signals.ts:534` (`winRate`, 0 ties — see Q110-Q11), `:404` (`b.trades - a.trades`),
-`compute-pbo.ts:154` (`a-b` on logits), `gridSearch.ts:294` (`b.score - a.score`),
-`walkForward.ts:147` (string compare on ISO dates). None can return `NaN` on reachable inputs.
-ES2019 mandates sort stability, so the non-total ones fall back to input order deterministically.
+**`Array.sort` comparator sweep — enumerated by grep, not incidentally.** `grep -rn "\.sort("`
+across the territory returns **15** sites (an earlier draft of this report said "five", which was
+the count I had stumbled on while reading rather than searched for — the exact defect class
+`guard_reachability_lesson.md` warns about, committed inside a report about that lesson):
+
+`priceBands.ts:44`, `multiTimeframe.ts:70`, `relativeStrength.ts:153`, `sectorRotation.ts:119`,
+`dataLoader.ts:155`, `walkForward.ts:148`, `portfolioBacktest.ts:165`, `portfolioBacktest.ts:642`,
+`gridSearch.ts:294`, `compute-pbo.ts:154`, `benchmark-signals.ts:206`, `:372`, `:403`, `:516`,
+`oos-walkforward.ts:137`.
+
+Of the 15: four are bare `.sort()` on ISO date/ticker strings (lexicographic = chronological —
+`dataLoader:155`, `benchmark-signals:206`, `:372`, `oos-walkforward:137`); ten are total numeric
+comparators on values that cannot be NaN on reachable inputs; **one returns NaN and is now
+Q110-Q19** (`relativeStrength.ts:153`). ES2019 mandates sort stability, so the non-total ones fall
+back to input order deterministically.
 
 **`lib/synthetic.ts`** — read in full. The `unique symbol` brand makes structural forgery a type
 error as `CLAUDE.md` I3 describes; no numerical surface; nothing to report.
+
+---
+
+## SECTION 2b — WHAT I DID **NOT** VISIT
+
+The territory is **10,261 lines** across 48 files. Read in full or substantially: `indicators.ts`,
+`deflatedSharpe.ts`, `effectiveSampleSize.ts`, `pbo.ts`, `trialRegistry.ts`, `benchmarkLabel.ts`,
+`executionModel.ts`, `core.ts`, `gridSearch.ts`, `benchmark-signals.ts`, `compute-pbo.ts`,
+`synthetic.ts`. Read partially (named sections only): `walkForward.ts`, `sectorProfiles.ts`,
+`engine.ts`, `portfolioBacktest.ts`, `riskFreeRate.ts`, `signals.ts`, `relativeStrength.ts`,
+`oos-walkforward.ts`.
+
+**Never opened — roughly 4,500 lines in 32 files.** A grep for `Math.random` / `Date.now` /
+`.sort(` / forward-index patterns covered all of them; **nothing else did.** So for these files I
+have ruled out nondeterminism and comparator hazards and **nothing about their arithmetic**:
+
+`exitRules.ts` (374), `buildFundamentalsPayload.ts` (457), `btc-indicators.ts` (433),
+`technicals.ts` (300), `multiTimeframe.ts` (269), `researchScore.ts` (257), `regimeSignal.ts` (185),
+`signalHelpers.ts` (166), `dataLoader.ts` (166), `regimeDetection.ts` (158), `correlation.ts` (149),
+`parameterSets.ts` (134), `volumeProfile.ts` (130), `sectorRotation.ts` (128), `liveSignal.ts` (119),
+`constants.ts` (110), `garchClient.ts` (106), `signalTypes.ts` (103), `frameworks.ts` (100),
+`intermarket.ts` (96), `dcf.ts` (92), `oos-validation.ts` (82), `priceBands.ts` (71),
+`yahooSymbol.ts` (70), `regimeHmmClient.ts` (68), `pivots.ts` (61), `earningsParse.ts` (59),
+`volatility.ts` (31), `kelly.ts` (24), `formatMetrics.ts` (24), `fundingConstants.ts` (7),
+`chartQuoteFilter.ts` (6). A further ~1,700 lines are unread inside the partially-read files,
+`portfolioBacktest.ts` (~600 unread) and `signals.ts` (~270) most of all.
+
+**Two of those unread files are on live paths and are the obvious next targets:**
+`lib/backtest/exitRules.ts` (374 lines) owns `DEFAULT_TIME_EXIT_CONFIG`, the 60-day horizon the
+H-DECISION set, and `lib/quant/technicals.ts` (300 lines) is the "thin delegate" over
+`indicators.ts` — I confirmed its `maxDrawdown:55` and `sortinoRatio:67` are genuine delegates and
+therefore inherit Q110-Q2 and Q110-Q4, but I did not read the other 240 lines for duplicated math,
+which is exactly what `CLAUDE.md`'s indicator-SSOT rule exists to prevent.
 
 ---
 
@@ -640,7 +756,7 @@ error as `CLAUDE.md` I3 describes; no numerical surface; nothing to report.
 
 | # | ID | Finding | Status | Sev | Direction of error |
 |---|---|---|---|---|---|
-| 1 | `Q110-Q1` | `excessReturn`/`annualizedReturn` measure B&H from bar 0 vs strategy from bar 200; mean **20.81pp** | CONFIRMED | HIGH | against the strategy |
+| 1 | `Q110-Q1` | `excessReturn`/`annualizedReturn` measure B&H from bar 0 vs strategy from bar 200; mean **+8.81pp**, mean abs **40.93pp** | CONFIRMED | HIGH | mean against; dispersion both ways |
 | 2 | `Q110-Q2` | `maxDrawdown()` divides by the global peak, not the trough's peak | CONFIRMED | HIGH | **flattering** (understates risk) |
 | 3 | `Q110-Q3` | Published `benchmark-results.json` says "PBO has no implementation" beside `pbo: 0.6667` | CONFIRMED | HIGH | claim defect |
 | 4 | `Q110-Q4` | `sortinoRatio` divides by `n_d` not `N` — measured **1.73×** low; docstring inverted | CONFIRMED | MED-HIGH | against |
@@ -658,8 +774,19 @@ error as `CLAUDE.md` I3 describes; no numerical surface; nothing to report.
 | 16 | `Q110-Q16` | Grid selection compares Sharpe against win rate via `??`; false annualisation comment | CONFIRMED | LOW | flattering |
 | 17 | `Q110-Q18` | `totalNetWins` float round-trip under a 0.10pp gate (0 mismatches today) | CONFIRMED-safe | LOW | none today |
 | 18 | `Q110-Q15` | `vwapArrayWindow` is not a sliding window; output depends on series length; 0 callers | CONFIRMED | LOW | latent trap |
+| 19 | `Q110-Q19` | `relativeStrength.ts:153` comparator returns NaN when the benchmark leg is null → arbitrary ranks; 0 callers | CONFIRMED | LOW | undefined behaviour |
 
-**Reserved and unused:** `Q110-Q19` … `Q110-Q29`.
+**Reserved and unused:** `Q110-Q20` … `Q110-Q29`.
+
+### Corrections made to this report before hand-off, recorded because both flattered a finding
+
+- `Q110-Q1` first measured **20.81pp** by differencing a dividend-reinvested B&H against a
+  *no-dividend* one. That double-counted the entire dividend contribution. Corrected to **8.81pp**
+  mean / **40.93pp** mean absolute, both legs dividend-reinvested. The finding survives; its
+  headline did not.
+- Section 2's "five sort comparators" was a count of what I had happened to read, not of what a
+  grep returns (**15**). Re-enumerating found `Q110-Q19`. *When a sweep comes back clean, ask what
+  it visited before you ask what it decided* — including when the sweep is your own.
 
 ### If the lead fixes only three
 
