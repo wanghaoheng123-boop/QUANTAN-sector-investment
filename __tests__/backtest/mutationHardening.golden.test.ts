@@ -209,7 +209,16 @@ describe('backtestInstrument — enhanced path (flag on) golden', () => {
     expect(res.totalTrades).toBe(0)
     expect(res.totalReturn).toBe(0)
     expect(res.sharpeRatio).toBeNull()
-    expect(res.sortinoRatio).toBeCloseTo(-15.874508, 4)
+    // MIGRATION NOTE — Q110-Q4 (2026-09-05). This pinned -15.874508, which is
+    // -sqrt(252): the value `sortinoRatio` collapses to when every return is
+    // identical and MAR > 0. With zero trades the equity curve is flat, every
+    // deviation equals MAR exactly, and the ratio is a CONSTANT independent of
+    // the instrument and the data. This golden asserted a risk-adjusted return
+    // for a strategy that never opened a position — in a test whose own name is
+    // "0 trades", and directly beneath `expect(res.sharpeRatio).toBeNull()`,
+    // which had the answer right all along. Twenty of the 56 real fixtures were
+    // in this state and rendered that constant to users.
+    expect(res.sortinoRatio).toBeNull() // was -15.874508 = -sqrt(252), a degenerate constant
     // MIGRATION NOTE — Q110-Q1: B&H is measured from bar 200, not bar 0. This
     // fixture crashes ×0.64 at bar 300 and recovers, so the pre-warmup run-up
     // that the old number carried was never available to the strategy.

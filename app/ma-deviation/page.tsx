@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { DataFreshnessIndicator } from '@/components/DataFreshnessIndicator'
 import Link from 'next/link'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -40,6 +41,14 @@ interface ApiResponse {
   rows: SectorRow[]
   computedAt: string
   disclaimer: string
+  /**
+   * I2 (Q110-P2) — this route holds a 5-minute module-level cache and served
+   * stored rows with nothing saying so, so a value up to five minutes old was
+   * indistinguishable from a fresh computation. `_cachedAt` carries the real
+   * age; a bare boolean would say "a cache was involved" and not "how old".
+   */
+  _cached?: boolean
+  _cachedAt?: number
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -156,7 +165,17 @@ export default function MADeviationPage() {
   useEffect(() => {
     let cancelled = false
     setLoading(true)
-    fetch('/api/ma-deviation')
+    // `cache: 'no-store'` is load-bearing, not hygiene. This route sets
+    // `Cache-Control: max-age=300`, so a default fetch on a repeat visit inside
+    // five minutes is answered by the BROWSER's HTTP cache with the stored body
+    // — whose `_cached: false` was frozen at the moment it was first computed.
+    // Measured 2026-09-05: two default fetches returned `_cached:false` with an
+    // identical `_cachedAt`, while the same pair with `no-store` returned
+    // `_cached:true`. A freshness flag defeated by a cache one layer above the
+    // code that sets it is the very substitution I2 forbids, so the page that
+    // renders the flag must reach the server that computes it. The sibling
+    // surfaces (`LiveSignalsPanel`, `app/backtest/page.tsx`) already do this.
+    fetch('/api/ma-deviation', { cache: 'no-store' })
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`)
         return r.json()
@@ -222,8 +241,15 @@ export default function MADeviationPage() {
             </div>
             <div className="flex flex-col items-end gap-2">
               {data && (
-                <div className="text-xs text-slate-400 font-mono">
-                  Computed: {new Date(data.computedAt).toLocaleTimeString()}
+                <div className="flex items-center gap-3">
+                  <DataFreshnessIndicator
+                    quoteTime={data._cachedAt ?? Date.parse(data.computedAt)}
+                    cached={data._cached === true}
+                    label="Data"
+                  />
+                  <div className="text-xs text-slate-400 font-mono">
+                    Computed: {new Date(data.computedAt).toLocaleTimeString()}
+                  </div>
                 </div>
               )}
               <button
