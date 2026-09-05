@@ -9,7 +9,7 @@ import { withRetry } from '@/lib/api/reliability'
 const yahooFinance = new YahooFinance()
 
 // 5-minute server-side cache — balances freshness vs Yahoo rate limits
-const _cache = new Map<string, { data: unknown; expiresAt: number }>()
+const _cache = new Map<string, { data: unknown; expiresAt: number; storedAt: number }>()
 const CACHE_TTL_MS = 5 * 60 * 1000
 
 const TICKERS = [
@@ -28,8 +28,22 @@ export async function GET(request: Request) {
 
   const now = Date.now()
   const cached = _cache.get('ma-deviation')
+  // I2 (Q110-P2, 2026-09-05) — a stored copy must say it is one. This route
+  // served `_cache` verbatim with nothing in the payload marking it, so a
+  // value up to the TTL old was indistinguishable from a live one. It was
+  // invisible to the I2 guard because that guard's producer set was "routes
+  // that already set `_cached`" — the violation defined itself out of scope.
+  // `_cachedAt` carries the real age so the badge can show it rather than a bare
+  // boolean: this cache runs to 5 minutes, and "how stale" is the useful signal.
+  //
+  // It is also the ONLY half that survives an HTTP cache. `Cache-Control` here
+  // is `max-age=300`, so a browser or CDN can answer from its own store with a
+  // body whose `_cached` was frozen as `false` when first computed — the boolean
+  // goes stale, the timestamp does not, because an age is recomputed from the
+  // clock on every render. Consumers must still fetch `no-store` to make the
+  // boolean meaningful; a CDN hop remains a layer this flag cannot describe.
   if (cached && now < cached.expiresAt) {
-    return NextResponse.json(cached.data, {
+    return NextResponse.json({ ...(cached.data as object), _cached: true, _cachedAt: cached.storedAt }, {
       headers: { 'Cache-Control': 'public, max-age=300, stale-while-revalidate=600' },
     })
   }
@@ -122,9 +136,9 @@ export async function GET(request: Request) {
         'Deviation zones and forward return context are based on historical analysis of S&P 500 / sector ETF daily data (1990–2024). Not investment advice. Past performance is not indicative of future results.',
     }
 
-    _cache.set('ma-deviation', { data: payload, expiresAt: now + CACHE_TTL_MS })
+    _cache.set('ma-deviation', { data: payload, expiresAt: now + CACHE_TTL_MS, storedAt: now })
 
-    return NextResponse.json(payload, {
+    return NextResponse.json({ ...payload, _cached: false, _cachedAt: now }, {
       headers: { 'Cache-Control': 'public, max-age=300, stale-while-revalidate=600' },
     })
   } catch (error) {

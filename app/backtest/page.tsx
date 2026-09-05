@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { DataFreshnessIndicator } from '@/components/DataFreshnessIndicator'
 import { apiUrl } from '@/lib/apiBase'
 import InstrumentTable from '@/components/backtest/InstrumentTable'
 import TradeLog from '@/components/backtest/TradeLog'
@@ -40,6 +41,18 @@ interface BacktestData {
     // Optional for backward-compat with cached responses from before the fix.
     excludedTickers?: string[]
   }
+  /**
+   * I2 (Q110-P2, 2026-09-05) — /api/backtest holds a ONE-HOUR module-level
+   * cache and served the stored payload with nothing marking it, so an
+   * hour-old full backtest rendered as though it had just been computed. At
+   * that TTL a boolean is the wrong affordance: the honest signal is the age,
+   * so `_cachedAt` is what the badge renders. `computedAt` below is the
+   * BACKTEST's own timestamp and is not the same thing as when this response
+   * was stored — the two diverge by exactly the cache age, which is the number
+   * a user needs.
+   */
+  _cached?: boolean
+  _cachedAt?: number
 }
 
 // ─── Main page ─────────────────────────────────────────────────────────────────
@@ -156,7 +169,14 @@ export default function BacktestPage() {
             </div>
             <div className="flex items-center gap-3">
               <div className="text-right">
-                <div className="text-xs text-slate-400">Last computed</div>
+                <div className="flex items-center justify-end gap-2">
+                  <DataFreshnessIndicator
+                    quoteTime={data._cachedAt ?? null}
+                    cached={data._cached === true}
+                    label="Response"
+                  />
+                  <div className="text-xs text-slate-400">Last computed</div>
+                </div>
                 <div className="text-sm font-mono text-slate-300">{new Date(computedAt).toLocaleString()}</div>
                 <div className="text-[10px] text-slate-400">{formatFreshness(computedAt)}</div>
               </div>
