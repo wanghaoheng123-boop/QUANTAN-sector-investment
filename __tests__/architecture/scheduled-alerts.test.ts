@@ -285,6 +285,54 @@ describe('Q107-O2 — job parsing is real, not assumed', () => {
   })
 })
 
+describe('Q107-A23 — quarantine is understood by EVERY gate between fetch and commit', () => {
+  const rd = () => read('refresh-data.yml')
+
+  it('the fetch SCRIPT exports the quarantined set to GITHUB_OUTPUT', () => {
+    // The producer is the script, not the workflow — an earlier version of this
+    // test asserted a job-level `outputs:` entry that is not needed, because the
+    // freshness step lives in the same job and reads steps.refresh.outputs
+    // directly. The test was wrong, not the code; corrected rather than worked
+    // around.
+    //
+    // Without this export the downstream gates cannot tell "held back on purpose"
+    // from "the fetch failed", which is exactly how 55 clean refreshes were
+    // discarded on run 33949824086.
+    const script = readFileSync(join(ROOT, 'scripts/fetchBacktestData.mjs'), 'utf8')
+    expect(script).toMatch(/GITHUB_OUTPUT/)
+    expect(script).toMatch(/quarantined=\$\{quarantined\.join\(','\)\}/)
+  })
+
+  it('the freshness gate RECEIVES it', () => {
+    const step = rd().slice(rd().indexOf('- name: Assert fixture freshness'))
+    expect(step).toMatch(/QUARANTINED:\s*\$\{\{\s*steps\.refresh\.outputs\.quarantined\s*\}\}/)
+  })
+
+  it('the freshness gate EXEMPTS quarantined tickers instead of failing on them', () => {
+    // Receiving the value and ignoring it would pass the test above while
+    // behaving identically to not having it — presence without effect, which is
+    // the defect this package has now shipped three separate times.
+    const s = rd()
+    expect(s).toContain('const QUARANTINED = new Set')
+    expect(s).toMatch(/if \(QUARANTINED\.has\(ticker\)\) held\.push/)
+    expect(s).toMatch(/held\.length > 0/)
+  })
+
+  it('a quarantined ticker is still REPORTED, not silently swallowed', () => {
+    // Exempting must not mean hiding: a ticker quarantined week after week is a
+    // real problem, and the only thing standing between that and silence is
+    // this line plus the alert job.
+    expect(rd()).toMatch(/intentionally held by the vintage guard/)
+  })
+
+  it('the alert detail does not assert a commit that a later gate can block', () => {
+    // The text shipped saying "Clean fixtures WERE committed" while the freshness
+    // gate had just prevented exactly that. An alert that states a falsehood is
+    // worse than a terse one.
+    expect(rd()).not.toContain('Clean fixtures WERE committed')
+  })
+})
+
 describe('Q107-O2 — a11y is unwired only while it cannot fail', () => {
   it('says so if that ever changes', () => {
     // Covered by the property tests above too; kept explicit because the

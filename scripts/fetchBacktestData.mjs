@@ -1,4 +1,4 @@
-import { writeFileSync, mkdirSync, readFileSync, existsSync } from 'fs';
+import { writeFileSync, mkdirSync, readFileSync, existsSync, appendFileSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
@@ -331,6 +331,15 @@ async function main() {
     console.error(`\nFAIL: ${failed} instrument(s) did not refresh cleanly — see [TICKER] ERROR lines above. Refusing to exit 0.`);
     process.exit(1);
   }
+  // Export the quarantined set so LATER GATES can tell "deliberately held back"
+  // from "the fetch failed". Without this the freshness check downstream sees a
+  // quarantined ticker as a stale fixture, exits 1, and the commit step is
+  // skipped — which discards all 55 clean refreshes and reproduces, one gate
+  // over, exactly the amplifier the exit-code split was written to remove.
+  if (process.env.GITHUB_OUTPUT) {
+    appendFileSync(process.env.GITHUB_OUTPUT, `quarantined=${quarantined.join(',')}\n`);
+  }
+
   if (quarantined.length > 0) {
     console.error(
       `\nQUARANTINED: ${quarantined.join(', ')} — existing fixture(s) kept, ${success} other instrument(s) refreshed cleanly ` +
