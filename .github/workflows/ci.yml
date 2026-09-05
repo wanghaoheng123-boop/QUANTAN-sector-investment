@@ -130,3 +130,29 @@ jobs:
       - uses: actions/checkout@v5
       - name: Lint workflows with actionlint
         run: npm run lint:workflows
+
+  # Q110-T7 (2026-09-05) — the Python suite had NEVER run in CI.
+  # `tests/` and `quant_framework/` hold 8 files and 132 cases, `requirements.txt`
+  # pins `pytest>=8.0.0`, and NO workflow in this repo referenced Python at all.
+  # They passed only when somebody remembered to run them by hand; the last
+  # recorded run is an inspection artifact from 2026-06-30. Measured locally on
+  # 2026-09-05 before adding this job: 131 passed, 1 skipped, 6.4s — so the job
+  # is green from its first run and gates from here on rather than announcing a
+  # backlog. `--maxfail=1` keeps a broken run short; warnings are NOT errors,
+  # because three of them come from numpy inside the factor-mining tests and
+  # turning them fatal would be a different change with a different argument.
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Run pytest
+        run: python -m pytest tests/ quant_framework/ -q --maxfail=1
