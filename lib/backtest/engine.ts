@@ -10,6 +10,7 @@ import { tradingDaysPerYear, TX_COST_PCT_PER_SIDE } from './core'
 export {
   TX_COST_BPS_PER_SIDE,
   TX_COST_PCT_PER_SIDE,
+  BACKTEST_WARMUP_BARS,
   computeBuyAndHoldReturn,
   backtestInstrument,
   tradingDaysPerYear,

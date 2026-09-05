@@ -6,6 +6,7 @@ import {
   walkForwardSummary,
   TX_COST_BPS_PER_SIDE,
   TX_COST_PCT_PER_SIDE,
+  BACKTEST_WARMUP_BARS,
 } from '@/lib/backtest/engine'
 import type { OhlcvRow } from '@/lib/backtest/engine'
 
@@ -110,11 +111,21 @@ describe('Backtest Engine', () => {
     expect(result.maxDrawdown).toBeLessThanOrEqual(1)
   })
 
-  it('buy-and-hold return matches price change', () => {
+  it('buy-and-hold return matches the price change over the TRADED window', () => {
+    // MIGRATION NOTE — Q110-Q1 (2026-09-05). This asserted the B&H base was
+    // `result.initialPrice` (= rows[0].close). That identity was the bug: the
+    // strategy cannot act until BACKTEST_WARMUP_BARS have passed, so B&H must
+    // start there too. `initialPrice` is the start of the DATA and is
+    // deliberately NOT the benchmark base — see the field's docstring in
+    // lib/backtest/core.ts. Restoring the old form re-freezes the defect.
     const rows = generateRows(500, 100, 0.001)
     const result = backtestInstrument('TEST', 'Technology', rows)
-    const expectedBnH = (result.finalPrice - result.initialPrice) / result.initialPrice
+    const base = rows[BACKTEST_WARMUP_BARS].close
+    const expectedBnH = (result.finalPrice - base) / base
     expect(result.bnhReturn).toBeCloseTo(expectedBnH, 5)
+    // Reachability: the two bases really differ on this fixture, so the
+    // assertion above is not accidentally equivalent to the old one.
+    expect(result.initialPrice).not.toBeCloseTo(base, 2)
   })
 
   it('excess return = total return - buy-and-hold', () => {

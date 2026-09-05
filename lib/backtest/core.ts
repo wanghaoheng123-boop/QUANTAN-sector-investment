@@ -23,6 +23,16 @@ export interface OhlcvRow extends OhlcBar {
   dividend?: number
 }
 
+/**
+ * Bars of history consumed before the walk-forward loop may emit its first
+ * signal. Set by the LONGEST lookback any signal reads: `sma200DeviationPct`,
+ * `sma200Slope` and the EMA50>EMA200 golden-cross gate in `./signals`, all of
+ * which need 200 prior bars. The strategy is therefore exposed to the market
+ * over `rows.length - BACKTEST_WARMUP_BARS` bars, NOT `rows.length` — every
+ * quantity compared against `totalReturn` must span that same window (Q110-Q1).
+ */
+export const BACKTEST_WARMUP_BARS = 200
+
 /** Total-return buy-and-hold including optional per-bar dividends (F1.5). */
 export function computeBuyAndHoldReturn(rows: OhlcvRow[]): number {
   if (rows.length < 2) return 0
@@ -58,6 +68,13 @@ export interface Trade {
 export interface BacktestResult {
   ticker: string
   sector: string
+  /**
+   * Close of the FIRST loaded bar — the start of the DATA, not of the traded
+   * window. It is deliberately NOT the buy-and-hold base: B&H is measured from
+   * `rows[BACKTEST_WARMUP_BARS]` so it spans the same window the strategy
+   * trades. `(finalPrice - initialPrice) / initialPrice` is therefore NOT
+   * `bnhReturn`, and asserting that identity is the Q110-Q1 bug (a test did).
+   */
   initialPrice: number
   finalPrice: number
   totalReturn: number
@@ -248,7 +265,7 @@ export function backtestInstrument(
   // Pre-compute ATR for all bars (14-period, no look-ahead)
   const atrVals = atr(bars, 14)
 
-  // Walk forward day by day (need 200 bars warmup)
+  // Walk forward day by day (BACKTEST_WARMUP_BARS of warmup)
   // FIX C2 (Critical): Signal at today's close, execute at TOMORROW's open.
   // This eliminates the same-day look-ahead bias where signal and execution
   // used the same day's close price (physically impossible in live trading).
@@ -264,21 +281,21 @@ export function backtestInstrument(
   // one push per loop iteration (every branch, incl. the `continue` paths, pushes
   // once) after its [initialCapital] seed — so pushing the B&H mark once at the
   // top of each iteration keeps bnhCurve[k] ↔ equityHistory[k] by construction.
-  // Dividends from the 200-bar warmup are accumulated into the starting shares.
+  // Dividends from the warmup are accumulated into the starting shares.
   let bnhShares = 1
-  for (let k = 1; k <= 200; k++) {
+  for (let k = 1; k <= BACKTEST_WARMUP_BARS; k++) {
     const div = rows[k].dividend ?? 0
     if (div > 0 && rows[k].close > 0) bnhShares += div / rows[k].close
   }
-  const bnhCurve: number[] = [bnhShares * rows[200].close]
+  const bnhCurve: number[] = [bnhShares * rows[BACKTEST_WARMUP_BARS].close]
 
   // D2 (2026-07-11): row index of the open position's entry FILL bar (i+1 at
   // the signal bar), for the label-matched time exit below. −1 when flat.
   // Mirrors the portfolio engine's OpenPosition.entryIdx convention (F-11).
   let entryFillBar = -1
 
-  for (let i = 200; i < rows.length - 1; i++) {
-    if (i > 200) {
+  for (let i = BACKTEST_WARMUP_BARS; i < rows.length - 1; i++) {
+    if (i > BACKTEST_WARMUP_BARS) {
       const div = rows[i].dividend ?? 0
       if (div > 0 && rows[i].close > 0) bnhShares += div / rows[i].close
     }
@@ -416,10 +433,40 @@ export function backtestInstrument(
   // F1.6 (Phase 13 S2): annualization uses tradingDaysPerYear() — 252 for
   // equities, 365 for crypto. Previously hardcoded 252 understated crypto
   // Sharpe by sqrt(252/365) ≈ 17% and overstated annualized return by ~4-5%/yr.
-  const years = days / annualization
+  //
+  // MIGRATION NOTE — Q110-Q1 (2026-09-05), sibling of the bnhReturn fix below.
+  // `years` divided `rows.length` (1254 bars on the standard fixture), but
+  // `totalReturn` is earned over `rows.length - BACKTEST_WARMUP_BARS` (1054).
+  // Annualizing a 1054-bar return across 1254 bars UNDERSTATES it. Measured
+  // over all 56 fixtures: mean 0.082pp, max 0.454pp (AVGO) — small because the
+  // strategy is flat much of the time, but it is a rendered figure AND the
+  // default sort key of `components/backtest/InstrumentTable.tsx:29`.
+  // `days` still reports the LOADED history length; only the exposure window
+  // is annualized.
+  const tradedBars = Math.max(0, rows.length - BACKTEST_WARMUP_BARS)
+  const years = tradedBars / annualization
   const totalReturn = (finalEquity - initialCapital) / initialCapital
   const annualizedReturn = years > 0 ? (1 + totalReturn) ** (1 / years) - 1 : 0
-  const bnhReturn = computeBuyAndHoldReturn(rows)
+  // MIGRATION NOTE — Q110-Q1 (2026-09-05). This was `computeBuyAndHoldReturn(rows)`:
+  // buy-and-hold measured from bar 0 over the FULL history, while `totalReturn`
+  // is earned from bar 200 onward. `excessReturn = totalReturn - bnhReturn` then
+  // subtracted 1254 bars of market return from 1054 bars of strategy return, and
+  // it is RENDERED in three components (InstrumentTable, AnalysisTab,
+  // WalkForwardPanel). Measured over all 56 fixtures: mean |Δ excess| = 40.36pp,
+  // worst NFLX −230.87pp, and 2 instruments (UNH, PEP) had excess of the WRONG
+  // SIGN — displayed orange/underperforming when they outperformed.
+  //
+  // Why the slice and not the bnhCurve endpoints: `bnhCurve`'s last mark tracks
+  // `equityCurve`, so it lands on bar len-2 when the strategy ends flat and bar
+  // len-1 when a position is still open (3 of 56 fixtures). Deriving the scalar
+  // from it would let the BENCHMARK's end date float with the STRATEGY's final
+  // holding — a smaller instance of the very defect being fixed. Slicing spans
+  // [200, len-1] unconditionally, which is exactly `totalReturn`'s window.
+  //
+  // `engine.ts` F-2 already made this correction for the PORTFOLIO aggregate and
+  // named this field as the mismatched-window legacy it routed around; the
+  // per-instrument value kept the defect for the rows the UI renders.
+  const bnhReturn = computeBuyAndHoldReturn(rows.slice(BACKTEST_WARMUP_BARS))
 
   // Equity curve metrics
   let peak = initialCapital, maxDd = 0

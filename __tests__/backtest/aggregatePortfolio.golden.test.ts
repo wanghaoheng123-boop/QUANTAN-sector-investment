@@ -14,6 +14,7 @@ import {
   TX_COST_PCT_PER_SIDE,
   backtestInstrument,
   computeBuyAndHoldReturn,
+  BACKTEST_WARMUP_BARS,
 } from '@/lib/backtest/engine'
 import type { BacktestResult, Trade, OhlcvRow } from '@/lib/backtest/engine'
 
@@ -171,7 +172,11 @@ describe('aggregatePortfolio — stub exclusion and fallbacks', () => {
     expect(s.excludedTickers).toEqual([])
   })
 
-  it('missing/mismatched bnhCurve falls back to full-history bnhReturn average', () => {
+  it('missing/mismatched bnhCurve falls back to averaging the bnhReturn field', () => {
+    // Renamed for Q110-Q1: the fallback averages the per-instrument `bnhReturn`
+    // FIELD, which since 2026-09-05 spans the traded window, not full history.
+    // The aggregator's behaviour is unchanged; the old name described the field
+    // as it used to be computed and would mislead the next reader.
     const a = mkResult({ ticker: 'A', equityCurve: c1, bnhCurve: undefined, bnhReturn: 0.3 })
     const b = mkResult({ ticker: 'B', equityCurve: c1, bnhCurve: c1.slice(0, 20), bnhReturn: 0.1 })
     const s = aggregatePortfolio([a, b], 100_000)
@@ -231,10 +236,26 @@ describe('backtestInstrument — dividend-reinvested B&H goldens (production pat
   it('accrues warmup + in-loop dividends into bnhCurve at exact values', () => {
     const rows = divSeries()
     const res = backtestInstrument('AAPL', 'Technology', rows)
-    // engine bnhReturn delegates to the canonical helper — exact identity
-    expect(res.bnhReturn).toBe(computeBuyAndHoldReturn(rows))
-    expect(res.bnhReturn).toBeCloseTo(2.409595, 5) // vs 2.143494 dividend-free
+    // MIGRATION NOTE — Q110-Q1 (2026-09-05). This asserted
+    // `res.bnhReturn === computeBuyAndHoldReturn(rows)` — an exact identity
+    // against the FULL history, which is precisely the defect: `totalReturn` is
+    // earned from bar 200 onward. The identity is kept, because delegating to
+    // the canonical helper is the property worth pinning; only the window it is
+    // applied over is corrected. Warmup dividends no longer reach the scalar's
+    // share count either — the B&H investor buys at bar 200 and did not hold
+    // through the warmup ex-dates.
+    expect(res.bnhReturn).toBe(computeBuyAndHoldReturn(rows.slice(BACKTEST_WARMUP_BARS)))
+    expect(res.bnhReturn).toBeCloseTo(0.456647, 5) // was 2.409595 (full history)
+    // Reachability: the corrected window really is a different number, so the
+    // identity above is not accidentally equivalent to the old one.
+    expect(res.bnhReturn).not.toBeCloseTo(computeBuyAndHoldReturn(rows), 3)
     expect(res.bnhCurve).toHaveLength(180)
+    // These three are DELIBERATELY unchanged by Q110-Q1. bnhCurve's contract is
+    // index-alignment with equityCurve for charting and the engine.ts F-2
+    // combine, so its endpoint should track the strategy's last mark; the
+    // scalar's contract is a fixed comparison window. They are two different
+    // measurements and differ by a mean 0.308pp across the 56 fixtures — the
+    // residual is asserted in excessReturnWindow.regression.test.ts.
     // bnhCurve[0] = shares-after-200-bar-warmup × close[200]: four ex-dates
     // (25/75/125/175) accrued before the walk begins
     expect(res.bnhCurve![0]).toBeCloseTo(234.423281, 5)
