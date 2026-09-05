@@ -136,21 +136,53 @@ age, but is mounted on **2 of 16 pages** (`app/desk/page.tsx:163`,
 `hooks/` SWR `keepPreviousData` is unchecked and is the most likely remaining I2
 violation. → `Q-101`.
 
-**Cache substitution · CLOSED by `Q-101` (2026-08-21).** `_cached` was set by
-three routes and read by **nobody** — the substitution happened and the flag died
-in the JSON, which is what made this half VIOLATED. All three now have a consumer
-that shows it: both chart pages set `chartCached` from the payload, and
-`components/crypto/BtcQuantLab.tsx` marks the metrics card and the liquidations
-panel. **`cached` outranks every freshness state including "Live"** — a cached
-value with a recent timestamp would otherwise render green and pulsing, telling
-the user it is live, which is worse than showing nothing; the test asserts branch
-ORDERING, not mere presence.
-`__tests__/architecture/cache-flag-consumed.test.ts` asserts the property **per
-producer**, because an aggregate check stays green while two of three routes
-still serve stored copies silently — and it **strips comments**, because the
-first version matched `_cached` in the explanatory comments the consuming pages
-carry, so deleting the actual read left it green. That was caught by mutation,
-not by reading.
+**Cache substitution · CLOSED by `Q-101` (2026-08-21), REOPENED and closed again
+by `Q110-P2` (2026-09-05) — and the reason is the most important sentence in this
+section.** `_cached` was set by three routes and read by **nobody** — the
+substitution happened and the flag died in the JSON, which is what made this half
+VIOLATED. Those three now have a consumer that shows it: both chart pages set
+`chartCached` from the payload, and `components/crypto/BtcQuantLab.tsx` marks the
+metrics card and the liquidations panel. **`cached` outranks every freshness
+state including "Live"** — a cached value with a recent timestamp would otherwise
+render green and pulsing, telling the user it is live, which is worse than
+showing nothing; the test asserts branch ORDERING, not mere presence. It also
+**strips comments**, because the first version matched `_cached` in the
+explanatory comments the consuming pages carry, so deleting the actual read left
+it green. That was caught by mutation, not by reading.
+
+*The previous text said "all three" and was wrong about the denominator, not the
+numerator.* `__tests__/architecture/cache-flag-consumed.test.ts` asserted the
+property **per producer** — correctly — over a producer set defined as
+`files.filter(f => /_cached:\s*true/)`, i.e. **"routes that already set the
+flag"**. A route that serves a stored copy and does not set it was therefore not
+a producer, so **the exact violation the guard exists to catch was the one input
+it could not see.** Measured 2026-09-05: **six** routes serve a stored value;
+three set the flag; three did not — `app/api/ma-deviation` (5-minute TTL),
+`app/api/backtest` (**one hour**) and `app/api/backtest/live` (60 seconds) — and
+the suite was green throughout. The paragraph that boasted about the per-producer
+loop was published while three routes served stored copies silently.
+
+**This is the guard-reachability defect in its sixth shape, and the first time it
+appeared as a set defined by the property under test.** The earlier five were a
+scan that never visited a directory, an extension, a top-level tree, a positive
+control that exercised the decider rather than the visitor, and a guard that
+could not fail. Add this one to the list: **when a guard is green, ask what it
+VISITED before you ask what it decided — and ask how the thing it visits was
+CHOSEN.** A filter written in terms of the answer cannot find a counterexample.
+
+`__tests__/architecture/cacheSubstitution.ts` now detects the substitution
+structurally — a module-level mutable store that is written and then referenced
+inside a `NextResponse.json(...)` argument, directly, through a spread, or
+through a local bound to it. All three forms occur here and **two were missed by
+the detector's first draft**, which read the spread's trailing dot as a member
+access; the three compliant routes are asserted as **positive controls** for
+exactly that reason. Watched it fail on the committed tree: it named all three
+silent routes, and reintroducing the spread bug fails four tests. The three
+routes now emit `_cached` **and `_cachedAt`**, because at a one-hour TTL a boolean
+says "a cache was involved" where the user needs "how old". Named residuals, each
+a passing test: a store read through an expression the alias rule does not model,
+a store served from the second argument onward, and a cache that lives in a
+shared `lib/` helper rather than the route module.
 
 ### I3 — No synthetic data crosses the boundary · PARTIAL *(VIOLATED 2026-08-17; closed to PARTIAL by `Q-098` 2026-08-18)*
 Mock/fixture/synthetic data is permitted only in `__tests__/` and `tests/` and
@@ -424,6 +456,16 @@ which is the point: it asks for an explanation rather than asserting a cause.
   produces the same id for a different issuer. Detection is a compensating
   control, not a solution.
 - **No bitemporal mapping table.** I6 asks for one and there is none.
+- ~~**The API layer did not use the SSOT at all.**~~ Closed by `Q110-P1`
+  (2026-09-05). `Q-080` made identity consistent in `lib/`, and **zero routes
+  under `app/api/` imported `lib/data/securityId.ts`** — so I6 held everywhere
+  except the layer the public calls. Measured: `?tickers=BRK-B` returned
+  `instruments: []` with a 200 while `?tickers=BRK.B` returned the row.
+  `/api/backtest` and `/api/backtest/live` now canonicalise through the SSOT,
+  and an unmatched filter token is named in `unmatchedTickers` rather than
+  vanishing into an empty list — I2's "missing displays as MISSING" clause on
+  the same call. Exercised through the real route handler, not a
+  re-implementation.
 - `lib/data/warehouse.ts:46-55` is still `PRIMARY KEY (ticker, date)`.
 - The handover detector WARNS and cannot distinguish a handover from a split or
   a halt. → `Q-080`.

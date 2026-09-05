@@ -9,6 +9,7 @@
 
 import { NextResponse } from 'next/server'
 import { SECTORS } from '@/lib/sectors'
+import { canonicalSecurityId } from '@/lib/data/securityId'
 import { loadStockHistory, loadBtcHistory, availableTickers } from '@/lib/backtest/dataLoader'
 import { backtestInstrument, aggregatePortfolio } from '@/lib/backtest/engine'
 import { validateCsrf } from '@/lib/api/csrf'
@@ -65,7 +66,7 @@ async function runBacktest(filterTickers?: string[]): Promise<{
 
   for (const sector of SECTORS) {
     for (const ticker of sector.topHoldings) {
-      if (filterTickers && !filterTickers.includes(ticker)) continue
+      if (filterTickers && !filterTickers.includes(canonicalSecurityId(ticker) ?? ticker)) continue
       if (!available.has(ticker.toUpperCase())) {
         instruments.push({ ticker, sector: sector.name, candles: 0 })
         continue
@@ -130,10 +131,20 @@ export async function GET(request: Request) {
   const tickersParam = searchParams.get('tickers')
   // Phase 13 S2 (F7.3): validate + cap each ticker. Drop invalid tokens
   // silently — fail-closed style. Cap total to avoid amplification.
+  // I6 (Q110-P1, 2026-09-05) — identity goes through the SSOT, once.
+  // `?tickers=BRK-B` returned `instruments: []` with a 200 and no error, while
+  // `?tickers=BRK.B` returned the row: the universe writes `BRK.B`, the fixture
+  // on disk is `BRK-B.json`, and this route compared the raw token against
+  // `sector.topHoldings` with no canonicalisation. `lib/data/securityId.ts` is
+  // the SSOT that `Q-080` built for exactly this, and ZERO routes under
+  // `app/api/` imported it — I6 was consistent everywhere except the layer the
+  // public actually calls.
   const filterTickers = tickersParam
     ? tickersParam
         .split(',')
         .map((t) => normalizeTicker(t))
+        .filter((t): t is string => t != null)
+        .map((t) => canonicalSecurityId(t))
         .filter((t): t is string => t != null)
         .slice(0, MAX_FILTER_TICKERS)
     : undefined
@@ -143,9 +154,21 @@ export async function GET(request: Request) {
   // cache the response even though the module-level `cache` gates recomputes.
   const CACHE_HEADERS = { 'Cache-Control': 's-maxage=3600, stale-while-revalidate=7200' }
 
-  // Serve from cache for full (unfiltered) runs
+  // I2 (Q110-P2, 2026-09-05) — a stored copy must say it is one. This route
+  // served `_cache` verbatim with nothing in the payload marking it, so a
+  // value up to the TTL old was indistinguishable from a live one. It was
+  // invisible to the I2 guard because that guard's producer set was "routes
+  // that already set `_cached`" — the violation defined itself out of scope.
+  //
+  // This TTL is ONE HOUR, so a bare boolean is the wrong affordance here: the
+  // honest signal is the age, and `_cachedAt` supplies it to the freshness
+  // badge. A user looking at an hour-old full backtest should be told how old,
+  // not merely that a cache was involved.
   if (!filterTickers && cache && Date.now() - cache.timestamp < CACHE_TTL_MS) {
-    return NextResponse.json(cache.data, { headers: CACHE_HEADERS })
+    return NextResponse.json(
+      { ...(cache.data as object), _cached: true, _cachedAt: cache.timestamp },
+      { headers: CACHE_HEADERS },
+    )
   }
 
   try {
@@ -160,7 +183,7 @@ export async function GET(request: Request) {
     } else {
       data = await runBacktest(filterTickers)
     }
-    return NextResponse.json(data, { headers: CACHE_HEADERS })
+    return NextResponse.json({ ...data, _cached: false, _cachedAt: Date.now() }, { headers: CACHE_HEADERS })
   } catch (e) {
     console.error('[api/backtest] error:', e)
     const message = sanitizeError(e)
