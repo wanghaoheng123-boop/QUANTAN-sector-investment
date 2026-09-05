@@ -78,7 +78,14 @@ jobs:
     needs: [benchmark]
     if: always()
     uses: ./.github/workflows/scheduled-failure-alert.yml
+    # A CALLER's job permissions are the ceiling for the CALLED workflow, exactly
+    # as a workflow-level block is the ceiling for its jobs. Granting only
+    # `issues: write` here zeroes `contents`, and scheduled-failure-alert.yml's
+    # job asks for `contents: read` because it runs actions/checkout — so the
+    # whole file was REJECTED (startup_failure, zero jobs) on every wired
+    # workflow. Both scopes must be granted at BOTH levels.
     permissions:
+      contents: read
       issues: write
     with:
       workflow: nightly-backtest.yml
