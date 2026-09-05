@@ -3,7 +3,9 @@
 **Agent:** platform-architect · **Branch:** `fix/Q107-A23-quarantine-vs-freshness` (`842e83f`, wave commit `c44d303`)
 **Territory:** `app/api/` route shape and contracts · `lib/` module boundaries and layering · `middleware.ts` · `next.config.js` · `package.json` · overall structure
 **Ids reserved:** `Q110-P1`…`Q110-P29` (used: P1–P18)
-**Wrote:** this file only. No source edited. No `reviews/findings-ledger.csv` write. `git status` clean.
+**Wrote:** this file only. No source edited. No `reviews/findings-ledger.csv` write.
+(`frontend.md` / `quant.md` also show as modified — the other wave agents writing concurrently,
+not this one.)
 
 ---
 
@@ -22,7 +24,7 @@ The recurring defect is one level up and it has a single shape:
 > boundary that needed it — while a second, sometimes better, implementation of the same concern
 > lives on inside a route file.**
 
-Four independent instances, each verified against the tree:
+Five independent instances, each verified against the tree:
 
 | Concern | Declared SSOT | Adoption | The other implementation |
 |---|---|---|---|
@@ -30,12 +32,13 @@ Four independent instances, each verified against the tree:
 | Error envelope | `lib/api/reliability.ts:122` `errorResponse` | **3 of 28** routes | 4 further envelope shapes, inline |
 | Retry / backoff | `lib/api/reliability.ts:45` `withRetry` | 14 sites, 9 files | `app/api/crypto/btc/route.ts:25` — **strictly better**, unshared |
 | Timeout wrapper | `lib/api/reliability.ts:71` `withTimeout` | — | `app/api/briefs/route.ts:76` — verbatim duplicate |
+| Provenance-aware caching | `app/api/briefs/route.ts:230-234` — **the correct pattern** | **1 of 3** routes that need it | `regime` / `conditional-vol` cache both provenances alike |
 
 This is precisely the failure CLAUDE.md names as "the single most expensive recurring failure in
 this repo." It has not been fixed; it has moved from the quantitative core (indicators, sector
 colours, execution costs) to the API boundary, where there is no equivalent guard watching for it.
 
-**Severity distribution:** 3 HIGH · 6 MED-HIGH/MED · 9 LOW-MED/LOW · 8 checked-and-clear.
+**Severity distribution:** 3 HIGH · 3 MED-HIGH · 8 MED · 4 LOW-MED · 12 checked-and-clear.
 
 ---
 
@@ -64,7 +67,7 @@ the corrected run.
 
 ---
 
-# 1 · Layering — CLEAR, with two caveats
+# 1 · Layering — CLEAR  *(brief priority 1)*
 
 Zero violations found across every rule I checked:
 
@@ -82,6 +85,19 @@ file, `lib/quant/indicators.ts` at 712 lines, is cohesive.
 
 **This is a genuine strength and should not be traded away.** The recommendations below are
 deliberately confined to `app/api/` and `lib/api/` so that none of them perturbs it.
+
+**Two caveats, and neither is a layering defect.** The module *graph* is clean; what is not clean is
+whether the modules that declare themselves authoritative are actually the ones the boundary calls.
+That is the subject of the next section — a dependency-graph tool cannot see it, which is part of
+why it survived.
+
+---
+
+# 2 · API contracts and the un-adopted SSOT  *(brief priority 2)*
+
+Every finding here is a boundary-contract defect: identity (P1), cache disclosure (P2), error and
+status shape (P3, P7), retry and timeout policy (P4, P5), provenance labelling (P6), and input
+validation (P8). The graph cannot see any of them.
 
 ### `Q110-P1` — The I6 identity SSOT has zero consumers at the request boundary · **HIGH · CONFIRMED**
 
@@ -338,7 +354,7 @@ shorter and consistent. `Q-094` tracks the news boundary; these are the others.
 
 ---
 
-# 4 · Caching — a set of independent decisions, not a strategy
+# 3 · Caching and invalidation — a set of independent decisions, not a strategy  *(brief priority 4)*
 
 ### `Q110-P9` — Three cache layers compose, and no route declares a staleness contract · **MED · CONFIRMED**
 
@@ -368,9 +384,10 @@ Not one of these numbers agrees with the layer above or below it. `/api/backtest
 its two TTLs (`:141-144` says so explicitly, and that comment is the only evidence in the tree that
 anyone has considered the composition).
 
-### `Q110-P10` — A Python-sidecar fallback gets CDN-cached for up to three days under the same URL as the real model · **MED-HIGH · CONFIRMED**
+### `Q110-P10` — A Python-sidecar fallback gets CDN-cached for up to three days under the same URL as the real model · **MED · CONFIRMED (contract) · LATENT (impact)**
 
-This is the sharpest caching consequence and it is fully visible from the route files.
+The sharpest caching defect in the report, fully visible from the route files — and, like `Q110-P6`,
+not currently reachable. Read the severity accordingly before spending a PR on it.
 
 `app/api/conditional-vol/[ticker]/route.ts:38-43` passes the client result straight through with
 `Cache-Control: s-maxage=86400, stale-while-revalidate=172800`. `app/api/regime/[ticker]/route.ts:39-44`
@@ -380,16 +397,35 @@ Those clients fall back to a local approximation when the sidecar is unreachable
 in the payload (`source: 'ewma-fallback'` vs `'python'`). **The route's HTTP contract does not
 distinguish them.** Same URL, same status, same cache key.
 
-**Consequence:** a single request landing during a 30-second sidecar outage pins the fallback
-approximation into the shared CDN cache and serves it to **every** user for up to 24 hours, and up
-to 72 hours counting `stale-while-revalidate`. Recovery of the sidecar does not evict it; nothing
-invalidates on the source changing. A `Vary` header cannot help — the varying dimension is server
-state, not a request header.
+**Consequence if wired:** a single request landing during a 30-second sidecar outage pins the
+fallback approximation into the shared CDN cache and serves it to **every** user for up to 24 hours,
+and up to 72 hours counting `stale-while-revalidate`. Recovery of the sidecar does not evict it;
+nothing invalidates on the source changing. A `Vary` header cannot help — the varying dimension is
+server state, not a request header.
+
+**LATENT, not live.** `Q110-P18` establishes that these are the two endpoints with **zero callers**.
+Nothing requests them, so no fallback reaches the CDN today. The contract defect is CONFIRMED from
+the route files; the poisoning begins the day someone wires a page to them — which is exactly when
+nobody will be re-reading the cache header.
 
 **This is I2's "never substitute a cached value for a live one without a visible flag," with the
-flag present in the payload and absent from the transport that decides who sees it.** The correct
-shape is `no-store` (or a much shorter `s-maxage`) on the fallback branch — the cache policy must be
-a function of provenance.
+flag present in the payload and absent from the transport that decides who sees it.**
+
+**The fix is a copy, not a decision — this team has already solved it, three routes over.**
+`app/api/briefs/route.ts:195` computes a `degraded` flag, `:226` puts it in the payload, and
+`:230-234` makes the **cache policy a function of it**:
+
+```ts
+// Phase 14 (R4-H-2): shorter CDN cache on degraded payloads so a
+// bad minute doesn't pin a poor result for the full window.
+'Cache-Control': degraded
+  ? 's-maxage=30, stale-while-revalidate=60'
+  : 's-maxage=300, stale-while-revalidate=600',
+```
+
+That comment is the rationale for this finding, written by this team, on a route with 9 callers.
+`regime` and `conditional-vol` need the same branch keyed on `source === 'python'`. This is a fifth
+instance of the headline shape: the good implementation exists and was not adopted.
 
 *The `source` field itself and its UI consumption are quant-validator / frontend territory. The
 finding here is that the route caches two different provenances under one key.*
@@ -418,7 +454,7 @@ highest-traffic quote endpoint.
 
 ---
 
-# 3 · The `app/api` ↔ `lib` seam
+# 4 · The `app/api` ↔ `lib` seam  *(brief priority 3)*
 
 The seam is in better shape than the file sizes suggest. `app/api/backtest/live/route.ts` already
 delegates to `lib/backtest/liveSignal.ts:buildLiveInstrumentSignal`; most routes are genuinely thin.
@@ -456,7 +492,7 @@ difference is a `label` in the rejection message — and `RetryOptions.retryLabe
 
 ---
 
-# 5 · Failure modes at the seams
+# 5 · Failure modes at the seams  *(brief priority 5)*
 
 Consolidating what the routes do when a dependency fails:
 
@@ -492,7 +528,7 @@ is what makes `Q110-P6`'s mislabel easy to write.
 
 ---
 
-# 6 · What a new engineer would get wrong
+# 6 · What a new engineer would get wrong  *(brief priority 6)*
 
 ### `Q110-P16` — The map states the wrong framework major · **MED · CONFIRMED**
 
