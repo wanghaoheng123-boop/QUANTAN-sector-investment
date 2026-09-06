@@ -2,7 +2,7 @@
   "schema_version": "1.1",
   "project": "QUANTAN-sector-investment",
   "created": "2026-04-28T09:40:00Z",
-  "last_updated": "2026-09-05",
+  "last_updated": "2026-09-06",
   "active_agent": "claude opus-5 (2026-08-16 Q-088 synthetic containment: deleted the fabricated-news and synthetic-marker paths, then REBUILT the containment after red-team showed the first brand/guard/assertion were all broken; PR #147 open, not merged)",
   "prod_bug_fix_2026_07_01": {
     "B-2": "News fetch broken by yahoo-finance2 SearchResult schema drift (yf.search validation threw → news silently dropped + 66 prod errors on /api/briefs since 2026-04-03). FOUND via Vercel get_runtime_errors. FIXED with validateResult:false on the 4 news-search callers (mirrors options/chain.ts precedent) → PR #82 → main 2e6137c. LIVE-VERIFIED: /api/briefs now 200 with full news feed (was empty); 0 SearchResult validation logs on new deploy dpl_D29j.",
@@ -718,7 +718,7 @@
     ]
   },
   "q110_deep_inspection_wave_2026_09_05": {
-    "status": "IN PROGRESS — two PRs open, stacked",
+    "status": "CLOSED — MERGED TO PRODUCTION 2026-09-06",
     "branches": {
       "fix/Q110-wave-tier1": "PR #179, base fix/Q107-A23-quarantine-vs-freshness (#178)",
       "fix/Q110-wave-tier2": "PR #180, base fix/Q110-wave-tier1"
@@ -736,7 +736,11 @@
       "Q110-P2": "The I2 cache guard's producer set was 'routes that already set the flag' — six producers, three silent. CLAUDE.md's CLOSED claim was false.",
       "Q110-P1": "?tickers=BRK-B returned [] with a 200; zero app/api routes imported the I6 identity SSOT. Plus unmatchedTickers for the fail-silent half.",
       "Q110-F1": "useLiveQuote identity reset — LATENT, see below.",
-      "Q110-F3": "lastFetched set and rendered nowhere."
+      "Q110-F3": "lastFetched set and rendered nowhere.",
+      "Q110-Q5": "excessReturn in benchmark-enhanced had no unit; now a per-20-day comparison over the same window.",
+      "Q110-Q4d": "A FOURTH Sortino implementation; both it and Sharpe now delegate to the indicator SSOT.",
+      "Q110-D2": "The universe guard reached its data by regex over source; scripts/lib/universe.mjs is now imported by producer and guard, and the guard also reads the fixture directory.",
+      "Q110-T7b": "requirements.txt CANNOT be installed — tradingagents>=0.2.0 is not on PyPI. Found by the pytest job on its FIRST CI run. requirements-test.txt added; the app manifest is still broken and is recorded, not patched."
     },
     "refuted": {
       "Q110-F2": "Page-owned state IS cleared on a ticker change — Next.js App Router keys each dynamic segment by value and REMOUNTS. Measured on the deployed production build and on localhost, for both /stock/[ticker] and /sector/[slug]. A fix would have been a no-op that looked like a fix.",
@@ -744,22 +748,41 @@
     },
     "open_recorded_not_fixed": [
       "Q110-Q1r",
-      "Q110-Q5",
       "Q110-P2r",
-      "Q110-Q3",
-      "Q110-Q4",
-      "Q110-T2",
-      "Q110-T7",
-      "EQIX missing 2026-07-31 bar",
-      "assertNoIdCollisions has zero production call sites"
+      "Q110-Q4b",
+      "Q110-Q4e",
+      "Q110-Q4f",
+      "Q110-Q4g",
+      "Q110-T7b (app manifest)",
+      "Q110-D1 (the EQIX bar itself)",
+      "Q109-1",
+      "Q109-2",
+      "F2.1 (reopened)"
     ],
     "lessons": [
       "SIXTH shape of the guard-reachability defect, and the first where the SET was the defect: a producer set written in terms of the property under test cannot contain a counterexample. Ask what a green guard visited AND how what it visits was chosen.",
       "Framework routing semantics are not derivable from component source. Q110-F2 was inferred from state declarations and effect deps and was false. Verify a finding with the same rigour as an all-clear.",
       "A pinned golden froze BOTH quant bugs. Seven goldens migrated. Properties with independent oracles are what should have caught them.",
       "A test whose fixture makes the assertion trivially true cannot fail: the annualization test's first draft used a monotonic uptrend on which this dip-buying strategy never trades, so totalReturn was 0 and (1+0)^x-1 = 0 for every exponent.",
-      "A freshness flag is only as truthful as the last cache between the code that sets it and the eye that reads it. The _cachedAt TIMESTAMP survives an HTTP cache; the boolean does not."
+      "A freshness flag is only as truthful as the last cache between the code that sets it and the eye that reads it. The _cachedAt TIMESTAMP survives an HTTP cache; the boolean does not.",
+      "A dependency manifest that has never been installed cold is a claim, not a fact. The pytest job failed on its first CI run because requirements.txt is not installable; a clean venv then found a SECOND hidden dependency (scipy, imported lazily inside a function). Static import analysis is not a substitute for a cold install.",
+      "Do NOT pass --delete-branch when merging the base of a stacked PR. Deleting fix/Q107-A23 auto-CLOSED #179 rather than retargeting it, and a closed PR whose base is gone cannot be reopened. The branch survived; the PR did not.",
+      "Retargeting a PR base does not re-trigger CI — pull_request fires on opened/synchronize/reopened, not on a base edit. Close-and-reopen is what runs the checks.",
+      "sharpeRatio takes an ANNUAL rate and sortinoRatio a DAILY one, adjacent in the same SSOT file, both plain `number`. I walked into it while delegating. A units error tsc cannot see (Q110-Q4f)."
     ],
-    "gates": "typecheck clean; 1927 pass / 17 skipped; architecture 251 pass; check:ci green; npm run benchmark unchanged at 1.91pp edge"
+    "gates": "typecheck clean; 1927 pass / 17 skipped; architecture 251 pass; check:ci green; npm run benchmark unchanged at 1.91pp edge",
+    "merged": {
+      "#178": "ca91d45 quarantine vs freshness",
+      "#181": "07635a5 tier 1 (replaces #179, which GitHub auto-CLOSED when its base branch was deleted on merging #178 — the branch survived, the PR could not be reopened)",
+      "#180": "fde0519 tier 2",
+      "#182": "d186442 ported Q109-1/Q109-2 off the conflicting #175, which is now closed"
+    },
+    "production_verified_2026_09_06": [
+      "?tickers=BRK-B returns BRK.B (was [] with a 200)",
+      "?tickers=ZZZZ returns unmatchedTickers:[\"ZZZZ\"] (was a bare empty list)",
+      "/api/ma-deviation emits _cached and _cachedAt",
+      "check:smoke against the live URL: all checks passed"
+    ],
+    "gates_at_merge": "typecheck clean; 1944 pass / 17 skipped; 9/9 CI checks green on #180 incl. the new pytest job; actionlint clean; verify:data 0 hard failures; benchmark 1.91pp edge unchanged; production smoke green"
   }
 }
