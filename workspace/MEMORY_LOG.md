@@ -1432,3 +1432,48 @@ Also: `sharpeRatio` takes an **annual** rate while `sortinoRatio` takes a
 **daily** one, adjacent in the same SSOT file, both plain `number`. I passed the
 daily rate to both while delegating and typecheck was clean. Logged as
 `Q110-Q4f` with every call site audited.
+
+---
+
+## 2026-09-06 (later) — the residuals, and a finding about one of my own findings
+
+PRs #184 and #185 merged; production smoke green. Of the eleven `Q110`/`Q109`
+rows left open this morning, eight are closed and the three remaining are
+deliberate decisions with passing tests behind them.
+
+**The one worth writing down is `Q110-T7b`, because I got it wrong in public.**
+I reported that `tradingagents` "does not exist on PyPI". It does — versions
+0.0.0 through 0.7.0 — and every one publishes `Requires-Python: >=3.12`. The CI
+job I had added pinned **3.11**, so pip refused them all and said "from versions:
+none", which reads like a missing package and is not one. The tell was in the
+same log, immediately above the line I quoted: pip had listed the versions it
+ignored for requiring a different Python. I anchored on the last line.
+
+The manifest was fine; my job's interpreter was not. Under 3.13 the full
+`requirements.txt` installs clean at **132 passed / 0 skipped**. The genuine
+defect underneath — **nothing declared a minimum interpreter**, so the constraint
+lived transitively inside a dependency and was discoverable only by failing — is
+now declared in `.python-version`, stated in the manifest, and guarded by a test
+that pins the declaration to the workflow *and* independently asserts the floor,
+because an equality check alone would happily agree on 3.11 twice.
+
+**`Q109-1`**: the primary CI gate had 0.10pp of headroom on a statistic whose
+per-year values span 14.45pp. Rebuilt in three layers — structural counts
+(near-noiseless, because `WINDOW_START` is pinned so bars only accumulate), a
+floor at the **null** rather than an arbitrary offset from a past measurement,
+and the unchanged significance gate. The sharper framing, which the finding did
+not have: the threat is not sampling error — CI re-measures nearly identical
+data — it is that **new data legitimately moves the pooled number**.
+
+**`Q110-Q4b`/`F2.1`**: Sortino now divides by N. `F2.1` had recorded this as
+CRITICAL and closed it the wrong way, and its defending test asserted the result
+"must NOT match ≈1.443" — which is the N−1 answer. **The exclusion line was
+excluding the correct convention.** Worth noting the change is a *rescale* by
+`1/sqrt(F)`, not a flattering one: AMT goes −0.227 → −0.323.
+
+**`Q110-D1`**: a vendor probe confirmed Yahoo serves EQIX 2026-07-31, so the hole
+was ours. `scripts/backfill-missing-sessions.mjs` fills exactly the detected holes
+and **refuses to write unless the refetch is a strict superset of the committed
+series** — a restatement is a different event needing a human. Benchmark
+unchanged. The live positive control was rewritten to reconstruct the hole in
+memory: a control that dies when the bug is fixed has an expiry date.
