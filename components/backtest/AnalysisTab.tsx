@@ -129,11 +129,28 @@ export function AnalysisTab({ results, sectorColors }: { results: BacktestResult
                       <td className="px-3 py-2 font-mono text-red-400">
                         -{(Math.abs(r.maxDrawdown) * 100).toFixed(1)}%
                       </td>
+                      {/*
+                        I1/I2 (Q110-Q4, 2026-09-05) — a missing risk metric must
+                        say WHY, not merely go blank. Twenty of 56 instruments
+                        never open a position over the window, and a bare "—"
+                        beside a real drawdown reads as a data failure. Until
+                        this fix those twenty rendered Sortino −15.87 — the
+                        constant −sqrt(252), which is what the formula collapses
+                        to on a flat series — next to a Sharpe that already said
+                        "—". Nulling the number without naming the reason would
+                        trade a confidently wrong figure for a silent one, and I2
+                        is explicit that a state must be VISIBLE, not just
+                        non-misleading.
+                      */}
                       <td className={`px-3 py-2 font-mono ${(r.sharpeRatio ?? 0) >= 1 ? 'text-emerald-400' : (r.sharpeRatio ?? 0) >= 0 ? 'text-amber-400' : 'text-red-400'}`}>
-                        {r.sharpeRatio != null ? r.sharpeRatio.toFixed(2) : '—'}
+                        {r.sharpeRatio != null
+                          ? r.sharpeRatio.toFixed(2)
+                          : <span className="text-slate-500" title="No position was ever opened, so there is no return series to grade">{r.totalTrades === 0 ? 'no trades' : '—'}</span>}
                       </td>
                       <td className={`px-3 py-2 font-mono ${(r.sortinoRatio ?? 0) >= 1 ? 'text-emerald-400' : (r.sortinoRatio ?? 0) >= 0 ? 'text-amber-400' : 'text-red-400'}`}>
-                        {r.sortinoRatio != null ? r.sortinoRatio.toFixed(2) : '—'}
+                        {r.sortinoRatio != null
+                          ? r.sortinoRatio.toFixed(2)
+                          : <span className="text-slate-500" title="No position was ever opened, so there is no return series to grade">{r.totalTrades === 0 ? 'no trades' : '—'}</span>}
                       </td>
                       <td className={`px-3 py-2 font-mono ${r.winRate >= 0.5 ? 'text-emerald-400' : 'text-slate-400'}`}>
                         {(r.winRate * 100).toFixed(0)}%

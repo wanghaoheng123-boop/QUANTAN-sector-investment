@@ -28,6 +28,8 @@ import { fileURLToPath } from 'url'
 import { enhancedCombinedSignal, DEFAULT_CONFIG } from '../lib/backtest/signals'
 import type { OhlcvRow } from '../lib/backtest/dataLoader'
 import { getProfileForTicker } from '../lib/optimize/sectorProfiles'
+import { sharpeRatio, sortinoRatio } from '../lib/quant/indicators'
+import { getRiskFreeRateSync } from '../lib/quant/riskFreeRate'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -221,26 +223,54 @@ function runInstrument(ticker: string, sector: string, rows: OhlcvRow[]): Instru
   let sharpe: number | null = null
   let sortino: number | null = null
   if (dailyReturns.length > 30) {
-    const mean = dailyReturns.reduce((a, b) => a + b, 0) / dailyReturns.length
-    const variance = dailyReturns.reduce((s, x) => s + (x - mean) ** 2, 0) / Math.max(1, dailyReturns.length - 1)
-    const sd = Math.sqrt(Math.max(variance, 0))
-    if (sd > 0) {
-      const rfDaily = 0.04 / 252
-      sharpe = ((mean - rfDaily) / sd) * Math.sqrt(252)
-    }
-    const neg = dailyReturns.filter(x => x < 0)
-    if (neg.length > 0) {
-      const downSd = Math.sqrt(neg.reduce((s, x) => s + x * x, 0) / neg.length)
-      if (downSd > 0) {
-        const rfDaily = 0.04 / 252
-        sortino = ((mean - rfDaily) / downSd) * Math.sqrt(252)
-      }
-    }
+    // Same delegation for Sharpe, and for the same reason: this copy carried the
+    // same hardcoded 0.04 and guarded `sd > 0` rather than the SSOT's 1e-10.
+    //
+    // MIND THE UNITS, and they are NOT the same for the two siblings:
+    // `sharpeRatio` takes an ANNUAL rate and divides internally (`rfAnnual`,
+    // indicators.ts:673), while `sortinoRatio` takes a DAILY one (`marDaily`,
+    // :717). Passing the daily rate to both — which is what the first draft of
+    // this delegation did — silently sets Sharpe's risk-free rate to 0.045/252,
+    // i.e. effectively zero, and no type catches it because both are `number`.
+    // Logged as Q110-Q4f.
+    sharpe = sharpeRatio(dailyReturns, getRiskFreeRateSync(), 252)
+    // Q110-Q4d (2026-09-06) — this was a FOURTH live Sortino implementation,
+    // while `lib/quant/indicators.ts` claims to be the consolidated SSOT and
+    // ledger row F1.16 records three divergent copies as merged. It was also
+    // internally inconsistent: the shortfall filter used MAR = 0 (`x < 0`)
+    // while the numerator used `mean − rfDaily`, so the two halves disagreed
+    // about the target return. It had no `n_d ≥ 30` minimum (only
+    // `neg.length > 0`), no dispersion guard — so it reproduced the degenerate
+    // constant Q110-Q4 removed from the canonical one — and it hardcoded
+    // `0.04 / 252` where the SSOT reads 0.045 from `getRiskFreeRateSync()`,
+    // a magic number that also disagreed with the rest of the platform.
+    //
+    // Delegating is what HOUSE STYLE requires ("never duplicate RSI/EMA math"),
+    // and it is why the same guards now apply here for free.
+    sortino = sortinoRatio(dailyReturns, getRiskFreeRateSync() / 252, 252)
   }
 
   const years = rows.length / 252
   const signalsPerYear = years > 0 ? totalBuys / years : 0
-  const excessReturn = avgReturn != null ? avgReturn * 252 - bnhReturn : null
+
+  // Q110-Q5 (2026-09-06) — this was `avgReturn * 252 - bnhReturn`, which
+  // subtracted a ~5-year CUMULATIVE buy-and-hold return from a per-trade mean
+  // scaled by 252. Two different units over two different windows. `avgReturn`
+  // is a mean 20-DAY return, so ×252 also assumed 252 independent such trades a
+  // year — off by ~12.6× on its own terms, before the comparison even happens.
+  //
+  // The fix is the same one Q110-Q1 applied to the engine: compare like with
+  // like. Convert buy-and-hold to a per-20-day rate over ITS OWN window and
+  // difference the two per-20-day returns. This needs no annualisation and no
+  // assumption about how often trades occur or whether they overlap — the two
+  // guesses the old expression made silently.
+  const HOLD_BARS = 20
+  const bnhPer20d =
+    rows.length > HOLD_BARS && bnhReturn > -1
+      ? (1 + bnhReturn) ** (HOLD_BARS / rows.length) - 1
+      : null
+  const excessReturn =
+    avgReturn != null && bnhPer20d != null ? avgReturn - bnhPer20d : null
 
   return {
     ticker, sector, bars: rows.length,
@@ -366,6 +396,21 @@ for (const r of bottom10) {
 const output = {
   timestamp: new Date().toISOString(),
   version: 'v3.0-phase8-loop2',
+  // Q110-Q4g (2026-09-06) — the caveat travels WITH the number, because a
+  // number in a JSON file gets quoted onward and a comment in the producer does
+  // not. `dailyReturns` here is the STRATEGY EQUITY CURVE, which is flat on
+  // ~94% of days because the strategy holds cash. With MAR = rf > 0 every flat
+  // day is a shortfall of exactly MAR, so the ratio degenerates monotonically
+  // toward −sqrt(252) ≈ −15.87 as trading frequency falls — and the values in
+  // this file sit at −14 to −15.5. They are measuring TIME OUT OF MARKET, not
+  // risk-adjusted return. The Q110-Q4 dispersion guard correctly does not fire
+  // (there IS some dispersion); it catches the fully degenerate case, not this
+  // near-degenerate one. Same finding as the backtest surface, fourth instance.
+  sharpeSortinoCaveat:
+    'sharpeRatio and sortinoRatio in byInstrument are computed on a strategy equity ' +
+    'curve that is flat ~94% of days. Sortino degenerates toward -sqrt(252) as ' +
+    'trading frequency falls and here measures time-out-of-market, not risk-adjusted ' +
+    'return. DO NOT QUOTE. See findings-ledger Q110-Q4g.',
   strategy: 'combinedSignal + sector gate post-filters (goldenCross, momentum) + per-sector maxHoldDays',
   aggregate: {
     totalInstruments: results.length,

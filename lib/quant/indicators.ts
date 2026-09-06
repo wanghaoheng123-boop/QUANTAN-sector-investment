@@ -696,8 +696,36 @@ export function sharpeRatio(
  *
  * Key choices:
  *   - Denominator is n_d (count of negative excess returns), NOT N (total obs).
- *     Using N understates downside deviation, inflating Sortino by sqrt(N/n_d).
+ *
+ *     CORRECTION (Q110-Q4, 2026-09-05) — the sentence that used to sit here read
+ *     "Using N understates downside deviation, inflating Sortino by sqrt(N/n_d)",
+ *     and it PRESUMED ITS OWN CONCLUSION. The arithmetic is right and the
+ *     normative direction is backwards. `LPM₂(τ) = E[min(0, R − τ)²]` is an
+ *     expectation over the FULL distribution of R — the integrand vanishes above
+ *     τ, the measure does not — so its sample analogue divides by N. Dividing by
+ *     n_d instead computes `E[(R−τ)² | R < τ] = LPM₂(τ)/F(τ)`, the CONDITIONAL
+ *     shortfall severity, a different functional. Identically:
+ *
+ *         dsd_nd = dsd_N / sqrt(F(τ)),   F(τ) ≈ n_d/N
+ *
+ *     So against the standard estimand the N-denominator estimator is the
+ *     consistent one and this one is biased UPWARD by 1/sqrt(F(τ)). The
+ *     structural objection is the stronger of the two: under n_d the statistic
+ *     is INVARIANT TO HOW OFTEN YOU LOSE. Risk is frequency × severity, and a
+ *     measure that discards frequency is not measuring risk.
+ *
+ *     It is left as n_d here, deliberately and for now, because changing it is
+ *     a FLATTERING move on the price-return path (sqrt(N/n_d) ≈ 1.42–1.47;
+ *     AAPL 0.653 → 0.956) and CLAUDE.md is explicit that a flattering correction
+ *     needs more care, not less. Tracked as Q110-Q4b with the measurement.
+ *     On the backtest path it is nearly moot: that path passes MAR = rfDaily > 0,
+ *     so a flat day counts as a shortfall and n_d ≈ N (measured 1.00–1.10).
+ *
  *   - Minimum n_d ≥ 30 for statistically stable estimate (Bacon 2008 p107).
+ *     NOTE: measured 2026-09-05, this gate has ZERO firing instances on any live
+ *     path — n_d ≈ N on the backtest path and ≈ 0.47N on the price path. It
+ *     nulls instruments only under MAR = 0 on a strategy curve, a combination no
+ *     production call site produces. Its unit test exercises that signature.
  *   - MAR (Minimum Acceptable Return) is configurable as a daily rate. Pass
  *     `marDaily = rfAnnual / annualization` to use risk-free rate as MAR.
  *   - Numerator uses (mean - MAR), matching the MAR used in the denominator.
@@ -705,6 +733,7 @@ export function sharpeRatio(
  * Returns null when:
  *   - returns.length < 30
  *   - n_d (negative excess returns) < 30
+ *   - the RETURN SERIES has no dispersion (Q110-Q4) — matching `sharpeRatio`
  *   - downsideDeviation is degenerate (zero or non-finite)
  *
  * @param returns        Daily return series (decimal, e.g. 0.01 = 1%).
@@ -723,12 +752,34 @@ export function sortinoRatio(
     .filter((x) => x < 0)
   if (negDevs.length < 30) return null
 
+  // Q110-Q4 (2026-09-05) — A RATIO NEEDS DISPERSION IN THE RETURNS, NOT MERELY
+  // AN OFFSET FROM MAR. `sharpeRatio` above guards `sd > 1e-10` and correctly
+  // returns null on a constant series. This function's own degeneracy guard
+  // below CANNOT fire in the same situation: with MAR = m > 0 and every return
+  // equal, each deviation is exactly −m, so `dsd = m`, comfortably above any
+  // epsilon. The whole expression then collapses to a constant:
+  //
+  //     Sortino = (0 − m)/m × sqrt(ann) = −sqrt(ann),  for ANY instrument
+  //
+  // Measured on the committed fixtures: TWENTY of 56 instruments returned
+  // −15.874507866387 — that is −sqrt(252) to floating-point accumulation — and
+  // ALL TWENTY had `totalTrades === 0`. A constant encoding "never opened a
+  // position" was rendered as an instrument-specific risk-adjusted return, in
+  // `AnalysisTab` beside a Sharpe that correctly showed `—` on the same row.
+  //
+  // The guard is deliberately the SAME test Sharpe uses, on the same series, so
+  // the two metrics can no longer disagree about whether a series is gradeable.
+  const mean = returns.reduce((a, b) => a + b, 0) / returns.length
+  const spread = Math.sqrt(
+    returns.reduce((s, x) => s + (x - mean) ** 2, 0) / Math.max(1, returns.length - 1),
+  )
+  if (!Number.isFinite(spread) || spread < 1e-10) return null
+
   const downsideVariance =
     negDevs.reduce((s, x) => s + x * x, 0) / negDevs.length
   const dsd = Math.sqrt(downsideVariance)
   if (!Number.isFinite(dsd) || dsd < 1e-12) return null
 
-  const mean = returns.reduce((a, b) => a + b, 0) / returns.length
   const ratio = ((mean - marDaily) / dsd) * Math.sqrt(annualization)
   return Number.isFinite(ratio) ? ratio : null
 }

@@ -1340,3 +1340,52 @@ failure; removing the shared write eliminates it.
 bars straight to `main` with no CI gate, into a primary gate with 0.10pp of
 headroom (`Q107-D5`). Nobody is watching it automatically. That is the single
 next action.
+
+---
+
+## 2026-09-05 — Q-110 deep inspection wave: two wrong numbers, one guard that could not fail, one finding of my own that was false
+
+Five specialist reviews landed on disjoint territories. What survived independent
+verification, and what did not, matters more than the count.
+
+**Two rendered numbers were wrong, and a dense golden had frozen each.**
+`maxDrawdown` divided the largest absolute drop by the FINAL running peak rather
+than the peak standing when it happened — NVDA reported 23.4% against a true
+66.4%, one-directional, and crash-in-2022-recover-by-2026 is the modal shape for
+this universe. `excessReturn` subtracted 1254 bars of buy-and-hold from 1054 bars
+of strategy: mean 40.36pp, worst NFLX −230.87pp, and UNH and PEP were shown
+underperforming while they outperformed. `engine.ts` F-2 had already made that
+correction for the portfolio aggregate and named the per-instrument field as the
+legacy it routed around; the rows the UI renders kept it.
+
+Both bugs were pinned by goldens matching the buggy formula to 1e-12. Seven
+migrated with notes. **A golden is a snapshot of behaviour, and a snapshot of
+wrong output makes the bug look deliberate to the next reader.**
+
+**The I2 cache guard's producer set was written in terms of the answer.**
+`files.filter(f => /_cached:\s*true/)` — "routes that already set the flag" — so
+a route serving a stored copy without it was not a producer. Six producers, three
+silent (`ma-deviation` 5 min, `backtest` ONE HOUR, `backtest/live` 60 s), 24
+assertions green throughout, and `CLAUDE.md` claiming the clause CLOSED in the
+same paragraph that explained why an aggregate check would miss exactly this.
+Sixth shape of the reachability defect and the first where the SET, not the scan,
+was the flaw. **Ask what a green guard visited — and how what it visits was
+chosen.**
+
+**And one of my own findings was false.** `Q110-F2` said page-owned state is not
+cleared on a ticker change. Measured on the deployed production build: Next.js
+App Router keys each dynamic segment by value and REMOUNTS, so the state cannot
+survive. `Q110-F1` was downgraded HIGH → LOW by the same measurement — the hook
+reset is correct and kept, but no call site can change its ticker without a
+remount, so no user ever saw the wrong price. Both claims were inferred from
+reading state declarations and effect dependencies. **Framework routing semantics
+are not derivable from component source, and a finding deserves the same
+verification an all-clear does.**
+
+Residuals were recorded rather than closed: the `_cached` boolean is defeated by
+any cache above it (two default browser fetches returned `false` with an
+identical `_cachedAt`; the second never reached the server), three detector
+escapes are asserted as passing tests, and `bnhCurve` still folds warmup
+dividends into its opening share count.
+
+PRs #179 and #180, stacked behind #178. Merge in order.

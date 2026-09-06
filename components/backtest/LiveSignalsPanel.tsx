@@ -13,6 +13,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
+import { DataFreshnessIndicator } from '@/components/DataFreshnessIndicator'
 import { apiUrl } from '@/lib/apiBase'
 
 type SortKey = 'ticker' | 'sector' | 'price' | 'changePct' | 'zone' | 'action' | 'confidence' | 'rsi14' | 'atrPct' | 'deviationPct' | 'slopePct'
@@ -215,6 +216,23 @@ export function LiveSignalsPanel() {
               once on mount (no polling), so nothing repeats client-side either.
               Stating the fixture's as-of date and its real cadence is the only
               claim here that survives contact with the data. */}
+          {/*
+            I2 (Q110-P2, 2026-09-05) — /api/backtest/live holds a 60-second
+            module-level cache and served the stored payload with nothing marking
+            it, so a minute-old signal set rendered identically to a fresh one.
+            `lastFetched` was ALSO set here and rendered by nobody, which is the
+            same dead-flag shape one level up; it now feeds the badge.
+          */}
+          <div className="mb-2">
+            <DataFreshnessIndicator
+              quoteTime={(signals._cachedAt as number | undefined) ?? null}
+              cached={signals._cached === true}
+              label="Signals"
+            />
+            {lastFetched && (
+              <span className="ml-2 text-[10.5px] text-slate-500 font-mono">fetched {lastFetched}</span>
+            )}
+          </div>
           {latestDataDate && (
             <div className="text-[10px] text-slate-400">
               Data through <span className="text-slate-400 font-mono">{latestDataDate}</span> · fixture refreshed weekly (Sun 22:00 UTC)
