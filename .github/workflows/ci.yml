@@ -150,9 +150,16 @@ jobs:
         with:
           python-version: '3.11'
           cache: 'pip'
+      # Q110-T7b (2026-09-06) — `requirements.txt` CANNOT be installed: line 13
+      # declares `tradingagents>=0.2.0`, which does not exist on PyPI, and pip
+      # dies there. This job's FIRST RUN found that, which is the job working —
+      # it was the first clean-environment install this project has ever done.
+      # `requirements-test.txt` declares exactly what the suite imports, with
+      # the same version floors. The application manifest is a separate,
+      # unfixed problem: findings-ledger Q110-T7b.
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r requirements-test.txt
       - name: Run pytest
         run: python -m pytest tests/ quant_framework/ -q --maxfail=1
