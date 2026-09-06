@@ -705,36 +705,51 @@ export function sharpeRatio(
  * (engine.ts, portfolioBacktest.ts, indicators.ts) — this is now the canonical one.
  * Other call-sites import from here.
  *
- * Formula (Sortino & van der Meer 1991):
- *   downsideDeviation = sqrt( sum( min(0, r - MAR)^2 ) / n_d )
+ * Formula (target semideviation — the square root of the second lower partial
+ * moment, Fishburn 1977 / Bawa 1975, as used by Sortino & van der Meer 1991):
+ *   downsideDeviation = sqrt( sum( min(0, r - MAR)^2 ) / N )
  *   Sortino           = ((mean - MAR) / downsideDeviation) * sqrt(annualization)
  *
  * Key choices:
- *   - Denominator is n_d (count of negative excess returns), NOT N (total obs).
+ *   - Denominator is N (ALL observations), not n_d (the count below target).
  *
- *     CORRECTION (Q110-Q4, 2026-09-05) — the sentence that used to sit here read
- *     "Using N understates downside deviation, inflating Sortino by sqrt(N/n_d)",
- *     and it PRESUMED ITS OWN CONCLUSION. The arithmetic is right and the
- *     normative direction is backwards. `LPM₂(τ) = E[min(0, R − τ)²]` is an
- *     expectation over the FULL distribution of R — the integrand vanishes above
- *     τ, the measure does not — so its sample analogue divides by N. Dividing by
- *     n_d instead computes `E[(R−τ)² | R < τ] = LPM₂(τ)/F(τ)`, the CONDITIONAL
- *     shortfall severity, a different functional. Identically:
+ *     MIGRATION NOTE — Q110-Q4b (2026-09-06). This divided by n_d until today,
+ *     and the docstring here defended it with "Using N understates downside
+ *     deviation, inflating Sortino by sqrt(N/n_d)" — a sentence that PRESUMED
+ *     ITS OWN CONCLUSION. The arithmetic was right; the normative direction was
+ *     backwards.
  *
- *         dsd_nd = dsd_N / sqrt(F(τ)),   F(τ) ≈ n_d/N
+ *     `LPM₂(τ) = E[min(0, R − τ)²]` is an expectation over the FULL distribution
+ *     of R. The integrand vanishes above τ; the MEASURE does not. The sample
+ *     analogue of an expectation divides by N. Dividing by n_d instead computes
  *
- *     So against the standard estimand the N-denominator estimator is the
- *     consistent one and this one is biased UPWARD by 1/sqrt(F(τ)). The
- *     structural objection is the stronger of the two: under n_d the statistic
- *     is INVARIANT TO HOW OFTEN YOU LOSE. Risk is frequency × severity, and a
- *     measure that discards frequency is not measuring risk.
+ *         E[(R−τ)² | R < τ] = LPM₂(τ) / F(τ)
  *
- *     It is left as n_d here, deliberately and for now, because changing it is
- *     a FLATTERING move on the price-return path (sqrt(N/n_d) ≈ 1.42–1.47;
- *     AAPL 0.653 → 0.956) and CLAUDE.md is explicit that a flattering correction
- *     needs more care, not less. Tracked as Q110-Q4b with the measurement.
- *     On the backtest path it is nearly moot: that path passes MAR = rfDaily > 0,
- *     so a flat day counts as a shortfall and n_d ≈ N (measured 1.00–1.10).
+ *     — the CONDITIONAL shortfall severity, a different functional. Identically
+ *     `dsd_nd = dsd_N / sqrt(F(τ))` with `F(τ) ≈ n_d/N`, so against the standard
+ *     estimand the n_d form was biased UPWARD by `1/sqrt(F(τ))`.
+ *
+ *     The structural objection is the stronger of the two and needs no citation:
+ *     under n_d the statistic is INVARIANT TO HOW OFTEN YOU LOSE. Two strategies
+ *     with identical loss magnitudes, one losing 10% of the time and one 90%,
+ *     scored the same. Risk is frequency × severity; a measure that discards
+ *     frequency is not measuring risk.
+ *
+ *     MEASURED EFFECT, and it is a RESCALE, not an improvement. The factor is
+ *     `1/sqrt(F(τ))`, which magnifies in BOTH directions:
+ *
+ *       price-return path (MAR=0, continuously invested), N/n_d ≈ 2.08:
+ *         AAPL   0.6529 →  0.9556      AVGO   1.2774 →  1.8600
+ *         AMT   −0.2268 → −0.3225      APD    0.1999 →  0.2846
+ *       backtest path (MAR=rfDaily, mostly-flat curve), N/n_d ≈ 1.00–1.10:
+ *         mean factor 1.0199 on values that are NEGATIVE — i.e. slightly worse.
+ *
+ *     Applied because it is correct, not because it helps — the same standard
+ *     `Q-084` set when it moved DSR 0.0723 → 0.3439. The precondition
+ *     `quant-validator` attached to this change was removing the unsourced
+ *     ">1.5 indicates good downside management" band from `lib/metricGlossary.ts`,
+ *     since AVGO crosses it on the definitional change alone; that band was
+ *     struck by `Q110-Q4c` before this landed.
  *
  *   - Minimum n_d ≥ 30 for statistically stable estimate (Bacon 2008 p107).
  *     NOTE: measured 2026-09-05, this gate has ZERO firing instances on any live
@@ -800,8 +815,9 @@ export function sortinoRatio(
   )
   if (!Number.isFinite(spread) || spread < 1e-10) return null
 
+  // Q110-Q4b: divide by N, not by negDevs.length. See the migration note above.
   const downsideVariance =
-    negDevs.reduce((s, x) => s + x * x, 0) / negDevs.length
+    negDevs.reduce((s, x) => s + x * x, 0) / returns.length
   const dsd = Math.sqrt(downsideVariance)
   if (!Number.isFinite(dsd) || dsd < 1e-12) return null
 

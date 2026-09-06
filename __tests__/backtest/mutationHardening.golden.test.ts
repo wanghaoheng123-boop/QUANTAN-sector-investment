@@ -132,7 +132,10 @@ describe('backtestInstrument — golden run (production signal path)', () => {
     // here; over the 56 real fixtures it is a mean 0.082pp.
     expect(res.annualizedReturn).toBeCloseTo(0.074093, 5) // was 0.034437 (380-bar window)
     expect(res.sharpeRatio).toBeCloseTo(4.219479, 4)
-    expect(res.sortinoRatio).toBeCloseTo(9.386393, 4)
+    // MIGRATION NOTE — Q110-Q4b (2026-09-06): downside deviation now divides by
+    // N (the LPM2 expectation) rather than n_d. A pure rescale by 1/sqrt(n_d/N),
+    // so magnitude grows in BOTH directions.
+    expect(res.sortinoRatio).toBeCloseTo(11.560703, 4) // was 9.386393 (n_d)
     expect(res.maxDrawdown).toBeCloseTo(0.000163, 5)
     expect(res.winRate).toBe(1)
     expect(res.profitFactor).toBe(Infinity) // one win, zero losses
@@ -293,7 +296,10 @@ describe('runPortfolioBacktest — golden run (production signal path)', () => {
     expect(res.equityCurve).toHaveLength(241)
     expect(res.dailyReturns).toHaveLength(240)
     expect(res.sharpeRatio).toBeCloseTo(-5.21958, 3)
-    expect(res.sortinoRatio).toBeCloseTo(-5.939125, 3)
+    // MIGRATION NOTE — Q110-Q4b (2026-09-06): downside deviation now divides by
+    // N (the LPM2 expectation) rather than n_d. A pure rescale by 1/sqrt(n_d/N),
+    // so magnitude grows in BOTH directions.
+    expect(res.sortinoRatio).toBeCloseTo(-6.538762, 3) // was -5.939125 (n_d); MORE negative
     expect(res.varMetrics.var95_1d).toBeCloseTo(0.000437, 5)
     expect(res.varMetrics.var99_1d).toBeNull() // < 250 daily returns
 
