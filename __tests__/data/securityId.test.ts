@@ -11,6 +11,8 @@ import {
 // arithmetic to satisfy a layering preference would put two copies of a
 // statistical rule in the repo.
 import { detectTickerHandover } from '../../scripts/lib/handoverDetect.mjs'
+// Q110-D2: the universe is imported, not scraped out of source with a regex.
+import { TICKERS } from '../../scripts/lib/universe.mjs'
 
 const ROOT = join(__dirname, '../..')
 
@@ -104,13 +106,47 @@ describe('assertNoIdCollisions — detects a REAL conflict, not a convention dif
   })
 
   it('the real universe has no conflicting attributes', () => {
-    const src = readFileSync(join(ROOT, 'scripts/fetchBacktestData.mjs'), 'utf8')
-    const entries = [...src.matchAll(/ticker:\s*'([^']+)'\s*,\s*sector:\s*'([^']+)'/g)].map((m) => ({
-      symbol: m[1],
-      attribute: m[2],
-    }))
-    expect(entries.length).toBeGreaterThan(40)
+    // Q110-D2 (2026-09-06) — this used to scrape the entries out of
+    // `fetchBacktestData.mjs` with a REGEX over its source text. A regex over
+    // source is not a reader of data: change how the array is written and the
+    // match count silently drops to zero, the guard runs over an empty list,
+    // and it passes. The `> 40` control was the only thing between that and a
+    // vacuous green. The universe now lives in `scripts/lib/universe.mjs`,
+    // which the fetch script and this test both IMPORT — a module cannot go
+    // quietly empty the way a pattern match can.
+    const entries = TICKERS.map((t) => ({ symbol: t.ticker, attribute: t.sector }))
+    expect(entries.length).toBeGreaterThan(40) // reachability, kept deliberately
     expect(() => assertNoIdCollisions(entries)).not.toThrow()
+  })
+
+  it('the FIXTURES on disk collide with nothing in the universe either', () => {
+    // The other half of Q110-D2, and the half that matters more: the universe
+    // declares `BRK.B` while the file on disk is `BRK-B.json`, and a divergence
+    // between those two is the exact defect class Q-080 existed to close. The
+    // old test covered the declaration and never looked at the directory.
+    const { readdirSync } = require('fs') as typeof import('fs')
+    const dir = join(ROOT, 'scripts/backtestData')
+    const fromDisk = readdirSync(dir)
+      .filter((f: string) => f.endsWith('.json'))
+      .map((f: string) => f.replace(/\.json$/, ''))
+    expect(fromDisk.length).toBeGreaterThan(50) // reachability
+
+    // Every fixture must resolve to an id, and every universe entry must have a
+    // fixture — checked as SETS so a mismatch names the symbol rather than a count.
+    const declared = new Set(TICKERS.map((t) => canonicalSecurityId(t.ticker)))
+    const onDisk = new Set(fromDisk.map((f) => canonicalSecurityId(f)))
+    expect([...declared].filter((id) => id != null && !onDisk.has(id))).toEqual([])
+
+    // And the combined set must still carry one attribute per id: if a fixture
+    // and a universe entry disagreed about the sector, THAT is a collision.
+    const combined = [
+      ...TICKERS.map((t) => ({ symbol: t.ticker, attribute: t.sector })),
+      ...fromDisk.map((f) => {
+        const meta = JSON.parse(readFileSync(join(dir, `${f}.json`), 'utf8'))
+        return { symbol: f, attribute: meta.sector as string | undefined }
+      }),
+    ]
+    expect(() => assertNoIdCollisions(combined)).not.toThrow()
   })
 })
 
