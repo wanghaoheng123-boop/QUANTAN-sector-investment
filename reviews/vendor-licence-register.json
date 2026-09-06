@@ -1718,6 +1718,23 @@
         "scripts/ci/notify-scheduled-failure.mjs:18"
       ],
       "routes_to": []
+    },
+    {
+      "kind": "http-host",
+      "id": "raw.githubusercontent.com",
+      "lifecycle": "active",
+      "classification": "build-tooling",
+      "vendor": "GitHub (raw content CDN)",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Fetches the pinned actionlint installer script in scripts/ci/lint-workflows.sh:37. Build tooling only \u2014 runs in CI and on a developer machine, never in the application tier, and returns a shell script rather than vendor data. The actionlint version is pinned so the fetched artifact is deterministic. CAUGHT BY THE GUARD, not by me: this is the SECOND time the I8 register has failed the suite on my own newly added outbound call before it could merge, which is the mechanism doing exactly what Q-100 built it for.",
+      "recorded_by": "Q107-A25 (lead) \u2014 recorded 2026-09-05",
+      "recorded_on": "2026-09-05",
+      "evidence": [
+        "scripts/ci/lint-workflows.sh:37"
+      ],
+      "routes_to": []
     }
   ],
   "field_definitions": {

@@ -29,7 +29,7 @@ jobs:
       - name: Start app
         run: |
           npm run start &
-          for i in $(seq 1 30); do
+          for _ in $(seq 1 30); do
             if curl -sf http://localhost:3000 -o /dev/null; then echo "app up"; break; fi
             sleep 2
           done
