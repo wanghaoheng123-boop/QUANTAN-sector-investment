@@ -148,18 +148,21 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          # >= 3.12 is a HARD requirement: `tradingagents` ships only
+          # `Requires-Python: >=3.12` wheels. Pinned rather than floated so a
+          # runner default cannot silently move it. Kept in step with
+          # `.python-version`.
+          python-version: '3.13'
           cache: 'pip'
-      # Q110-T7b (2026-09-06) — `requirements.txt` CANNOT be installed: line 13
-      # declares `tradingagents>=0.2.0`, which does not exist on PyPI, and pip
-      # dies there. This job's FIRST RUN found that, which is the job working —
-      # it was the first clean-environment install this project has ever done.
-      # `requirements-test.txt` declares exactly what the suite imports, with
-      # the same version floors. The application manifest is a separate,
-      # unfixed problem: findings-ledger Q110-T7b.
+      # Installs the REAL manifest, which also makes this job a check that
+      # `requirements.txt` is installable at all. Its first run proved that
+      # worth doing — it failed, on 3.11, and the diagnosis in the first draft
+      # of this comment was WRONG: `tradingagents` does exist on PyPI, every
+      # version simply requires >= 3.12. The manifest was fine; the interpreter
+      # this job pinned was not. See findings-ledger Q110-T7b, corrected.
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements-test.txt
+          pip install -r requirements.txt
       - name: Run pytest
         run: python -m pytest tests/ quant_framework/ -q --maxfail=1
