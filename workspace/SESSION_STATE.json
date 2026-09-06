@@ -784,5 +784,32 @@
       "check:smoke against the live URL: all checks passed"
     ],
     "gates_at_merge": "typecheck clean; 1944 pass / 17 skipped; 9/9 CI checks green on #180 incl. the new pytest job; actionlint clean; verify:data 0 hard failures; benchmark 1.91pp edge unchanged; production smoke green"
+  },
+  "q110_residuals_2026_09_06": {
+    "status": "CLOSED — MERGED TO PRODUCTION",
+    "merged": {
+      "#184": "89463b9 residuals",
+      "#185": "25a0859 Sortino denominator"
+    },
+    "fixed": {
+      "Q110-T7b": "MY DIAGNOSIS WAS WRONG. tradingagents DOES exist on PyPI; every version needs Python >=3.12 and my CI job pinned 3.11. The manifest was fine. Under 3.13 it installs clean, 132 passed / 0 skipped. Real defect underneath: nothing declared a minimum interpreter. Now declared and guarded.",
+      "Q109-1": "Primary CI gate had 0.10pp headroom. Rebuilt in three layers: structural counts (near-noiseless because WINDOW_START is pinned), a floor at the NULL (0.0 not 1.81), and the unchanged significance gate. Sharper framing than the finding: the threat is new data moving the pooled number, not sampling error.",
+      "Q110-Q4f": "Rate-unit guards. sharpeRatio takes ANNUAL, sortinoRatio DAILY; both now throw on an implausible value and each names the sibling. A brand remains the stronger fix.",
+      "Q110-D1": "EQIX 2026-07-31 backfilled. Vendor probe confirmed the hole was ours. scripts/backfill-missing-sessions.mjs refuses to write unless the refetch is a strict SUPERSET of the committed series.",
+      "Q110-Q4b": "Sortino denominator n_d -> N. It is a RESCALE by 1/sqrt(F), magnifying both directions (AMT -0.227 -> -0.323), not simply flattering.",
+      "F2.1": "Resolved in the direction the algebra requires. Its defending test asserted the result 'must NOT match 1.443' — the N-1 answer — so it was excluding the correct convention."
+    },
+    "open_by_decision": [
+      "Q110-Q1r (bnhCurve residual, asserted as a passing test)",
+      "Q110-Q4e (dormant n_d>=30 gate, documented)",
+      "Q109-2 (per-year edge, INFO by design)"
+    ],
+    "lessons": [
+      "A diagnosis written from one failing log line is a claim, not a fact. pip listed 'Ignored the following versions that require a different python version' immediately above the line I quoted, and I anchored on the last line.",
+      "A gate must be calibrated against something real. Prefer a quantity that CANNOT drift (counts, under a pinned window) over one that can, and prefer a principled threshold (the null) over an arbitrary offset from a past measurement.",
+      "A positive control that dies when the bug is fixed has an expiry date. Reconstruct the defect in memory instead of depending on it being present.",
+      "A stale disclosure is the same defect as a missing one — the glossary text written 24 hours earlier became false when the denominator changed, and had to go with it."
+    ],
+    "gates": "typecheck clean; 1954 pass / 17 skipped; 9/9 CI checks green on both PRs; actionlint clean; verify:data 0 hard failures, 2 warnings; benchmark exit 0 at 1.91pp; production smoke green"
   }
 }
