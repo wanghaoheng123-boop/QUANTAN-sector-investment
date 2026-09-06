@@ -132,6 +132,11 @@ export const METRIC_GLOSSARY: Record<string, MetricMeta> = {
   },
   sortino: {
     label: 'Sortino Ratio',
+    // Q110-Q4b (2026-09-06) — the denominator moved from n_d to N, so the
+    // disclosure written a day earlier ("divides by the COUNT OF SHORTFALL
+    // PERIODS … not directly comparable") is now itself wrong and is replaced.
+    // The figure IS the standard target semideviation and comparable as such.
+    //
     // Q110-Q4 (2026-09-05) — three user-visible claims struck, each unsupported.
     //
     // 1. "correct denominator: n_d" asserted a CORRECTNESS verdict that the
@@ -146,15 +151,16 @@ export const METRIC_GLOSSARY: Record<string, MetricMeta> = {
     //    threshold, which CLAUDE.md's house style forbids and which a
     //    definitional change to the denominator alone could push a name across.
     definition:
-      'Like Sharpe, but only downside deviation from the target return enters the denominator. ' +
-      'This implementation divides by the COUNT OF SHORTFALL PERIODS (n_d) rather than by all ' +
-      'periods (N), so it is not directly comparable to a Sortino quoted elsewhere.',
-    range: 'Unbounded. Not comparable across sources without knowing the denominator convention.',
+      'Like Sharpe, but only shortfalls below the target return enter the denominator. ' +
+      'Downside deviation is the square root of the second lower partial moment — an average ' +
+      'over ALL periods, with above-target periods contributing zero — so it captures how ' +
+      'OFTEN you fall short as well as how far.',
+    range: 'Unbounded. Compare against this platform\'s own history rather than a fixed threshold.',
     howToUse:
       'Read it against this platform\'s own history, not against a published threshold. ' +
       'It is shown as — when the return series has no dispersion, which is what a strategy ' +
       'that never opened a position produces.',
-    source: 'Sortino & van der Meer (1991); denominator convention documented in lib/quant/indicators.ts',
+    source: 'Target semideviation (Fishburn 1977; Bawa 1975), as used by Sortino & van der Meer (1991)',
   },
   profitFactor: {
     label: 'Profit Factor',

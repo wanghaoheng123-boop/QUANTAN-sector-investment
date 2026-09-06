@@ -216,7 +216,8 @@ describe('buildFundamentalsPayload — RICH fixture (full payload)', () => {
     // caught this.
     expect(t.maxDrawdownPct).toBeCloseTo(0.005608197080703907, 10)
     expect(t.sharpe).toBeCloseTo(7.700214771, 6)
-    expect(t.sortino).toBeCloseTo(13.70744206, 6)
+      // MIGRATION NOTE — Q110-Q4b (2026-09-06): LPM2 denominator is N, not n_d.
+    expect(t.sortino).toBeCloseTo(22.25661304, 6)  // was 13.70744206 (n_d)
     expect(t.vol20dAnnualized).toBeCloseTo(0.04493978862, 9)
     expect(t.vol60dAnnualized).toBeCloseTo(0.04473398153, 9)
     expect(t.volRegime20over60).toBeCloseTo(1.004600688, 8)

@@ -315,26 +315,51 @@ describe('Sortino Ratio', () => {
     }
   })
 
-  // F2.1 / F1.16 acceptance test: canonical n_d denominator (Sortino & van der
-  // Meer 1991), not N-1.  Hand-computed value below should hold.
-  it('uses n_d (negative-period count) denominator, not N', () => {
+  /**
+   * MIGRATION NOTE — Q110-Q4b (2026-09-06). This test was called "uses n_d
+   * (negative-period count) denominator, not N", it pinned the n_d value, and
+   * its last line asserted that the result "must NOT match" ≈1.443.
+   *
+   * 1.443 is the N−1 answer, and 1.4491 is the N answer. **The line excluding
+   * it was excluding the correct convention to within the N vs N−1
+   * distinction.** A CRITICAL ledger row (F2.1) closed this in the wrong
+   * direction and two passing tests then defended it — which is why the
+   * arithmetic is spelled out below rather than pinned as a constant: a reader
+   * can check it without trusting either the code or a previous decision.
+   *
+   * `LPM₂(τ) = E[min(0, R − τ)²]` is an expectation over the FULL distribution,
+   * so its sample analogue divides by N. See the migration note in
+   * lib/quant/indicators.ts for the full derivation.
+   */
+  it('uses N (all observations) as the LPM2 denominator, not n_d', () => {
     // 30 returns of -0.01 + 70 returns of +0.005, MAR = 0:
-    //   n = 100, n_d = 30
+    //   N = 100, n_d = 30
     //   sum(min(0,r)^2) = 30 * 1e-4 = 3e-3
-    //   downsideVariance = 3e-3 / 30 = 1e-4 → dsd = 0.01
+    //   downsideVariance = 3e-3 / 100 = 3e-5 → dsd = sqrt(3e-5) ≈ 0.00547723
     //   mean = (-0.30 + 0.35) / 100 = 0.0005
-    //   sortino = 0.0005 / 0.01 * sqrt(252) = 0.05 * sqrt(252) ≈ 0.7937
+    //   sortino = 0.0005 / 0.00547723 * sqrt(252) ≈ 1.4491
     const returns = [
       ...Array.from({ length: 30 }, () => -0.01),
       ...Array.from({ length: 70 }, () => 0.005),
     ]
     const sortino = sortinoRatio(returns, 0)
     expect(sortino).not.toBeNull()
-    if (sortino != null) {
-      expect(sortino).toBeCloseTo(0.05 * Math.sqrt(252), 4)
-      // If denom were (N-1)=99 (the old bug), sortino ≈ 1.443. We must NOT match.
-      expect(Math.abs(sortino - 1.443)).toBeGreaterThan(0.5)
-    }
+
+    // Derived, not pinned — every term is visible above.
+    const dsd = Math.sqrt((30 * 0.01 ** 2) / 100)
+    const expected = (0.0005 / dsd) * Math.sqrt(252)
+    expect(sortino!).toBeCloseTo(expected, 10)
+
+    // And it must NOT be the n_d value, which is what shipped until today.
+    const ndValue = (0.0005 / Math.sqrt((30 * 0.01 ** 2) / 30)) * Math.sqrt(252)
+    expect(ndValue).toBeCloseTo(0.05 * Math.sqrt(252), 10) // = the old golden
+    expect(Math.abs(sortino! - ndValue)).toBeGreaterThan(0.5)
+
+    // The identity relating the two, which is what makes the correction a pure
+    // RESCALE rather than a different measurement:
+    //   dsd_nd = dsd_N / sqrt(F)   =>   sortino_N = sortino_nd / sqrt(F)
+    const F = 30 / 100 // = n_d / N
+    expect(sortino!).toBeCloseTo(ndValue / Math.sqrt(F), 10)
   })
 
   it('respects custom MAR — higher MAR shrinks excess and Sortino', () => {
