@@ -1389,3 +1389,46 @@ escapes are asserted as passing tests, and `bnhCurve` still folds warmup
 dividends into its opening share count.
 
 PRs #179 and #180, stacked behind #178. Merge in order.
+
+---
+
+## 2026-09-06 — Q-110 merged to production
+
+Four PRs on `main`: #178, #181, #180, #182. Production verified after deploy —
+`?tickers=BRK-B` returns `BRK.B` where it used to return `[]` with a 200,
+`?tickers=ZZZZ` now names itself in `unmatchedTickers`, `/api/ma-deviation`
+emits `_cached`/`_cachedAt`, and the live smoke suite is green.
+
+**The last three findings closed in the process, and one of them was found BY
+the fix rather than before it.** `Q110-Q5` (an `excessReturn` with no unit —
+a per-trade mean scaled by 252 minus a five-year cumulative return) and
+`Q110-Q4d` (a fourth Sortino implementation, internally inconsistent about MAR,
+contradicting the SSOT claim) both lived in `benchmark-enhanced.ts`.
+`Q110-D2` — the universe guard reaching its data by **regex over source text** —
+is closed by `scripts/lib/universe.mjs`, imported by both producer and guard,
+with the fixture directory now covered too.
+
+**The pytest job added yesterday failed on its first CI run, and that is the job
+working.** `requirements.txt:13` declares `tradingagents>=0.2.0`, which does not
+exist on PyPI; a clean `pip install -r requirements.txt` dies there. It was
+invisible for as long as nobody provisioned from scratch — the same suite
+reported 131 passed on this machine an hour earlier, because a local environment
+inherits packages installed some other way. A cold venv then exposed a **second**
+hidden dependency: `scipy`, imported lazily inside `alpha_miner.py:79`, which an
+import-walk of top-level statements cannot see. **A dependency manifest that has
+never been installed cold is a claim, not a fact**, and static analysis is not a
+substitute for a cold install. `requirements-test.txt` fixes the suite; the
+application manifest is recorded as `Q110-T7b` (HIGH) and deliberately untouched.
+
+**Two process mistakes worth not repeating.** `--delete-branch` on the base of a
+stacked PR auto-CLOSED #179 instead of retargeting it, and a closed PR whose
+base branch is gone cannot be reopened — recovered by opening #181 on the same
+branch, rebased onto the squashed `main`. And retargeting a PR's base does not
+re-trigger CI (`pull_request` fires on opened/synchronize/reopened, not on a base
+edit), so #180 sat with only Vercel checks until it was closed and reopened —
+which is precisely when the pytest failure surfaced.
+
+Also: `sharpeRatio` takes an **annual** rate while `sortinoRatio` takes a
+**daily** one, adjacent in the same SSOT file, both plain `number`. I passed the
+daily rate to both while delegating and typecheck was clean. Logged as
+`Q110-Q4f` with every call site audited.
