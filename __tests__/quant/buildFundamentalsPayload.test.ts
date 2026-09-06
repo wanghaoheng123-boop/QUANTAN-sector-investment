@@ -202,7 +202,19 @@ describe('buildFundamentalsPayload — RICH fixture (full payload)', () => {
     expect(t.atrStopLong).toBeCloseTo(160.2777047, 6)
     expect(t.atrStopShort).toBeCloseTo(165.2589876, 6)
     expect(t.trendLabel).toBe('Golden cross zone (SMA50 above SMA200)')
-    expect(t.maxDrawdownPct).toBeCloseTo(0.005516396121, 10)
+    // MIGRATION NOTE (Q110-Q2, 2026-09-05). This golden was 0.005516396121 and
+    // it FROZE A BUG: `maxDrawdown` divided the largest absolute drop by the
+    // final running peak instead of the peak standing when it happened, which
+    // can only ever understate. The old golden matches the buggy formula to
+    // 1e-12; the value below matches an INDEPENDENT oracle to 1e-12 (recomputed
+    // from this file's own `series(320)` without touching the implementation).
+    //
+    // A dense golden is a snapshot, and a snapshot of wrong output ratifies the
+    // wrongness — this one made the bug look deliberate for as long as it stood.
+    // The property version lives in __tests__/quant/maxDrawdown.regression.test.ts
+    // and checks an oracle against all 56 fixtures, which is what should have
+    // caught this.
+    expect(t.maxDrawdownPct).toBeCloseTo(0.005608197080703907, 10)
     expect(t.sharpe).toBeCloseTo(7.700214771, 6)
     expect(t.sortino).toBeCloseTo(13.70744206, 6)
     expect(t.vol20dAnnualized).toBeCloseTo(0.04493978862, 9)

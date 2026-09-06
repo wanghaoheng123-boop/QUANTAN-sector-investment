@@ -31,6 +31,18 @@ established; I am not re-deriving it, just citing the search that grounds it.
 
 ## 1. Where the UI states something it does not know
 
+**Sweep evidence.** `grep -rn "|| 0"` and `grep -rn "?? 0"` across
+`app/ components/ hooks/` (excluding `app/api/`) returned **50 hits total**
+(3 + 47). Every one was opened and dispositioned: most (`AnalysisTab`,
+`WalkForwardPanel`, `InstrumentTable`, `TradeLog`, `EquityCurveChart`,
+`SectorHeatmap` under `components/backtest/`) apply to backtest-computed
+fields that are never vendor-optional (a completed backtest run always has a
+Sharpe/return for every instrument it ran), so `?? 0` there has no missing-
+data reading to violate — not filed. The four filed below (F3, F5, F6, plus
+the `app/page.tsx` ticker-tape check in the null-results section) are every
+instance where the fallback could plausibly stand in for a genuinely missing
+vendor value.
+
 ### Q110-F1 — `hooks/useLiveQuote.ts:102-258` — stale quote survives a ticker-identity change (root cause) — **HIGH — CONFIRMED**
 
 The effect that owns the SSE subscription depends on `[ticker, supported]`
@@ -594,21 +606,30 @@ information that is central to reading an options chain: a color-blind user
 apart at all, row by row.
 
 **Proposed diff:** keep the color (it's still useful for sighted, non-CVD
-users) but add a redundant, non-color cue and an accessible name:
+users) but add a redundant, non-color cue and an accessible name **inside the
+existing cells** — the header declares `colSpan={5}` (calls) + strike +
+`colSpan={5}` (puts) = 11 columns, and each row is exactly
+`ContractCell(5) + strike + ContractCell(5) = 11` body cells; adding a new
+`<td>` would make it 12 against an 11-column header and break alignment, so
+the redundant cue goes in the first cell's content, not as a new cell:
 ```diff
    if (!contract) return <td className="px-2 py-1 text-gray-500 text-xs" colSpan={5}>—</td>
    const itm = side === 'call' ? spot > contract.strike : spot < contract.strike
 -  const cellCls = `px-2 py-1 text-xs tabular-nums text-right ${itm ? 'text-emerald-400' : 'text-gray-300'}`
 +  const cellCls = `px-2 py-1 text-xs tabular-nums text-right ${itm ? 'text-emerald-400 font-semibold' : 'text-gray-300'}`
    return (
--    <>
-+    <>
-+      <td className="sr-only">{itm ? 'in the money' : 'out of the money'}</td>
-       <td className={cellCls}>{fmtPct(contract.impliedVolatility)}</td>
+     <>
+-      <td className={cellCls}>{fmtPct(contract.impliedVolatility)}</td>
++      <td className={cellCls}>
++        <span className="sr-only">{itm ? 'in the money, ' : 'out of the money, '}</span>
++        {fmtPct(contract.impliedVolatility)}
++      </td>
+       <td className={cellCls}>{fmtNum(contract.delta)}</td>
 ```
-(A `font-weight` difference plus an `sr-only` cell is the minimal redundant
-encoding; a visible left-border accent on the row would be the fuller fix but
-touches more markup than this sketch.)
+(`font-semibold` is the sighted-user redundant cue; the `sr-only` span is the
+screen-reader-facing one. Column count is unchanged — 11 in, 11 out. A
+visible left-border accent per row would be the fuller fix but touches more
+markup than this sketch.)
 
 ---
 
@@ -652,6 +673,12 @@ truncates meaning"); scrolling a table is neither.
 ---
 
 ## 6. Free sweep — searched and found clean (named, per instructions, so a null result counts as evidence)
+
+**8 components/pages** checked below for fabricated-zero and color-only-
+meaning patterns specifically, beyond the ones already filed as findings:
+`SectorCard`, `ma-deviation/page.tsx`, `desk/page.tsx` + `commodities/page.tsx`
+table cells, `AnalysisTab`, `BtcHeader`, `app/page.tsx` ticker tape,
+`BtcQuantLab`, `LiveSignalsPanel` zone/action chips.
 
 - **`components/SectorCard.tsx`** — every numeric render goes through
   `safeFixed` (imported from `lib/format.ts`, which returns `'—'` for
