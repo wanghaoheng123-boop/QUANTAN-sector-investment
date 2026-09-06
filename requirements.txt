@@ -1,5 +1,17 @@
 # QUANTAN Backend Dependencies
 # Install with: pip install -r requirements.txt
+#
+# REQUIRES PYTHON >= 3.12  (see .python-version, pinned to 3.13)
+#
+# Q110-T7b (2026-09-06) — this line exists because the constraint was previously
+# invisible. `tradingagents` (below) publishes only wheels with
+# `Requires-Python: >=3.12`, so on 3.11 pip reports "from versions: none" and
+# the manifest looks BROKEN rather than mis-targeted. Nothing in this repo
+# declared a minimum interpreter — no pyproject.toml, no setup.py, no
+# .python-version — so the requirement lived transitively inside a dependency
+# and was discoverable only by failing. The CI pytest job pinned 3.11 and did
+# exactly that. Under 3.13 the full manifest installs clean and the suite is
+# 132 passed / 0 skipped.
 
 # Core
 fastapi>=0.115.0

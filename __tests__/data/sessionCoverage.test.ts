@@ -87,10 +87,19 @@ describe('findSessionHoles — the EQIX shape', () => {
 })
 
 describe('findSessionHoles — the live fixture directory', () => {
-  it('finds EQIX 2026-07-31, the instance this check was built for', () => {
-    // The real instance, asserted. When EQIX is refetched this test must be
-    // updated deliberately — a silently vanishing positive control is how a
-    // guard goes quietly back to zero instances.
+  it('finds EQIX 2026-07-31 when it is removed again — the founding instance, now permanent', () => {
+    // Q110-D1 UPDATE (2026-09-06). This used to assert the hole was PRESENT in
+    // the committed fixtures. `scripts/backfill-missing-sessions.mjs` has since
+    // repaired it, so that assertion had to change — and the note left here
+    // demanded it change DELIBERATELY rather than quietly, which is why you are
+    // reading this instead of a deleted test.
+    //
+    // The control is now stronger than it was: instead of depending on the bug
+    // still being present, it RECONSTRUCTS it from the real fixture set by
+    // removing that one session in memory. The founding instance stays
+    // executable forever, and the "no holes today" assertion below carries the
+    // live state separately. A positive control that dies when the bug is fixed
+    // is a control with an expiry date.
     const { readdirSync, readFileSync } = require('fs') as typeof import('fs')
     const { join } = require('path') as typeof import('path')
     const dir = join(__dirname, '../../scripts/backtestData')
@@ -109,7 +118,20 @@ describe('findSessionHoles — the live fixture directory', () => {
       )
     }
     expect(byTicker.size).toBeGreaterThan(50) // reachability
-    const { holes } = findSessionHoles(byTicker) as Holes
-    expect(holes).toEqual([{ ticker: 'EQIX', missing: ['2026-07-31'] }])
+
+    // The live state: the real fixtures have no holes.
+    const live = findSessionHoles(byTicker) as Holes
+    expect(live.sessions.length).toBeGreaterThan(1000) // reachability, not vacuous
+    expect(live.holes).toEqual([])
+
+    // The founding instance, reconstructed: punch 2026-07-31 out of EQIX.
+    const eqix = byTicker.get('EQIX')
+    expect(eqix).toBeDefined()
+    expect(eqix!.has('2026-07-31')).toBe(true) // the repair is real
+    const wounded = new Map(byTicker)
+    wounded.set('EQIX', new Set([...eqix!].filter((d) => d !== '2026-07-31')))
+    expect((findSessionHoles(wounded) as Holes).holes).toEqual([
+      { ticker: 'EQIX', missing: ['2026-07-31'] },
+    ])
   })
 })

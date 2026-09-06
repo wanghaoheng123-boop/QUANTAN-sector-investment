@@ -673,6 +673,21 @@ export function sharpeRatio(
   rfAnnual = 0.04,
   annualization = 252,
 ): number | null {
+  // Q110-Q4f (2026-09-06) — this parameter is ANNUAL and its sibling
+  // `sortinoRatio`'s is DAILY. Two functions in this file, adjacent in the
+  // source, taking the same concept in different units, both typed `number`.
+  // I passed the daily rate to both while delegating `benchmark-enhanced.ts` to
+  // this SSOT: it silently set the risk-free rate to 0.045/252 ≈ 1.8e-4 and
+  // typecheck was clean. Nothing in the type system can see it, so this makes
+  // the mistake LOUD instead. No real annual risk-free rate is under 5 bps,
+  // while a daily one is ~2 bps, so the two are cleanly separable.
+  if (rfAnnual !== 0 && rfAnnual > 0 && rfAnnual < 0.0005) {
+    throw new Error(
+      `sharpeRatio: rfAnnual=${rfAnnual} is implausibly small for an ANNUAL rate — ` +
+        'this parameter is annual and is divided by `annualization` internally. ' +
+        'Did you pass a DAILY rate? (sortinoRatio takes a daily MAR; this does not.)',
+    )
+  }
   if (returns.length < 20) return null
   const rfD = rfAnnual / annualization
   const excess = returns.map((x) => x - rfD)
@@ -746,6 +761,16 @@ export function sortinoRatio(
   marDaily = 0,
   annualization = 252,
 ): number | null {
+  // Q110-Q4f — the mirror of the guard in `sharpeRatio`. This parameter is a
+  // DAILY target return; an annual one (~0.045) passed here would be a MAR of
+  // 4.5% PER DAY and would silently make every observation a shortfall.
+  if (marDaily > 0.01) {
+    throw new Error(
+      `sortinoRatio: marDaily=${marDaily} exceeds 1% PER DAY — ` +
+        'this parameter is a daily target return, not an annual one. ' +
+        'Pass `rfAnnual / annualization`. (sharpeRatio takes the annual rate; this does not.)',
+    )
+  }
   if (returns.length < 30) return null
   const negDevs = returns
     .map((x) => Math.min(0, x - marDaily))

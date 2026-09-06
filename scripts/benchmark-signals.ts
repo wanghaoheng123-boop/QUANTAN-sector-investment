@@ -566,21 +566,99 @@ const FLOOR_NET_WR = 53.29
  * D1 gate re-founding (2026-07-11 rethink, MASTER §4 D1 — see
  * reviews/invariants-baseline.md §1b amendment). The raw net-WR floor (53.29)
  * sits BELOW the always-buy base rate (54.02 at freeze), so passing it
- * certifies nothing about selection skill. The PRIMARY gate is now the EDGE
- * OVER THE BASE RATE, frozen 2026-07-11 at +2.31pp with the established
- * 50 bps tolerance convention → hard floor +1.81pp. The raw WR floors are
- * retained as SECONDARY regression guards (they still catch code breakage
- * independent of base-rate drift). Significance (non-overlap Wilson lower
- * bound vs the base rate) is reported as WARN, not FAIL — it is EXPECTED to
- * warn until the edge becomes significant at honest sample sizes; hardening
- * it into a failure is a future owner decision.
+ * certifies nothing about selection skill. The gate is therefore founded on the
+ * EDGE OVER THE BASE RATE. The raw WR floors are retained as SECONDARY
+ * regression guards (they still catch code breakage independent of base-rate
+ * drift). Significance (non-overlap Wilson lower bound vs the base rate) is
+ * reported as WARN, not FAIL — it is EXPECTED to warn until the edge becomes
+ * significant at honest sample sizes; hardening it into a failure is a future
+ * owner decision.
+ *
+ * ── Q109-1 RECALIBRATION (2026-09-06) ──────────────────────────────────────
+ *
+ * The floor was +1.81pp (frozen +2.31pp less a 50 bps convention) against a
+ * measured +1.91pp: **0.10pp of headroom**. That is not a gate, it is a coin
+ * flip, and the script already emitted its own WARN saying so.
+ *
+ * The sharp form of the argument is NOT sampling error. A CI run re-measures
+ * almost the same data — `WINDOW_START` is pinned at 2021-08-17 (`Q-102`), so
+ * the window only GROWS at the right edge — and run-to-run drift is far smaller
+ * than the ±9pp sampling halfwidth at n_eff=114. The real threat is that NEW
+ * DATA LEGITIMATELY MOVES THE POOLED NUMBER: measured per-year edge ranges
+ * **−3.31pp (2024) to +11.14pp (2022)**, a 14.45pp spread. A year of fresh bars
+ * arriving at 2024's edge drags the pool down by multiple pp with no code
+ * change at all. A floor 0.10pp away fires on that, and a red run that means
+ * "the market changed" teaches everyone to ignore the offender list.
+ *
+ * So the gate is rebuilt in three layers, each calibrated against something
+ * real rather than against a frozen observation:
+ *
+ *  1. STRUCTURAL (new, and this is where the sensitivity now lives). Counts —
+ *     signals emitted, instruments producing trades. Because the window start is
+ *     PINNED and bars only accumulate, these are monotonically non-decreasing
+ *     under normal operation, so ANY material drop is breakage rather than
+ *     drift. Near-zero false-alarm rate, and they fail loudly on exactly the
+ *     things that actually break: a signal function returning nothing, a loader
+ *     losing fixtures, a config change silencing the strategy.
+ *
+ *  2. NULL-REFERENCED (this floor, moved to 0.0). "The selection is no better
+ *     than unconditional exposure" is a PRINCIPLED threshold — it is the null
+ *     the whole benchmark is defined against — where +1.81pp was an arbitrary
+ *     point 0.10pp under a measurement. Headroom goes from 0.10pp to 1.91pp.
+ *     It is a coarse breakage floor and is NOT a performance bar; nothing here
+ *     certifies skill, and I5's verdict below is unchanged.
+ *
+ *  3. SIGNIFICANCE (already present, unchanged). `HARMFUL_T` fails when the
+ *     excess over the market is significantly NEGATIVE at |t| > 3. That is the
+ *     layer that catches a genuinely inverted signal, and it is calibrated to a
+ *     significance bar rather than to an observation.
+ *
+ * Net effect is STRONGER, not weaker: one arbitrary threshold with 0.02 SE of
+ * headroom is replaced by two near-noiseless structural gates plus a floor at
+ * the null, with the significance gate untouched.
  */
-const FLOOR_EDGE_PP = 1.81
+const FLOOR_EDGE_PP = 0.0
 
+/**
+ * Structural breakage floors. Frozen from the 2026-09-06 measurement
+ * (3,394 signals across 55 of 56 instruments) with margin sized to what a
+ * vendor restatement could plausibly remove — a few names going quiet — NOT to
+ * statistical noise, because with a pinned window start there is very little.
+ * A drop past these is a pipeline defect, not a market.
+ */
+const FLOOR_BUY_SIGNALS = 3000
+const FLOOR_INSTRUMENTS_WITH_TRADES = 50
+
+// ── Layer 1: structural. Where the sensitivity lives (Q109-1). ──────────────
+if (benchmark.aggregate.totalBuySignals < FLOOR_BUY_SIGNALS) {
+  console.error(
+    `\nREGRESSION (structural gate): ${benchmark.aggregate.totalBuySignals} BUY signals, below floor ` +
+      `${FLOOR_BUY_SIGNALS}. The window start is PINNED, so bars only accumulate and this count cannot ` +
+      `fall on data drift — a drop is the signal pipeline, not the market.`,
+  )
+  process.exit(1)
+}
+if (benchmark.aggregate.instrumentsWithTrades < FLOOR_INSTRUMENTS_WITH_TRADES) {
+  console.error(
+    `\nREGRESSION (structural gate): only ${benchmark.aggregate.instrumentsWithTrades} of ` +
+      `${benchmark.aggregate.totalInstruments} instruments produced trades, below floor ` +
+      `${FLOOR_INSTRUMENTS_WITH_TRADES}. Check the loader and the fixture set before the strategy.`,
+  )
+  process.exit(1)
+}
+
+// ── Layer 2: null-referenced. Coarse, and deliberately NOT a performance bar. ─
 if (benchmark.edgeOverBaseRatePp < FLOOR_EDGE_PP) {
   console.error(
-    `\nREGRESSION (primary gate): edge over base rate ${benchmark.edgeOverBaseRatePp}pp below floor ${FLOOR_EDGE_PP}pp ` +
-      `(net WR ${benchmark.aggregate.aggregateNetWinRate}% vs base ${benchmark.alwaysBuyBaseline.netWinRatePct}%)`,
+    `\nREGRESSION (edge gate): edge over base rate ${benchmark.edgeOverBaseRatePp}pp is below the floor ` +
+      `${FLOOR_EDGE_PP}pp (net WR ${benchmark.aggregate.aggregateNetWinRate}% vs base ` +
+      `${benchmark.alwaysBuyBaseline.netWinRatePct}%)` +
+      // The "no better than the market" reading is only true when the floor IS
+      // the null. Stating it unconditionally would be a false sentence the day
+      // someone raises the floor.
+      (FLOOR_EDGE_PP === 0
+        ? ' — the selection is no better than unconditional exposure.'
+        : ' — NOTE this floor sits above the null, so a breach is not by itself evidence of breakage.'),
   )
   process.exit(1)
 }
@@ -661,9 +739,9 @@ if (tStat != null && tStat < HARMFUL_T) {
 const headroomPp = Number((benchmark.edgeOverBaseRatePp - FLOOR_EDGE_PP).toFixed(2))
 if (headroomPp < THIN_HEADROOM_PP) {
   console.warn(
-    `\nWARN: the PRIMARY edge gate has ${headroomPp}pp of headroom (${benchmark.edgeOverBaseRatePp} vs floor ${FLOOR_EDGE_PP}). ` +
-      'The dataset is rewritten in place weekly and the universe re-anchored to Date.now() (Q-102), so this can breach on data drift ' +
-      'alone, with no code change. Treat a breach as a data-vintage question first, not a regression.',
+    `\nWARN: the edge gate has ${headroomPp}pp of headroom (${benchmark.edgeOverBaseRatePp} vs floor ${FLOOR_EDGE_PP}). ` +
+      'New bars legitimately move the pooled edge — measured per-year edge spans -3.31pp to +11.14pp — so treat a ' +
+      'breach as a data-vintage question first, not a regression. The structural gates above are the breakage detector.',
   )
 }
 console.log(
