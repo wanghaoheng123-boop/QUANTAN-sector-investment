@@ -1477,3 +1477,77 @@ and **refuses to write unless the refetch is a strict superset of the committed
 series** — a restatement is a different event needing a human. Benchmark
 unchanged. The live positive control was rewritten to reconstruct the hole in
 memory: a control that dies when the bug is fixed has an expiry date.
+
+---
+
+## 2026-09-09 — Q107-S9: the guard opened every file and traversed no edges
+
+Shipped as PR #187 (`2760ab9` + `057755b`), open at time of writing. **I8 stays
+VIOLATED** — this closes one named gap in the process half, nothing more.
+
+**The session began by repairing the map, and that was not overhead.** The local
+worktree was **17 commits behind `origin/main`**. The boot-sequence files I read
+first were dated 2026-08-26 against an origin at 2026-09-06, so the map told me
+Q-080 was the newest wave and I5 was VIOLATED — both superseded. `git log` is in
+the boot sequence precisely because the map can be **stale rather than wrong**.
+Compare against `origin`, not just `HEAD`.
+
+`detectEgress` answers *"does this repository reach a vendor?"* It never answered
+*"which surfaces expose that vendor to an end user?"*, which is what I8's trigger
+sentence actually governs. Four routes — `prices`, `fundamentals/[ticker]`,
+`bloomberg-bridge/health`, `trading-agents/health` — contain **no host literal,
+no host-bearing env read and no dependency**. Every detector kind was blind to
+all four. Three were recorded only because a human typed them into a prose
+finding; the fourth, which fetches an operator origin at `:41`, appeared in **no
+row's evidence across all 93**.
+
+**Reusing the hardened module imported a P0, and that is the finding worth
+keeping.** I imported `syntheticContainment`'s resolver rather than writing a
+second one — right call, and I wrote in the docstring that "three adversarial
+rounds of hardening carry over". **False for the field this hinges on:**
+`typeOnly` had *zero readers* before this work. `staticRe` anchored on any
+occurrence of the word `import`/`export` with a lazy `{0,800}` gap, so a
+preceding `export type Row = { close: number }` swallowed the next real import.
+My edge was dropped — and `parseClause` got the **declaration body** as its
+clause, so `.named` returned garbage and `importsConstructor` returned `false`.
+That is **I3's only surviving detector**. Measured: a producer calling
+`markSynthetic` with one `export interface` line above the import, feeding
+branded OHLC into a live API route, left `synthetic-containment` at **71/71
+green**. It is 1 failed / 70 passed now. **A hardened module is hardened where it
+was exercised, and nowhere else — check which of its fields anyone has ever
+read.**
+
+**Red-team broke five of my claims, and four were prose rather than code.**
+`PUBLIC_SURFACE` enumerated `route|page|layout` and missed five real files
+(`app/error.tsx`, `global-error`, `not-found`, and two `briefs` errors) — an
+allowlist of **filenames** is the same defect as the allowlist of **directories**
+Q-098 rejected, one level up. Worse: I wrote *"additions fail, removals do not,
+because over-recording is the safe direction"*, and red-team disarmed the rule
+with exactly that — pad every list with all 46 surfaces and no addition is ever
+possible again. **Over-recording was not a cautious error; it was the way to
+switch the gate off.** Now set equality. And I wrote
+`expect(withField.length).toBeGreaterThanOrEqual(12)` **forty lines above** the
+place this same file strikes a drifting count floor, quoting the lesson while
+committing it.
+
+**Two claims withdrawn rather than defended.** "The seventh instance of the
+guard-reachability defect" was overclaimed: in the priors an *existing* rule sat
+at zero instances, whereas rules 1–7 here all fire on their own terms. And
+`evidence` is declared on every one of the 93 rows and **read by nobody** — my
+own diagnosis was *"an unchecked field drifted"* and my fix added a **second**
+field beside it rather than a reader for the first. Filed as `Q-111`, not
+bundled.
+
+**A shell mistake, a new shape.** I undid a test mutation with
+`git checkout reviews/vendor-licence-register.json` while my 65-line patch to
+that file was **uncommitted** — it reverted the patch, not the mutation, and the
+next run looked green for the wrong reason. `git checkout <file>` restores from
+`HEAD`, so it is only an undo if what you want to keep is already committed.
+
+Nine mutations watched failing on the real tree, green on revert.
+
+**Tier board:** I1 ASP · I2 PARTIAL · I3 PARTIAL *(a live escape closed; tier
+unchanged)* · I4 ASP · I5 PARTIAL · I6 PARTIAL · I7 VIOLATED · I8 VIOLATED.
+**Still no invariant is ENFORCED**, and Q-097 makes every check here advisory —
+including this one. A lint rule (`import/first`) would have caught the CRITICAL
+for free; `Q-093` records that no lint exists.

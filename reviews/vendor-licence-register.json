@@ -46,6 +46,25 @@
         "app/api/news/ticker/[ticker]/route.ts",
         "lib/briefs/sectorBrief.ts"
       ],
+      "exposed_via": [
+        "app/api/analytics/[ticker]/route.ts",
+        "app/api/briefs/[sector]/route.ts",
+        "app/api/briefs/route.ts",
+        "app/api/chart/[ticker]/route.ts",
+        "app/api/darkpool/[ticker]/route.ts",
+        "app/api/fundamentals/[ticker]/route.ts",
+        "app/api/ma-deviation/route.ts",
+        "app/api/news/[sector]/route.ts",
+        "app/api/news/ticker/[ticker]/route.ts",
+        "app/api/options/[ticker]/route.ts",
+        "app/api/prices/route.ts",
+        "app/api/search/route.ts",
+        "app/api/sector-rotation/route.ts",
+        "app/api/stream/[ticker]/route.ts",
+        "app/api/stream/route.ts",
+        "app/briefs/page.tsx",
+        "app/briefs/sector/[sector]/page.tsx"
+      ],
       "routes_to": [
         "Q-082",
         "Q-083"
@@ -70,6 +89,11 @@
         "app/api/crypto/btc/quote/route.ts:17",
         "components/crypto/hooks/useBtcCandles.ts:34"
       ],
+      "exposed_via": [
+        "app/api/crypto/btc/quote/route.ts",
+        "app/api/crypto/btc/route.ts",
+        "app/crypto/btc/page.tsx"
+      ],
       "routes_to": [
         "Q-082",
         "Q-083"
@@ -92,6 +116,9 @@
         "app/api/crypto/btc/route.ts:4",
         "scripts/verify-btc-ohlc-sample.mjs:2"
       ],
+      "exposed_via": [
+        "app/api/crypto/btc/route.ts"
+      ],
       "routes_to": [
         "Q-082",
         "Q-083"
@@ -113,6 +140,9 @@
       "evidence": [
         "app/api/crypto/btc/route.ts:5"
       ],
+      "exposed_via": [
+        "app/api/crypto/btc/route.ts"
+      ],
       "routes_to": [
         "Q-082",
         "Q-083"
@@ -133,6 +163,9 @@
       "recorded_on": "2026-08-27",
       "evidence": [
         "app/api/crypto/btc/metrics/route.ts:6"
+      ],
+      "exposed_via": [
+        "app/api/crypto/btc/metrics/route.ts"
       ],
       "routes_to": [
         "Q-082",
@@ -156,6 +189,10 @@
         "app/api/crypto/btc/metrics/route.ts:7",
         "app/api/crypto/btc/liquidations/route.ts:7"
       ],
+      "exposed_via": [
+        "app/api/crypto/btc/liquidations/route.ts",
+        "app/api/crypto/btc/metrics/route.ts"
+      ],
       "routes_to": [
         "Q-082",
         "Q-083"
@@ -176,6 +213,11 @@
       "recorded_on": "2026-08-27",
       "evidence": [
         "lib/quant/riskFreeRate.ts:68"
+      ],
+      "exposed_via": [
+        "app/api/backtest/route.ts",
+        "app/api/conditional-vol/[ticker]/route.ts",
+        "app/api/options/[ticker]/route.ts"
       ],
       "routes_to": [
         "Q-082"
@@ -223,6 +265,11 @@
         "components/stock/quantlab/tabs/SummaryTab.tsx:32",
         "app/api/bloomberg-bridge/health/route.ts:22"
       ],
+      "exposed_via": [
+        "app/api/bloomberg-bridge/health/route.ts",
+        "app/api/fundamentals/[ticker]/route.ts",
+        "app/api/prices/route.ts"
+      ],
       "routes_to": [
         "Q-082",
         "Q-083"
@@ -245,6 +292,11 @@
       "evidence": [
         "lib/trading-agents-config.ts:69"
       ],
+      "exposed_via": [
+        "app/api/trading-agents/[ticker]/route.ts",
+        "app/api/trading-agents/health/route.ts",
+        "app/stock/[ticker]/page.tsx"
+      ],
       "routes_to": [
         "Q-082",
         "Q-083",
@@ -266,6 +318,11 @@
       "recorded_on": "2026-08-27",
       "evidence": [
         "lib/trading-agents-config.ts:73"
+      ],
+      "exposed_via": [
+        "app/api/trading-agents/[ticker]/route.ts",
+        "app/api/trading-agents/health/route.ts",
+        "app/stock/[ticker]/page.tsx"
       ],
       "routes_to": [
         "Q-082",
@@ -1613,6 +1670,9 @@
       "evidence": [
         "components/crypto/hooks/useBtcKlineWs.ts:7"
       ],
+      "exposed_via": [
+        "app/crypto/btc/page.tsx"
+      ],
       "routes_to": [
         "Q-082",
         "Q-083"
@@ -1633,6 +1693,9 @@
       "recorded_on": "2026-08-27",
       "evidence": [
         "components/crypto/hooks/useBtcPriceWs.ts:6"
+      ],
+      "exposed_via": [
+        "app/crypto/btc/page.tsx"
       ],
       "routes_to": [
         "Q-082",
@@ -1739,6 +1802,7 @@
   ],
   "field_definitions": {
     "end_user_exposed": "TRUE when vendor-derived content can be obtained by an end user of this platform through ANY path \u2014 a route, a shared CDN cache, or a published artifact \u2014 regardless of whether it is labelled as vendor data. It is NOT 'is there a UI component for it'. Left undefined in the first version of this file, which produced systematic understatement.",
-    "authenticated": "Describes the SURFACE WE SERVE: does a caller need to authenticate to obtain this data from us? It does NOT describe the credential we send outbound. Outbound credentials are recorded in the finding text. Conflating the two is how BLOOMBERG_BRIDGE_URL came to read authenticated:true while app/api/prices/route.ts:63 says 'Public endpoint, no authentication required'."
+    "authenticated": "Describes the SURFACE WE SERVE: does a caller need to authenticate to obtain this data from us? It does NOT describe the credential we send outbound. Outbound credentials are recorded in the finding text. Conflating the two is how BLOOMBERG_BRIDGE_URL came to read authenticated:true while app/api/prices/route.ts:63 says 'Public endpoint, no authentication required'.",
+    "exposed_via": "The public surfaces \u2014 app route/page/layout files and middleware \u2014 that reach this egress point through the VALUE import graph, transitively. COMPUTED by attributeSurfaces in __tests__/architecture/importGraph.ts, never typed in: the four routes that expose Bloomberg and the trading-agents backend carry no host literal, no host-bearing env read and no dependency, so every detector kind was blind to them and three were recorded only because a human wrote them into a prose finding (Q107-S9). Required on an active end-user-exposed row that any surface reaches. ADDITIONS fail the guard; removals do not \u2014 a listed surface that no longer reaches the vendor overstates the exposure, which is the safe direction, and failing on it would redden the gate for every unrelated refactor. ABSENT means one of two things and they must not be confused: the graph reaches nothing (pip-package and published-data rows are structurally invisible to a TypeScript import graph), or the row is not end-user-exposed."
   }
 }

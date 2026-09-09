@@ -46,6 +46,7 @@ import {
   type RegisterEntry,
   type EgressPoint,
 } from './vendorEgress'
+import { attributeSurfaces, buildImportGraph, orphanedEvidence, PUBLIC_SURFACE } from './importGraph'
 
 const ROOT = join(__dirname, '../..')
 
@@ -119,6 +120,16 @@ const register = JSON.parse(readFileSync(join(ROOT, 'reviews/vendor-licence-regi
 const points = detectEgress(files, manifest)
 const detected = distinctIds(points)
 const has = (kind: string, id: string) => detected.has(`${kind}|${id}`)
+
+/**
+ * Which public surfaces reach each vendor (Q107-S9). `detectEgress` is per-file
+ * and textual; this traverses the edges BETWEEN files, which no earlier version
+ * of the guard did.
+ */
+const surfaces = attributeSurfaces(files, points)
+
+/** No surface map — for virtual-file cases whose rows are not end-user exposed. */
+const NO_SURFACES = new Map<string, readonly string[]>()
 
 // ─────────────────────────────────────────────────────────────────────────────
 describe('I8 — the scan is reachable', () => {
@@ -204,8 +215,70 @@ describe('I8 — the scan is reachable', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Q107-S9. The block above proves the WALKER opened the files; this one proves
+// the graph traversed the EDGES between them. They are different visitors, and
+// the second did not exist until now — which is why four routes serving vendor
+// data were recorded only because a human typed them into a prose finding.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('I8 — the import graph is reachable', () => {
+  const graph = buildImportGraph(files)
+  const edgeCount = [...graph.values()].reduce((n, s) => n + s.size, 0)
+
+  it('resolves a substantial number of import edges', () => {
+    // A resolver that returns null for everything would leave every rule below
+    // with zero instances and the suite green — the exact defect this repository
+    // has shipped seven times.
+    expect(edgeCount).toBeGreaterThan(300)
+  })
+
+  it('finds public surfaces of both kinds, not just API routes', () => {
+    const found = files.map((f) => f.path).filter((p) => PUBLIC_SURFACE.test(p))
+    expect(found.filter((p) => p.endsWith('/route.ts')).length).toBeGreaterThan(20)
+    expect(found.filter((p) => p.endsWith('/page.tsx')).length).toBeGreaterThan(5)
+    expect(found).toContain('middleware.ts')
+  })
+
+  it('attributes a vendor to a route the DETECTOR produces no evidence for', () => {
+    // THE FINDING, as a test — and the first draft of it asserted the wrong thing.
+    // It grepped the source for `BLOOMBERG_BRIDGE_URL` and failed, because the
+    // route names the variable in a JSDoc comment at :44. Matching prose about the
+    // behaviour instead of the behaviour is the defect this repository keeps
+    // shipping; stripComments masks that line, so the DETECTOR is what to ask.
+    const cited = points.filter((p) => p.where.startsWith('app/api/prices/route.ts:'))
+    expect(cited).toEqual([])
+    expect(surfaces.get('env-host|BLOOMBERG_BRIDGE_URL')).toContain('app/api/prices/route.ts')
+  })
+
+  it('attributes the route that appeared in NO register row at all', () => {
+    // Q107-S9's measured example: app/api/trading-agents/health/route.ts fetches
+    // an operator origin at :41 through a helper, and across all 93 rows it was
+    // named in no evidence array.
+    expect(surfaces.get('env-host|TRADING_AGENTS_BASE'))
+      .toContain('app/api/trading-agents/health/route.ts')
+  })
+
+  it('traverses MORE than one hop', () => {
+    // app/stock/[ticker]/page.tsx reaches TRADING_AGENTS_BASE through a component
+    // and a hook. The ledger row proposed "a one-hop import-edge pass"; one hop
+    // would have missed this, and a page is a more complete end-user exposure
+    // than the API route beneath it.
+    expect(surfaces.get('env-host|TRADING_AGENTS_BASE')).toContain('app/stock/[ticker]/page.tsx')
+  })
+
+  it('attributes a browser-direct vendor to the PAGE that mounts it', () => {
+    // components/crypto/hooks/useBtcCandles.ts calls CoinGecko from the browser.
+    // Restricting surfaces to app/api/** would have been blind to it entirely.
+    expect(surfaces.get('http-host|api.coingecko.com')).toContain('app/crypto/btc/page.tsx')
+  })
+
+  it('attributes the package-mediated vendor with the largest surface (Yahoo)', () => {
+    expect(surfaces.get('npm-package|yahoo-finance2')?.length ?? 0).toBeGreaterThanOrEqual(15)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
 describe('I8 — every vendor this repository reaches is recorded', () => {
-  const violations = checkRegister(points, register.entries)
+  const violations = checkRegister(points, register.entries, surfaces)
 
   it('has no unregistered egress point', () => {
     const unregistered = violations
@@ -236,6 +309,31 @@ describe('I8 — every vendor this repository reaches is recorded', () => {
   it('serves nothing a recorded licence forbids', () => {
     const forbidden = violations.filter((v) => v.rule === 'restricted-but-active').map((v) => v.id)
     expect(forbidden).toEqual([])
+  })
+
+  it('records every public surface that exposes a vendor to an end user', () => {
+    // Q107-S9. Rules 1-7 all key on EGRESS; this one keys on EXPOSURE, which is
+    // what I8's trigger sentence actually governs.
+    const surfaceDrift = violations
+      .filter((v) => v.rule === 'surfaces-unrecorded' || v.rule === 'surface-added')
+      .map((v) => `${v.rule}: ${v.kind} ${v.id} — ${v.detail}`)
+    expect(surfaceDrift).toEqual([])
+  })
+
+  it('carries exposed_via on exactly the exposed rows the graph reaches', () => {
+    // Stated as an IFF over the actual rows, not as a floor. The first draft was
+    // `expect(withField.length).toBeGreaterThanOrEqual(12)` — which is the same
+    // drifting threshold this file explicitly strikes 40 lines below, where a
+    // count went RED as a reward for withdrawing a vendor surface and the repair
+    // was to type a smaller number. Reintroducing it while quoting the lesson is
+    // the sin this suite exists to remove (red-team MEDIUM-1).
+    const shouldHave = register.entries
+      .filter((e) => e.end_user_exposed && e.lifecycle === 'active' && (surfaces.get(`${e.kind}|${e.id}`)?.length ?? 0) > 0)
+      .map((e) => `${e.kind}|${e.id}`)
+    const doesHave = register.entries
+      .filter((e) => Array.isArray(e.exposed_via))
+      .map((e) => `${e.kind}|${e.id}`)
+    expect(doesHave.sort()).toEqual(shouldHave.sort())
   })
 
   it('states where redistribution stands for everything a user can see', () => {
@@ -321,7 +419,7 @@ describe('I8 — the register has not been quietly softened', () => {
 describe('I8 — the guard catches what it claims to catch', () => {
   const f = (path: string, source: string): SourceFile[] => [{ path, source }]
   const unregistered = (pts: EgressPoint[]) =>
-    checkRegister(pts, register.entries).filter((v) => v.rule === 'unregistered').map((v) => v.id)
+    checkRegister(pts, register.entries, NO_SURFACES).filter((v) => v.rule === 'unregistered').map((v) => v.id)
 
   it('catches a new host in a new nested file', () => {
     expect(unregistered(detectEgress(f('lib/data/providers/newVendor.ts', `const B = 'https://api.polygon.io/v2'`))))
@@ -416,6 +514,132 @@ describe('I8 — the guard catches what it claims to catch', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Q107-S9 positive controls. Every case here is a route that reaches a vendor
+// while containing no host, no dependency and no env read — the shape that shipped
+// green before this rule existed.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('I8 — a new surface cannot quietly start serving a vendor', () => {
+  const VENDOR: SourceFile = {
+    path: 'lib/data/vendorClient.ts',
+    source: `export async function q() { return fetch(process.env.SOME_VENDOR_URL + '/q') }`,
+  }
+  const exposedRow = (over: Partial<RegisterEntry> = {}): RegisterEntry => ({
+    kind: 'env-host', id: 'SOME_VENDOR_URL', lifecycle: 'active',
+    classification: 'market-data-vendor', vendor: 'Some Vendor', end_user_exposed: true,
+    authenticated: false, licence_status: 'UNVERIFIED', finding: 'recorded',
+    recorded_by: 'test', recorded_on: '2026-09-09',
+    redistribution_position: 'UNRESOLVED — Q-082',
+    exposed_via: ['app/api/known/route.ts'],
+    ...over,
+  })
+  const run = (fs: SourceFile[], entry: RegisterEntry) => {
+    const all = [VENDOR, ...fs]
+    const pts = detectEgress(all)
+    return checkRegister(pts, [entry], attributeSurfaces(all, pts)).map((v) => v.rule)
+  }
+  const known: SourceFile = {
+    path: 'app/api/known/route.ts',
+    source: `import { q } from '@/lib/data/vendorClient'\nexport const GET = () => q()`,
+  }
+
+  it('is green while only the recorded surface reaches it', () => {
+    expect(run([known], exposedRow())).toEqual([])
+  })
+
+  it('THE FINDING: a new route importing the vendor client is flagged', () => {
+    const added: SourceFile = {
+      path: 'app/api/brand-new/route.ts',
+      source: `import { q } from '@/lib/data/vendorClient'\nexport const GET = () => q()`,
+    }
+    expect(run([known, added], exposedRow())).toEqual(['surface-added'])
+  })
+
+  it('catches it through an intermediate helper, not just a direct import', () => {
+    const helper: SourceFile = {
+      path: 'lib/helpers/wrap.ts',
+      source: `export { q } from '@/lib/data/vendorClient'`,
+    }
+    const added: SourceFile = {
+      path: 'app/api/indirect/route.ts',
+      source: `import { q } from '@/lib/helpers/wrap'\nexport const GET = () => q()`,
+    }
+    expect(run([known, helper, added], exposedRow())).toEqual(['surface-added'])
+  })
+
+  it('catches a PAGE, not only an API route', () => {
+    const page: SourceFile = {
+      path: 'app/new-thing/page.tsx',
+      source: `import { q } from '@/lib/data/vendorClient'\nexport default function P() { void q; return null }`,
+    }
+    expect(run([known, page], exposedRow())).toEqual(['surface-added'])
+  })
+
+  it('refuses an exposed row that omits the field entirely', () => {
+    const bare = exposedRow()
+    delete bare.exposed_via
+    expect(run([known], bare)).toEqual(['surfaces-unrecorded'])
+  })
+
+  it.each([
+    ['a preceding export type', `export type Params = { t: string }\nimport { q } from '@/lib/data/vendorClient'`],
+    ['a preceding export interface', `export interface Params { t: string }\nimport { q } from '@/lib/data/vendorClient'`],
+    ['a JSDoc block above the import', `/**\n * import type { X } from 'somewhere'\n */\nimport { q } from '@/lib/data/vendorClient'`],
+    ['a named clause longer than 800 characters', `import { ${Array.from({ length: 70 }, (_, i) => `unused${i}`).join(', ')}, q } from '@/lib/data/vendorClient'`],
+  ])('is not defeated by %s', (_what, header) => {
+    // Red-team CRITICAL-1 and CRITICAL-2, both verified against the real tree
+    // before the fix. `staticRe` anchored on any occurrence of the word
+    // import/export and ran a lazy {0,800} gap to the next `from '…'`, so a
+    // preceding declaration swallowed the real import (returning it type-only, or
+    // handing parseClause the declaration body as the clause) and a clause past
+    // the bound produced NO specifier at all. Fixed at source in
+    // syntheticContainment.ts, which is why the I3 suite is a gate on this change.
+    const added: SourceFile = { path: 'app/api/escape/route.ts', source: `${header}\nexport const GET = () => q()` }
+    expect(run([known, added], exposedRow())).toEqual(['surface-added'])
+  })
+
+  it('does NOT fire when the new importer is an internal module, not a surface', () => {
+    // The unit is the surface. A helper importing a helper exposes nothing new to
+    // an end user, and firing on it would make the register a call graph.
+    const inner: SourceFile = { path: 'lib/other/thing.ts', source: `import { q } from '@/lib/data/vendorClient'\nexport const z = q` }
+    expect(run([known, inner], exposedRow())).toEqual([])
+  })
+
+  it('does NOT fire on a TYPE-ONLY import, which reaches nothing at runtime', () => {
+    // lib/data/mergeQuotes.ts:1 imports BloombergQuoteNormalized as a type. An
+    // edge there would attribute a live Bloomberg exposure to every surface that
+    // merges quotes — a false claim in the one artifact that exists to be audited.
+    const typed: SourceFile = {
+      path: 'app/api/types-only/route.ts',
+      source: `import type { Q } from '@/lib/data/vendorClient'\nexport const GET = () => new Response()`,
+    }
+    expect(run([known, typed], exposedRow())).toEqual([])
+  })
+
+  it('THE DISARMING ATTACK: a padded exposed_via cannot silence the rule', () => {
+    // Red-team's HIGH-1. The first version of rule 8 fired on additions only,
+    // calling over-recording "the safe direction". Union a row's list with every
+    // surface that could ever exist and no addition is possible again — the rule
+    // becomes permanently unfirable with the suite green. Over-recording is not a
+    // cautious error; it is how you switch the gate off.
+    const padded = exposedRow({
+      exposed_via: ['app/api/known/route.ts', 'app/api/anything/route.ts', 'app/api/whatever/route.ts'],
+    })
+    expect(run([known], padded)).toEqual(['surface-stale'])
+  })
+
+  it('names the computed set in the message, so repair is copy-paste not padding', () => {
+    const added: SourceFile = {
+      path: 'app/api/brand-new/route.ts',
+      source: `import { q } from '@/lib/data/vendorClient'\nexport const GET = () => q()`,
+    }
+    const all = [VENDOR, known, added]
+    const pts = detectEgress(all)
+    const v = checkRegister(pts, [exposedRow()], attributeSurfaces(all, pts))
+    expect(v[0].detail).toContain('Computed set: app/api/brand-new/route.ts, app/api/known/route.ts')
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
 describe('I8 — the lifecycle cannot punish doing the right thing', () => {
   const row = (over: Partial<RegisterEntry>): RegisterEntry => ({
     kind: 'http-host', id: 'api.gone.example', lifecycle: 'active',
@@ -430,34 +654,34 @@ describe('I8 — the lifecycle cannot punish doing the right thing', () => {
     // gate red, the route to green would be deleting the audit trail — the same
     // shape as the DSR floor that made "stop logging trials" the way to pass.
     const withdrawn = row({ lifecycle: 'withdrawn', withdrawn_on: '2026-08-27', withdrawn_reason: 'surface removed' })
-    expect(checkRegister([], [withdrawn])).toEqual([])
+    expect(checkRegister([], [withdrawn], NO_SURFACES)).toEqual([])
   })
 
   it('but a row still recorded active with nothing reaching it is flagged, not deleted', () => {
-    expect(checkRegister([], [row({})]).map((v) => v.rule)).toEqual(['stale-active'])
+    expect(checkRegister([], [row({})], NO_SURFACES).map((v) => v.rule)).toEqual(['stale-active'])
   })
 
   it('and claiming a withdrawal that did not happen is itself a violation', () => {
     const pts: EgressPoint[] = [{ kind: 'http-host', id: 'api.gone.example', where: 'lib/x.ts:1' }]
     const withdrawn = row({ lifecycle: 'withdrawn', withdrawn_on: '2026-08-27', withdrawn_reason: 'surface removed' })
-    expect(checkRegister(pts, [withdrawn]).map((v) => v.rule)).toEqual(['withdrawn-but-live'])
+    expect(checkRegister(pts, [withdrawn], NO_SURFACES).map((v) => v.rule)).toEqual(['withdrawn-but-live'])
   })
 
   it('rejects PERMITTED without a document, so the status cannot be typed to pass', () => {
     const pts: EgressPoint[] = [{ kind: 'http-host', id: 'api.gone.example', where: 'lib/x.ts:1' }]
-    expect(checkRegister(pts, [row({ licence_status: 'PERMITTED' })]).map((v) => v.rule))
+    expect(checkRegister(pts, [row({ licence_status: 'PERMITTED' })], NO_SURFACES).map((v) => v.rule))
       .toEqual(['permitted-without-evidence'])
   })
 
   it('accepts PERMITTED once a document is named', () => {
     const pts: EgressPoint[] = [{ kind: 'http-host', id: 'api.gone.example', where: 'lib/x.ts:1' }]
-    expect(checkRegister(pts, [row({ licence_status: 'PERMITTED', licence_evidence: 'MSA 2026-09-01 §4.2, countersigned' })]))
+    expect(checkRegister(pts, [row({ licence_status: 'PERMITTED', licence_evidence: 'MSA 2026-09-01 §4.2, countersigned' })], NO_SURFACES))
       .toEqual([])
   })
 
   it('refuses to serve a surface whose licence is recorded as forbidding it', () => {
     const pts: EgressPoint[] = [{ kind: 'http-host', id: 'api.gone.example', where: 'lib/x.ts:1' }]
-    expect(checkRegister(pts, [row({ licence_status: 'RESTRICTED' })]).map((v) => v.rule))
+    expect(checkRegister(pts, [row({ licence_status: 'RESTRICTED' })], NO_SURFACES).map((v) => v.rule))
       .toEqual(['restricted-but-active'])
   })
 })
@@ -470,7 +694,92 @@ describe('I8 — the lifecycle cannot punish doing the right thing', () => {
 describe('I8 — what this guard CANNOT do', () => {
   const f = (path: string, source: string): SourceFile[] => [{ path, source }]
   const unregistered = (pts: EgressPoint[]) =>
-    checkRegister(pts, register.entries).filter((v) => v.rule === 'unregistered').map((v) => v.id)
+    checkRegister(pts, register.entries, NO_SURFACES).filter((v) => v.rule === 'unregistered').map((v) => v.id)
+
+  // ── Q107-S9: what the IMPORT GRAPH cannot do ────────────────────────────────
+  const surfacesOf = (fs: SourceFile[]) => attributeSurfaces(fs, detectEgress(fs))
+
+  it('CANNOT see a surface that reaches a vendor through a NON-LITERAL specifier', () => {
+    // `import(vendorPath)` is unresolvable by construction. The synthetic guard
+    // treats an opaque specifier as a violation in its own right; here it is a
+    // hole, because a compliance register cannot demand that no route ever
+    // computes a module path.
+    const fs: SourceFile[] = [
+      { path: 'lib/v.ts', source: `export const q = () => fetch(process.env.OPAQUE_VENDOR_URL!)` },
+      { path: 'app/api/o/route.ts', source: 'const p = "@/lib/v"\nexport const GET = async () => (await import(p)).q()' },
+    ]
+    expect(surfacesOf(fs).get('env-host|OPAQUE_VENDOR_URL')).toBeUndefined()
+  })
+
+  it('CANNOT attribute a vendor reached only from Python', () => {
+    // yfinance, akshare and tradingagents are end-user exposed and carry NO
+    // exposed_via, because a TypeScript import graph cannot reach a .py module.
+    // Their absence is a measured blind spot, not an implied "nothing exposes it".
+    for (const id of ['yfinance', 'akshare', 'tradingagents']) {
+      expect(surfaces.get(`pip-package|${id}`)).toBeUndefined()
+      const row = register.entries.find((e) => e.kind === 'pip-package' && e.id === id)
+      expect(row?.exposed_via).toBeUndefined()
+    }
+  })
+
+  it('CANNOT attribute republished data, which no surface imports', () => {
+    expect(surfaces.get('published-data|scripts/backtestData/')).toBeUndefined()
+  })
+
+  it('CANNOT see a vendor rendered from an ALREADY-fetched field — and here is the REAL instance', () => {
+    // Named gap (1), unchanged by this work, and the first draft of this test
+    // demonstrated it with an invented toy while a known real instance sat in the
+    // evidence array of a row being edited (red-team HIGH-2). The toy is gone.
+    //
+    // components/stock/quantlab/tabs/SummaryTab.tsx:34 renders a literal
+    // "Bloomberg spot" badge. The chain app/stock/[ticker]/page.tsx:13 ->
+    // QuantLabPanel -> SummaryTab imports NO bridge client: the price arrives as a
+    // prop from a fetch. So the page is in exposed_via for TRADING_AGENTS_BASE,
+    // where a hook imports the config module, and NOT for BLOOMBERG_BRIDGE_URL —
+    // same page, same commit, opposite treatment, decided purely by
+    // hook-versus-prop. The graph is not wrong; it is measuring imports, and
+    // imports are not exposure. Recorded so the register's asymmetry is a stated
+    // limit rather than something a reader has to notice.
+    const chain = files.find((f) => f.path === 'components/stock/quantlab/tabs/SummaryTab.tsx')?.source ?? ''
+    expect(chain).toContain('Bloomberg spot')
+    expect(surfaces.get('env-host|TRADING_AGENTS_BASE')).toContain('app/stock/[ticker]/page.tsx')
+    expect(surfaces.get('env-host|BLOOMBERG_BRIDGE_URL') ?? []).not.toContain('app/stock/[ticker]/page.tsx')
+  })
+
+  it('CANNOT tell an exposed row that is MISCLASSIFIED as unexposed', () => {
+    // Rule 8 is scoped to end_user_exposed, which is I8's own wording — but that
+    // flag is a human judgement. Marking a live vendor unexposed silences the rule.
+    const fs: SourceFile[] = [
+      { path: 'lib/v.ts', source: `export const q = () => fetch('https://api.quiet.example/q')` },
+      { path: 'app/api/q/route.ts', source: `import { q } from '@/lib/v'\nexport const GET = () => q()` },
+    ]
+    const pts = detectEgress(fs)
+    const row: RegisterEntry = {
+      kind: 'http-host', id: 'api.quiet.example', lifecycle: 'active',
+      classification: 'market-data-vendor', vendor: 'Quiet', end_user_exposed: false,
+      authenticated: false, licence_status: 'UNVERIFIED', finding: 'x', recorded_by: 'y', recorded_on: '2026-09-09',
+    }
+    expect(checkRegister(pts, [row], attributeSurfaces(fs, pts))).toEqual([])
+  })
+
+  it('CANNOT see an entry point outside app/ that is not one of the two named root files', () => {
+    // PUBLIC_SURFACE enumerates nothing WITHIN app/ — the first version listed
+    // route|page|layout and missed five error/not-found files already in the tree
+    // (red-team CRITICAL-3). Outside app/ it still names exactly two files, so a
+    // Pages-Router handler would be invisible. This repository is App Router only,
+    // asserted below so the gap stays measured rather than assumed.
+    expect(PUBLIC_SURFACE.test('app/api/x/handler.ts')).toBe(true)
+    expect(PUBLIC_SURFACE.test('app/error.tsx')).toBe(true)
+    expect(PUBLIC_SURFACE.test('pages/api/legacy.ts')).toBe(false)
+    expect(files.filter((f) => f.path.startsWith('pages/'))).toEqual([])
+  })
+
+  it('CANNOT prove its evidence paths were visited — but there are none unvisited', () => {
+    // An egress point whose `where` names no walked file attaches to a node with
+    // no edges: it reaches zero surfaces, so rule 8 can never fire for it, and the
+    // green result means "we never looked" rather than "nothing exposes it".
+    expect(orphanedEvidence(files, points)).toEqual([])
+  })
 
   it('CANNOT see a host assembled by concatenation from fragments', () => {
     // Briefly, an unguarded protocol-relative branch DID catch this, via the `//`
@@ -505,7 +814,7 @@ describe('I8 — what this guard CANNOT do', () => {
       authenticated: false, licence_status: 'NOT_APPLICABLE', finding: 'not a vendor, honest',
       recorded_by: 'someone', recorded_on: '2026-08-27',
     }
-    expect(checkRegister(detectEgress([], { dependencies: { 'definitely-a-vendor-client': '^1.0.0' } }), [mis]))
+    expect(checkRegister(detectEgress([], { dependencies: { 'definitely-a-vendor-client': '^1.0.0' } }), [mis], NO_SURFACES))
       .toEqual([])
   })
 
