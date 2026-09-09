@@ -46,7 +46,7 @@ import {
   type RegisterEntry,
   type EgressPoint,
 } from './vendorEgress'
-import { attributeSurfaces, buildImportGraph, PUBLIC_SURFACE } from './importGraph'
+import { attributeSurfaces, buildImportGraph, orphanedEvidence, PUBLIC_SURFACE } from './importGraph'
 
 const ROOT = join(__dirname, '../..')
 
@@ -320,13 +320,20 @@ describe('I8 — every vendor this repository reaches is recorded', () => {
     expect(surfaceDrift).toEqual([])
   })
 
-  it('has exposed_via on every exposed row the graph can see, and on no other', () => {
-    // The rule fires only where the graph reaches something, so this pins WHICH
-    // rows carry the field. Without it, a resolver that silently returned nothing
-    // would leave rule 8 at zero instances and the test above green.
-    const withField = register.entries.filter((e) => Array.isArray(e.exposed_via)).map((e) => `${e.kind}|${e.id}`)
-    expect(withField.length).toBeGreaterThanOrEqual(12)
-    for (const k of withField) expect(surfaces.get(k)?.length ?? 0).toBeGreaterThan(0)
+  it('carries exposed_via on exactly the exposed rows the graph reaches', () => {
+    // Stated as an IFF over the actual rows, not as a floor. The first draft was
+    // `expect(withField.length).toBeGreaterThanOrEqual(12)` — which is the same
+    // drifting threshold this file explicitly strikes 40 lines below, where a
+    // count went RED as a reward for withdrawing a vendor surface and the repair
+    // was to type a smaller number. Reintroducing it while quoting the lesson is
+    // the sin this suite exists to remove (red-team MEDIUM-1).
+    const shouldHave = register.entries
+      .filter((e) => e.end_user_exposed && e.lifecycle === 'active' && (surfaces.get(`${e.kind}|${e.id}`)?.length ?? 0) > 0)
+      .map((e) => `${e.kind}|${e.id}`)
+    const doesHave = register.entries
+      .filter((e) => Array.isArray(e.exposed_via))
+      .map((e) => `${e.kind}|${e.id}`)
+    expect(doesHave.sort()).toEqual(shouldHave.sort())
   })
 
   it('states where redistribution stands for everything a user can see', () => {
@@ -573,6 +580,23 @@ describe('I8 — a new surface cannot quietly start serving a vendor', () => {
     expect(run([known], bare)).toEqual(['surfaces-unrecorded'])
   })
 
+  it.each([
+    ['a preceding export type', `export type Params = { t: string }\nimport { q } from '@/lib/data/vendorClient'`],
+    ['a preceding export interface', `export interface Params { t: string }\nimport { q } from '@/lib/data/vendorClient'`],
+    ['a JSDoc block above the import', `/**\n * import type { X } from 'somewhere'\n */\nimport { q } from '@/lib/data/vendorClient'`],
+    ['a named clause longer than 800 characters', `import { ${Array.from({ length: 70 }, (_, i) => `unused${i}`).join(', ')}, q } from '@/lib/data/vendorClient'`],
+  ])('is not defeated by %s', (_what, header) => {
+    // Red-team CRITICAL-1 and CRITICAL-2, both verified against the real tree
+    // before the fix. `staticRe` anchored on any occurrence of the word
+    // import/export and ran a lazy {0,800} gap to the next `from '…'`, so a
+    // preceding declaration swallowed the real import (returning it type-only, or
+    // handing parseClause the declaration body as the clause) and a clause past
+    // the bound produced NO specifier at all. Fixed at source in
+    // syntheticContainment.ts, which is why the I3 suite is a gate on this change.
+    const added: SourceFile = { path: 'app/api/escape/route.ts', source: `${header}\nexport const GET = () => q()` }
+    expect(run([known, added], exposedRow())).toEqual(['surface-added'])
+  })
+
   it('does NOT fire when the new importer is an internal module, not a surface', () => {
     // The unit is the surface. A helper importing a helper exposes nothing new to
     // an end user, and firing on it would make the register a call graph.
@@ -591,11 +615,27 @@ describe('I8 — a new surface cannot quietly start serving a vendor', () => {
     expect(run([known, typed], exposedRow())).toEqual([])
   })
 
-  it('does NOT fire when a recorded surface stops reaching the vendor', () => {
-    // Removals are deliberately not violations: an over-recorded surface overstates
-    // the exposure, which is the safe direction, and firing would redden the gate
-    // for every unrelated refactor. Same reasoning as dynamic_sites.
-    expect(run([known], exposedRow({ exposed_via: ['app/api/known/route.ts', 'app/api/gone/route.ts'] }))).toEqual([])
+  it('THE DISARMING ATTACK: a padded exposed_via cannot silence the rule', () => {
+    // Red-team's HIGH-1. The first version of rule 8 fired on additions only,
+    // calling over-recording "the safe direction". Union a row's list with every
+    // surface that could ever exist and no addition is possible again — the rule
+    // becomes permanently unfirable with the suite green. Over-recording is not a
+    // cautious error; it is how you switch the gate off.
+    const padded = exposedRow({
+      exposed_via: ['app/api/known/route.ts', 'app/api/anything/route.ts', 'app/api/whatever/route.ts'],
+    })
+    expect(run([known], padded)).toEqual(['surface-stale'])
+  })
+
+  it('names the computed set in the message, so repair is copy-paste not padding', () => {
+    const added: SourceFile = {
+      path: 'app/api/brand-new/route.ts',
+      source: `import { q } from '@/lib/data/vendorClient'\nexport const GET = () => q()`,
+    }
+    const all = [VENDOR, known, added]
+    const pts = detectEgress(all)
+    const v = checkRegister(pts, [exposedRow()], attributeSurfaces(all, pts))
+    expect(v[0].detail).toContain('Computed set: app/api/brand-new/route.ts, app/api/known/route.ts')
   })
 })
 
@@ -686,14 +726,24 @@ describe('I8 — what this guard CANNOT do', () => {
     expect(surfaces.get('published-data|scripts/backtestData/')).toBeUndefined()
   })
 
-  it('CANNOT see a vendor rendered on a new surface from an ALREADY-fetched field', () => {
-    // Named gap (1) of the register, unchanged by this work: a page that displays a
-    // vendor value handed to it as a prop reaches no host and imports no client.
-    const fs: SourceFile[] = [
-      { path: 'app/api/known/route.ts', source: `export const GET = () => fetch('https://api.vendor.example/q')` },
-      { path: 'app/render/page.tsx', source: `export default function P({ v }: { v: number }) { return <b>{v}</b> }` },
-    ]
-    expect(surfacesOf(fs).get('http-host|api.vendor.example')).not.toContain('app/render/page.tsx')
+  it('CANNOT see a vendor rendered from an ALREADY-fetched field — and here is the REAL instance', () => {
+    // Named gap (1), unchanged by this work, and the first draft of this test
+    // demonstrated it with an invented toy while a known real instance sat in the
+    // evidence array of a row being edited (red-team HIGH-2). The toy is gone.
+    //
+    // components/stock/quantlab/tabs/SummaryTab.tsx:34 renders a literal
+    // "Bloomberg spot" badge. The chain app/stock/[ticker]/page.tsx:13 ->
+    // QuantLabPanel -> SummaryTab imports NO bridge client: the price arrives as a
+    // prop from a fetch. So the page is in exposed_via for TRADING_AGENTS_BASE,
+    // where a hook imports the config module, and NOT for BLOOMBERG_BRIDGE_URL —
+    // same page, same commit, opposite treatment, decided purely by
+    // hook-versus-prop. The graph is not wrong; it is measuring imports, and
+    // imports are not exposure. Recorded so the register's asymmetry is a stated
+    // limit rather than something a reader has to notice.
+    const chain = files.find((f) => f.path === 'components/stock/quantlab/tabs/SummaryTab.tsx')?.source ?? ''
+    expect(chain).toContain('Bloomberg spot')
+    expect(surfaces.get('env-host|TRADING_AGENTS_BASE')).toContain('app/stock/[ticker]/page.tsx')
+    expect(surfaces.get('env-host|BLOOMBERG_BRIDGE_URL') ?? []).not.toContain('app/stock/[ticker]/page.tsx')
   })
 
   it('CANNOT tell an exposed row that is MISCLASSIFIED as unexposed', () => {
@@ -712,11 +762,23 @@ describe('I8 — what this guard CANNOT do', () => {
     expect(checkRegister(pts, [row], attributeSurfaces(fs, pts))).toEqual([])
   })
 
-  it('CANNOT see a runtime-resolved route handler outside the app tree convention', () => {
-    // PUBLIC_SURFACE is a filename convention. A vendor reached from a module that
-    // Next.js invokes by some other mechanism is not attributed to anything.
-    expect(PUBLIC_SURFACE.test('app/api/x/handler.ts')).toBe(false)
+  it('CANNOT see an entry point outside app/ that is not one of the two named root files', () => {
+    // PUBLIC_SURFACE enumerates nothing WITHIN app/ — the first version listed
+    // route|page|layout and missed five error/not-found files already in the tree
+    // (red-team CRITICAL-3). Outside app/ it still names exactly two files, so a
+    // Pages-Router handler would be invisible. This repository is App Router only,
+    // asserted below so the gap stays measured rather than assumed.
+    expect(PUBLIC_SURFACE.test('app/api/x/handler.ts')).toBe(true)
+    expect(PUBLIC_SURFACE.test('app/error.tsx')).toBe(true)
     expect(PUBLIC_SURFACE.test('pages/api/legacy.ts')).toBe(false)
+    expect(files.filter((f) => f.path.startsWith('pages/'))).toEqual([])
+  })
+
+  it('CANNOT prove its evidence paths were visited — but there are none unvisited', () => {
+    // An egress point whose `where` names no walked file attaches to a node with
+    // no edges: it reaches zero surfaces, so rule 8 can never fire for it, and the
+    // green result means "we never looked" rather than "nothing exposes it".
+    expect(orphanedEvidence(files, points)).toEqual([])
   })
 
   it('CANNOT see a host assembled by concatenation from fragments', () => {

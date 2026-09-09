@@ -474,10 +474,12 @@ export interface RegisterEntry {
    * Bloomberg reaches no new host, adds no dependency and reads no new env var,
    * so every earlier rule here stays green (Q107-S9).
    *
-   * Additions fail; removals do not, on the same reasoning as `dynamic_sites`. A
-   * listed surface that no longer reaches the vendor OVERSTATES the exposure,
-   * which is the safe direction, and failing on it would redden the gate for
-   * every unrelated refactor.
+   * The recorded set must EQUAL the computed set. An earlier draft failed on
+   * additions only, calling over-recording "the safe direction"; red-team then
+   * disarmed the rule by padding every list with all 46 surfaces, after which no
+   * addition was possible and the suite stayed green. A padded list cannot
+   * register a new surface, so an inaccurate one switches the gate off rather
+   * than erring safely.
    */
   exposed_via?: string[]
   cross_reference?: string
@@ -613,15 +615,43 @@ export function checkRegister(
               `I8 governs EXPOSURE: record which surfaces serve it. Reached from ${reached.join(', ')}.`,
           })
         } else {
+          //  SET EQUALITY, not containment.
+          //
+          //  The first version fired on additions only, reasoning that an
+          //  over-recorded surface overstates the exposure and is therefore the
+          //  safe direction. **That was wrong, and red-team disarmed the rule with
+          //  it:** union every row's exposed_via with all 46 public surfaces and
+          //  no addition is ever possible again, so rule 8 becomes permanently
+          //  unfirable while the suite stays green. Over-recording is not a
+          //  cautious error here — it is the way to switch the gate off.
+          //
+          //  The `dynamic_sites` precedent does not transfer. That rule counts
+          //  unresolvable expressions and cannot tell WHICH one moved, so it can
+          //  only compare magnitudes. This one holds exact paths, so it can
+          //  demand the recorded set BE the computed set. The detail line prints
+          //  the computed list, which makes the repair a copy-paste rather than
+          //  an invitation to pad.
           const recorded = new Set(e.exposed_via)
           const added = reached.filter((s) => !recorded.has(s))
+          const stale = e.exposed_via.filter((s) => !reached.includes(s))
           if (added.length > 0) {
             v.push({
               rule: 'surface-added',
               kind: e.kind, id: e.id,
               detail:
                 `${added.join(', ')} now reach(es) this vendor and is not in exposed_via. ` +
-                `A new surface exposing vendor data to end users is I8's trigger condition: confirm the licence permits it AND record the finding.`,
+                `A new surface exposing vendor data to end users is I8's trigger condition: confirm the licence permits it AND record the finding. ` +
+                `Computed set: ${reached.join(', ')}.`,
+            })
+          }
+          if (stale.length > 0) {
+            v.push({
+              rule: 'surface-stale',
+              kind: e.kind, id: e.id,
+              detail:
+                `exposed_via lists ${stale.join(', ')}, which no longer reach(es) this vendor. ` +
+                `A padded list cannot register a new surface, so an inaccurate one disarms the rule rather than erring safely. ` +
+                `Computed set: ${reached.join(', ')}.`,
             })
           }
         }

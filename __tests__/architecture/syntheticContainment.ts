@@ -206,7 +206,34 @@ interface Specifier {
 export function extractSpecifiers(code: string): Specifier[] {
   const out: Specifier[] = []
 
-  const staticRe = /\b(import|export)\b([\s\S]{0,800}?)\bfrom\s*['"]([^'"]+)['"]/g
+  /**
+   * A STATEMENT-ANCHORED match. The previous version was `\b(import|export)\b`
+   * with a `{0,800}?` gap, and both halves were defects that red-team broke on
+   * the real tree (Q107-S9 review):
+   *
+   * **The anchor matched any occurrence of the word.** A preceding declaration
+   * that contains no `from` of its own — `export type Row = { close: number }` —
+   * anchored the match and the lazy gap ran on into the NEXT statement's
+   * `from '…'`. The real import then never got its own match, and the clause
+   * handed to `parseClause` was the declaration body. Two consequences, both
+   * live: the specifier came back `typeOnly: true` so `importGraph` dropped the
+   * edge, and `.named` came back `[{exported: 'close: number'}]`, which made
+   * `importsConstructor` return false. **That is I3's only surviving detector,
+   * and one `export interface` line above the import switched it off** — verified
+   * against `synthetic-containment.test.ts` on the real tree.
+   *
+   * **The 800-character bound silently dropped the specifier entirely.** A named
+   * import clause longer than that produced NO match at all, not a truncated one.
+   *
+   * Anchoring at a statement boundary and forbidding the gap from crossing into
+   * another `import`/`export` statement fixes both: a spurious anchor can no
+   * longer reach past the declaration it starts, so the engine falls through to
+   * the real one. The bound stays finite to keep the scan linear, at roughly
+   * twice the longest clause red-team could construct; it is asserted as a
+   * CANNOT-do test rather than left as an assumption.
+   */
+  const staticRe =
+    /(?:^|[\n;}])\s*(import|export)\b((?:(?![\n;]\s*(?:import|export)\b)[\s\S]){0,4000}?)\bfrom\s*['"]([^'"]+)['"]/g
   for (const m of code.matchAll(staticRe)) {
     out.push({ raw: m[3], reexport: m[1] === 'export', clause: m[2] })
   }

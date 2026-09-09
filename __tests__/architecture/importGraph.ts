@@ -18,26 +18,38 @@
  * route importing `bridgeClient` and serving Bloomberg on a new public surface
  * shipped green.
  *
- * ## This is the SEVENTH instance of the same defect, not a new kind
+ * ## It is RELATED to the reachability family, and the first draft overclaimed
  *
- * The guard was correct and never visited the thing it governed. The previous six
- * were an unvisited fixture directory, an unvisited top-level directory, an
- * unvisited file extension, an unvisited language, a producer set defined in terms
- * of the property under test, and a positive control that exercised the decider
- * rather than the visitor. Here the walker visited every file and the *edges
- * between them* were never traversed. **When a guard is green, ask what it
- * visited before you ask what it decided.**
+ * That draft called this "the seventh instance of the guard-reachability defect".
+ * Red-team was right that it is not the same thing, and the correction matters
+ * because inflated framing is what this project's tier discipline exists to
+ * punish. In the priors an EXISTING rule sat at zero reachable instances. Here
+ * rules 1-7 all fire correctly on their own terms; what was missing is a
+ * capability nobody built, and a hand-typed field that drifted because nothing
+ * read it — closer to `_cached` and `QuoteProvenance` than to the unvisited
+ * fixture directory. The shared lesson survives the correction, and is the reason
+ * the block below exists: **when a guard is green, ask what it visited before you
+ * ask what it decided.** Here the walker visited every file and the *edges
+ * between them* were never traversed.
  *
- * ## The resolver is imported, not re-implemented
+ * ## The resolver is imported, not re-implemented — and importing it found a P0
  *
  * `resolveSpecifier`, `extractSpecifiers` and `parseClause` live in
  * `syntheticContainment.ts` and were hardened across three adversarial rounds
  * against aliases, multi-hop re-exports, namespace and default laundering,
  * non-literal dynamic specifiers, and an extension allowlist that silently
  * dropped `.json`. Writing a second resolver here would re-open every one of
- * those escapes, and CLAUDE.md's one-home rule exists for exactly this. It is
- * imported instead — the layering points from the newer guard to the older one,
- * which is the direction that leaves the hardened file untouched.
+ * those escapes, and CLAUDE.md's one-home rule exists for exactly this.
+ *
+ * **But "the hardening carries over" was false for the part this hinges on.**
+ * `typeOnly` had ZERO readers before this file, and red-team broke it
+ * immediately: `staticRe` anchored on any occurrence of the word `import` or
+ * `export`, so a preceding `export type Row = { close: number }` swallowed the
+ * next real import and returned it as type-only, dropping the edge. The same bug
+ * corrupted `.named`, which switched off `importsConstructor` — **I3's only
+ * surviving detector** — and that one WAS exercised. Reusing a hardened module is
+ * still right; assuming its hardening covers a field nobody had ever read was
+ * not. Both are fixed at the source, in `syntheticContainment.ts`.
  *
  * ## Pure function over a virtual file set
  *
@@ -53,19 +65,34 @@ import {
 import type { EgressPoint, SourceFile } from './vendorEgress'
 
 /**
- * A file the Next.js runtime invokes in response to an end-user request.
+ * A file the Next.js runtime can invoke in response to an end-user request.
  *
- * Deliberately broader than `app/api/**`. `hooks/useBtcCandles.ts` reaches
- * CoinGecko **browser-direct** and is not in an API route at all — it is imported
- * by a component imported by a page, so the page is the surface that exposes it.
- * Restricting this to API routes would have been blind to every client-side
- * vendor call, which is the half of the platform I8's audit named first.
+ * **This enumerates nothing, and the first version did.** It listed
+ * `route|page|layout`, and red-team found five files already in the tree that it
+ * missed — `app/error.tsx`, `app/global-error.tsx`, `app/not-found.tsx`,
+ * `app/briefs/error.tsx`, `app/briefs/sector/[sector]/error.tsx`. Each is
+ * convention-discovered with **no importer**, exactly like `page.tsx`, so its
+ * whole import subtree was unattributed: a component under `app/briefs/error.tsx`
+ * importing `yahoo-finance2` and `bridgeClient` left the suite green. Beyond
+ * those there are `default`, `template`, `sitemap`, `opengraph-image`,
+ * `instrumentation` and whatever convention Next.js adds next — and "there are
+ * none of those right now" is the reasoning Q-098 rejected for `.json`, one level
+ * up. An allowlist of filenames is the same defect as an allowlist of directories.
  *
- * `layout.tsx` is included because a root layout renders on every request, and
- * `middleware.ts` because it runs before all of them.
+ * So: **everything under `app/`**, plus the two root files the runtime invokes
+ * outside it. Of the 53 files in `app/` today, 50 are entry points and 3 are
+ * colocated components — and those three are imported by pages, so they were
+ * already covered transitively. Naming them as surfaces costs at most three
+ * redundant register entries and is not even wrong: a component that reaches a
+ * vendor is part of the exposure path.
+ *
+ * Breadth is the point elsewhere too. `hooks/useBtcCandles.ts` reaches CoinGecko
+ * **browser-direct** and is in no API route at all; it is imported by a component
+ * imported by a page, so the page is the surface. Restricting this to
+ * `app/api/**` would have been blind to every client-side vendor call, which is
+ * the half of the platform I8's audit names first.
  */
-export const PUBLIC_SURFACE =
-  /^(middleware\.(?:ts|js)|app\/(?:.*\/)?(?:route|page|layout)\.(?:tsx?|jsx?))$/
+export const PUBLIC_SURFACE = /^(?:app\/.+\.(?:tsx?|jsx?)|(?:middleware|instrumentation)\.(?:tsx?|jsx?))$/
 
 /**
  * Egress kinds that are attributable to a FILE, and therefore to whatever imports
@@ -119,6 +146,28 @@ export function buildImportGraph(files: readonly SourceFile[]): Map<string, Set<
   return edges
 }
 
+/** The file an egress point cites. `where` is `path:line` or `path:line:col`. */
+const evidenceFile = (p: EgressPoint): string => p.where.split(':')[0]
+
+/**
+ * Egress evidence whose file the walker never visited.
+ *
+ * Such a point attaches to a graph node with no edges, so it reaches zero
+ * surfaces and rule 8 can never fire for it — a green result meaning "nothing
+ * exposes this" when the truth is "we never looked". That is the seventh-defect
+ * shape reappearing inside the fix for the seventh defect, so it is measured
+ * rather than assumed: zero instances today, asserted by the caller.
+ */
+export function orphanedEvidence(
+  files: readonly SourceFile[],
+  points: readonly EgressPoint[],
+): string[] {
+  const known = new Set(files.map((f) => f.path))
+  return points
+    .filter((p) => FILE_BORNE.has(p.kind) && !known.has(evidenceFile(p)))
+    .map((p) => p.where)
+}
+
 /** The package a bare specifier belongs to: `@scope/pkg/sub` → `@scope/pkg`, `pkg/sub` → `pkg`. */
 function packageOf(spec: string): string | null {
   if (spec.startsWith('.') || spec.startsWith('@/') || spec.startsWith('/')) return null
@@ -153,8 +202,7 @@ export function attributeSurfaces(
   for (const p of points) {
     if (p.kind === 'npm-package') packages.add(p.id)
     if (!FILE_BORNE.has(p.kind)) continue
-    // `where` is `path:line` or `path:line:col`; repo paths carry no colon.
-    add(p.where.split(':')[0], `${p.kind}|${p.id}`)
+    add(evidenceFile(p), `${p.kind}|${p.id}`)
   }
 
   for (const file of files) {
