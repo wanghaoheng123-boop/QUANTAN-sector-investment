@@ -19,7 +19,10 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync, readdirSync } from 'fs'
 import { join } from 'path'
-import { checkNames, collisions, jobBlocks, normalise, requirable, triggers, type WorkflowFile } from './workflowCheckNames'
+import {
+  calleeOf, checkNames, collisions, jobBlocks, normalise, requirable, scalar,
+  triggerFilters, triggers, unsafeToRequire, type WorkflowFile,
+} from './workflowCheckNames'
 
 const DIR = join(__dirname, '../../.github/workflows')
 const files: WorkflowFile[] = readdirSync(DIR)
@@ -36,7 +39,7 @@ const nameSet = [...new Set(names.map((c) => c.name))].sort()
  * STATUS rather than a check run and so is not derivable from these files at all;
  * it is named in the requirable list below instead.
  */
-const OBSERVED_BEFORE_THIS_FIX = [
+const OBSERVED_RAW = [
   'alert / alert',
   'axe',
   'benchmark',
@@ -44,11 +47,37 @@ const OBSERVED_BEFORE_THIS_FIX = [
   'pytest',
   'refresh',
   'smoke',
-  'stryker (*)',
+  'stryker (backtest)',
+  'stryker (options)',
+  'stryker (quant-indicators)',
+  'stryker (quant-rest)',
   'test',
   'typecheck',
   'workflows',
-].sort()
+]
+
+/**
+ * The four `stryker (…)` names are one template. Collapsing them HERE, with the
+ * same public `normalise` the derivation uses, keeps the frozen list raw GitHub
+ * output — red-team's F7 was that the list already carried the pre-cooked
+ * `stryker (*)`, i.e. one of eleven entries was the model asserted against
+ * itself, in the very branch that had no reachable instances.
+ */
+const OBSERVED_BEFORE_THIS_FIX = [...new Set(
+  OBSERVED_RAW.map((n) => n.replace(/\((?!\*\))[^)]*\)/, '(*)')),
+)].sort()
+
+/** The workflow files the snapshot above was measured over. */
+const MEASURED_OVER = [
+  'a11y-axe.yml', 'ci.yml', 'nightly-backtest.yml',
+  'refresh-data.yml', 'scheduled-failure-alert.yml', 'stryker-weekly.yml',
+]
+
+/** The sources as they stood before this package renamed anything. */
+const preFix: WorkflowFile[] = files.map((f) => ({
+  path: f.path,
+  source: f.source.replace(/^ {4}name: (?:nightly-benchmark|alert-[a-z-]+)\n/gm, ''),
+}))
 
 // ─────────────────────────────────────────────────────────────────────────────
 describe('Q107-O4 — the derivation reproduces what GitHub actually emits', () => {
@@ -61,19 +90,22 @@ describe('Q107-O4 — the derivation reproduces what GitHub actually emits', () 
     for (const f of files) expect(jobBlocks(f.source).size).toBeGreaterThan(0)
   })
 
+  it('the oracle is scoped to the workflows it was measured over', () => {
+    // F5: the frozen list is a SNAPSHOT. Adding a seventh workflow must not force
+    // an author to invent a never-observed name and paste it into a list
+    // documented as GitHub's output — that is how an oracle quietly becomes a
+    // second copy of the model. The comparison below is restricted to the six
+    // files the snapshot covers, so a new file fails the COLLISION and REQUIRABLE
+    // checks (where it belongs) and not this one.
+    expect(MEASURED_OVER.every((f) => files.some((x) => x.path === f))).toBe(true)
+  })
+
   it('derives the historical name set EXACTLY from the pre-fix sources', () => {
     // The positive control on the DERIVATION. Every job below is reproduced from
     // the source text as it stood before this commit, so the expected value is
     // GitHub's own output rather than a restatement of the model. A version that
     // dropped the composite or the matrix suffix fails here.
-    const before: WorkflowFile[] = files.map((f) => ({
-      path: f.path,
-      source: f.source
-        .replace(/^ {4}name: nightly-benchmark\n/m, '')
-        .replace(/^ {4}name: alert-nightly-benchmark\n/m, '')
-        .replace(/^ {4}name: alert-weekly-refresh\n/m, '')
-        .replace(/^ {4}name: alert-stryker-weekly\n/m, ''),
-    }))
+    const before: WorkflowFile[] = preFix.filter((f) => MEASURED_OVER.includes(f.path))
     expect([...new Set(checkNames(before).map((c) => c.name))].sort()).toEqual(OBSERVED_BEFORE_THIS_FIX)
   })
 
@@ -81,11 +113,7 @@ describe('Q107-O4 — the derivation reproduces what GitHub actually emits', () 
     // Watched it fail, kept as a test. `alert / alert` was produced by three
     // workflows; commit 50bbab4 carries two of them on one SHA. `benchmark` was
     // produced by ci.yml and nightly-backtest.yml.
-    const before: WorkflowFile[] = files.map((f) => ({
-      path: f.path,
-      source: f.source.replace(/^ {4}name: (?:nightly-benchmark|alert-[a-z-]+)\n/gm, ''),
-    }))
-    const c = collisions(checkNames(before))
+    const c = collisions(checkNames(preFix))
     expect([...c.keys()].sort()).toEqual(['alert / alert', 'benchmark'])
     expect(c.get('alert / alert')?.map((x) => x.workflow).sort()).toEqual([
       'nightly-backtest.yml', 'refresh-data.yml', 'stryker-weekly.yml',
@@ -184,10 +212,15 @@ describe('Q107-O4 — what is SAFE to require when Q-097 lands', () => {
   })
 
   it('excludes every name a pull request can never produce', () => {
-    // The permanent-block foot-gun, named rather than described. NOTE this is a
-    // DIFFERENT failure from ambiguity, and the Q107-O4 ledger row conflates
-    // them: `benchmark` was ambiguous but never a permanent block, because
-    // ci.yml does emit it on PR heads.
+    // The permanent-block foot-gun, named rather than described. It is a
+    // DIFFERENT failure from ambiguity, and the Q107-O4 row conflates them.
+    //
+    // CORRECTION, kept because it went the flattering way first: an earlier draft
+    // called `benchmark` merely ambiguous and "latent", on two sampled commits.
+    // Measured across 200 CI and 41 nightly runs, the two workflows share 12
+    // commits and ELEVEN carry two or more `benchmark` check runs — f0fda05 has
+    // run 33096354980 (Nightly, schedule) and 32982665852 (CI, push). Live, and
+    // the row's severity was right. Two samples are not a "never".
     for (const n of ['axe', 'refresh', 'stryker (*)', 'alert-nightly-benchmark / alert']) {
       expect(nameSet).toContain(n)
       expect(requirable(files)).not.toContain(n)
@@ -205,6 +238,87 @@ describe('Q107-O4 — what is SAFE to require when Q-097 lands', () => {
       { path: 'rogue.yml', source: 'name: Rogue\non:\n  schedule:\n    - cron: 0 0 * * *\njobs:\n  typecheck:\n    runs-on: ubuntu-latest\n' },
     ]
     expect(requirable(poisoned)).not.toContain('typecheck')
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Escapes found by adversarial review. Each shipped GREEN in the first version.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('Q107-O4 — the escapes red-team found', () => {
+  const wf = (path: string, source: string): WorkflowFile => ({ path, source })
+  const CI_HEAD = 'name: X\non:\n  pull_request:\n    branches: [main]\njobs:\n'
+
+  it('F2: two jobs in ONE workflow sharing a name is a collision', () => {
+    // The first version keyed collisions on WORKFLOW, so a second ci.yml job
+    // named `test` was invisible and `test` was still recommended as requirable.
+    // A re-run is a different run of the SAME job, which (workflow, jobId)
+    // collapses anyway — the rationale never supported the code.
+    const f = [wf('ci.yml', CI_HEAD + '  test:\n    runs-on: u\n  test-e2e:\n    name: test\n    runs-on: u\n')]
+    expect([...collisions(checkNames(f)).keys()]).toEqual(['test'])
+    expect(requirable(f)).not.toContain('test')
+  })
+
+  it('F1: a path-filtered pull_request trigger makes every name unrequirable', () => {
+    // GitHub does not report a job skipped by a path filter AT ALL, so a required
+    // check sits pending forever on a docs-only PR — and this repo merges
+    // chore(state) PRs constantly. The name looks safe on the PR where it ran.
+    const f = [wf('ci.yml', "name: X\non:\n  pull_request:\n    paths: ['app/**']\njobs:\n  test:\n    runs-on: u\n")]
+    expect(triggerFilters(f[0].source, 'pull_request')).toContain('paths')
+    expect(requirable(f)).toEqual([])
+    expect(unsafeToRequire(f)[0].reason).toMatch(/filters pull_request by path/)
+  })
+
+  it('F1: a job-level if: makes that one name unrequirable', () => {
+    const f = [wf('ci.yml', CI_HEAD + "  always:\n    runs-on: u\n  sometimes:\n    if: github.actor != 'bot'\n    runs-on: u\n")]
+    expect(requirable(f)).toEqual(['always'])
+    expect(unsafeToRequire(f).map((u) => u.name)).toEqual(['sometimes'])
+  })
+
+  it('F1: the real ci.yml has neither, which is why its seven names are safe', () => {
+    const ci = files.find((f) => f.path === 'ci.yml')!
+    expect(triggerFilters(ci.source, 'pull_request')).toEqual(new Set(['branches']))
+    expect([...jobBlocks(ci.source).values()].some((b) => b.some((l) => /^ {4}if:/.test(l)))).toBe(false)
+  })
+
+  it('F4: a REMOTE reusable workflow is unresolvable, not an ordinary job', () => {
+    // The first version matched only an unquoted local `./…` path, so its
+    // "unresolvable" branch could fire on nothing actionlint would pass — correct
+    // and unreachable, inside the guard written to close a reachability defect.
+    // A remote call derived the bare caller name where GitHub emits a composite.
+    const f = [wf('x.yml', CI_HEAD + '  call:\n    uses: octo/repo/.github/workflows/w.yml@v1\n')]
+    expect(calleeOf(['    uses: octo/repo/.github/workflows/w.yml@v1'])).toEqual({ kind: 'remote', ref: 'octo/repo/.github/workflows/w.yml@v1' })
+    expect(checkNames(f)[0].name).toContain('<UNRESOLVED')
+    expect(requirable(f)).toEqual([])
+  })
+
+  it('F6: a trailing comment on a job header no longer loses TWO jobs', () => {
+    // It lost the commented job AND appended its body to the job above, renaming
+    // that one. Two jobs corrupted by one comment.
+    const b = jobBlocks(CI_HEAD + '  first:\n    runs-on: u\n  deploy: # later\n    name: shipped\n    runs-on: u\n')
+    expect([...b.keys()]).toEqual(['first', 'deploy'])
+    expect(checkNames([wf('x.yml', CI_HEAD + '  first:\n    runs-on: u\n  deploy: # later\n    name: shipped\n    runs-on: u\n')]).map((c) => c.name))
+      .toEqual(['first', 'shipped'])
+  })
+
+  it('F6: a trailing comment on a name is not part of the name', () => {
+    // Deriving `builder # x` where GitHub emits `builder` would have had the
+    // guard MANUFACTURING a never-emitted name and recommending it as requirable.
+    expect(scalar('builder # x')).toBe('builder')
+    expect(scalar('"release #1"')).toBe('release #1')
+    expect(scalar("'quoted'")).toBe('quoted')
+  })
+
+  it('F6: a quoted uses: still resolves the composite', () => {
+    expect(calleeOf(["    uses: './.github/workflows/scheduled-failure-alert.yml'"]))
+      .toEqual({ kind: 'local', ref: 'scheduled-failure-alert.yml' })
+  })
+
+  it('F6: flow-style and quoted on: are parsed, not silently emptied', () => {
+    // An empty trigger set would drop a whole workflow out of the requirable
+    // calculation without failing anything.
+    expect(triggers('on: [push, pull_request]\njobs:\n')).toEqual(new Set(['push', 'pull_request']))
+    expect(triggers('"on":\n  pull_request:\njobs:\n')).toEqual(new Set(['pull_request']))
+    expect(triggers('on: push\njobs:\n')).toEqual(new Set(['push']))
   })
 })
 
