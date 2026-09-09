@@ -1556,7 +1556,7 @@ for free; `Q-093` records that no lint exists.
 
 ## 2026-09-09 — Q107-O4: a required check must name exactly one job
 
-Branch `fix/Q107-O4-check-name-collisions`, four commits. **I7 is unchanged and
+Merged 2026-09-10 as PR #188 (squash `5d33f0f`). **I7 is unchanged and
 nothing here changes it** — `Q-097` is owner action in repo settings, and the
 list this package produces is a recommendation nothing consumes.
 

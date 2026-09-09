@@ -2,7 +2,7 @@
   "schema_version": "1.1",
   "project": "QUANTAN-sector-investment",
   "created": "2026-04-28T09:40:00Z",
-  "last_updated": "2026-09-09",
+  "last_updated": "2026-09-10",
   "active_agent": "claude opus-5 (2026-09-09 Q107-O4 check-name collisions; PR pending)",
   "prod_bug_fix_2026_07_01": {
     "B-2": "News fetch broken by yahoo-finance2 SearchResult schema drift (yf.search validation threw → news silently dropped + 66 prod errors on /api/briefs since 2026-04-03). FOUND via Vercel get_runtime_errors. FIXED with validateResult:false on the 4 news-search callers (mirrors options/chain.ts precedent) → PR #82 → main 2e6137c. LIVE-VERIFIED: /api/briefs now 200 with full news feed (was empty); 0 SearchResult validation logs on new deploy dpl_D29j.",
@@ -842,7 +842,7 @@
   },
   "q107_o4_check_name_collisions_2026_09_09": {
     "directive": "owner: 'Continue with the next action.' — Q107-O4, the single next action named at the end of the Q107-S9 sprint.",
-    "status": "Branch fix/Q107-O4-check-name-collisions, four commits, PR pending.",
+    "status": "MERGED to production 2026-09-10 as PR #188 (squash 5d33f0f), five commits. All 8 checks + Vercel green on the PR head, verified BY NAME against the commit; typecheck/architecture/actionlint re-run on the squashed commit on main; production smoke passed. Zero production code touched — workflows, tests, reviews and workspace only.",
     "why_it_mattered": "Q-097 is owner action and could land at any time. A required status check is matched by NAME, so a name that identifies two jobs is ambiguous and a name no pull_request-triggered workflow emits blocks every PR permanently.",
     "MY_OWN_CLAIM_WENT_THE_FLATTERING_WAY": "I wrote that the benchmark collision was LATENT — 'the two have never co-occurred on a commit' — into a docstring AND a commit message, on a TWO-COMMIT sample. FALSE. Across 200 CI runs and 41 nightly runs the two workflows share 12 commits and ELEVEN carry >=2 check runs named benchmark (f0fda05: run 33096354980 Nightly/schedule + 32982665852 CI/push). I generalised to the conclusion that made my package look tidier, which is the exact failure this project documents. TWO SAMPLES ARE NOT A 'NEVER'.",
     "what_shipped": [
@@ -862,6 +862,7 @@
     "method_lesson": "A mutation that appears to survive may be a mutation that never applied. Assert the target exists before believing the result, or mutation testing reports your tests as stronger than they are. Same family as 'ask what a green guard VISITED before what it decided'.",
     "not_claimed": "I7 stays VIOLATED and nothing here changes that — Q-097 is owner action in repo settings, and requirable() is a recommendation nothing consumes. Every check in this repo remains advisory.",
     "gates": "typecheck clean; 2013 pass / 17 skipped (from 2002); architecture 314 pass; actionlint clean.",
-    "open_next": "Q107-A22 (HIGH — the alerting cannot report its own failure to start; needs an out-of-band scheduled probe). Then Q-108 (Bloomberg gate, P1, fully designed), Q-111 (register evidence has no reader), Q-093 (no lint). LIVE: issue #177 records refresh-data.yml failing since 2026-09-05; it auto-closes on the next scheduled success. OWNER-GATED: Q-005, Q-082, Q-083, Q-097, Q-109."
+    "open_next": "Q107-A22 (HIGH — the alerting cannot report its own failure to start; needs an out-of-band scheduled probe). Then Q-108 (Bloomberg gate, P1, fully designed), Q-111 (register evidence has no reader), Q-093 (no lint). LIVE: issue #177 records refresh-data.yml failing since 2026-09-05; it auto-closes on the next scheduled success. OWNER-GATED: Q-005, Q-082, Q-083, Q-097, Q-109.",
+    "INCIDENTAL_CONFIRMATION": "PR #188's own head carried exactly the check names requirable() publishes — benchmark, coverage, pytest, smoke, test, typecheck, workflows — so the deliverable was confirmed by the very PR that shipped it. That list is what the owner should paste into the required-status-check set when Q-097 is enabled."
   }
 }
