@@ -463,6 +463,23 @@ export interface RegisterEntry {
    * reformat while still refusing a new one.
    */
   dynamic_sites?: number
+  /**
+   * The public surfaces — routes, pages, layouts, middleware — that reach this
+   * egress point through the import graph. Computed by `attributeSurfaces`, never
+   * typed in.
+   *
+   * Required on an end-user-exposed row that any surface reaches, because I8's
+   * trigger is EXPOSURE, not egress: *"before any feature exposes vendor data to
+   * end users."* Without it, a new route importing `bridgeClient` and serving
+   * Bloomberg reaches no new host, adds no dependency and reads no new env var,
+   * so every earlier rule here stays green (Q107-S9).
+   *
+   * Additions fail; removals do not, on the same reasoning as `dynamic_sites`. A
+   * listed surface that no longer reaches the vendor OVERSTATES the exposure,
+   * which is the safe direction, and failing on it would redden the gate for
+   * every unrelated refactor.
+   */
+  exposed_via?: string[]
   cross_reference?: string
 }
 
@@ -481,8 +498,18 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
  *
  * Returns every violation rather than throwing on the first, because the useful
  * output of a compliance gate is the whole list.
+ *
+ * `surfaces` maps `kind|id` to the public surfaces that reach it, from
+ * `attributeSurfaces`. It is REQUIRED rather than optional on purpose: an
+ * optional parameter is precisely how a rule ends up with zero reachable
+ * instances, which is the defect this repository has now shipped seven times. A
+ * required parameter makes `tsc` the thing that notices a forgotten call site.
  */
-export function checkRegister(points: EgressPoint[], entries: RegisterEntry[]): Violation[] {
+export function checkRegister(
+  points: EgressPoint[],
+  entries: RegisterEntry[],
+  surfaces: ReadonlyMap<string, readonly string[]>,
+): Violation[] {
   const v: Violation[] = []
   const byKey = new Map<string, RegisterEntry>()
 
@@ -561,6 +588,44 @@ export function checkRegister(points: EgressPoint[], entries: RegisterEntry[]): 
     //    cannot be confused for one another.
     if (e.end_user_exposed && !e.redistribution_position?.trim()) {
       v.push({ rule: 'exposed-without-position', kind: e.kind, id: e.id, detail: 'end-user-exposed rows must state where the redistribution question stands' })
+    }
+
+    // 8. The EXPOSURE SURFACE may not quietly grow (Q107-S9).
+    //
+    //    Rules 1-7 all key on EGRESS: a host, a package, an env var. A new public
+    //    route that imports an existing vendor client reaches nothing new, so all
+    //    seven stay green while the surface serving that vendor to end users
+    //    doubles. I8's trigger condition is the exposure, not the egress.
+    //
+    //    Scoped to end-user-exposed rows because that is I8's own wording, not
+    //    because it is convenient. Tracking all 93 rows would attach a 40-entry
+    //    list to `next` and a 27-entry list to KV_REST_API_URL, and a register
+    //    nobody reads records nothing.
+    if (e.end_user_exposed && e.lifecycle === 'active') {
+      const reached = surfaces.get(key(e.kind, e.id)) ?? []
+      if (reached.length > 0) {
+        if (!Array.isArray(e.exposed_via)) {
+          v.push({
+            rule: 'surfaces-unrecorded',
+            kind: e.kind, id: e.id,
+            detail:
+              `${reached.length} public surface(s) reach this vendor through the import graph and exposed_via is absent. ` +
+              `I8 governs EXPOSURE: record which surfaces serve it. Reached from ${reached.join(', ')}.`,
+          })
+        } else {
+          const recorded = new Set(e.exposed_via)
+          const added = reached.filter((s) => !recorded.has(s))
+          if (added.length > 0) {
+            v.push({
+              rule: 'surface-added',
+              kind: e.kind, id: e.id,
+              detail:
+                `${added.join(', ')} now reach(es) this vendor and is not in exposed_via. ` +
+                `A new surface exposing vendor data to end users is I8's trigger condition: confirm the licence permits it AND record the finding.`,
+            })
+          }
+        }
+      }
     }
   }
 
