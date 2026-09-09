@@ -67,6 +67,8 @@ jobs:
   # fortnight of data. `always()` is load-bearing — without it this job is skipped
   # on failure, which is precisely the case it exists for.
   alert:
+    # Q107-O4 — see nightly-backtest.yml.
+    name: alert-stryker-weekly
     needs: [stryker]
     if: always()
     uses: ./.github/workflows/scheduled-failure-alert.yml

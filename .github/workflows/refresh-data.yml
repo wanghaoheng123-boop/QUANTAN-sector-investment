@@ -196,6 +196,9 @@ jobs:
   # fortnight of data. `always()` is load-bearing — without it this job is skipped
   # on failure, which is precisely the case it exists for.
   alert:
+    # Q107-O4 — see nightly-backtest.yml. The id stays `alert` so
+    # `alertPermissions()` and `needs.refresh.result` are unaffected.
+    name: alert-weekly-refresh
     needs: [refresh]
     if: always()
     uses: ./.github/workflows/scheduled-failure-alert.yml

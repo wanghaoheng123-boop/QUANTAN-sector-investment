@@ -1551,3 +1551,74 @@ unchanged)* · I4 ASP · I5 PARTIAL · I6 PARTIAL · I7 VIOLATED · I8 VIOLATED.
 **Still no invariant is ENFORCED**, and Q-097 makes every check here advisory —
 including this one. A lint rule (`import/first`) would have caught the CRITICAL
 for free; `Q-093` records that no lint exists.
+
+---
+
+## 2026-09-09 — Q107-O4: a required check must name exactly one job
+
+Branch `fix/Q107-O4-check-name-collisions`, four commits. **I7 is unchanged and
+nothing here changes it** — `Q-097` is owner action in repo settings, and the
+list this package produces is a recommendation nothing consumes.
+
+A required status check is matched by **name**. Three ways that goes wrong, and
+the ledger row described one while using another's mechanism: **ambiguity** (one
+name, two jobs), **never-emitted** (requiring a name no `pull_request` workflow
+produces — the actual "blocks every PR permanently" case), and **skippable** (a
+`paths:` filter or a job-level `if:`, where GitHub reports nothing at all and the
+check hangs forever).
+
+**My own claim went the flattering way, and that is the lesson.** I wrote that
+the `benchmark` collision was *latent* — "the two have never co-occurred on a
+commit" — into a docstring **and** a commit message, on a **two-commit sample**.
+False. Across 200 CI runs and 41 nightly runs the two workflows share **12
+commits**, and **eleven carry two or more check runs named `benchmark`**
+(`f0fda05`: run 33096354980 Nightly/schedule + 32982665852 CI/push). I
+generalised to the conclusion that made my package look tidier. **Two samples are
+not a "never"** — and the direction of the error is the tell.
+
+The reading trap in the other direction is worth keeping too: three `benchmark`
+runs on `77cc18e` looked like a collision and were not — same run ids as the
+three `alert / alert` runs beside them, i.e. one workflow re-running on an
+unmoved `main`. **Count the run ids and the workflows before believing a
+duplicate name, in either direction.**
+
+The wider collision the row never mentions: all three callers of
+`scheduled-failure-alert.yml` used the job id `alert`, so all three emitted
+`alert / alert`. Commit `50bbab4` carries two of them.
+
+Fixed by adding `name:`, never by renaming a job id, so `needs:`,
+`needs.<job>.result` and `alertPermissions()`'s `jobBlocks(f)['alert']` all keep
+resolving — and `ci.yml` is untouched, because CLAUDE.md's I5 section cites it by
+line number.
+
+**Verified against GitHub, not against a spec.** That `name:` on a `uses:` job
+moves the first half of the `caller / callee` composite is not derivable from
+anything this repo controls. Dispatched `nightly-backtest.yml` at head `83b5245`
+(run 34368245585) and read `actions/runs/<id>/jobs`: exactly `nightly-benchmark`
+and `alert-nightly-benchmark / alert`. It was a CANNOT-do claim; it is a
+measurement.
+
+**Red-team broke four rules and one claim.** `requirable()` never asked whether
+the job *runs* on the PR; `collisions()` keyed on workflow, so two jobs in one
+workflow sharing a name were invisible while the test title said "more than one
+job"; the `<UNRESOLVED>` branch could fire on nothing actionlint would pass, and
+a **remote** reusable workflow was modelled as an ordinary job — correct and
+unreachable, inside the guard written to close a reachability defect; and the
+parser mis-modelled four valid YAML forms, one of which had the guard
+**manufacturing** a name GitHub never emits and recommending it as requirable.
+
+**Two mutations read as survivors and neither had run.** Bash mangled the target
+string, so the substitution matched nothing and the file was unmutated. **A
+mutation that appears to survive may be a mutation that never applied** — assert
+the target exists before believing the result, or mutation testing reports your
+tests as stronger than they are. Chasing one of them turned up a **NUL byte
+(0x00)** I had written into `workflowCheckNames.ts` inside a template literal
+where a space belonged; `tsc`, vitest and 2013 tests were all green on it.
+
+The deliverable is not the rename — it is `requirable()`: **benchmark, coverage,
+pytest, smoke, test, typecheck, workflows**, the names it is safe for the owner
+to demand when `Q-097` lands, with `unsafeToRequire()` saying which of the three
+failure modes excludes everything else.
+
+**Tier board:** I1 ASP · I2 PARTIAL · I3 PARTIAL · I4 ASP · I5 PARTIAL ·
+I6 PARTIAL · I7 VIOLATED · I8 VIOLATED. **Still no invariant is ENFORCED.**

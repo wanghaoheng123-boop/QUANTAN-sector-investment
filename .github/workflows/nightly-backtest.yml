@@ -18,6 +18,13 @@ on:
 
 jobs:
   benchmark:
+    # Q107-O4. The check-run name is the job id unless `name:` overrides it, and
+    # ci.yml also has a job id `benchmark`. Two jobs answering to one required
+    # status check is ambiguous, so the NAME is disambiguated while the ID stays
+    # put — `needs: [benchmark]` below and every `needs.benchmark.result`
+    # reference keep working, and ci.yml is not touched at all (CLAUDE.md's I5
+    # section cites it by line number).
+    name: nightly-benchmark
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -75,6 +82,12 @@ jobs:
   # fortnight of data. `always()` is load-bearing — without it this job is skipped
   # on failure, which is precisely the case it exists for.
   alert:
+    # Q107-O4. A reusable-workflow call is reported as `<caller job> / <called
+    # job>`, and all three callers of scheduled-failure-alert.yml used the job id
+    # `alert`, so all three emitted the SAME check name. MEASURED: commit 50bbab4
+    # carries two check runs called `alert / alert`, from Weekly Data Refresh and
+    # Stryker Weekly. That is a live collision, not a hypothetical one.
+    name: alert-nightly-benchmark
     needs: [benchmark]
     if: always()
     uses: ./.github/workflows/scheduled-failure-alert.yml
