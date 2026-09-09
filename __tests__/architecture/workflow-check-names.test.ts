@@ -93,6 +93,27 @@ describe('Q107-O4 — the derivation reproduces what GitHub actually emits', () 
     expect(c.get('benchmark')?.map((x) => x.workflow).sort()).toEqual(['ci.yml', 'nightly-backtest.yml'])
   })
 
+  it('appends the matrix suffix for a matrix job whose name carries no expression', () => {
+    // REACHABILITY, and this branch had NONE. Mutation M-2 deleted the suffix
+    // entirely and the whole suite stayed green: `stryker` already carries
+    // `${{ matrix.shard.name }}` in its own `name:`, so it normalises to
+    // `stryker (*)` via the expression and the suffix never fires. A rule correct
+    // and unreachable — in the guard written to close a reachability defect,
+    // which is why it is caught here rather than shipped as decoration.
+    const virtual: WorkflowFile[] = [{
+      path: 'm.yml',
+      source: 'name: M\non:\n  schedule:\n    - cron: 0 0 * * *\njobs:\n  shard:\n    strategy:\n      matrix:\n        os: [a, b]\n    runs-on: ubuntu-latest\n',
+    }]
+    expect(checkNames(virtual).map((c) => c.name)).toEqual(['shard (*)'])
+  })
+
+  it('does not double-suffix a matrix job that already interpolates the matrix', () => {
+    // The real shape. Guards the other direction of the same branch: `stryker
+    // (*) (*)` would be a name GitHub never emits, and the oracle above would
+    // catch it only because stryker happens to exist.
+    expect(nameSet.filter((n) => n.startsWith('stryker'))).toEqual(['stryker (*)'])
+  })
+
   it('does not invent a check for the reusable workflow itself', () => {
     // scheduled-failure-alert.yml is workflow_call only: it is always reported
     // under its caller. Emitting a bare `alert` here would be a phantom name.
