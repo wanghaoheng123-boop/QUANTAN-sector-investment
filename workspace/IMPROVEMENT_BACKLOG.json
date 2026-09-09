@@ -2386,7 +2386,8 @@
       "npx vitest run __tests__/data/dataVintage.test.ts",
       "gh run list --workflow=refresh-data.yml --limit 3"
     ],
-    "notes_2026_08_29": "PARTIAL. LANDED: the Q-102 restatement guard had DEADLOCKED the weekly refresh since 2026-08-23 - 36 of 56 tickers refused over routine consolidated-tape volume finalization, data frozen 13 days, and it would have recurred every week because a refused ticker keeps the stale value the next fetch disagrees with. Fixed by discriminating on FIELD and AGE with measured constants. Also closed two fail-open holes in the same guard. Separately, the I8 comment masker was string-unaware and was DELETING EVIDENCE (a # or // inside a string erased the rest of the line, including real vendor URLs), and its protocol-relative branch had ZERO reachable inputs in any JS/TS file. Replaced with a quote-tracking scanner. NOT DONE, recorded in reviews/findings-ledger.csv: Q107-S9 (no import graph - a new route importing bridgeClient ships green; highest-value remaining guard work), Q107-D5 (baseline drift + a 0.10pp gate about to receive 15 days of bars), Q107-O2 (no alerting on scheduled-workflow failure - why this went unnoticed), Q107-O4 (benchmark job-name collision, a Q-097 foot-gun), Q107-F3/F9 (I1/I2 surfaces), Q107-R6/R7 (accepted and residual detector limits)."
+    "notes_2026_08_29": "PARTIAL. LANDED: the Q-102 restatement guard had DEADLOCKED the weekly refresh since 2026-08-23 - 36 of 56 tickers refused over routine consolidated-tape volume finalization, data frozen 13 days, and it would have recurred every week because a refused ticker keeps the stale value the next fetch disagrees with. Fixed by discriminating on FIELD and AGE with measured constants. Also closed two fail-open holes in the same guard. Separately, the I8 comment masker was string-unaware and was DELETING EVIDENCE (a # or // inside a string erased the rest of the line, including real vendor URLs), and its protocol-relative branch had ZERO reachable inputs in any JS/TS file. Replaced with a quote-tracking scanner. NOT DONE, recorded in reviews/findings-ledger.csv: Q107-S9 (no import graph - a new route importing bridgeClient ships green; highest-value remaining guard work), Q107-D5 (baseline drift + a 0.10pp gate about to receive 15 days of bars), Q107-O2 (no alerting on scheduled-workflow failure - why this went unnoticed), Q107-O4 (benchmark job-name collision, a Q-097 foot-gun), Q107-F3/F9 (I1/I2 surfaces), Q107-R6/R7 (accepted and residual detector limits).",
+    "notes_2026_09_09": "Q107-S9 CLOSED by PR #187 - the highest-value remaining guard work on this row. The egress detector was per-file and TEXTUAL; __tests__/architecture/importGraph.ts now attributes each egress point to the public surfaces that reach it transitively, and rule 8 demands the recorded exposed_via EQUAL the computed set. The one-hop pass the ledger row proposed would not have sufficed. STILL OPEN on this row: Q107-A22 (the alerting cannot report its own failure to start - needs an out-of-band probe, HIGH), Q107-O4 (the 'benchmark' job-name collision, a Q-097 foot-gun worth clearing BEFORE the owner enables branch protection), Q107-F3/F9 (I1/I2 surfaces), Q107-D6/R6/R7/A19 (accepted limitations). Q107-D5 is answered empirically by Q107-D5b and its row should be re-statused."
   },
   {
     "id": "Q-108",
@@ -2424,5 +2425,48 @@
     "owner_role": "Owner (PM)",
     "human_blocker": "User-visible regulatory copy - routes through Q-083 before shipping",
     "notes_2026_08_29": "components/ComplianceBanner.tsx:31-32 asserts the product does not provide recommendations 'regulated under MiFID II, SEC RIA, or equivalent regimes'. That is an unverified regulatory SELF-CLASSIFICATION which names two regimes that do not govern and omits MAS, which does. Review was explicit: DO NOT substitute MAS - writing 'not regulated under MAS' is the identical error against the regulator that actually bites. Delete the clause. Also :7 open=false hides the detail by default, and 'does not route or execute orders' is inherited unverified copy - grep before re-shipping it. Ledger Q100-22."
+  },
+  {
+    "id": "Q-111",
+    "title": "vendor-licence-register `evidence` is declared, carried by all 93 rows, and read by nobody",
+    "domain": "Security/Compliance",
+    "priority": "P2",
+    "status": "pending",
+    "files": [
+      "__tests__/architecture/vendorEgress.ts",
+      "reviews/vendor-licence-register.json"
+    ],
+    "acceptance_criteria": [
+      "checkRegister reads `evidence` and fails when a row's evidence cites a file:line that no detected egress point supports",
+      "The rule is watched failing on a mutated row before it is claimed to work",
+      "Evidence that names an unwalked file is a violation, not a silent skip"
+    ],
+    "verify_commands": [
+      "npx vitest run __tests__/architecture/vendor-licence-register.test.ts"
+    ],
+    "blocked_by": [],
+    "notes_2026_09_09": "Found by the red-team review of Q107-S9 (finding S9-R5). RegisterEntry declares `evidence?: string[]`, all 93 rows carry one, and no rule in checkRegister reads it - the same built-and-inert shape as _cached (Q-101) and QuoteProvenance (I1), in the one artifact whose entire purpose is an auditable trail. The reviewer's sharpest point: Q107-S9's own diagnosis was 'an unchecked field drifted', and the fix added a SECOND field beside it rather than a reader for the first. NOT bundled into PR #187 deliberately - a register-wide evidence audit is its own package and would have made the S9 gate hostage to it. CAUTION for whoever takes this: `evidence` and `exposed_via` measure different things - evidence is WHERE the egress is, exposed_via is which surfaces REACH it - so their disagreement on 9 of 12 rows is expected and is not the defect. The defect is that nothing checks either against the tree. `orphanedEvidence` in importGraph.ts is the half that already exists and returns empty."
+  },
+  {
+    "id": "Q-112",
+    "title": "Two untracked agent-definition directories sit outside the declared SSOT",
+    "domain": "DevOps/CI",
+    "priority": "P3",
+    "status": "pending",
+    "files": [
+      ".agents/",
+      ".codex/",
+      ".claude/agents/"
+    ],
+    "acceptance_criteria": [
+      "Establish what created .agents/skills and .codex/agents and when",
+      "Either fold them into .claude/agents (the live roster) or delete them",
+      "Whichever way: they are tracked, ignored, or gone - not untracked and undocumented"
+    ],
+    "verify_commands": [
+      "git status --short"
+    ],
+    "blocked_by": [],
+    "notes_2026_09_09": "Noticed during the Q107-S9 sprint. `.agents/skills/` and `.codex/agents/` are untracked, dated 2026-09-06, and appear in no session note, no commit and no state key. CLAUDE.md's MODEL POLICY says the lever is the `model:` frontmatter in `.claude/agents/<name>.md`; a second and third agents directory is precisely the parallel record-keeping the SSOT table exists to prevent, and the roster is load-bearing for which model runs an adversarial review. LOW priority because nothing reads them today as far as anyone can tell - which is itself the thing to establish rather than assume. Operational note for any agent in this tree: `git add -A` would sweep these plus reviews/wsa-2026-06-23/ and reviews/wspy-2026-06-22/ into an unrelated commit. Add explicit paths."
   }
 ]
