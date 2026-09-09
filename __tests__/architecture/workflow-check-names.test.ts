@@ -93,6 +93,19 @@ describe('Q107-O4 — the derivation reproduces what GitHub actually emits', () 
     expect(c.get('benchmark')?.map((x) => x.workflow).sort()).toEqual(['ci.yml', 'nightly-backtest.yml'])
   })
 
+  it('reproduces the names GitHub emitted for the RENAMED workflow, measured after the fix', () => {
+    // The second oracle, and the only proof that `name:` on a `uses:` job moves
+    // the first half of the composite — that is GitHub behaviour this repository
+    // does not control and cannot derive from a specification.
+    //
+    // MEASURED: nightly-backtest.yml dispatched against this branch at head
+    // 83b5245, run 34368245585, `actions/runs/<id>/jobs` returned exactly
+    // "nightly-benchmark" and "alert-nightly-benchmark / alert". Before the fix
+    // the same workflow emitted "benchmark" and "alert / alert".
+    const emitted = names.filter((c) => c.workflow === 'nightly-backtest.yml').map((c) => c.name).sort()
+    expect(emitted).toEqual(['alert-nightly-benchmark / alert', 'nightly-benchmark'])
+  })
+
   it('appends the matrix suffix for a matrix job whose name carries no expression', () => {
     // REACHABILITY, and this branch had NONE. Mutation M-2 deleted the suffix
     // entirely and the whole suite stayed green: `stryker` already carries
