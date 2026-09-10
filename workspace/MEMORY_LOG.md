@@ -1627,8 +1627,8 @@ I6 PARTIAL · I7 VIOLATED · I8 VIOLATED. **Still no invariant is ENFORCED.**
 
 ## 2026-09-10 — Q107-A22: an alert inside the thing it watches
 
-Branch `fix/Q107-A22-out-of-band-heartbeat`, two commits, PR pending. **I7 is
-unchanged** — branch protection was checked at the start of this package and is
+Merged 2026-09-10 as PR #190 (`39648da`) with a follow-up in #192 (`3eff4b0`).
+**I7 is unchanged** — branch protection was checked at the start of this package and is
 still off (`protected: false`, `rulesets: 0`), so `Q-097` remains open.
 
 `Q107-O2` gave every scheduled workflow an alert job, and that job lives *inside*
@@ -1682,6 +1682,26 @@ fix. The local dry run hid it by using a full-scope PAT.
 **Nothing watches the watchman.** A permanent failure of the probe produces no
 run and therefore no verdict; only an intermittent one is reported, by its own
 next successful run. Stated as a passing CANNOT-do test, not claimed as closed.
+
+**Then production found the next one.** The probe's first CI run opened an alert
+against **itself** — merged minutes earlier, so no scheduled history for a fire
+that predated it. True and useless: every newly merged scheduled workflow would
+have raised a false alarm on day one, the mechanism's first impression being the
+exact fatigue it exists to avoid. Fixed in #192 by asking the Actions API when
+the workflow was registered. **Two rounds of review and a green suite did not
+find it; running it twice in production did.**
+
+That same run proved the two things a local dry run structurally could not: that
+`actions: read` works with the real workflow token (my dry run used a full-scope
+PAT, which *hid* its absence), and that the shared-issue dedupe holds — it
+commented on #177 rather than duplicating.
+
+**A residual I introduced, filed against myself as `Q-113`:** the probe runs
+daily and comments on every persistent failure every run, so a long outage now
+accrues a comment a day. `alertDecision`'s own docstring warns that alert fatigue
+is how the next outage goes unread; a daily comment on one issue is that argument
+one level down. Not fixed here because throttling changes the shared contract
+three other workflows use.
 
 **Tier board:** I1 ASP · I2 PARTIAL · I3 PARTIAL · I4 ASP · I5 PARTIAL ·
 I6 PARTIAL · I7 VIOLATED · I8 VIOLATED. **Still no invariant is ENFORCED.**
