@@ -35,6 +35,11 @@ on:
 # a permissions block zeroes every scope not listed, and this job runs
 # actions/checkout. Q107-A20/A21 were both this rule, missed at different levels.
 permissions:
+  # `actions: read` is what lets this read OTHER workflows' run history, and its
+  # absence would have 403'd on the first scheduled fire — the probe failing to
+  # probe, silently, which is Q107-A22 reproduced by its own fix. Naming a
+  # permissions block zeroes every scope not listed (Q107-A20/A21, twice).
+  actions: read
   contents: read
   issues: write
 

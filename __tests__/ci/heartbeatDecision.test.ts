@@ -144,19 +144,74 @@ describe('Q107-A22 — the states the in-workflow alerter cannot reach', () => {
     expect(toAlertConclusion('unregistered')).toBe('failure')
   })
 
-  it('a cron that can never fire is not silently treated as healthy', () => {
-    // previousFire returns null rather than throwing for a well-formed
-    // expression that simply never matches. 30 February parses fine and fires
-    // never; without this branch it would fall through to a due of `null`.
+  it('a cron that can never fire is a VIOLATION, not silence', () => {
+    // 30 February parses fine and fires never. This returned `too-early`, which
+    // maps to `skipped`, which is silence — under a test whose own title claimed
+    // it was "not silently treated as healthy". A test that ratifies the bug is
+    // worse than no test; red-team caught the contradiction between the title and
+    // the assertion.
     const r = assessWorkflow({ file: 'x.yml', crons: ['0 0 30 2 *'], runs: [], now: new Date('2026-09-09T14:00:00Z') })
-    expect(r.state).toBe('too-early')
-    expect(toAlertConclusion(r.state)).toBe('skipped')
+    expect(r.state).toBe('unparseable')
+    expect(toAlertConclusion(r.state)).toBe('failure')
   })
 
   it('an unknown state speaks rather than staying silent', () => {
     // Fail closed, the same way alertDecision's HEALTHY set does. A state added
     // later must not default to silence.
     expect(toAlertConclusion('something-new-and-unhandled' as never)).toBe('failure')
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe('Q107-A22 — a later run must not answer for an earlier fire', () => {
+  const nightly = { file: 'nightly-backtest.yml', crons: ['0 6 * * 1-5'] }
+  const now = new Date('2026-09-09T14:00:00Z') // judged fire: Tue 2026-09-08T06:00Z
+  const R = (createdAt: string, conclusion = 'success') => ({ createdAt, status: 'completed', conclusion })
+
+  // THE CRITICAL BUG, and the reason it survived 33 green tests: every fixture in
+  // the first suite supplied only runs belonging to the judged fire, so the
+  // unbounded window end was never exercised. Because the clock is shifted back
+  // by the grace, an open-ended window spans 32h and CONTAINS THE NEXT FIRE —
+  // whose run then supplied the verdict for the fire under judgement.
+
+  it('a missed fire is NOT excused by the next day succeeding', () => {
+    expect(assessWorkflow({ ...nightly, runs: [R('2026-09-09T06:10:00Z')], now }).state).toBe('missing')
+  })
+
+  it('an ISOLATED startup_failure is reported — the whole point of the package', () => {
+    // Read `healthy` before the fix. The probe built to catch startup_failure
+    // could not see one that was followed by a good day.
+    const runs = [R('2026-09-08T06:10:00Z', 'startup_failure'), R('2026-09-09T06:10:00Z')]
+    expect(assessWorkflow({ ...nightly, runs, now }).state).toBe('unhealthy')
+  })
+
+  it('and the ordinary case still passes, so the bound is not just strictness', () => {
+    const runs = [R('2026-09-08T06:10:00Z'), R('2026-09-09T06:10:00Z')]
+    expect(assessWorkflow({ ...nightly, runs, now }).state).toBe('healthy')
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe('Q107-A22 — the probe watching ITSELF reaches a verdict', () => {
+  const hb = { file: 'workflow-heartbeat.yml', crons: ['0 14 * * *'] }
+  // The probe assessing itself mid-run. Its own live run must not occupy the
+  // verdict slot — with an unbounded window it did, so the self-watch always
+  // returned `in-flight` and the claim that it reports its own intermittent
+  // failures was false. Bounding the window fixed that as a side effect.
+  const now = new Date('2026-09-09T14:05:00Z')
+  const mine = { createdAt: '2026-09-09T14:00:00Z', status: 'in_progress', conclusion: null }
+  const yesterday = (conclusion: string) => ({ createdAt: '2026-09-08T14:02:00Z', status: 'completed', conclusion })
+
+  it('judges YESTERDAY, not the run currently executing', () => {
+    expect(assessWorkflow({ ...hb, runs: [mine], now }).due).toBe('2026-09-08T14:00:00.000Z')
+  })
+
+  it.each([
+    ['it did not run yesterday', [mine], 'missing'],
+    ['it ran and failed yesterday', [mine, yesterday('failure')], 'unhealthy'],
+    ['it ran fine yesterday', [mine, yesterday('success')], 'healthy'],
+  ])('reports %s', (_what, runs, expected) => {
+    expect(assessWorkflow({ ...hb, runs, now }).state).toBe(expected)
   })
 })
 
@@ -236,12 +291,20 @@ describe('Q107-A22 — both mechanisms share ONE issue per workflow', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 describe('Q107-A22 — what this probe CANNOT do', () => {
   it('CANNOT report its own PERMANENT failure — nothing watches the watchman', () => {
-    // Stated rather than closed. The probe watches itself along with the rest, so
-    // an INTERMITTENT gap is reported by its own next successful run; a permanent
-    // one is not reported at all. Closing this needs a second, independent
-    // system, which this repository does not have and which would have the same
-    // residual one level up.
-    expect(scheduled.map((s) => s.file)).toContain('workflow-heartbeat.yml')
+    // Stated rather than closed, and asserted on BEHAVIOUR rather than on watch-
+    // list membership: the first version checked that the probe was in its own
+    // watch list, which exercises the visitor to infer a property of the decider —
+    // the shape Q-103 already recorded. What actually matters is that a verdict
+    // about itself is only ever produced BY a run of itself, so if it never runs
+    // again, nothing is produced. Demonstrated by there being no assessment at
+    // all when the probe does not execute: the function is not called.
+    const selfVerdict = assessWorkflow({
+      file: 'workflow-heartbeat.yml', crons: ['0 14 * * *'], runs: [],
+      now: new Date('2026-09-09T14:05:00Z'),
+    })
+    expect(selfVerdict.state).toBe('missing')
+    // …which is only ever computed inside a run of this same workflow. A
+    // permanent outage produces no run, hence no verdict, hence no alert.
   })
 
   it('CANNOT distinguish a hung run from a slow one WITHIN one period', () => {

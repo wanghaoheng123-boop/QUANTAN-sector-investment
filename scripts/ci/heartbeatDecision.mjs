@@ -96,11 +96,11 @@ export function assessWorkflow({ file, crons, runs, now, graceMs = GRACE_MS }) {
       return { file, state: 'unparseable', detail: `cannot model cadence "${expr}": ${err.message}` }
     }
     if (fired === null) {
-      return {
-        file,
-        state: 'too-early',
-        detail: `"${expr}" has not yet been due longer ago than the ${graceMs / 3_600_000}h grace window`,
-      }
+      // A well-formed expression that never matches — 30 February parses fine and
+      // fires never. This was `too-early`, i.e. SILENCE, ratified by a test whose
+      // own title said it was not silently treated as healthy. A cadence that can
+      // never fire is a workflow nobody is watching, which is a violation.
+      return { file, state: 'unparseable', detail: `"${expr}" has no fire time within the lookback window — it can never run` }
     }
     // A workflow may declare several crons; the most recent one is what is owed.
     if (due === null || fired.getTime() > due.getTime()) due = fired
@@ -108,8 +108,27 @@ export function assessWorkflow({ file, crons, runs, now, graceMs = GRACE_MS }) {
 
   const dueIso = due.toISOString()
 
+  // The window is BOUNDED AT BOTH ENDS, and the first version was not.
+  //
+  // Opening it at `due` and taking the newest run looks right and is the
+  // package's worst bug: because the clock is shifted back by the grace, the
+  // open-ended window spans 32h and CONTAINS THE NEXT FIRE, whose run then
+  // supplies the verdict for the fire under judgement. Measured on the committed
+  // module — a missed Tuesday nightly with a healthy Wednesday returned
+  // `healthy`, and an isolated `startup_failure` followed by a good day returned
+  // `healthy` too. That is the exact case this package exists to catch, reported
+  // as fine, by the probe built to catch it.
+  //
+  // It failed silently because every fixture in the first test suite supplied
+  // only runs belonging to the judged fire, so the unbounded end was never
+  // exercised: 33 tests green on a probe that could not see an isolated miss.
+  // A run belongs to this fire only if it started within the grace it is allowed.
+  const windowEnd = due.getTime() + graceMs
   const since = (runs ?? [])
-    .filter((r) => Date.parse(r.createdAt) >= due.getTime())
+    .filter((r) => {
+      const t = Date.parse(r.createdAt)
+      return t >= due.getTime() && t <= windowEnd
+    })
     .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
 
   if (since.length === 0) {

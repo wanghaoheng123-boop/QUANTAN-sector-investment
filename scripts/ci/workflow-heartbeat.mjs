@@ -59,8 +59,14 @@ const DIR = '.github/workflows'
 const watched = readdirSync(DIR)
   .filter((f) => /\.ya?ml$/.test(f))
   .map((f) => ({ file: f, source: readFileSync(join(DIR, f), 'utf8') }))
+  // A workflow that DECLARES a schedule is watched even if no cron could be read
+  // from it — dropping those made the `unparseable` state unreachable in
+  // production, so a scheduled workflow with a cron this scanner cannot see was
+  // silently unwatched while the suite stayed green. Membership is decided by the
+  // `schedule:` key, which is the thing that makes GitHub run it; the crons are
+  // what we then try to model.
+  .filter((w) => /^\s*schedule:\s*(?:#.*)?$/m.test(w.source))
   .map((w) => ({ file: w.file, crons: extractCrons(w.source) }))
-  .filter((w) => w.crons.length > 0)
 
 if (watched.length === 0) {
   console.error('workflow-heartbeat: found NO scheduled workflows — the probe has nothing to watch, which is a defect in the probe, not health')
@@ -120,7 +126,17 @@ if (dryRun) {
   process.exit(0)
 }
 
-const openIssues = await gh(`/repos/${repo}/issues?state=open&per_page=100`)
+// Paginated, and pull requests excluded — /issues returns BOTH, and a PR whose
+// title happened to match would be "commented on" as if it were the alert
+// thread. `notify-scheduled-failure.mjs` already does both and documents them as
+// verified against this repo; dropping them here would have quietly broken the
+// shared-issue property this probe depends on.
+const openIssues = []
+for (let page = 1; page <= 10; page++) {
+  const batch = await gh(`/repos/${repo}/issues?state=open&per_page=100&page=${page}`)
+  openIssues.push(...batch.filter((i) => !i.pull_request))
+  if (batch.length < 100) break
+}
 const findIssue = (title) =>
   openIssues.find((i) => i.title === title && (i.body ?? '').includes(ALERT_MARKER)) ?? null
 
