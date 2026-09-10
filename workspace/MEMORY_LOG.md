@@ -1622,3 +1622,66 @@ failure modes excludes everything else.
 
 **Tier board:** I1 ASP · I2 PARTIAL · I3 PARTIAL · I4 ASP · I5 PARTIAL ·
 I6 PARTIAL · I7 VIOLATED · I8 VIOLATED. **Still no invariant is ENFORCED.**
+
+---
+
+## 2026-09-10 — Q107-A22: an alert inside the thing it watches
+
+Branch `fix/Q107-A22-out-of-band-heartbeat`, two commits, PR pending. **I7 is
+unchanged** — branch protection was checked at the start of this package and is
+still off (`protected: false`, `rulesets: 0`), so `Q-097` remains open.
+
+`Q107-O2` gave every scheduled workflow an alert job, and that job lives *inside*
+the workflow it watches. A `startup_failure` produces **zero jobs**, so the alert
+never runs. `nightly-backtest` startup-failed on 2026-09-03 and 2026-09-04 with
+nothing notified; four such instances across the last 60 runs of each workflow.
+
+The probe runs out of band and is framed on **when a run was DUE**, not on run
+conclusions — because GitHub disables schedules after 60 days of inactivity and
+creates *no run record at all*, so a conclusion-based check reads the last old
+run and reports health forever.
+
+**My grace window was wrong, and measuring fixed it.** I set 2 hours from the
+docs' wording. Real dispatch lateness across 65 scheduled runs: **max 11.85h**,
+medians 0.95–3.43h. Two hours would have fired on a routine week — and for an
+alerter that is worse than not existing, because `alertDecision`'s own docstring
+says alert fatigue is how the next outage goes unread. **Measure the null before
+setting a threshold**, again. Red-team re-measured over 118 runs and confirmed
+11.85h to the digit.
+
+**The CRITICAL my own tests could not see.** The run window opened at `due` and
+never *closed*. Because the clock is shifted back by the grace so the judged fire
+is the previous one, that window spans 32h and **contains the next fire**, whose
+run then supplied the verdict. A missed Tuesday with a healthy Wednesday read
+`healthy`. An **isolated `startup_failure` followed by a good day read
+`healthy`** — the exact case the package exists for, reported as fine by the
+probe built to catch it. 74 of 76 real nightly runs sit in the masking regime.
+
+It survived 33 green tests because **every fixture supplied only runs belonging
+to the judged fire**, so the unbounded end was never exercised: correct and
+broken were indistinguishable to the suite. **When fixtures are built from the
+happy path, ask which inputs they never construct.** Bounding the window also
+fixed the self-watch, which had been structurally inert — the probe's own live
+run always occupied the verdict slot.
+
+**Found by running it, not reading it:** the first dry run died on an unhandled
+404, a workflow on disk that GitHub has not registered. A real state, now
+reported.
+
+**Three of my own guards caught things in this diff** — the `Q107-O2` guard
+(I left the probe unwired), the `Q107-O4` guard (the new alert caller needed a
+distinct name, and a hardcoded `toBe(6)` broke — the same drifting count that
+file strikes twice elsewhere, committed by me in the package that struck them),
+and the I8 register (`GITHUB_SERVER_URL` had no row). Guards written in earlier
+packages doing work in a later one is the first time that has happened here.
+
+`actions: read` was missing and would have 403'd on the first scheduled fire —
+the probe failing to probe, silently, which is Q107-A22 reproduced by its own
+fix. The local dry run hid it by using a full-scope PAT.
+
+**Nothing watches the watchman.** A permanent failure of the probe produces no
+run and therefore no verdict; only an intermittent one is reported, by its own
+next successful run. Stated as a passing CANNOT-do test, not claimed as closed.
+
+**Tier board:** I1 ASP · I2 PARTIAL · I3 PARTIAL · I4 ASP · I5 PARTIAL ·
+I6 PARTIAL · I7 VIOLATED · I8 VIOLATED. **Still no invariant is ENFORCED.**
