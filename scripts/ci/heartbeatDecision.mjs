@@ -70,8 +70,17 @@ export const GRACE_MS = GRACE_HOURS * 60 * 60 * 1000
  *    lands here, which is the case the in-workflow alerter structurally cannot
  *    report on.
  *  - `healthy`     — a run completed successfully since it was due.
+ *
+ * @param {{
+ *   file: string,
+ *   crons: string[],
+ *   runs?: Run[],
+ *   now: Date,
+ *   registeredAt?: string|null,
+ *   graceMs?: number,
+ * }} input
  */
-export function assessWorkflow({ file, crons, runs, now, graceMs = GRACE_MS }) {
+export function assessWorkflow({ file, crons, runs, now, registeredAt = null, graceMs = GRACE_MS }) {
   if (!Array.isArray(crons) || crons.length === 0) {
     return { file, state: 'unparseable', detail: 'no cron expression found for a workflow listed as scheduled' }
   }
@@ -107,6 +116,28 @@ export function assessWorkflow({ file, crons, runs, now, graceMs = GRACE_MS }) {
   }
 
   const dueIso = due.toISOString()
+
+  // A workflow cannot have run before it existed.
+  //
+  // FOUND IN PRODUCTION, on this probe's own first CI run: it opened an alert
+  // against ITSELF, correctly reporting no run since the previous 14:00 — the
+  // workflow had been merged minutes earlier and had no scheduled history at
+  // all. Technically true and operationally useless: every newly merged
+  // scheduled workflow would raise a false alarm on day one, which is the alert
+  // fatigue this whole design is trying to avoid. `registeredAt` comes from the
+  // Actions API's own `created_at` for the workflow, so this is a measurement
+  // rather than a heuristic about file age.
+  if (registeredAt !== null) {
+    const born = Date.parse(registeredAt)
+    if (Number.isFinite(born) && born > due.getTime()) {
+      return {
+        file,
+        state: 'too-early',
+        due: dueIso,
+        detail: `registered ${registeredAt}, after the fire due ${dueIso} — it did not exist yet`,
+      }
+    }
+  }
 
   // The window is BOUNDED AT BOTH ENDS, and the first version was not.
   //

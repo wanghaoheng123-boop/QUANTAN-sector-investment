@@ -216,6 +216,36 @@ describe('Q107-A22 — the probe watching ITSELF reaches a verdict', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
+describe('Q107-A22 — a workflow cannot have run before it existed', () => {
+  const hb = { file: 'workflow-heartbeat.yml', crons: ['0 14 * * *'] }
+  const now = new Date('2026-09-10T09:35:00Z')
+
+  // FOUND IN PRODUCTION. This probe's first CI run opened an alert against
+  // ITSELF — correctly reporting no run since the previous 14:00, because it had
+  // been merged minutes earlier. True and useless: every newly merged scheduled
+  // workflow would raise a false alarm on day one, which is the alert fatigue the
+  // whole design exists to avoid. Issue #191 was that alarm.
+
+  it('a workflow registered AFTER the judged fire is not alerted on', () => {
+    const r = assessWorkflow({ ...hb, runs: [], registeredAt: '2026-09-10T01:29:56Z', now })
+    expect(r.state).toBe('too-early')
+    expect(toAlertConclusion(r.state)).toBe('skipped')
+  })
+
+  it('an established workflow with no run IS still alerted on', () => {
+    // The guard must not become a blanket excuse — this is the 60-day
+    // schedule-disable case and it has to survive.
+    expect(assessWorkflow({ ...hb, runs: [], registeredAt: '2026-05-26T13:27:09Z', now }).state).toBe('missing')
+  })
+
+  it('and with no registration date at all it FAILS CLOSED', () => {
+    // Absence of evidence about age is not evidence of youth. Unknown means the
+    // ordinary rules apply, not that the finding is suppressed.
+    expect(assessWorkflow({ ...hb, runs: [], now }).state).toBe('missing')
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
 describe('Q107-A22 — the grace window is measured, and both its bounds bite', () => {
   const nightly = { file: 'nightly-backtest.yml', crons: ['0 6 * * 1-5'] }
 

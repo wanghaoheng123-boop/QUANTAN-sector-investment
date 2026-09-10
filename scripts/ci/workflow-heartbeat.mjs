@@ -74,6 +74,15 @@ if (watched.length === 0) {
 }
 
 const now = new Date()
+
+// When GitHub first registered each workflow, so a newly merged one is not
+// alerted on for fires that predate its existence. One request, not one per
+// workflow.
+const registry = new Map()
+for (const w of (await gh(`/repos/${repo}/actions/workflows?per_page=100`)).workflows ?? []) {
+  registry.set(w.path.replace(/^\.github\/workflows\//, ''), w.created_at)
+}
+
 const withRuns = []
 const unregistered = []
 for (const w of watched) {
@@ -101,6 +110,7 @@ for (const w of watched) {
   }
   withRuns.push({
     ...w,
+    registeredAt: registry.get(w.file) ?? null,
     runs: (data.workflow_runs ?? []).map((r) => ({
       createdAt: r.created_at,
       status: r.status,
