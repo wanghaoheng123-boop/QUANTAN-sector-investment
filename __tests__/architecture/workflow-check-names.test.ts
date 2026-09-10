@@ -82,7 +82,12 @@ const preFix: WorkflowFile[] = files.map((f) => ({
 // ─────────────────────────────────────────────────────────────────────────────
 describe('Q107-O4 — the derivation reproduces what GitHub actually emits', () => {
   it('reads every workflow file, not a corner of them', () => {
-    expect(files.length).toBe(6)
+    // Was `toBe(6)`, and adding the Q107-A22 heartbeat workflow broke it — the
+    // same drifting count this file strikes twice elsewhere, committed by me in
+    // the very package that struck them. A reachability check should assert that
+    // the walk FOUND things, not that it found a number nobody will update.
+    expect(files.length).toBeGreaterThanOrEqual(MEASURED_OVER.length)
+    expect(files.map((f) => f.path)).toEqual(expect.arrayContaining(MEASURED_OVER))
     expect(files.map((f) => f.path)).toContain('scheduled-failure-alert.yml')
   })
 
@@ -113,7 +118,12 @@ describe('Q107-O4 — the derivation reproduces what GitHub actually emits', () 
     // Watched it fail, kept as a test. `alert / alert` was produced by three
     // workflows; commit 50bbab4 carries two of them on one SHA. `benchmark` was
     // produced by ci.yml and nightly-backtest.yml.
-    const c = collisions(checkNames(preFix))
+    // Scoped to the six files that EXISTED before Q107-O4. The pre-fix transform
+    // strips `name: alert-*`, so an alert caller added later (Q107-A22's
+    // heartbeat) would otherwise be back-dated into a historical claim it was
+    // never part of. The oracle describes what GitHub emitted, not what today's
+    // tree would have emitted then.
+    const c = collisions(checkNames(preFix.filter((f) => MEASURED_OVER.includes(f.path))))
     expect([...c.keys()].sort()).toEqual(['alert / alert', 'benchmark'])
     expect(c.get('alert / alert')?.map((x) => x.workflow).sort()).toEqual([
       'nightly-backtest.yml', 'refresh-data.yml', 'stryker-weekly.yml',
@@ -185,10 +195,14 @@ describe('Q107-O4 — no check-run name identifies more than one job', () => {
 
   it('every alert composite is distinct and says which workflow it came from', () => {
     const composites = nameSet.filter((n) => n.includes(' / '))
+    // Grows as alert callers are added — and it caught Q107-A22's heartbeat
+    // needing a distinct name, which is the guard doing exactly its job. Asserted
+    // as a SET rather than a count, so adding one is a deliberate edit here.
     expect(composites.sort()).toEqual([
       'alert-nightly-benchmark / alert',
       'alert-stryker-weekly / alert',
       'alert-weekly-refresh / alert',
+      'alert-workflow-heartbeat / alert',
     ])
   })
 

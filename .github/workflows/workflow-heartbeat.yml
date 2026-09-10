@@ -1,0 +1,81 @@
+# Out-of-band probe for scheduled workflows (Q107-A22).
+#
+# Q107-O2 gave every scheduled workflow an alert job. That alert lives INSIDE the
+# workflow it watches, and a `startup_failure` produces ZERO jobs — so the alert
+# job never runs and the outage is silent. Measured: nightly-backtest ran
+# startup_failure on 2026-09-03 and 2026-09-04 and nothing notified anyone; it
+# was found days later by a human reading run history during an unrelated review.
+#
+# This workflow is the out-of-band half. It shares no trigger with the workflows
+# it watches, so the correlated failure that made Q107-A22 possible — the alerter
+# dying with the thing it was watching — cannot recur in the same way.
+#
+# It asks a question the inside cannot: was a run DUE, and did one happen? That
+# framing, rather than "did the last run pass", is deliberate — GitHub DISABLES
+# scheduled triggers after 60 days of repository inactivity, creating no run
+# record at all, and a conclusion-based check would read the last old run and
+# report health forever.
+#
+# WHO WATCHES THE WATCHMAN: nothing. It watches itself along with the rest, so an
+# intermittent failure is reported by its own next successful run; a permanent
+# one is not reported at all. That residual is stated rather than closed, and is
+# asserted as a passing test in __tests__/ci/heartbeatDecision.test.ts.
+name: Workflow heartbeat
+
+on:
+  schedule:
+    # 14:00 UTC daily. Late enough that the weekday 06:00 nightly and the Sunday
+    # 08:00 stryker run have finished even at the worst observed dispatch
+    # lateness, and the probe's own cadence is what bounds detection latency:
+    # a missed fire is reported at the next probe after the 18h grace expires.
+    - cron: '0 14 * * *'
+  workflow_dispatch:
+
+# Least privilege, and `contents: read` is REQUIRED rather than tidiness: naming
+# a permissions block zeroes every scope not listed, and this job runs
+# actions/checkout. Q107-A20/A21 were both this rule, missed at different levels.
+permissions:
+  # `actions: read` is what lets this read OTHER workflows' run history, and its
+  # absence would have 403'd on the first scheduled fire — the probe failing to
+  # probe, silently, which is Q107-A22 reproduced by its own fix. Naming a
+  # permissions block zeroes every scope not listed (Q107-A20/A21, twice).
+  actions: read
+  contents: read
+  issues: write
+
+jobs:
+  heartbeat:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+      - name: Probe every scheduled workflow
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/ci/workflow-heartbeat.mjs
+
+  # The watchman is wired to the same alerter as everything it watches, and the
+  # Q107-O2 guard is what caught its absence — this workflow is scheduled and CAN
+  # fail (it exits 1 on a cadence it cannot model, or on an API error), so leaving
+  # it unwired would have been a new instance of the very gap Q107-A22 closes.
+  #
+  # This covers the probe's JOB-level failures. It cannot cover the probe's own
+  # startup_failure, which produces zero jobs — that residual is irreducible here
+  # and is stated in __tests__/ci/heartbeatDecision.test.ts rather than papered over.
+  alert:
+    # Distinct from the other three callers because a reusable call reports as
+    # `<caller job> / <called job>`, and three of them were already named `alert`
+    # (Q107-O4). The check-name guard fails if this collides.
+    name: alert-workflow-heartbeat
+    needs: [heartbeat]
+    if: always()
+    uses: ./.github/workflows/scheduled-failure-alert.yml
+    permissions:
+      contents: read
+      issues: write
+    with:
+      workflow: workflow-heartbeat.yml
+      conclusion: ${{ needs.heartbeat.result }}
+      detail: ${{ 'The out-of-band scheduled-workflow probe did not complete, so nothing is watching the schedules.' }}

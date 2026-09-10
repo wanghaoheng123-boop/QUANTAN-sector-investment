@@ -1798,6 +1798,23 @@
         "scripts/ci/lint-workflows.sh:37"
       ],
       "routes_to": []
+    },
+    {
+      "kind": "env-host",
+      "id": "GITHUB_SERVER_URL",
+      "lifecycle": "active",
+      "classification": "first-party-ci-infrastructure",
+      "vendor": "GitHub (the forge this repository already runs on)",
+      "end_user_exposed": false,
+      "authenticated": true,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Injected by GitHub Actions into its own runners; used ONLY to build a human-readable link back to the run that produced an alert (`${GITHUB_SERVER_URL}/${repo}/actions/runs/${GITHUB_RUN_ID}`). No request is made to it \u2014 the value is interpolated into issue text. It is read rather than hardcoded so the probe works on GitHub Enterprise Server, where the host is not github.com. Not a data vendor: nothing is fetched, and no market data or user data crosses it. RECORDED BECAUSE THE GUARD DEMANDED IT, which is the mechanism working as intended \u2014 the I8 process clause is 'record the finding', not 'record the findings that feel interesting'. Q107-A22 introduced it and the vendor-licence guard failed the suite on the first full run.",
+      "recorded_by": "Q107-A22 (agent, lead engineer) \u2014 factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-09-10",
+      "evidence": [
+        "scripts/ci/workflow-heartbeat.mjs:127"
+      ],
+      "routes_to": []
     }
   ],
   "field_definitions": {
