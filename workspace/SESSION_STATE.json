@@ -867,7 +867,7 @@
   },
   "q107_a22_out_of_band_heartbeat_2026_09_10": {
     "directive": "owner: 'sure I will take your suggestion and proceed next' — taken as: they will act on the requirable() list for Q-097, and I proceed to the next package. VERIFIED 2026-09-10: branch protection is still OFF (protected:false, rulesets:0), so I7 is unchanged and Q-097 remains open.",
-    "status": "Branch fix/Q107-A22-out-of-band-heartbeat, two commits, PR pending.",
+    "status": "MERGED to production 2026-09-10: PR #190 (squash 39648da) and the follow-up PR #192 (squash 3eff4b0). All 8 checks + Vercel green on both, verified BY NAME against the commit.",
     "the_defect": "Q107-O2's alert job lives INSIDE the workflow it watches. A startup_failure produces ZERO jobs, so the alert never runs. nightly-backtest startup_failed 2026-09-03 and 2026-09-04 with nothing notified; four such instances across the last 60 runs of each workflow. Found days later by a human reading run history.",
     "what_shipped": [
       ".github/workflows/workflow-heartbeat.yml — daily, shares no trigger with what it watches.",
@@ -886,6 +886,8 @@
     "review": "Six findings: A22-R1 CRITICAL (the masking window), A22-R2/R3/R4/R5 HIGH (inert self-watch; missing actions:read, which would have 403'd on the first fire; issue lookup missing pagination and the PR filter; unparseable unreachable in production), A22-R6 MEDIUM (a never-firing cron mapped to silence under a test whose title said otherwise).",
     "not_claimed": "Nothing watches the watchman. A permanent failure of the probe produces no run and therefore no verdict; only an intermittent one is reported, by its own next successful run. Asserted as a passing CANNOT-do test rather than claimed as closed. I7 is unchanged.",
     "gates": "typecheck clean; 2055 pass / 17 skipped; actionlint clean; live dry run against the real API correct on all five watched workflows.",
-    "open_next": "Q-108 (Bloomberg gate, P1, fully designed and unstarted), Q-111 (register `evidence` has no reader), Q-093 (no lint — and note a lint rule would have caught Q107-S9's CRITICAL for free), Q-095 (ledger still has 9 malformed rows). LIVE: issue #177, refresh-data.yml failing since 2026-09-05, auto-closes on its next scheduled success. OWNER-GATED: Q-005, Q-082, Q-083, Q-097, Q-109."
+    "open_next": "Q-108 (Bloomberg gate, P1, fully designed and unstarted), Q-111 (register `evidence` has no reader), Q-093 (no lint — and note a lint rule would have caught Q107-S9's CRITICAL for free), Q-095 (ledger still has 9 malformed rows). LIVE: issue #177, refresh-data.yml failing since 2026-09-05, auto-closes on its next scheduled success. OWNER-GATED: Q-005, Q-082, Q-083, Q-097, Q-109.",
+    "VERIFIED_IN_CI_NOT_JUST_LOCALLY": "Dispatched on main twice. Run 34425732638 proved actions:read works with the REAL workflow token (the local dry run used a full-scope PAT, which hid its absence) and that the shared-issue dedupe holds — it COMMENTED on #177 rather than opening a duplicate. It also opened #191 against ITSELF, a genuine false positive: merged minutes earlier, so no scheduled history for a fire that predated it. Fixed in #192 and re-verified by run 34426124881 — four clean, one genuine alert, no duplicate. FOUND BY RUNNING IT IN PRODUCTION, twice, after the suite was green.",
+    "residual_i_introduced": "The probe runs DAILY and comments on every persistent failure every run, so a long outage now accrues a comment a day on top of the in-workflow alerter's. alertDecision's own docstring warns that alert fatigue is how the next outage goes unread. Filed as Q-113 rather than fixed here: throttling changes the shared alerting contract three other workflows use."
   }
 }
