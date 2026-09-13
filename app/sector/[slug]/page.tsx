@@ -4,9 +4,16 @@ import { useState, useEffect, useMemo, useCallback, use } from 'react'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import dynamic from 'next/dynamic'
+import { PanelSpinner } from '@/components/PanelSpinner'
 import SignalCard from '@/components/SignalCard'
-import DarkPoolPanel from '@/components/DarkPoolPanel'
-import NewsFeed from '@/components/NewsFeed'
+const DarkPoolPanel = dynamic(() => import('@/components/DarkPoolPanel'), {
+  ssr: false,
+  loading: () => <PanelSpinner label="dark pool" />,
+})
+const NewsFeed = dynamic(() => import('@/components/NewsFeed'), {
+  ssr: false,
+  loading: () => <PanelSpinner label="news" />,
+})
 import WatchlistButton from '@/components/WatchlistButton'
 import { SECTORS, getSectorBySlug } from '@/lib/sectors'
 import { generateDarkPoolPrints } from '@/lib/mockData'

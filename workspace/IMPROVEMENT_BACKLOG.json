@@ -2568,5 +2568,59 @@
     ],
     "blocked_by": [],
     "notes_2026_09_13": "Split out of Q-115. @axe-core/cli@4 PINS Chrome at 756x413 and ignores the window size. Measured three ways against axe-core 4.13.0 — --chrome-options 'headless,window-size=375x812', the same with an escaped comma, and without headless — and all three reported testEnvironment.windowWidth: 756. So every target-size, reflow and orientation result this job produces is a tablet-landscape result whatever the route, and the widths where mobile defects actually appear are invisible to CI. This is NOT a rule-availability problem: --rules target-size works and the rule EXECUTES rather than being silently skipped (verified: 'passes' over 28 nodes on /desk pre-fix, 50 post-fix). The blocker is purely the viewport. OPTIONS: drive axe through Playwright (real viewport control, but a new devDependency and a bigger job), or run @axe-core/puppeteer. Either is a larger change than Q-115's scope and neither should be bundled with a copy fix. DO NOT resolve this by flipping continue-on-error — that is a gating change on a schedule-only workflow, it is Q-097-adjacent, and it is the owner's call."
+  },
+  {
+    "id": "Q-117",
+    "title": "Tabbed detail pages shipped every tab's code on first paint",
+    "domain": "Frontend/UX",
+    "priority": "P2",
+    "status": "done",
+    "files": [
+      "app/stock/[ticker]/page.tsx",
+      "app/sector/[slug]/page.tsx",
+      "components/PanelSpinner.tsx"
+    ],
+    "acceptance_criteria": [
+      "A tab panel's code is fetched when its tab is opened, not on first paint",
+      "Tab switching shows a loading state rather than an empty panel",
+      "The options DELAYED disclosure still renders before the chain",
+      "The win is MEASURED, not estimated"
+    ],
+    "verify_commands": [
+      "npm run typecheck",
+      "npm run test",
+      "npm run build"
+    ],
+    "notes_2026_09_14": "MEASURED FIRST, and the measurement is the reason the package exists. /stock/[ticker] statically imported all five tabs' components — the four options panels, the QuantLab tree (1757 LOC including a 470-LOC LlmTab), DarkPoolPanel and NewsFeed — while the default tab is Chart. A throwaway branch stubbed the seven imports and rebuilt: the route chunk fell 27.9 -> 7.9 kB, so the panels were 20 kB of it. That number is what justified doing the work; without it the change was a guess. REAL DELTA after the actual change: /stock/[ticker] 27.9 -> 6.36 kB route and 167 -> 134 kB First Load JS (-33 kB, -20%); /sector/[slug] 148 -> 145 kB First Load (its route chunk grew 0.23 kB because the dynamic() wrappers cost a little, which is the honest way to read it). DEFERRED, NOT DELETED: clicking Options pulls 7 chunks and ~105 kB decoded at click time. A chart-only visitor never pays it; an options user pays the same bytes later. That is the correct trade for a tabbed page and should not be described as a universal saving. VERIFIED BY CLICKING ALL SIX LAZY PANELS on a real build: Quant Lab 5175 chars, Options 3398 (DELAYED badge intact), Dark Pool 1262, News 1485, plus both sector panels — no stuck spinners. PanelSpinner exists because next/dynamic renders NOTHING without a fallback, and an empty panel is indistinguishable from a failed one."
+  },
+  {
+    "id": "Q-118",
+    "title": "Sixteen unused runtime exports, five of them in one module",
+    "domain": "Testing/Quality",
+    "priority": "P3",
+    "status": "pending",
+    "files": [
+      "lib/chartEma.ts",
+      "components/SiteNav.tsx",
+      "lib/sectors.ts",
+      "lib/deskTickers.ts",
+      "lib/commodities.ts",
+      "lib/sectorColors.ts",
+      "lib/options/flow.ts",
+      "lib/api/reliability.ts",
+      "lib/briefs/sectorBrief.ts",
+      "components/stock/QuantLabMarketCards.tsx",
+      "components/KeyboardShortcuts.tsx"
+    ],
+    "acceptance_criteria": [
+      "Each symbol is confirmed unreachable through the IMPORT GRAPH, not by text match, before deletion",
+      "lib/chartEma.ts is examined as a module, not as five independent mistakes",
+      "Anything kept is kept for a written reason"
+    ],
+    "verify_commands": [
+      "npm run typecheck",
+      "npm run test"
+    ],
+    "notes_2026_09_14": "Found while auditing for Q-117. A first pass reported 114 unused exports; splitting by kind gave 16 RUNTIME exports and 98 TYPE-ONLY ones. Types are erased at build and cost nothing, so the headline number was wrong by 7x and the corrected one is the only one worth acting on. The 16: lib/chartEma.ts (ALWAYS_ON_EMAS, DEFAULT_ACTIVE_EMAS, TRADING_DEFAULT_EMA_KEYS, allEmaOn, chartEmaKey), components/SiteNav.tsx (NAV_GROUPS, NAV_PRIMARY), KeyboardShortcuts (SHORTCUTS_OPEN_EVENT), QuantLabMarketCards, lib/sectors.ts (getSectorByEtf), lib/deskTickers.ts (deskTickersParam), lib/commodities.ts (getCommodityByTicker), lib/sectorColors.ts (sectorColorByName), lib/options/flow.ts (MIN_ABSOLUTE_VOL_FOR_UNUSUAL), lib/api/reliability.ts (degradedResponse), lib/briefs/sectorBrief.ts (defaultBriefFetchers). FIVE of the sixteen are in lib/chartEma.ts, which smells like a module whose consumers moved rather than five independent mistakes — look at it as a unit. DO NOT DELETE ON THE STRENGTH OF THIS LIST. The detector matches \\bNAME\\b across source text; a symbol reached through a re-export, a namespace import or a dynamic key would look dead and is not. The I3 work learned exactly this and moved to resolving through the import graph. Verify each one that way first."
   }
 ]

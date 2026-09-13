@@ -8,16 +8,37 @@
 import { useState, useEffect, useCallback, useMemo, useRef, use } from 'react'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
-import DarkPoolPanel from '@/components/DarkPoolPanel'
+const DarkPoolPanel = dynamic(() => import('@/components/DarkPoolPanel'), {
+  ssr: false,
+  loading: () => <PanelSpinner label="dark pool" />,
+})
 import WatchlistButton from '@/components/WatchlistButton'
-import QuantLabPanel from '@/components/stock/QuantLabPanel'
-import NewsFeed from '@/components/NewsFeed'
+const QuantLabPanel = dynamic(() => import('@/components/stock/QuantLabPanel'), {
+  ssr: false,
+  loading: () => <PanelSpinner label="Quant Lab" />,
+})
+const NewsFeed = dynamic(() => import('@/components/NewsFeed'), {
+  ssr: false,
+  loading: () => <PanelSpinner label="news" />,
+})
 import IndicatorPanel from '@/components/IndicatorPanel'
-import OptionsChainTable from '@/components/options/OptionsChainTable'
-import GexChart from '@/components/options/GexChart'
+const OptionsChainTable = dynamic(() => import('@/components/options/OptionsChainTable'), {
+  ssr: false,
+  loading: () => <PanelSpinner label="options chain" />,
+})
+const GexChart = dynamic(() => import('@/components/options/GexChart'), {
+  ssr: false,
+  loading: () => <PanelSpinner label="gamma exposure" />,
+})
 import { useLiveQuote } from '@/hooks/useLiveQuote'
-import MaxPainGauge from '@/components/options/MaxPainGauge'
-import FlowScanner from '@/components/options/FlowScanner'
+const MaxPainGauge = dynamic(() => import('@/components/options/MaxPainGauge'), {
+  ssr: false,
+  loading: () => <PanelSpinner label="max pain" />,
+})
+const FlowScanner = dynamic(() => import('@/components/options/FlowScanner'), {
+  ssr: false,
+  loading: () => <PanelSpinner label="options flow" />,
+})
 import { generateDarkPoolPrints } from '@/lib/mockData'
 import { markSynthetic, unwrapSynthetic, assertNotSynthetic, type Synthetic } from '@/lib/synthetic'
 import { DarkPoolPrint, SECTORS } from '@/lib/sectors'
@@ -27,6 +48,7 @@ import type { DarkPoolAnalysis } from '@/lib/darkpool'
 import { buildVisFromIndicatorPreset, type ChartEmaKey } from '@/lib/chartEma'
 import { STOCK_CHART_RANGES, isStockIntradayPollRange, chartBarKindLabel } from '@/lib/chartYahoo'
 import { ChartErrorBoundary } from '@/components/ChartErrorBoundary'
+import { PanelSpinner } from '@/components/PanelSpinner'
 import type { EnrichedChain } from '@/lib/options/chain'
 import type { GexResult } from '@/lib/options/gex'
 import type { UnusualFlowItem, FlowSentimentLabel } from '@/lib/options/flow'
