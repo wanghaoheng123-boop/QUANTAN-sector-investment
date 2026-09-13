@@ -3,7 +3,7 @@
   "project": "QUANTAN-sector-investment",
   "created": "2026-04-28T09:40:00Z",
   "last_updated": "2026-09-13",
-  "active_agent": "claude opus-5 (2026-09-13 Q-101 data-state affordance; branch feat/q-101-data-state-affordance)",
+  "active_agent": "claude opus-5 (2026-09-13 Q-101 shipped; PR #194 merged, production verified)",
   "prod_bug_fix_2026_07_01": {
     "B-2": "News fetch broken by yahoo-finance2 SearchResult schema drift (yf.search validation threw → news silently dropped + 66 prod errors on /api/briefs since 2026-04-03). FOUND via Vercel get_runtime_errors. FIXED with validateResult:false on the 4 news-search callers (mirrors options/chain.ts precedent) → PR #82 → main 2e6137c. LIVE-VERIFIED: /api/briefs now 200 with full news feed (was empty); 0 SearchResult validation logs on new deploy dpl_D29j.",
     "method_note": "Empirical bug-finding via Vercel runtime-errors/logs is high-signal — surfaced a real 3-month-old LIVE issue the static inspection didn't (it was a caught-and-logged error, invisible to tsc/tests/benchmark). Consider a runtime-errors sweep as a standing step."
@@ -910,6 +910,14 @@
     "filed": "Q-114 (two divergent freshness vocabularies on overlapping surfaces)",
     "still_open_from_before": "Q-097 (branch protection, owner action) unchanged — checked, main still protected:false",
     "what_was_re_rendered_and_read_back": "Stated precisely because an earlier draft of this key over-claimed. /stock/AAPL: BEFORE the SSE fix it rendered 'live' for a Friday close on a Sunday; AFTER, '42h ago' — the full before/after on the SSE merge path. /stock/AAPL options tab: 'Delayed 15m' plus the aria text, above the chain. /desk: 'At close · Fri 16:15 ET', read back AFTER the useLivePrices fallback removal. /sector/technology: 'At close · Fri 16:00 ET' and '42h ago' after 30s. NOT separately observed: the sector page's SSE merge delivering a quote within the observation window — it is the identical hook and merge as the stock page, plus a source-level assertion, not a second live observation.",
-    "homepage_note": "app/page.tsx:146 now assigns the vendor stamp instead of the emit time, which is strictly more correct — but nothing reads it (SectorCard does not), so it is itself a dead flag. The homepage status pill keys off live.marketOpen && streamConnected, not off age, and reads MARKET CLOSED correctly. No calendar is needed there today."
+    "homepage_note": "app/page.tsx:146 now assigns the vendor stamp instead of the emit time, which is strictly more correct — but nothing reads it (SectorCard does not), so it is itself a dead flag. The homepage status pill keys off live.marketOpen && streamConnected, not off age, and reads MARKET CLOSED correctly. No calendar is needed there today.",
+    "shipped_to_production": {
+      "pr": "#194, squash-merged 2026-09-13 as 6f0942e",
+      "ci": "9/9 checks green — typecheck, test, coverage, pytest, benchmark, smoke, workflows, Vercel build, Vercel preview comments",
+      "prod_deploy": "2026-09-13T14:52:01Z",
+      "prod_smoke": "npm run check:smoke — 20/20 pass against quantan.vercel.app",
+      "prod_verified_by_re_render": "/desk now reads 'Market closed. Data is as of the last session close, Fri 16:15 ET.' where 90 minutes earlier the SAME page read 'Data is stale, 151223 seconds old; consider refreshing'. /stock/AAPL header reads 'CLOSED · 42h ago' where it read 'CLOSED · live'. The options tab carries 'Delayed 15m' with its aria text above the chain. All read back from the production DOM, not from the build log.",
+      "could_not_verify": "The Vercel PREVIEW deployment is behind Vercel deployment protection and redirects to a login, so the preview surface was never smoked — the preview BUILD check passing is all that was confirmed there. Production was smoked instead, after merge. Noting this because the deploy protocol asks for a preview smoke and it did not happen."
+    }
   }
 }

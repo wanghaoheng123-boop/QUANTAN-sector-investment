@@ -1816,3 +1816,14 @@ observed on the committed tree at localhost against live production data, and
 merge was never separately observed delivering a quote. In the one document whose
 purpose is that its claims can be checked, the venue of an observation is part of
 the claim.
+
+**Shipped.** PR #194 squash-merged as `6f0942e`, 9/9 CI checks green, production
+deploy `2026-09-13T14:52:01Z`, `check:smoke` 20/20 against `quantan.vercel.app`.
+Verified by re-reading the production DOM, not the build log: `/desk` now reads
+*"Market closed. Data is as of the last session close, Fri 16:15 ET."* where
+ninety minutes earlier the same page read *"Data is stale, 151223 seconds old;
+consider refreshing"*; `/stock/AAPL` reads `CLOSED · 42h ago` where it read
+`CLOSED · live`. **The preview deployment is behind Vercel deployment protection
+and redirects to a login, so the preview surface was never smoked** — only its
+build check passed. The deploy protocol asks for a preview smoke; it did not
+happen, and production was smoked after merge instead.
