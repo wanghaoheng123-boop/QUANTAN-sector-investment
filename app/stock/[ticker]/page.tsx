@@ -22,6 +22,7 @@ import { generateDarkPoolPrints } from '@/lib/mockData'
 import { markSynthetic, unwrapSynthetic, assertNotSynthetic, type Synthetic } from '@/lib/synthetic'
 import { DarkPoolPrint, SECTORS } from '@/lib/sectors'
 import { DataFreshnessIndicator } from '@/components/DataFreshnessIndicator'
+import { parseDelayedMinutes } from '@/lib/data/freshness'
 import type { DarkPoolAnalysis } from '@/lib/darkpool'
 import { buildVisFromIndicatorPreset, type ChartEmaKey } from '@/lib/chartEma'
 import { STOCK_CHART_RANGES, isStockIntradayPollRange, chartBarKindLabel } from '@/lib/chartYahoo'
@@ -73,6 +74,9 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
   const [optionsFlow, setOptionsFlow] = useState<UnusualFlowItem[]>([])
   const [optionsSentiment, setOptionsSentiment] = useState<{ flowLabel: FlowSentimentLabel; maxPain: number | null; putCallVolumeRatio: number | null; putCallOiRatio: number | null } | null>(null)
   const [optionsLoading, setOptionsLoading] = useState(false)
+  // I1/I2 (Q-101): the options route has declared a 15-minute vendor delay
+  // since Phase 13 and no component read it. This is that read.
+  const [optionsDelayedMinutes, setOptionsDelayedMinutes] = useState<number | null>(null)
   const [activeTab, setActiveTab]       = useState<'chart' | 'quant' | 'options' | 'darkpool' | 'news'>('chart')
   const [activeRange, setActiveRange]   = useState('1Y')
   const [activeIndicator, setActiveIndicator] = useState('ema')
@@ -224,7 +228,10 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
       change: live.quote!.change,
       changePct: live.quote!.changePct,
       marketCap: prev?.marketCap ?? '',
-      quoteTime: live.quote!.timestamp,
+      // Q-101: the VENDOR's stamp, never this server's emit time. Using
+      // `timestamp` here made /stock/AAPL read "live" for a Friday close on a
+      // Sunday. null when the vendor gave none — unknown must read as unknown.
+      quoteTime: live.quote!.quoteTime,
     }))
     setQuoteError(null)
   }, [live.quote])
@@ -281,6 +288,7 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
           setOptionsGex(data.gex)
           setOptionsFlow(data.unusualFlow ?? [])
           setOptionsSentiment(data.sentiment ?? null)
+          setOptionsDelayedMinutes(parseDelayedMinutes(data.dataProvenance))
         }
         setOptionsLoading(false)
       })
@@ -530,6 +538,24 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
                   )}
                   {optionsChain && (
                     <>
+                      {/*
+                        I1 — the vendor delay, disclosed BEFORE any number below it.
+                        /api/options emits dataProvenance {delayedMinutes: 15,
+                        realtime: false} and its own comment says the UI should
+                        "render an explicit DELAYED label". Until Q-101 nothing
+                        read it, so every strike, every Greek, every GEX bar and
+                        every max-pain print on this panel was ~15 minutes behind
+                        the market with no indication. One badge covers the whole
+                        panel because one fetch feeds all of it.
+                      */}
+                      {optionsDelayedMinutes != null && (
+                        <div className="flex items-center gap-2 rounded-lg border border-sky-500/25 bg-sky-950/20 px-3 py-2">
+                          <DataFreshnessIndicator delayedMinutes={optionsDelayedMinutes} />
+                          <span className="text-[11px] text-slate-400">
+                            Options quotes, Greeks, GEX and max pain on this panel are vendor-delayed. Not for execution timing.
+                          </span>
+                        </div>
+                      )}
                       {/* Chain table */}
                       {/* Phase 14 wave 41 (UX-F1): every options panel is now wrapped
                           in ChartErrorBoundary individually so one panel's crash

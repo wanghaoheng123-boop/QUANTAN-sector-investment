@@ -48,7 +48,13 @@ export interface LiveQuote {
   changePct: number
   volume?: number
   marketOpen: boolean
+  /** When THIS SERVER emitted the event. Never the age of the price. */
   timestamp: string
+  /**
+   * The vendor's last-trade time (Q-101). null when the vendor gave none —
+   * consumers render that as unknown and must not substitute `timestamp`.
+   */
+  quoteTime: string | null
 }
 
 /**
@@ -77,8 +83,11 @@ export function parseLiveQuote(raw: unknown): LiveQuote | null {
   const volume = typeof r.volume === 'number' && Number.isFinite(r.volume) && r.volume >= 0
     ? r.volume
     : undefined
+  // Vendor stamp. Absent or malformed becomes null rather than borrowing
+  // `timestamp`: an unknown age must read as unknown, never as "live".
+  const quoteTime = typeof r.quoteTime === 'string' && r.quoteTime.length > 0 ? r.quoteTime : null
   const marketOpen = r.marketOpen === true
-  return { ticker, price, change, changePct, volume, marketOpen, timestamp }
+  return { ticker, price, change, changePct, volume, marketOpen, timestamp, quoteTime }
 }
 
 export interface UseLiveQuoteResult {

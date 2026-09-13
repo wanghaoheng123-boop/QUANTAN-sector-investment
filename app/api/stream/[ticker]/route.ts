@@ -19,6 +19,7 @@ import { isMarketOpen } from '@/lib/api/marketHours'
 import { applyRateLimit } from '@/lib/api/rateLimit'
 import YahooFinance from 'yahoo-finance2'
 import { withRetry } from '@/lib/api/reliability'
+import { parseQuoteTime } from '@/lib/format'
 import { STREAM_AUTO_CLOSE_MS, STREAM_CLOSE_WARN_LEAD_MS } from '@/lib/api/streamBudget'
 
 const yahooFinance = new YahooFinance()
@@ -52,6 +53,21 @@ interface QuoteEvent {
   volume?: number
   marketOpen: boolean
   timestamp: string
+  /**
+   * The VENDOR's last-trade time, not ours (Q-101, 2026-09-13).
+   *
+   * `timestamp` above is when this server emitted the event, and it was the
+   * only time field on this contract. Three surfaces wrote it into their
+   * `quoteTime` state and rendered it as the quote's age, so on 2026-09-13 — a
+   * Sunday — /stock/AAPL displayed Friday's closing price labelled "live",
+   * beside its own CLOSED badge. `q.regularMarketTime` was on the same
+   * yahoo-finance2 object the whole time and was discarded.
+   *
+   * null when the vendor gives no stamp. Consumers must render that as unknown
+   * and must NOT fall back to `timestamp` — substituting our clock for the
+   * vendor's is the defect, not the fix.
+   */
+  quoteTime: string | null
 }
 
 async function fetchQuote(symbol: string): Promise<QuoteEvent | null> {
@@ -69,6 +85,7 @@ async function fetchQuote(symbol: string): Promise<QuoteEvent | null> {
       volume: q.regularMarketVolume ?? undefined,
       marketOpen: isMarketOpen(),
       timestamp: new Date().toISOString(),
+      quoteTime: parseQuoteTime(q.regularMarketTime),
     }
   } catch (err) {
     // Phase 13 S2 fix: previously a silent catch — operators had no diagnostic

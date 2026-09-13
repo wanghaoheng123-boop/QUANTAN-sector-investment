@@ -48,10 +48,28 @@ export function formatCompactNumber(value: number | null | undefined, digits = 1
   }).format(value)
 }
 
+/**
+ * Render a timestamp's age as a short human string.
+ *
+ * Q-101 (2026-09-13) — a missing timestamp returned the word `'stale'`, which
+ * is a claim about the data's AGE made when the age is unknown. I2's wording is
+ * the opposite: "Stale data displays as STALE with age. Missing data displays as
+ * MISSING." Rendered on eight user-visible surfaces (SignalCard:161,
+ * DarkPoolPanel:204, SectorRotationPanel:159, QuantLabPanel:65,
+ * BtcQuantLab:409, sector:318, stock:385, backtest:181) with zero tests, and
+ * three of those pass an explicitly-optional value. `formatCompactNumber`
+ * directly above already returns '—' for the same case, so this was the odd one
+ * out in its own file.
+ *
+ * NOT the same vocabulary as `DataFreshnessIndicator`, and that divergence is a
+ * real finding rather than a tidy-up: this says "live" under 30s where the
+ * component says 10s, and it knows nothing about caching, vendor delay or the
+ * market session. Filed as Q-114 rather than unified here.
+ */
 export function formatFreshness(iso: string | null | undefined): string {
-  if (!iso) return 'stale'
+  if (!iso) return '—'
   const ts = new Date(iso).getTime()
-  if (!Number.isFinite(ts)) return 'stale'
+  if (!Number.isFinite(ts)) return '—'
   const deltaSec = Math.max(0, Math.floor((Date.now() - ts) / 1000))
   if (deltaSec < 30) return 'live'
   if (deltaSec < 120) return `${deltaSec}s ago`

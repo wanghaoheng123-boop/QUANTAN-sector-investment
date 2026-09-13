@@ -104,11 +104,22 @@ export function useLivePrices(
         if (Number.isFinite(t) && t > max) max = t
       }
     }
-    // Fall back to the response's timestamp (when the fetch completed)
-    if (max === 0 && swr.data?.timestamp) {
-      const t = Date.parse(swr.data.timestamp)
-      if (Number.isFinite(t)) max = t
-    }
+    // NO FALLBACK TO `swr.data.timestamp` (Q-101, 2026-09-13).
+    //
+    // That field is when /api/prices finished ITS fetch — our clock, not the
+    // vendor's. Substituting it here is the identical defect this package
+    // removed from the SSE path, where it made /stock/AAPL render a Friday
+    // close as "live" on a Sunday. It is worse here than it looks: the fallback
+    // fires precisely when NO quote in the batch carries a stamp, which is the
+    // degraded-feed case the badge exists for — the feed breaks, `max` stays 0,
+    // and the badge would go green off our own clock at the exact moment it is
+    // supposed to go red.
+    //
+    // Measured 2026-09-13 against production: 0 of 28 desk instruments lacked
+    // `quoteTime`, so this had not fired — but "has not fired yet" is not a
+    // property, and the one sample was a warm cache on a closed market.
+    //
+    // null means unknown, and DataFreshnessIndicator renders unknown as '—'.
     return max > 0 ? max : null
   }, [swr.data])
 

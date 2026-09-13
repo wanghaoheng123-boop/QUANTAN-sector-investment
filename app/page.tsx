@@ -142,7 +142,8 @@ export default function HomePage() {
           price: q.price,
           change: q.change,
           changePct: q.changePct,
-          quoteTime: q.timestamp,
+          // Q-101: vendor stamp, not our emit time. See hooks/useLiveQuote.
+          quoteTime: q.quoteTime,
         }
         touched = true
       }

@@ -1705,3 +1705,114 @@ three other workflows use.
 
 **Tier board:** I1 ASP · I2 PARTIAL · I3 PARTIAL · I4 ASP · I5 PARTIAL ·
 I6 PARTIAL · I7 VIOLATED · I8 VIOLATED. **Still no invariant is ENFORCED.**
+
+---
+
+## 2026-09-13 — Q-101: what state is this number in
+
+Branch `feat/q-101-data-state-affordance`. **I7 is unchanged** — `main` still
+reports `protected: false`, so `Q-097` remains open and these gates were run
+locally because running them locally IS the gate.
+
+**The package started from a measurement, not a file.** Production, on a Sunday:
+`/desk` carried `aria-label="Data is stale, 151223 seconds old; consider
+refreshing"` — 42 hours — beside the site's own `MarketStatus` pill reading
+CLOSED. The feed was healthy; Friday's close is the freshest datum that exists,
+and "refresh" is an action that cannot help. The regular session is 32.5h of a
+168h week, so that red alarm was on for **~80% of wall-clock time** with nothing
+wrong. `alertDecision`'s own docstring in this repo already says what that costs:
+alert fatigue is how the next real outage goes unread.
+
+**Measure the null before setting a threshold — third recorded instance, and the
+first where the threshold was fine and the QUESTION was wrong.** 120 seconds is
+a reasonable staleness bound *during a session*. The defect was asking a
+wall-clock question outside one. Anchoring "is this the latest session's data?"
+on the session **open** rather than the close removed the tuned grace constant
+entirely; measured against the live desk basket (28 instruments, 2026-09-11),
+27 stamp exactly 16:00 ET and ^VIX stamps 16:15, so stamps *after* the close are
+normal and the window has to stay open forward — which anchoring on the open
+does for free.
+
+**Then verifying the fix found something worse than the thing being fixed.**
+`/stock/AAPL` rendered Friday's closing price labelled **`live`**, on a Sunday,
+next to its own CLOSED badge. Both SSE routes emitted
+`timestamp: new Date().toISOString()` — *our* emit time — as the only time field
+on a quote event, while the vendor's `regularMarketTime` sat unread on the same
+yahoo-finance2 object. Three pages wrote it into `quoteTime` and rendered it as
+the quote's age. **That is not a missing flag; it is a flag asserting the
+opposite of the truth**, which is the case I2 exists to forbid. **2124 tests were
+green on it.**
+
+**It is the Q-079 audit's "declared blind spot" — found one path over from where
+the audit pointed.** The audit named SWR `keepPreviousData` as "the most likely
+remaining I2 violation". Measured: latent. `hooks/useLivePrices.ts:80` sets it,
+it has exactly one consumer, and that consumer passes a module constant, so the
+SWR key never changes and the option is a no-op. The instinct was right and the
+address was wrong — and I nearly wrote "latent" as the package's whole answer to
+that blind spot, which would have been a downgrade that flattered my own work.
+**Check the direction of the error; the ones that flatter you are the ones to
+re-measure.** Recorded again because it nearly cost the session's best finding.
+
+**My own guard was green and blind, in the file that warns about it.** The first
+version asserted that a surface reading the vendor delay also *mentioned*
+`DataFreshnessIndicator` somewhere in the file. The stock page already mounts
+that component for the chart-cache badge — so deleting the delayed badge
+entirely left the string behind and the guard stayed green through 82 passing
+tests. The fix asserts the fact reaches the component **as a prop**. Caught by
+mutation, not by reading, in the file whose own header is about matching prose
+instead of behaviour. 12 mutations run against the committed tree, 11 caught;
+the 12th was a bad mutation (it adds a fact that is genuinely consumed on eight
+surfaces), which is itself the "a mutation that appears to survive may be one
+that never tested anything" lesson in its milder form.
+
+**The constitution's own count was wrong by a factor of four.** I2 said
+`DataFreshnessIndicator` was "mounted on 2 of 16 pages"; measured, it is 9 sites
+across 5 pages and 2 components. Corrected with `file:line`, and the correction
+says **not to maintain that number there** — the same argument that moved the
+vendor count into the register. Every citation in the rewritten I2 block was
+re-resolved against the tree after the edits; two pairs had already drifted by
+three lines.
+
+Also closed: the options chain has declared a 15-minute vendor delay since Phase
+13 with a comment asking the UI to render a DELAYED label, and one occurrence
+repo-wide — the producer. Every strike, Greek, GEX bar and max-pain print was
+~15 minutes behind the market with no indication. `delayed` outranks `live` in
+the classifier for the identical reason `cached` does: a price the vendor holds
+back 15 minutes, fetched two seconds ago, has an *age* of two seconds.
+
+`lib/format.ts:formatFreshness` returned the string `'stale'` for a **missing**
+timestamp — asserting an age nobody knew — while `formatCompactNumber` directly
+above it already returned `'—'` for the same case. Rendered on eight surfaces
+with zero tests. Fixed and tested; unifying the two divergent vocabularies is
+`Q-114`, not this package.
+
+**External reference, one bounded pass:** Smashing Magazine, "UX Strategies For
+Real-Time Dashboards" (2025) — a disconnect, a stale quote, a delayed tick and a
+closed market need four different states, four different labels and four
+different next actions. This codebase collapsed the last two into the first two.
+
+**Tier board:** I1 ASP · I2 PARTIAL · I3 PARTIAL · I4 ASP · I5 PARTIAL ·
+I6 PARTIAL · I7 VIOLATED · I8 VIOLATED. **Still no invariant is ENFORCED.**
+I2 does not move — the gaps are named and executable (no holiday calendar, a
+halted instrument reads `atClose`, the second vocabulary). This is explicitly
+**not** an I1 move: the 5-tuple still does not exist.
+
+**Review addendum (same day).** Adversarial review found the fix incomplete in
+the file I had cleared. `hooks/useLivePrices.ts`' `quoteTime` memo fell back to
+`swr.data.timestamp` — `/api/prices`' own fetch-completion time — whenever no
+quote in the batch carried a vendor stamp. **That is the identical substitution
+this package removed from SSE, in the hook feeding the other equity surface**,
+and it fires precisely in the degraded-feed case the badge exists for: the feed
+breaks, no stamp arrives, and the badge goes *green off our own clock* at the
+moment it should go red. I had measured it (0 of 28 instruments lacked a stamp)
+and written "latent" into a passing CANNOT-do test — on one sample, a warm cache,
+a closed market. **"Has not fired yet" is not a property**, and measuring the
+happy path is how the same mistake got made twice in one session.
+
+Two records were also stronger than the measurement and are corrected: the
+`CLAUDE.md` I2 block said the SSE defect was "observed on production" when it was
+observed on the committed tree at localhost against live production data, and
+`SESSION_STATE.json` said "both fixes re-rendered" when the sector page's SSE
+merge was never separately observed delivering a quote. In the one document whose
+purpose is that its claims can be checked, the venue of an observation is part of
+the claim.
