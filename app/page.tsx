@@ -33,7 +33,9 @@ interface Quote {
   price: number
   change: number
   changePct: number
-  quoteTime?: string | null
+  // No `quoteTime`. See the note at the assignment site: it was written and read
+  // by nobody, and a declared-but-unread data-state field is the shape Q-101
+  // exists to remove. Re-add it together with a consumer, never before one.
 }
 
 function formatUtcDateTime(ts: string): string {
@@ -142,8 +144,16 @@ export default function HomePage() {
           price: q.price,
           change: q.change,
           changePct: q.changePct,
-          // Q-101: vendor stamp, not our emit time. See hooks/useLiveQuote.
-          quoteTime: q.quoteTime,
+          // Q-101 review: `quoteTime` is NOT carried here, deliberately.
+          //
+          // It was assigned and read by nobody — SectorCard does not take it,
+          // and the hero pill keys off `live.marketOpen && streamConnected`,
+          // not off age. Shipping an assignment whose only consumer is nothing
+          // is the exact shape this package exists to remove, so carrying a
+          // *correct* value there would still have been the defect. If a
+          // homepage surface ever needs the age, take `q.quoteTime` (the vendor
+          // stamp) and pass `calendar="us-equity"` — never `q.timestamp`, which
+          // is this server's emit time.
         }
         touched = true
       }
