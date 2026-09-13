@@ -3,7 +3,7 @@
   "project": "QUANTAN-sector-investment",
   "created": "2026-04-28T09:40:00Z",
   "last_updated": "2026-09-13",
-  "active_agent": "claude opus-5 (2026-09-13 Q-101 CLOSED to PARTIAL-with-named-gaps; #194 #195 #196 merged and production-verified)",
+  "active_agent": "claude opus-5 (2026-09-13 Q-101 + Q-115 shipped; #194-#199 merged, production-verified)",
   "prod_bug_fix_2026_07_01": {
     "B-2": "News fetch broken by yahoo-finance2 SearchResult schema drift (yf.search validation threw → news silently dropped + 66 prod errors on /api/briefs since 2026-04-03). FOUND via Vercel get_runtime_errors. FIXED with validateResult:false on the 4 news-search callers (mirrors options/chain.ts precedent) → PR #82 → main 2e6137c. LIVE-VERIFIED: /api/briefs now 200 with full news feed (was empty); 0 SearchResult validation logs on new deploy dpl_D29j.",
     "method_note": "Empirical bug-finding via Vercel runtime-errors/logs is high-signal — surfaced a real 3-month-old LIVE issue the static inspection didn't (it was a caught-and-logged error, invisible to tsc/tests/benchmark). Consider a runtime-errors sweep as a standing step."
@@ -927,5 +927,27 @@
       "prod_health": "check:smoke 20/20; homepage re-read after deploy — 16 sector cards, MARKET CLOSED pill correct, zero console errors."
     },
     "next_package": "Q-114 — unify the two freshness vocabularies (lib/format.ts:69 formatFreshness vs lib/data/freshness.ts classifyFreshness). Filed, not started. Changes rendered strings on 8 surfaces, so it is its own package."
+  },
+  "wave_2026_09_13_q115": {
+    "package": "Q-115 — the desk told users to click a row that is not clickable",
+    "prs": "#198 (the package) and #199 (my own residual); production deploys 15:29:08Z and 15:43:31Z",
+    "gates": "typecheck clean; vitest 2158 passed / 17 skipped / 0 failed; next build green; actionlint clean; 9/9 CI on each PR",
+    "external_study": "The goal asked to learn from other sites. Three references actually changed the design: Smashing Magazine 'UX Strategies For Real-Time Dashboards' (2025) — a disconnect, a stale quote, a delayed tick and a closed market need four states, four labels, four next actions; Toptal's mobile dashboard guidance — progressive disclosure, most important content above the fold; and WCAG 2.2 SC 2.5.8, which is where the most useful correction came from.",
+    "findings": {
+      "1_false_instruction": "app/desk/page.tsx said 'Click any row to drill into the detail page.' NO <tr> in this repository is interactive — zero hits for onClick, role or a pointer affordance on any row. The only real affordance was a 29x15 CSS px link. Fixed by correcting the copy and enlarging the links, not by faking an interactive row.",
+      "2_my_wcag_claim_was_wrong": "I measured 40 of 49 targets under SC 2.5.8's 24px and was about to call it a violation. It is NOT: the SPACING EXCEPTION applied, minimum centre-to-centre 25.2px against the 24px required, and axe-core 4.13 put target-size in PASSES over 28 nodes. It cleared by 1.2px. The honest claim is a usability defect (15px vs Apple HIG 44pt / Material 48dp) plus 1.2px of margin. Recorded as a correction because the wrong version flattered the package.",
+      "3_guide_filled_the_phone": "DashboardGuide opened by default on every viewport. 2453px tall on /desk at 375px, first quote row 985px down = 1.21 screens of prose before a price; /sector was 1.56 screens. Collapsed by default on narrow viewports only, so the Phase 12 desktop decision survives. 985px -> 355px.",
+      "4_a11y_gate_visited_2_of_16_routes": "/ and /backtest were the whole crawl, so the page with 39 links was never audited by the job that exists to audit exactly that. Reachability defect, EIGHTH shape, in the accessibility gate itself. Six routes added. It still cannot reach a mobile viewport — @axe-core/cli@4 pins Chrome at 756x413, measured three ways — filed as Q-116.",
+      "5_i_pushed_the_target_off_screen": "The enlarged links widened the table past its scroll container: sector +81px, commodity +52px, 34 of 39 links off-screen. My FIRST measurement of this said overflowPx: 0 and was an AGGREGATE over the first table only. Fixed in #199 by pinning the Drill column, reclaiming width from a Name column that reserved desktop width at every size, and hiding the one-glyph W column and the SECONDARY sector link below sm."
+    },
+    "prod_verified_375x812": "0 of 28 visible links clipped across all three tables; 0 rows with Chg covered; 0 targets under 24px; targets 45x36; guide collapsed; first quote at 0.44 screens; no row-click claim. At 1280px: all 8 columns, sector link back, guide expanded — desktop untouched.",
+    "lessons": [
+      "Check the direction of your own error: my WCAG framing, and my 'overflowPx: 0', both flattered the package and both were wrong.",
+      "Assert per item, not in aggregate — an aggregate passed while two of three tables were clipped.",
+      "Confirm the served bytes contain the change before believing a measurement of it: one run measured a stale server and reported a regression that did not exist.",
+      "A guard that matches raw source matches its own explanatory comment — ui-copy-promises flagged the commit that fixed the thing it guards."
+    ],
+    "tier_board": "I1 ASP · I2 PARTIAL · I3 PARTIAL · I4 ASP · I5 PARTIAL · I6 PARTIAL · I7 VIOLATED · I8 VIOLATED. Unchanged — this package touches no invariant.",
+    "next": "Q-114 (two freshness vocabularies) and Q-116 (a11y mobile viewport) are filed and not started."
   }
 }

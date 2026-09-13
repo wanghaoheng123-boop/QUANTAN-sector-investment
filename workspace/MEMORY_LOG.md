@@ -1854,3 +1854,66 @@ Both closed; the guard was re-pointed rather than deleted.
 **The next package is `Q-114`**, not more of this one: `lib/format.ts:69` is a
 second freshness vocabulary on 8 surfaces, and unifying it changes rendered
 strings, so it carries its own risk and its own sign-off question.
+
+---
+
+## 2026-09-13 — Q-115: the desk told users to click a row that is not clickable
+
+Merged as #198 and #199. **No invariant moves** — this package touches none.
+
+The owner asked for UI/UX work informed by other sites, so the package began by
+measuring production on a phone rather than by reading the backlog.
+
+`app/desk/page.tsx` told the user **"Click any row to drill into the detail
+page."** No `<tr>` in this repository is interactive — zero hits for `onClick`, a
+role, or a pointer affordance on any row, anywhere. The instruction was false,
+and the only real way in was a **29×15 CSS px** link. Someone following the
+instruction literally tapped a row, nothing happened, and the page gave no hint
+why. Fixed by correcting the copy and enlarging the links, not by faking an
+interactive row: a clickable `<tr>` is either keyboard-hostile or DOM gymnastics.
+
+**My WCAG claim was wrong and the correction is the most useful thing here.** I
+measured 40 of 49 targets under SC 2.5.8's 24px and was about to ship it as a
+conformance violation. It is not one: the **spacing exception** applied, with a
+minimum centre-to-centre distance of **25.2px against the 24px required**, and
+axe-core 4.13 put `target-size` in **passes** over 28 nodes. It cleared the bar
+by 1.2 pixels. The honest claim is a usability defect — 15px against Apple HIG's
+44pt and Material's 48dp — plus 1.2px of conformance margin. **The wrong version
+flattered the package, which is exactly the class this log says to re-measure.**
+
+**Then I pushed the target off the screen.** Enlarging the links widened the
+table past its scroll container: the sector table by 81px, the commodity table by
+52px, leaving **34 of 39 drill links off-screen**. A target you cannot see is not
+an improvement on a target you cannot hit. **My first measurement of that said
+`overflowPx: 0` — an aggregate over the FIRST TABLE ONLY**; per table, two of
+three were clipped. This repo already records that lesson for cache producers,
+and I reproduced it within the hour. Fixed by pinning the Drill column, reclaiming
+width from a Name column that reserved desktop width at every size, and hiding the
+one-glyph W column and the *secondary* sector link below `sm` — a two-link pinned
+column sits on top of `Chg`, hiding the change number to surface a secondary
+navigation path.
+
+**The guide filled the phone screen.** `DashboardGuide` opened by default on every
+viewport; at 375px it was 2453px tall on `/desk`, putting the first quote row
+**1.21 screens down** on a page whose purpose is at-a-glance quotes (1.56 screens
+on `/sector`). Now collapsed by default on narrow viewports only, so the Phase 12
+first-visit decision survives where it is cheap. 985px → 355px.
+
+**The a11y gate visited 2 of 16 routes** — `/` and `/backtest` — so the page with
+39 links was never audited by the job that exists to audit exactly that.
+**Reachability defect, eighth shape, this time in the accessibility gate itself.**
+Six routes added. It still cannot reach a mobile viewport: `@axe-core/cli@4` pins
+Chrome at 756×413 and ignores the window size, measured three ways. Filed as
+`Q-116` rather than papered over — and the rule itself is fine, `--rules
+target-size` executes rather than being silently skipped.
+
+**Two process lessons worth more than the diff.** One verification run measured a
+**stale server** and reported that my change had made spacing *worse*; it had not,
+the old build was still being served — confirm the served bytes contain the change
+before believing any measurement of it. And the new guard's first version matched
+raw source and **flagged the JSX comment explaining the fix** — a guard matching
+prose *about* the behaviour instead of the behaviour, in the same suite whose
+header warns about precisely that.
+
+**Tier board:** I1 ASP · I2 PARTIAL · I3 PARTIAL · I4 ASP · I5 PARTIAL ·
+I6 PARTIAL · I7 VIOLATED · I8 VIOLATED. **Still no invariant is ENFORCED.**
