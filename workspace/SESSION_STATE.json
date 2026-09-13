@@ -893,7 +893,7 @@
   "wave_2026_09_13_q101": {
     "package": "Q-101 — what state is this number in",
     "branch": "feat/q-101-data-state-affordance",
-    "gates": "typecheck clean; vitest 2140 passed / 17 skipped / 0 failed (142 files); next build green; 15 mutations against the committed tree, 14 caught (the 15th a bad mutation that adds a fact which is genuinely consumed)",
+    "gates": "typecheck clean; vitest 2140 passed / 17 skipped / 0 failed (142 files); next build green; 14 mutations run against the committed tree, 13 caught. The one survivor was a BAD MUTATION, not a gap: it adds `fetchedAt` to the data-state fact list, and that fact is genuinely consumed and rendered on 8 surfaces, so the guard correctly passed.",
     "found_by_measuring_production": "/desk carried aria-label 'Data is stale, 151223 seconds old; consider refreshing' (42h) beside its own CLOSED pill, on a healthy feed. The regular session is 32.5h of a 168h week, so the red alarm was on ~80% of wall-clock time naming an action that could not help.",
     "worse_finding_found_while_verifying_the_first": "/stock/AAPL rendered Friday's closing price labelled 'live' on a Sunday, next to its own CLOSED badge. Both SSE routes emitted our own emit time as the quote event's only time field, discarding the vendor's regularMarketTime from the same object; three pages wrote it into quoteTime and rendered it as the quote's age. 2124 tests were green on it. This is the audit's 'declared blind spot' — but one path over from where the audit pointed (SSE, not SWR keepPreviousData, which is latent because its single consumer passes a module constant).",
     "shipped": [
