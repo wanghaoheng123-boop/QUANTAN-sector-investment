@@ -1796,3 +1796,23 @@ I6 PARTIAL · I7 VIOLATED · I8 VIOLATED. **Still no invariant is ENFORCED.**
 I2 does not move — the gaps are named and executable (no holiday calendar, a
 halted instrument reads `atClose`, the second vocabulary). This is explicitly
 **not** an I1 move: the 5-tuple still does not exist.
+
+**Review addendum (same day).** Adversarial review found the fix incomplete in
+the file I had cleared. `hooks/useLivePrices.ts`' `quoteTime` memo fell back to
+`swr.data.timestamp` — `/api/prices`' own fetch-completion time — whenever no
+quote in the batch carried a vendor stamp. **That is the identical substitution
+this package removed from SSE, in the hook feeding the other equity surface**,
+and it fires precisely in the degraded-feed case the badge exists for: the feed
+breaks, no stamp arrives, and the badge goes *green off our own clock* at the
+moment it should go red. I had measured it (0 of 28 instruments lacked a stamp)
+and written "latent" into a passing CANNOT-do test — on one sample, a warm cache,
+a closed market. **"Has not fired yet" is not a property**, and measuring the
+happy path is how the same mistake got made twice in one session.
+
+Two records were also stronger than the measurement and are corrected: the
+`CLAUDE.md` I2 block said the SSE defect was "observed on production" when it was
+observed on the committed tree at localhost against live production data, and
+`SESSION_STATE.json` said "both fixes re-rendered" when the sector page's SSE
+merge was never separately observed delivering a quote. In the one document whose
+purpose is that its claims can be checked, the venue of an observation is part of
+the claim.

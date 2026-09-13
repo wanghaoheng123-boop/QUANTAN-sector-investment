@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest'
+import { readFileSync } from 'fs'
+import { join } from 'path'
 import { parseLiveQuote } from '@/hooks/useLiveQuote'
 
 describe('parseLiveQuote (Q-049)', () => {
@@ -65,5 +67,36 @@ describe('parseLiveQuote — the vendor stamp is not our emit time', () => {
     // The pre-existing contract is unchanged: `timestamp` remains required.
     expect(parseLiveQuote({ ...base, timestamp: undefined, quoteTime: '2026-09-11T20:00:00.000Z' }))
       .toBeNull()
+  })
+})
+
+/**
+ * Q-101 — the SWR price hook must not substitute our clock either.
+ *
+ * Source-level, because the derivation lives inside a `useMemo` and the
+ * property is an ABSENCE: that no path assigns the response's own completion
+ * time to the value rendered as the quote's age. The SSE half of this defect
+ * shipped for months; this is the same substitution in the other feed.
+ */
+describe('useLivePrices does not fall back to our fetch-completion time', () => {
+  const src = readFileSync(join(__dirname, '../../hooks/useLivePrices.ts'), 'utf8')
+  const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1')
+
+  it('the quoteTime memo is present at all', () => {
+    // Reachability: if this file stopped deriving quoteTime the assertion below
+    // would pass vacuously.
+    expect(code).toMatch(/const quoteTime = useMemo/)
+  })
+
+  it('never assigns the response timestamp into the rendered age', () => {
+    expect(code).not.toMatch(/max\s*=\s*t\b[\s\S]{0,40}data\?\.timestamp/)
+    expect(code).not.toMatch(/data\?\.timestamp[\s\S]{0,120}max\s*=/)
+  })
+
+  it('the matcher would catch the substitution if it came back', () => {
+    // Negative control — the assertion above is worthless if the pattern cannot
+    // match the thing it forbids.
+    const reintroduced = `if (max === 0 && swr.data?.timestamp) {\n const t = Date.parse(swr.data.timestamp)\n if (Number.isFinite(t)) max = t\n }`
+    expect(/data\?\.timestamp[\s\S]{0,120}max\s*=/.test(reintroduced)).toBe(true)
   })
 })

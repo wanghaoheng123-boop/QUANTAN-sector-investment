@@ -893,7 +893,7 @@
   "wave_2026_09_13_q101": {
     "package": "Q-101 — what state is this number in",
     "branch": "feat/q-101-data-state-affordance",
-    "gates": "typecheck clean; vitest 2124 passed / 17 skipped / 0 failed (142 files); 12 mutations run against the committed tree, 11 caught, the 12th a bad mutation; both fixes re-rendered and read back from the DOM",
+    "gates": "typecheck clean; vitest 2140 passed / 17 skipped / 0 failed (142 files); next build green; 15 mutations against the committed tree, 14 caught (the 15th a bad mutation that adds a fact which is genuinely consumed)",
     "found_by_measuring_production": "/desk carried aria-label 'Data is stale, 151223 seconds old; consider refreshing' (42h) beside its own CLOSED pill, on a healthy feed. The regular session is 32.5h of a 168h week, so the red alarm was on ~80% of wall-clock time naming an action that could not help.",
     "worse_finding_found_while_verifying_the_first": "/stock/AAPL rendered Friday's closing price labelled 'live' on a Sunday, next to its own CLOSED badge. Both SSE routes emitted our own emit time as the quote event's only time field, discarding the vendor's regularMarketTime from the same object; three pages wrote it into quoteTime and rendered it as the quote's age. 2124 tests were green on it. This is the audit's 'declared blind spot' — but one path over from where the audit pointed (SSE, not SWR keepPreviousData, which is latent because its single consumer passes a module constant).",
     "shipped": [
@@ -902,11 +902,14 @@
       "components/DataFreshnessIndicator.tsx — presentation only; atClose renders the stamp and every state still carries the age",
       "app/api/stream/[ticker]/route.ts:88 + app/api/stream/route.ts:164 — vendor quoteTime on the SSE contract; consumers may never fall back to the emit time",
       "app/stock/[ticker]/page.tsx — the options DELAYED disclosure, declared since Phase 13 and read by nobody until now",
-      "lib/format.ts:69 — a missing timestamp returned the word 'stale'; now '—'. Had zero tests while rendering on 8 surfaces"
+      "lib/format.ts:69 — a missing timestamp returned the word 'stale'; now '—'. Had zero tests while rendering on 8 surfaces",
+      "hooks/useLivePrices.ts — removed the fallback to swr.data.timestamp (/api/prices' own fetch-completion time). Found by review, not by me: it is the SAME substitution this package removed from SSE, and it fires precisely when no quote carries a vendor stamp — the degraded-feed case the badge exists for, where it would have gone green off our own clock."
     ],
     "guard_lesson": "My own guard's first version checked that a file MENTIONED DataFreshnessIndicator anywhere rather than that the fact reached it as a PROP. The stock page already mounts that component for the chart-cache badge, so deleting the delayed badge entirely left the string behind and the guard stayed green through 82 passing tests. Caught by mutation, not by reading — in the very file whose header warns about matching prose instead of behaviour.",
     "tier_board": "I1 ASP · I2 PARTIAL · I3 PARTIAL · I4 ASP · I5 PARTIAL · I6 PARTIAL · I7 VIOLATED · I8 VIOLATED. Still no invariant is ENFORCED. I2 does NOT move (named executable gaps remain) and this is explicitly NOT an I1 move — the 5-tuple still does not exist.",
     "filed": "Q-114 (two divergent freshness vocabularies on overlapping surfaces)",
-    "still_open_from_before": "Q-097 (branch protection, owner action) unchanged — checked, main still protected:false"
+    "still_open_from_before": "Q-097 (branch protection, owner action) unchanged — checked, main still protected:false",
+    "what_was_re_rendered_and_read_back": "Stated precisely because an earlier draft of this key over-claimed. /stock/AAPL: BEFORE the SSE fix it rendered 'live' for a Friday close on a Sunday; AFTER, '42h ago' — the full before/after on the SSE merge path. /stock/AAPL options tab: 'Delayed 15m' plus the aria text, above the chain. /desk: 'At close · Fri 16:15 ET', read back AFTER the useLivePrices fallback removal. /sector/technology: 'At close · Fri 16:00 ET' and '42h ago' after 30s. NOT separately observed: the sector page's SSE merge delivering a quote within the observation window — it is the identical hook and merge as the stock page, plus a source-level assertion, not a second live observation.",
+    "homepage_note": "app/page.tsx:146 now assigns the vendor stamp instead of the emit time, which is strictly more correct — but nothing reads it (SectorCard does not), so it is itself a dead flag. The homepage status pill keys off live.marketOpen && streamConnected, not off age, and reads MARKET CLOSED correctly. No calendar is needed there today."
   }
 }

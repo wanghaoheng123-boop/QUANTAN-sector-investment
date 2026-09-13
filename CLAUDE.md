@@ -146,19 +146,28 @@ applies: it is derivable with one grep, and a hand-written total in prose is the
 artifact that goes stale silently. It is written down once, dated, because the
 figure it replaces was wrong by a factor of four.
 
-The blind spot was named in the wrong place, and that mattered. SWR
-`keepPreviousData` is **latent, not live**: `hooks/useLivePrices.ts:80` sets it,
-it has exactly one consumer (`app/desk/page.tsx:46`), and that consumer passes
-the module constant `DESK_TICKERS`, so the SWR key never changes and the option
-is a no-op. The real violation was one path over, in **SSE**, and it was the
+The blind spot was named in the wrong place, and that mattered — twice over.
+`keepPreviousData` itself is **latent, not live**: `hooks/useLivePrices.ts:80`
+sets it, it has exactly one consumer (`app/desk/page.tsx:46`), and that consumer
+passes the module constant `DESK_TICKERS`, so the SWR key never changes and the
+option is a no-op. **But the same file carried the substitution anyway, in its
+`quoteTime` memo**, which fell back to `swr.data.timestamp` — `/api/prices`'
+own fetch-completion time — whenever no quote in the batch carried a vendor
+stamp. That is the degraded-feed case the badge exists for: the feed breaks, no
+stamp arrives, and the badge would have gone *green off our own clock* at the
+moment it was supposed to go red. Removed; the honest value is null, which
+renders `—`. Measured: 0 of 28 desk instruments lacked a stamp, so it had not
+fired — but "has not fired yet" is not a property. The larger violation was one
+path over, in **SSE**, and it was the
 worst-shaped one in the repo: `app/api/stream/[ticker]/route.ts` and
 `app/api/stream/route.ts` emitted `timestamp: new Date().toISOString()` (now at
 `:87` and `:134`, where it correctly remains the EMIT time) — as the *only* time
 field on a quote event, while the vendor's
 `regularMarketTime` sat unread on the same object. Three pages wrote it into
-their `quoteTime` and rendered it as the quote's age. **Observed on production
-logic 2026-09-13, a Sunday: `/stock/AAPL` rendered Friday's closing price
-labelled `live`, beside its own CLOSED badge.** Not a missing flag — a flag
+their `quoteTime` and rendered it as the quote's age. **Observed 2026-09-13, a
+Sunday, on the committed tree at localhost against live production data:
+`/stock/AAPL` rendered Friday's closing price labelled `live`, beside its own
+CLOSED badge.** Not a missing flag — a flag
 asserting the opposite of the truth, which is the failure I2 exists to forbid.
 2124 tests were green on it. Closed by `Q-101`: the contract now carries a
 separate `quoteTime` from `parseQuoteTime(regularMarketTime)`
