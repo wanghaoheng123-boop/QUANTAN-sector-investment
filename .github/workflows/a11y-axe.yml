@@ -39,11 +39,52 @@ jobs:
         # data DOM exists; without the delay the crawl audited a spinner and
         # the renderer timed out mid-run (seen 2026-07-06: TimeoutError after
         # the first page). --timeout raises axe's own per-page budget.
+        #
+        # Q-115 (2026-09-13) — THE CRAWL VISITED 2 OF 16 ROUTES.
+        #
+        # `/` and `/backtest` were the whole list, so the pages carrying the
+        # most interactive density were never audited: /desk renders a 28-row
+        # quote table with 39 links, and none of them had ever been seen by this
+        # job. A gate that does not visit the page cannot report on it — the
+        # reachability defect this repo has now recorded eight times, here in the
+        # accessibility gate itself.
+        #
+        # The routes below are the interactive-dense ones. The dynamic pages
+        # (/sector, /stock) depend on a live vendor fetch; if that fails in CI
+        # they render an error state and axe audits THAT, which is a real result
+        # about a real state but not the one intended — read the job log rather
+        # than the exit code, which this workflow's `continue-on-error` already
+        # requires of you.
         run: |
           npx --yes @axe-core/cli@4 \
             http://localhost:3000/ \
             http://localhost:3000/backtest \
+            http://localhost:3000/desk \
+            http://localhost:3000/ma-deviation \
+            http://localhost:3000/heatmap \
+            http://localhost:3000/crypto/btc \
+            http://localhost:3000/sector/technology \
+            http://localhost:3000/stock/AAPL \
             --chromedriver-path "$CHROMEWEBDRIVER/chromedriver" \
             --load-delay 25000 \
             --timeout 180 \
             --exit
+
+      # WHAT THIS JOB STILL CANNOT DO, measured rather than assumed (Q-115).
+      #
+      # It cannot audit a MOBILE viewport. @axe-core/cli@4 pins Chrome at
+      # 756x413 and ignores the window size: `--chrome-options` was tried as
+      # "headless,window-size=375x812", with an escaped comma, and without
+      # headless, and all three reported `testEnvironment.windowWidth: 756`.
+      # So every target-size, reflow and orientation result from this job is a
+      # tablet-landscape result, whatever the route.
+      #
+      # That matters concretely. On /desk at a real 375px width the drill links
+      # measured 29x15 CSS px, and WCAG 2.2 SC 2.5.8 was satisfied only by the
+      # spacing exception, with a minimum centre-to-centre distance of 25.2px
+      # against a 24px requirement — 1.2px of margin, invisible to this job.
+      #
+      # `--rules target-size` DOES work and the rule executes (verified locally
+      # against axe-core 4.13.0: `passes` over 28 nodes on /desk, not skipped).
+      # It is not added here because at the viewport this job can reach it tells
+      # us nothing we do not already know. Residual, filed as Q-116.

@@ -3,9 +3,29 @@
 /**
  * DashboardGuide — collapsible "How to read this dashboard" panel.
  *
- * Phase 12 Sprint 1 follow-up: Sits at the top of every page, gives traders a
- * 30-second orientation: what they're looking at, what columns mean, how to act.
- * Stays collapsed by default after first visit (localStorage), open on first load.
+ * Phase 12 Sprint 1 follow-up: gives traders a 30-second orientation — what
+ * they're looking at, what the columns mean, how to act.
+ *
+ * ("Sits at the top of every page" was this docstring's claim and it is not
+ * true: measured 2026-09-13 it is mounted on TWO of sixteen pages, /desk and
+ * /sector/[slug]. Corrected rather than left, since a reader sizing a change to
+ * this file would mis-scope it by a factor of eight.)
+ * Stays collapsed by default after first visit (localStorage), open on first load
+ * — on a wide viewport. On a narrow one it starts COLLAPSED even on a first
+ * visit (Q-115).
+ *
+ * Measured on production 2026-09-13 at 375x812: this panel was 2453px tall on
+ * /desk, putting the first quote row 985px down — 1.21 screens of scrolling past
+ * explanatory prose before a single price is visible, on a page whose entire
+ * purpose is at-a-glance quotes. On /sector/[slug] it pushed the first content
+ * below the guide to 1266px, 1.56 screens.
+ *
+ * The Phase 12 decision (show the explanation on first load) is preserved where
+ * it is cheap — a wide viewport wraps the same prose into far fewer lines. What
+ * changes is only the case where it was expensive. The collapsed header still
+ * carries the page title and the one-line summary, so the orientation is not
+ * hidden, only the detail: progressive disclosure, which is the standard answer
+ * to exactly this trade-off on small screens.
  */
 
 import { useState, useEffect } from 'react'
@@ -31,6 +51,32 @@ interface Props {
   legend?: { color: string; label: string; meaning: string }[]
 }
 
+/**
+ * Tailwind's `sm` breakpoint, which is what every responsive class in this repo
+ * is written against. Named so the guide and the layout cannot drift apart.
+ */
+export const NARROW_VIEWPORT_MAX_PX = 639
+
+/**
+ * Whether the guide should start collapsed for a first-time visitor.
+ *
+ * Pure and exported so the decision is unit-testable without a DOM — the state
+ * it drives is only observable through a hydration effect otherwise, which is
+ * how a default like this goes unnoticed when it changes.
+ *
+ * `matchMedia` is feature-detected: jsdom and older browsers lack it, and the
+ * safe answer there is "do not collapse" — showing the explanation to someone
+ * who did not need it is a smaller harm than hiding it from someone who did.
+ */
+export function shouldStartCollapsed(win: Pick<Window, 'matchMedia'> | undefined): boolean {
+  if (!win || typeof win.matchMedia !== 'function') return false
+  try {
+    return win.matchMedia(`(max-width: ${NARROW_VIEWPORT_MAX_PX}px)`).matches
+  } catch {
+    return false
+  }
+}
+
 export function DashboardGuide({ pageKey, title, summary, sections, legend }: Props) {
   const storageKey = `quantan-guide-${pageKey}`
   // Default OPEN on first ever visit so users see the explanations
@@ -39,7 +85,14 @@ export function DashboardGuide({ pageKey, title, summary, sections, legend }: Pr
 
   useEffect(() => {
     const seen = typeof window !== 'undefined' ? window.localStorage.getItem(storageKey) : null
-    if (seen === 'collapsed') setOpen(false)
+    if (seen === 'collapsed') {
+      setOpen(false)
+    } else if (seen === null && typeof window !== 'undefined' && shouldStartCollapsed(window)) {
+      // First visit on a narrow viewport. Deliberately NOT persisted: this is a
+      // default, not a choice the user made, so rotating to landscape or opening
+      // the same page on a desktop still gets the first-visit explanation.
+      setOpen(false)
+    }
     setHydrated(true)
   }, [storageKey])
 

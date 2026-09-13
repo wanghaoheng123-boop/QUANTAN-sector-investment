@@ -2521,5 +2521,51 @@
     ],
     "blocked_by": [],
     "notes_2026_09_13": "Found while closing Q-101. lib/format.ts:69 `formatFreshness` is rendered on EIGHT surfaces — app/sector/[slug]/page.tsx:318, app/stock/[ticker]/page.tsx:385, app/backtest/page.tsx:181, components/SignalCard.tsx:161, components/DarkPoolPanel.tsx:204, components/SectorRotationPanel.tsx:159, components/stock/QuantLabPanel.tsx:65, components/crypto/BtcQuantLab.tsx:409 — and had ZERO tests. It is a second, divergent answer to the same question that DataFreshnessIndicator answers: 'live' under 30s where the component says 10s, and no notion of caching, vendor delay or the market session. On the sector page both describe the SAME quote a few lines apart. CLAUDE.md forbids duplicate SSOTs. PARTIALLY ADDRESSED in Q-101 and deliberately not more: its missing-timestamp case returned the string 'stale' — asserting an age nobody knew, which I2 names explicitly ('Missing data displays as MISSING') and which formatCompactNumber directly above it already got right by returning '—'. That one-word mislabel is fixed with tests; UNIFYING the two vocabularies changes rendered strings on eight surfaces and is its own package."
+  },
+  {
+    "id": "Q-115",
+    "title": "Desk told users to click a row that is not clickable, behind a guide that filled the phone screen",
+    "domain": "Frontend/UX",
+    "priority": "P2",
+    "status": "done",
+    "files": [
+      "app/desk/page.tsx",
+      "components/DashboardGuide.tsx",
+      ".github/workflows/a11y-axe.yml",
+      "__tests__/architecture/ui-copy-promises.test.ts",
+      "__tests__/components/dashboardGuideDefault.test.ts"
+    ],
+    "acceptance_criteria": [
+      "No page claims an interaction its markup does not implement, and a guard fails when one does",
+      "The desk's only drill affordance is hittable on a phone",
+      "A first-time mobile visitor sees data, not documentation",
+      "The a11y crawl visits the routes with interactive density"
+    ],
+    "verify_commands": [
+      "npm run typecheck",
+      "npm run test",
+      "npm run lint:workflows"
+    ],
+    "notes_2026_09_13": "MEASURED ON PRODUCTION AT 375x812, not inferred. (1) app/desk/page.tsx said 'Click any row to drill into the detail page.' NO <tr> in this repository is interactive — grepped, zero hits for onClick/role/cursor-pointer on any row. The instruction was false and the only real affordance was a 29x15 CSS px link. Fixed by correcting the COPY and enlarging the links, not by faking an interactive row: a clickable <tr> is either keyboard-hostile or DOM gymnastics. (2) MY FIRST FRAMING OF THIS AS A WCAG FAILURE WAS WRONG AND IS RECORDED AS WRONG. 40 of 49 targets were under SC 2.5.8's 24px, but the SPACING EXCEPTION applied: minimum centre-to-centre distance measured 25.2px against the 24px requirement, and axe-core 4.13 put target-size in PASSES over 28 nodes. It cleared the bar by 1.2px. The honest claim is a usability defect (15px vs Apple HIG 44pt / Material 48dp) plus 1.2px of conformance margin, NOT a violation. After: 45x36px on mobile, 45x24px on desktop, 0 of 39 targets under 24px, minimum distance 45px. (3) DashboardGuide was open by default on every viewport. On /desk at 375px it was 2453px tall, putting the first quote row 985px down — 1.21 screens of prose before a price, on a page whose purpose is at-a-glance quotes; /sector/[slug] was 1.56 screens. Now collapsed by default on narrow viewports only, so the Phase 12 first-visit decision is preserved where it is cheap (verified: aria-expanded stays true at 1280px, false at 375px). First quote row: 985px -> 355px, 1.21 screens -> 0.44. (4) THE A11Y GATE VISITED 2 OF 16 ROUTES — / and /backtest — so the page with the violations was never audited. Reachability defect, eighth shape, in the accessibility gate itself. Six interactive-dense routes added. PROCESS NOTE: the first verification run measured a STALE server and reported the change had made spacing WORSE (23.5px). It had not — the old build was still being served. Always confirm the served bytes contain the change before believing a measurement of it."
+  },
+  {
+    "id": "Q-116",
+    "title": "The a11y gate cannot audit a mobile viewport at all",
+    "domain": "Testing/Quality",
+    "priority": "P3",
+    "status": "pending",
+    "files": [
+      ".github/workflows/a11y-axe.yml"
+    ],
+    "acceptance_criteria": [
+      "The a11y job audits at least one narrow viewport, or the limitation is accepted in writing with the alternative named",
+      "target-size runs at that viewport (the rule itself works: verified executing, not skipped)",
+      "A route's mobile result is distinguishable from its desktop result in the job log"
+    ],
+    "verify_commands": [
+      "npm run lint:workflows"
+    ],
+    "blocked_by": [],
+    "notes_2026_09_13": "Split out of Q-115. @axe-core/cli@4 PINS Chrome at 756x413 and ignores the window size. Measured three ways against axe-core 4.13.0 — --chrome-options 'headless,window-size=375x812', the same with an escaped comma, and without headless — and all three reported testEnvironment.windowWidth: 756. So every target-size, reflow and orientation result this job produces is a tablet-landscape result whatever the route, and the widths where mobile defects actually appear are invisible to CI. This is NOT a rule-availability problem: --rules target-size works and the rule EXECUTES rather than being silently skipped (verified: 'passes' over 28 nodes on /desk pre-fix, 50 post-fix). The blocker is purely the viewport. OPTIONS: drive axe through Playwright (real viewport control, but a new devDependency and a bigger job), or run @axe-core/puppeteer. Either is a larger change than Q-115's scope and neither should be bundled with a copy fix. DO NOT resolve this by flipping continue-on-error — that is a gating change on a schedule-only workflow, it is Q-097-adjacent, and it is the owner's call."
   }
 ]

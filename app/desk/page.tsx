@@ -87,8 +87,8 @@ export default function DeskPage() {
             body: (
               <p>
                 Three groups: <strong>Macro</strong> (DXY, TNX, VIX, SPY benchmarks), <strong>Sectors</strong> (11 GICS ETFs),
-                <strong> Commodities</strong> (oil, gold, copper, etc.). Each row: live price, % change, volume, sparkline.
-                Click any row to drill into the detail page.
+                <strong> Commodities</strong> (oil, gold, copper, etc.). Each row: live price, % change and volume.
+                Use the <strong>Drill</strong> column at the end of a row to open its chart, or its sector page where one exists.
               </p>
             ),
           },
@@ -228,18 +228,47 @@ export default function DeskPage() {
                           {q && q.volume ? formatCompactNumber(q.volume) : '—'}
                         </td>
                         <td className="px-2 py-1 text-center text-amber-500/90">{has(t) ? '★' : ''}</td>
+                        {/*
+                          Q-115: these were 29x15 CSS px — the only way into a
+                          detail page from this table, on a page whose own guide
+                          told the user to "click any row" (no <tr> in this repo
+                          is interactive, so that instruction was false; it is
+                          corrected above).
+
+                          NOT a WCAG 2.2 SC 2.5.8 failure, and the record should
+                          not say it was: measured at 375px the minimum
+                          centre-to-centre distance between two of these links
+                          was 25.2px against the 24px the spacing exception
+                          requires, and axe-core 4.13 put `target-size` in
+                          PASSES over 28 nodes. It cleared the bar by 1.2px.
+
+                          It is a usability defect all the same — 15px against
+                          Apple HIG's 44pt and Material's 48dp — and 1.2px of
+                          conformance margin on a table that gets restyled is
+                          not margin. The sizing below is responsive because the
+                          desk is a density surface: a comfortable touch target
+                          on a phone, the original compactness on a desktop.
+                        */}
                         <td className="px-2 py-1">
-                          <Link href={`/stock/${t.replace(/^\^/, '').toLowerCase()}`} className="text-blue-400 hover:underline">
+                          <span className="inline-flex items-center gap-1">
+                          <Link
+                            href={`/stock/${t.replace(/^\^/, '').toLowerCase()}`}
+                            className="inline-flex items-center justify-center min-h-[36px] sm:min-h-[24px] min-w-[44px] sm:min-w-0 px-2 rounded text-blue-400 hover:bg-slate-800/70 hover:underline"
+                          >
                             chart
                           </Link>
                           {SECTORS.some((s) => s.etf === t) && (
                             <>
-                              {' · '}
-                              <Link href={`/sector/${SECTORS.find((s) => s.etf === t)!.slug}`} className="text-slate-400 hover:text-slate-300">
+                              <span aria-hidden="true" className="text-slate-600">·</span>
+                              <Link
+                                href={`/sector/${SECTORS.find((s) => s.etf === t)!.slug}`}
+                                className="inline-flex items-center justify-center min-h-[36px] sm:min-h-[24px] min-w-[44px] sm:min-w-0 px-2 rounded text-slate-400 hover:bg-slate-800/70 hover:text-slate-300"
+                              >
                                 sector
                               </Link>
                             </>
                           )}
+                          </span>
                         </td>
                       </tr>
                     )
