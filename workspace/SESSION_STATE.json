@@ -2,8 +2,8 @@
   "schema_version": "1.1",
   "project": "QUANTAN-sector-investment",
   "created": "2026-04-28T09:40:00Z",
-  "last_updated": "2026-09-10",
-  "active_agent": "claude opus-5 (2026-09-10 Q107-A22 out-of-band heartbeat; PR pending)",
+  "last_updated": "2026-09-13",
+  "active_agent": "claude opus-5 (2026-09-13 Q-101 data-state affordance; branch feat/q-101-data-state-affordance)",
   "prod_bug_fix_2026_07_01": {
     "B-2": "News fetch broken by yahoo-finance2 SearchResult schema drift (yf.search validation threw → news silently dropped + 66 prod errors on /api/briefs since 2026-04-03). FOUND via Vercel get_runtime_errors. FIXED with validateResult:false on the 4 news-search callers (mirrors options/chain.ts precedent) → PR #82 → main 2e6137c. LIVE-VERIFIED: /api/briefs now 200 with full news feed (was empty); 0 SearchResult validation logs on new deploy dpl_D29j.",
     "method_note": "Empirical bug-finding via Vercel runtime-errors/logs is high-signal — surfaced a real 3-month-old LIVE issue the static inspection didn't (it was a caught-and-logged error, invisible to tsc/tests/benchmark). Consider a runtime-errors sweep as a standing step."
@@ -889,5 +889,24 @@
     "open_next": "Q-108 (Bloomberg gate, P1, fully designed and unstarted), Q-111 (register `evidence` has no reader), Q-093 (no lint — and note a lint rule would have caught Q107-S9's CRITICAL for free), Q-095 (ledger still has 9 malformed rows). LIVE: issue #177, refresh-data.yml failing since 2026-09-05, auto-closes on its next scheduled success. OWNER-GATED: Q-005, Q-082, Q-083, Q-097, Q-109.",
     "VERIFIED_IN_CI_NOT_JUST_LOCALLY": "Dispatched on main twice. Run 34425732638 proved actions:read works with the REAL workflow token (the local dry run used a full-scope PAT, which hid its absence) and that the shared-issue dedupe holds — it COMMENTED on #177 rather than opening a duplicate. It also opened #191 against ITSELF, a genuine false positive: merged minutes earlier, so no scheduled history for a fire that predated it. Fixed in #192 and re-verified by run 34426124881 — four clean, one genuine alert, no duplicate. FOUND BY RUNNING IT IN PRODUCTION, twice, after the suite was green.",
     "residual_i_introduced": "The probe runs DAILY and comments on every persistent failure every run, so a long outage now accrues a comment a day on top of the in-workflow alerter's. alertDecision's own docstring warns that alert fatigue is how the next outage goes unread. Filed as Q-113 rather than fixed here: throttling changes the shared alerting contract three other workflows use."
+  },
+  "wave_2026_09_13_q101": {
+    "package": "Q-101 — what state is this number in",
+    "branch": "feat/q-101-data-state-affordance",
+    "gates": "typecheck clean; vitest 2124 passed / 17 skipped / 0 failed (142 files); 12 mutations run against the committed tree, 11 caught, the 12th a bad mutation; both fixes re-rendered and read back from the DOM",
+    "found_by_measuring_production": "/desk carried aria-label 'Data is stale, 151223 seconds old; consider refreshing' (42h) beside its own CLOSED pill, on a healthy feed. The regular session is 32.5h of a 168h week, so the red alarm was on ~80% of wall-clock time naming an action that could not help.",
+    "worse_finding_found_while_verifying_the_first": "/stock/AAPL rendered Friday's closing price labelled 'live' on a Sunday, next to its own CLOSED badge. Both SSE routes emitted our own emit time as the quote event's only time field, discarding the vendor's regularMarketTime from the same object; three pages wrote it into quoteTime and rendered it as the quote's age. 2124 tests were green on it. This is the audit's 'declared blind spot' — but one path over from where the audit pointed (SSE, not SWR keepPreviousData, which is latent because its single consumer passes a module constant).",
+    "shipped": [
+      "lib/api/marketHours.ts — session-boundary helpers anchored on the session OPEN, which removes the tuned grace constant; measured against the live desk basket (28 instruments): 27 stamp exactly 16:00 ET, ^VIX stamps 16:15 ET",
+      "lib/data/freshness.ts — the decision extracted pure; precedence cached > delayed > age/session > unknown",
+      "components/DataFreshnessIndicator.tsx — presentation only; atClose renders the stamp and every state still carries the age",
+      "app/api/stream/[ticker]/route.ts:88 + app/api/stream/route.ts:164 — vendor quoteTime on the SSE contract; consumers may never fall back to the emit time",
+      "app/stock/[ticker]/page.tsx — the options DELAYED disclosure, declared since Phase 13 and read by nobody until now",
+      "lib/format.ts:69 — a missing timestamp returned the word 'stale'; now '—'. Had zero tests while rendering on 8 surfaces"
+    ],
+    "guard_lesson": "My own guard's first version checked that a file MENTIONED DataFreshnessIndicator anywhere rather than that the fact reached it as a PROP. The stock page already mounts that component for the chart-cache badge, so deleting the delayed badge entirely left the string behind and the guard stayed green through 82 passing tests. Caught by mutation, not by reading — in the very file whose header warns about matching prose instead of behaviour.",
+    "tier_board": "I1 ASP · I2 PARTIAL · I3 PARTIAL · I4 ASP · I5 PARTIAL · I6 PARTIAL · I7 VIOLATED · I8 VIOLATED. Still no invariant is ENFORCED. I2 does NOT move (named executable gaps remain) and this is explicitly NOT an I1 move — the 5-tuple still does not exist.",
+    "filed": "Q-114 (two divergent freshness vocabularies on overlapping surfaces)",
+    "still_open_from_before": "Q-097 (branch protection, owner action) unchanged — checked, main still protected:false"
   }
 }

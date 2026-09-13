@@ -160,7 +160,7 @@ export default function DeskPage() {
             Watchlist only
           </button>
           <span className="hidden sm:inline-flex">
-            <DataFreshnessIndicator quoteTime={quoteTime} compact label="desk feed" />
+            <DataFreshnessIndicator quoteTime={quoteTime} compact label="desk feed" calendar="us-equity" />
           </span>
         </div>
       </div>

@@ -18,6 +18,7 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync, readdirSync, statSync, existsSync } from 'fs'
 import { join, relative, sep } from 'path'
 import { findCacheProducers, firstArgument, referencesBinding, silentProducers } from './cacheSubstitution'
+import { classifyFreshness } from '@/lib/data/freshness'
 
 const ROOT = join(__dirname, '../..')
 const IGNORED = new Set(['node_modules', '.next', 'coverage', 'dist', 'build', '.git'])
@@ -182,15 +183,35 @@ describe('I2 — cached must outrank every freshness state, including Live', () 
     expect(src).toMatch(/cached\?:\s*boolean/)
   })
 
-  it('the cached branch is evaluated BEFORE the age-based states', () => {
-    // A cached value with a recent timestamp would otherwise render green and
-    // pulsing — actively telling the user it is live. That is worse than showing
-    // nothing, so ordering is the property that matters, not mere presence.
-    const cachedBranch = src.indexOf('if (cached)')
-    const liveBranch = src.indexOf('ageSec < 10')
-    expect(cachedBranch).toBeGreaterThan(-1)
-    expect(liveBranch).toBeGreaterThan(-1)
-    expect(cachedBranch).toBeLessThan(liveBranch)
+  /**
+   * Q-101 (2026-09-13) — this was `src.indexOf('if (cached)') <
+   * src.indexOf('ageSec < 10')`, an assertion about where two strings sit in a
+   * component's source. It broke the moment the decision moved to a pure
+   * module, which is the tell: it was measuring layout, not behaviour. A
+   * reformat could break it and a genuinely wrong answer could pass it.
+   *
+   * Replaced with the property itself, called. Strictly stronger — swapping the
+   * branches in `lib/data/freshness.ts` fails these, and no amount of moving
+   * lines around passes them.
+   */
+  it('cached OUTRANKS live: a stored copy stamped one second ago is not live', () => {
+    const now = Date.parse('2026-09-14T15:00:00Z') // Monday 11:00 ET, session open
+    expect(classifyFreshness({ quoteTime: now - 1_000, now, cached: true }).kind).toBe('cached')
+  })
+
+  it('and outranks it under the equity calendar too', () => {
+    const now = Date.parse('2026-09-14T15:00:00Z')
+    expect(
+      classifyFreshness({ quoteTime: now - 1_000, now, cached: true, calendar: 'us-equity' }).kind,
+    ).toBe('cached')
+  })
+
+  it('a vendor-delayed feed is not live either, for the same reason', () => {
+    // The age of a fetch says nothing about the age of a price the vendor holds
+    // back by 15 minutes. Same lie, different cause, same branch ordering.
+    const now = Date.parse('2026-09-14T15:00:00Z')
+    expect(classifyFreshness({ quoteTime: now - 1_000, now, delayedMinutes: 15 }).kind)
+      .toBe('delayed')
   })
 
   it('the cached state says so to assistive technology, not just in colour', () => {
@@ -307,5 +328,186 @@ export async function GET() {
     expect(referencesBinding('{ ...store.data }', 'store')).toBe(true)
     expect(referencesBinding('{ x: other.store }', 'store')).toBe(false)
     expect(referencesBinding('store', 'store')).toBe(true)
+  })
+})
+
+/* ========================================================================== *
+ * Q-101 (2026-09-13) — the same property, one level up.
+ *
+ * `_cached` was never the only data-state fact this codebase emits and drops.
+ * The Q-079 audit named two more in the same breath and only the first was ever
+ * closed. Measured on the committed tree before this block existed:
+ *
+ *   dataProvenance  1 occurrence repo-wide — the producer. Zero consumers.
+ *   provenance      built per field on every /api/prices row. Zero consumers.
+ *
+ * A flag with no consumer is indistinguishable from no flag, whatever it is
+ * called, so the assertion below is the generalisation rather than a second
+ * copy of the one above.
+ *
+ * ON THE SHAPE OF THE PRODUCER SET, because that is where the last six of these
+ * guards died. Here the antecedent is "declares the fact" and the consequent is
+ * "someone reads it" — the antecedent is legitimately the declaration, unlike
+ * the `_cached` case above where it had to be "serves a stored value" and was
+ * wrongly written as "sets the flag". The analogous hole HERE is a route that
+ * serves vendor-delayed data and never declares it at all, which no source
+ * property can see. It is asserted as a CANNOT-do below rather than implied
+ * closed.
+ * ========================================================================== */
+
+/** An emitted key that makes a claim about the STATE of the data, not its value. */
+const DATA_STATE_FACTS = [
+  { key: 'dataProvenance', what: 'vendor delay and realtime claim' },
+  { key: 'provenance', what: 'per-field vendor attribution' },
+] as const
+
+/** A user-facing surface: somewhere a human can actually see the fact rendered. */
+const isSurface = (path: string) =>
+  (path.startsWith('app/') && !path.startsWith('app/api/')) ||
+  path.startsWith('components/') ||
+  path.startsWith('hooks/')
+
+/** Matches the key in emitting position, and does not let `provenance` match `dataProvenance`. */
+const emits = (source: string, key: string) =>
+  new RegExp(`(^|[^A-Za-z_$.])${key}\\s*:`).test(source)
+
+/**
+ * Declared exceptions. Each needs a reason and an owning ticket, asserted
+ * below — so an exemption cannot be added as a silent one-word edit, which is
+ * the only way an allowlist stays honest.
+ */
+const EXEMPT: { key: string; producer: string; ticket: string; reason: string }[] = [
+  {
+    key: 'provenance',
+    producer: 'lib/data/mergeQuotes.ts',
+    ticket: 'Q-108',
+    reason:
+      'Per-field yahoo-vs-bloomberg attribution. The Bloomberg bridge is unwired ' +
+      '(.env.example leaves BLOOMBERG_BRIDGE_URL commented out), so every row is ' +
+      'uniformly yahoo today and rendering the field would add noise, not ' +
+      'information. It becomes user-visible the moment a row can be mixed, which ' +
+      'is exactly what Q-108 governs. NOT closed here — deliberately deferred to ' +
+      'the ticket that owns the Bloomberg surface.',
+  },
+]
+
+describe('I1/I2 — a declared data-state fact must have a consumer', () => {
+  const producersFor = (key: string) =>
+    files.filter((f) => emits(f.source, key) && f.path !== 'lib/data/freshness.ts')
+
+  it.each(DATA_STATE_FACTS)('the scan actually finds producers of $key', ({ key }) => {
+    // Reachability first. A zero producer count would make every assertion in
+    // this block pass while saying nothing — the failure mode this repo has now
+    // hit in six packages.
+    expect(producersFor(key).length).toBeGreaterThan(0)
+  })
+
+  it('finds the known producer of the options vendor delay', () => {
+    // Positive control. If a refactor moves or renames this, the block must go
+    // red rather than quietly dropping to zero instances.
+    expect(producersFor('dataProvenance').map((f) => f.path))
+      .toContain('app/api/options/[ticker]/route.ts')
+  })
+
+  it('finds the known producer of per-field attribution', () => {
+    expect(producersFor('provenance').map((f) => f.path)).toContain('lib/data/mergeQuotes.ts')
+  })
+
+  it('does NOT treat every file as a producer', () => {
+    // Negative control: without one, "everything emits it" also satisfies the
+    // positive controls above.
+    expect(producersFor('dataProvenance').length).toBeLessThan(files.length)
+  })
+
+  it.each(DATA_STATE_FACTS)('$key is read by a surface, or exempted with a reason', ({ key }) => {
+    const producers = producersFor(key)
+    const exemptPaths = EXEMPT.filter((e) => e.key === key).map((e) => e.producer)
+    const unconsumed: string[] = []
+    for (const prod of producers) {
+      if (exemptPaths.includes(prod.path)) continue
+      const readers = files.filter(
+        (f) => f.path !== prod.path && isSurface(f.path) && new RegExp(`\\b${key}\\b`).test(f.source),
+      )
+      if (readers.length === 0) unconsumed.push(prod.path)
+    }
+    expect(unconsumed).toEqual([])
+  })
+
+  /**
+   * CAUGHT BY MUTATION, NOT BY READING — and it was my own, in the file that
+   * warns about it.
+   *
+   * The first version of this test filtered readers by
+   * `!/DataFreshnessIndicator/.test(f.source)`, i.e. "does this file MENTION the
+   * component anywhere". The stock page already mounts that component for the
+   * chart-cache badge, so deleting the delayed badge entirely left the string
+   * behind and the test stayed green. Verified: mutation M2 survived 82 passing
+   * tests. That is the same "matches something near the behaviour rather than
+   * the behaviour" defect the `stripComments` note at the top of this file was
+   * written about, committed while extending it.
+   *
+   * The property is that the FACT reaches the component, so the assertion is on
+   * the prop.
+   */
+  const rendersFact = (source: string, prop: string) =>
+    new RegExp(`<DataFreshnessIndicator[^>]*\\b${prop}\\s*=`).test(source)
+
+  it('the delay reaches the indicator as a prop, not merely the same file', () => {
+    // A UI surface, not the module that DEFINES the parser — `lib/data/freshness.ts`
+    // naming its own export is not a consumer, and counting it would let the
+    // whole assertion pass with nothing rendered anywhere.
+    const readers = files.filter(
+      (f) => isSurface(f.path) && /parseDelayedMinutes/.test(f.source),
+    )
+    expect(readers.map((f) => f.path)).not.toEqual([])
+    const silent = readers.filter((f) => !rendersFact(f.source, 'delayedMinutes')).map((f) => f.path)
+    expect(silent).toEqual([])
+  })
+
+  it('the prop matcher is not vacuously true', () => {
+    // Negative control for the matcher itself. Without this, a regex that never
+    // matches anything would make the assertion above pass for every input —
+    // which is how the version it replaced failed.
+    expect(rendersFact('<DataFreshnessIndicator quoteTime={t} />', 'delayedMinutes')).toBe(false)
+    expect(rendersFact('<DataFreshnessIndicator delayedMinutes={m} />', 'delayedMinutes')).toBe(true)
+    expect(rendersFact('const delayedMinutes = 15 // no component here', 'delayedMinutes')).toBe(false)
+  })
+
+  it('every exemption carries a reason and an owning ticket', () => {
+    for (const e of EXEMPT) {
+      // `length > 60` alone was too weak: a mutation that emptied one line of a
+      // multi-line concatenated reason left the rest above the bar and survived.
+      // An exemption has to say what it is exempting and why it is safe today.
+      expect(e.reason.length).toBeGreaterThan(120)
+      expect(e.reason).toMatch(/\bQ-?\d+\b/)
+      expect(e.reason.toLowerCase()).toContain('not closed here')
+      expect(e.ticket).toMatch(/^Q-?\d+/)
+      expect(files.map((f) => f.path)).toContain(e.producer)
+    }
+  })
+})
+
+describe('I1/I2 — what this block CANNOT do', () => {
+  it('cannot see a route that serves vendor-delayed data and never says so', () => {
+    // The delay is a fact about a vendor entitlement, not about the code. There
+    // is no source property that distinguishes a route returning a real-time
+    // feed from one returning a delayed feed, so a route that simply omits
+    // `dataProvenance` is invisible here and always will be. The compensating
+    // control is the vendor-licence register, which enumerates egress.
+    const undeclared = files.filter(
+      (f) => f.path.startsWith('app/api/') && !emits(f.source, 'dataProvenance'),
+    )
+    expect(undeclared.length).toBeGreaterThan(0)
+  })
+
+  it('cannot tell whether a rendered indicator is the right one for the surface', () => {
+    // `calendar="us-equity"` on a 24/7 feed, or its absence on an equity feed,
+    // both typecheck and both render. The default is the loud one on purpose
+    // (see lib/data/freshness.ts), but the choice itself is unguarded.
+    const equitySurfaces = files.filter((f) => /calendar="us-equity"/.test(f.source))
+    expect(equitySurfaces.map((f) => f.path).sort()).toEqual([
+      'app/desk/page.tsx',
+      'app/sector/[slug]/page.tsx',
+    ])
   })
 })

@@ -129,12 +129,63 @@ Never forward-fill into a live quote. Never substitute a cached value for a
 live one without a visible flag. A broken feed must degrade the UI, not
 invisibly poison it.
 *Today:* the two halves sit at different tiers, so the heading takes the worse.
-**Staleness · PARTIAL, and this half is why I2 is no better than PARTIAL:**
-`components/DataFreshnessIndicator.tsx` correctly renders `Stale — refresh` with
-age, but is mounted on **2 of 16 pages** (`app/desk/page.tsx:163`,
-`app/sector/[slug]/page.tsx:352`). The audit's declared blind spot also stands:
-`hooks/` SWR `keepPreviousData` is unchecked and is the most likely remaining I2
-violation. → `Q-101`.
+
+**Staleness · PARTIAL, and this half is why I2 is no better than PARTIAL.**
+*Two claims in the previous text were wrong and are struck, in both directions.*
+
+The count was stale. `DataFreshnessIndicator` is mounted at **9 sites across 5
+pages and 2 components**, not "2 of 16 pages" — `app/desk/page.tsx:163`,
+`app/sector/[slug]/page.tsx:361` and `:511`, `app/stock/[ticker]/page.tsx:475`
+and `:553`, `app/ma-deviation/page.tsx:245`, `app/backtest/page.tsx:173`,
+`components/crypto/BtcQuantLab.tsx:410`,
+`components/backtest/LiveSignalsPanel.tsx:227` (measured 2026-09-13). A
+constitution that reports a closed gap as open teaches the reader to discount
+its tier claims, which is the same defect as the reverse. **Do not maintain that
+number here** — the same argument that moved the vendor count into the register
+applies: it is derivable with one grep, and a hand-written total in prose is the
+artifact that goes stale silently. It is written down once, dated, because the
+figure it replaces was wrong by a factor of four.
+
+The blind spot was named in the wrong place, and that mattered. SWR
+`keepPreviousData` is **latent, not live**: `hooks/useLivePrices.ts:80` sets it,
+it has exactly one consumer (`app/desk/page.tsx:46`), and that consumer passes
+the module constant `DESK_TICKERS`, so the SWR key never changes and the option
+is a no-op. The real violation was one path over, in **SSE**, and it was the
+worst-shaped one in the repo: `app/api/stream/[ticker]/route.ts` and
+`app/api/stream/route.ts` emitted `timestamp: new Date().toISOString()` (now at
+`:87` and `:134`, where it correctly remains the EMIT time) — as the *only* time
+field on a quote event, while the vendor's
+`regularMarketTime` sat unread on the same object. Three pages wrote it into
+their `quoteTime` and rendered it as the quote's age. **Observed on production
+logic 2026-09-13, a Sunday: `/stock/AAPL` rendered Friday's closing price
+labelled `live`, beside its own CLOSED badge.** Not a missing flag — a flag
+asserting the opposite of the truth, which is the failure I2 exists to forbid.
+2124 tests were green on it. Closed by `Q-101`: the contract now carries a
+separate `quoteTime` from `parseQuoteTime(regularMarketTime)`
+(`app/api/stream/[ticker]/route.ts:88`, `app/api/stream/route.ts:164`), null
+when the vendor gives none, and consumers may never fall back to the emit time.
+Verified by re-render: the same page now reads `42h ago`.
+
+**The staleness alarm was also miscalibrated in the other direction, and the
+null was never measured.** The badge classified by wall-clock age alone, so
+`/desk` carried `aria-label="Data is stale, 151223 seconds old; consider
+refreshing"` — 42 hours — next to the site's own `MarketStatus` pill reading
+CLOSED. The feed was healthy. The regular session is 32.5h of a 168h week, so
+that red alarm was on for **~80% of wall-clock time** with nothing wrong, naming
+an action that could not help. `lib/data/freshness.ts` adds `atClose` and
+`delayed` as states distinct from `stale`, with the precedence
+`cached > delayed > age/session > unknown` — `delayed` outranks `live` for the
+identical reason `cached` does. **Measure the null before setting a threshold**
+is now recorded three times in this repo; this is the first instance where the
+threshold was fine and the *question being asked of it* was wrong.
+
+*Why still PARTIAL:* named, executable gaps. `isMarketOpen` has no holiday
+calendar, so ~9 weekday closures a year still alarm. A halted instrument reads
+`atClose` like any other. `lib/format.ts:69` (`formatFreshness`) is a **second,
+divergent** freshness vocabulary rendered on 8 surfaces (`live` at 30s where the
+component says 10s, and no notion of caching, delay or session) — its
+missing-timestamp case returned the word `stale`, asserting an age nobody knew,
+and now returns `—`; unifying the two is `Q-114`. → `Q-101`, `Q-114`.
 
 **Cache substitution · CLOSED by `Q-101` (2026-08-21), REOPENED and closed again
 by `Q110-P2` (2026-09-05) — and the reason is the most important sentence in this

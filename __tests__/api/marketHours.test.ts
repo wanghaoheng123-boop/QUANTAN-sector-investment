@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { isMarketOpen, minutesUntilNextOpen } from '@/lib/api/marketHours'
+import { readFileSync } from 'fs'
+import { join } from 'path'
 
 // All times below are constructed via UTC so the test passes on any runtime
 // timezone (CI, local, Lambda, etc.) — the function under test must be
@@ -67,5 +69,40 @@ describe('minutesUntilNextOpen', () => {
     const m = minutesUntilNextOpen(t)
     expect(m).toBeGreaterThan(0)
     expect(m).toBeLessThan(3 * 24 * 60)  // < 3 days to next Mon open
+  })
+})
+
+/**
+ * Q-101 — the stream contract carries the vendor's stamp.
+ *
+ * A source-level assertion because the alternative is standing up an SSE
+ * server; the property is that neither route may pair a price with our own
+ * clock as its age.
+ */
+describe('SSE quote events carry the vendor stamp, not the emit time', () => {
+  const read = (p: string) =>
+    readFileSync(join(__dirname, '../..', p), 'utf8')
+
+  it.each(['app/api/stream/[ticker]/route.ts', 'app/api/stream/route.ts'])(
+    '%s derives quoteTime from regularMarketTime',
+    (path) => {
+      const src = read(path)
+      expect(src).toMatch(/quoteTime:\s*parseQuoteTime\(\s*(q|row)\.regularMarketTime\s*\)/)
+    },
+  )
+
+  it.each([
+    'app/stock/[ticker]/page.tsx',
+    'app/sector/[slug]/page.tsx',
+  ])('%s reads the vendor stamp, never the emit time', (path) => {
+    const src = read(path)
+    expect(src).toMatch(/quoteTime:\s*live\.quote!\.quoteTime/)
+    expect(src).not.toMatch(/quoteTime:\s*live\.quote!\.timestamp/)
+  })
+
+  it('app/page.tsx reads the vendor stamp too', () => {
+    const src = read('app/page.tsx')
+    expect(src).toMatch(/quoteTime:\s*q\.quoteTime/)
+    expect(src).not.toMatch(/quoteTime:\s*q\.timestamp/)
   })
 })

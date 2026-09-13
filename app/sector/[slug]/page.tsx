@@ -192,7 +192,10 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
       high52w: prev?.high52w ?? 0,
       low52w: prev?.low52w ?? 0,
       pe: prev?.pe ?? 0,
-      quoteTime: live.quote!.timestamp,
+      // Q-101: the VENDOR's stamp, never this server's emit time. Using
+      // `timestamp` here made /stock/AAPL read "live" for a Friday close on a
+      // Sunday. null when the vendor gave none — unknown must read as unknown.
+      quoteTime: live.quote!.quoteTime,
     }))
     setQuoteError(null)
   }, [live.quote])
@@ -355,7 +358,7 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
                 ))}
               </span>
               <span className="flex items-center gap-1">
-                <DataFreshnessIndicator quoteTime={quote.quoteTime ? Date.parse(quote.quoteTime) : null} compact />
+                <DataFreshnessIndicator quoteTime={quote.quoteTime ? Date.parse(quote.quoteTime) : null} compact calendar="us-equity" />
                 <span className="text-[10px]">data freshness</span>
               </span>
             </div>
