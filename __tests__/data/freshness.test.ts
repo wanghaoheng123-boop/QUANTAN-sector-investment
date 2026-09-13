@@ -145,6 +145,23 @@ describe('the closed market is not a fault', () => {
       .toBe('stale')
   })
 
+  it('THE DEGRADED-FEED CASE: no vendor stamp reads unknown, never atClose and never live', () => {
+    // Q-101 review. Removing useLivePrices' fallback to our own fetch-completion
+    // time means `quoteTime` is now null whenever NO quote in the batch carries
+    // a vendor stamp — which is exactly when the feed is degraded. Nothing
+    // pinned what the badge renders in that state, in the package whose whole
+    // subject is that state. The `!hasTime` return sits BEFORE the calendar
+    // branch, so `us-equity` must not turn an unknown age into "At close".
+    const s = classifyFreshness({ quoteTime: null, now: SUNDAY, calendar: 'us-equity' })
+    expect(s.kind).toBe('unknown')
+    expect(s.ageSec).toBeNull()
+  })
+
+  it('and the same holds while the market is OPEN', () => {
+    const s = classifyFreshness({ quoteTime: null, now: MON_MIDDAY, calendar: 'us-equity' })
+    expect(s.kind).toBe('unknown')
+  })
+
   it('WITHOUT the calendar the same input alarms — this is the bug being fixed', () => {
     // Regression lock. If this ever returns 'atClose', the default changed and
     // a 24/7 surface silently inherited the equity calendar.
