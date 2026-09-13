@@ -185,13 +185,36 @@ export default function DeskPage() {
                 <thead>
                   <tr className="text-slate-400 border-b border-slate-800/80">
                     <th scope="col" className="text-left px-2 py-1.5 w-16">Sym</th>
-                    <th scope="col" className="text-left px-2 py-1.5 min-w-[120px]">Name</th>
+                    {/*
+                      Q-115 follow-up: 90px on a phone, 120px from `sm` up.
+                      Enlarging the Drill targets widened the table past its
+                      scroll container by 18px, clipping the primary action to
+                      35 of its 45px — I fixed the tap target and pushed it off
+                      the screen. The slack comes from the Name column, which
+                      reserved a desktop-sized 120px at every width, rather than
+                      from the touch target that was the point of the change.
+                    */}
+                    <th scope="col" className="text-left px-2 py-1.5 min-w-[72px] sm:min-w-[120px]">Name</th>
                     <th scope="col" className="text-right px-2 py-1.5">Last</th>
                     <th scope="col" className="text-right px-2 py-1.5">Chg</th>
                     <th scope="col" className="text-right px-2 py-1.5 hidden sm:table-cell">%</th>
                     <th scope="col" className="text-right px-2 py-1.5 hidden md:table-cell">Vol M</th>
-                    <th scope="col" className="text-center px-2 py-1.5">W</th>
-                    <th scope="col" className="text-left px-2 py-1.5">Drill</th>
+                    <th scope="col" className="text-center px-2 py-1.5 hidden sm:table-cell">W</th>
+                    {/*
+                      PINNED, because enlarging the targets was not enough on a
+                      phone. Measured at 375px AFTER that change: the sector
+                      table overflowed its scroll container by 81px and the
+                      commodity table by 52px, so 34 of 39 drill links sat
+                      off-screen and needed a horizontal scroll to reach. Some
+                      of that overflow predates this work and some of it I added
+                      — a target you cannot see is not an improvement on a target
+                      you cannot hit.
+
+                      The first measurement of this said `overflowPx: 0` and was
+                      an AGGREGATE over the first table only. Per table, two of
+                      three were clipped. Assert per item, not in aggregate.
+                    */}
+                    <th scope="col" className="text-left px-2 py-1.5 sticky right-0 bg-slate-950 border-l border-slate-800/60">Drill</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -201,7 +224,7 @@ export default function DeskPage() {
                     return (
                       <tr key={t} className="border-b border-slate-800/40 hover:bg-slate-900/60">
                         <td className="px-2 py-1 text-slate-200 font-semibold">{sym}</td>
-                        <td className="px-2 py-1 text-slate-400 truncate max-w-[180px]" title={label}>
+                        <td className="px-2 py-1 text-slate-400 truncate max-w-[104px] sm:max-w-[180px]" title={label}>
                           {label}
                         </td>
                         <td className="px-2 py-1 text-right text-slate-100">{q ? formatCurrency(q.price) : '—'}</td>
@@ -227,7 +250,7 @@ export default function DeskPage() {
                         <td className="px-2 py-1 text-right text-slate-400 hidden md:table-cell">
                           {q && q.volume ? formatCompactNumber(q.volume) : '—'}
                         </td>
-                        <td className="px-2 py-1 text-center text-amber-500/90">{has(t) ? '★' : ''}</td>
+                        <td className="px-2 py-1 text-center text-amber-500/90 hidden sm:table-cell">{has(t) ? '★' : ''}</td>
                         {/*
                           Q-115: these were 29x15 CSS px — the only way into a
                           detail page from this table, on a page whose own guide
@@ -249,20 +272,31 @@ export default function DeskPage() {
                           desk is a density surface: a comfortable touch target
                           on a phone, the original compactness on a desktop.
                         */}
-                        <td className="px-2 py-1">
+                        <td className="px-2 py-1 sticky right-0 bg-slate-950 border-l border-slate-800/60">
                           <span className="inline-flex items-center gap-1">
                           <Link
                             href={`/stock/${t.replace(/^\^/, '').toLowerCase()}`}
-                            className="inline-flex items-center justify-center min-h-[36px] sm:min-h-[24px] min-w-[44px] sm:min-w-0 px-2 rounded text-blue-400 hover:bg-slate-800/70 hover:underline"
+                            className="inline-flex items-center justify-center min-h-[36px] sm:min-h-[24px] px-2 rounded text-blue-400 hover:bg-slate-800/70 hover:underline"
                           >
                             chart
                           </Link>
+                          {/*
+                            The SECONDARY link is hidden below `sm`. Pinning the
+                            Drill column made it always reachable, but a
+                            two-link column is ~110px wide and the pinned cell
+                            then sits on top of `Chg` — hiding the change number,
+                            which is the most important figure on a quote table,
+                            to surface a secondary navigation path. A sector page
+                            is still reachable on a phone from the home page's
+                            sector cards and from the nav; the change number has
+                            nowhere else to be.
+                          */}
                           {SECTORS.some((s) => s.etf === t) && (
                             <>
-                              <span aria-hidden="true" className="text-slate-600">·</span>
+                              <span aria-hidden="true" className="hidden sm:inline text-slate-600">·</span>
                               <Link
                                 href={`/sector/${SECTORS.find((s) => s.etf === t)!.slug}`}
-                                className="inline-flex items-center justify-center min-h-[36px] sm:min-h-[24px] min-w-[44px] sm:min-w-0 px-2 rounded text-slate-400 hover:bg-slate-800/70 hover:text-slate-300"
+                                className="hidden sm:inline-flex items-center justify-center min-h-[36px] sm:min-h-[24px] px-2 rounded text-slate-400 hover:bg-slate-800/70 hover:text-slate-300"
                               >
                                 sector
                               </Link>
