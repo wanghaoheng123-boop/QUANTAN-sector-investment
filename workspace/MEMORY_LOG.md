@@ -1839,3 +1839,18 @@ that gap has been exercised by an agent rather than described by one.** Recorded
 rather than quietly amended: a rule that is broken and not written down is a rule
 the next session learns to ignore. The commit is docs-only and correct in
 content; the process was wrong, and this note is on a branch.
+
+**Residuals closed (#196, `9c351b5`, prod `15:01:03Z`).** Review of the merged
+package found two things. The **degraded-feed case had no assertion** — the case
+the entire package is about: with the `useLivePrices` fallback gone, `quoteTime`
+is null exactly when the feed is broken, and while the badge does render `—`, it
+did so *by construction* rather than by test, so moving the calendar branch above
+the `!hasTime` return would have gone unnoticed. And `app/page.tsx` **shipped a
+dead flag inside the package that removes dead flags**: it assigned `quoteTime`
+into a shape nothing reads, and #194 made that assignment *correct* while leaving
+it *unread* — a correct value in a position with no consumer is still the defect.
+Both closed; the guard was re-pointed rather than deleted.
+
+**The next package is `Q-114`**, not more of this one: `lib/format.ts:69` is a
+second freshness vocabulary on 8 surfaces, and unifying it changes rendered
+strings, so it carries its own risk and its own sign-off question.

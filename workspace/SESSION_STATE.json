@@ -3,7 +3,7 @@
   "project": "QUANTAN-sector-investment",
   "created": "2026-04-28T09:40:00Z",
   "last_updated": "2026-09-13",
-  "active_agent": "claude opus-5 (2026-09-13 Q-101 shipped; PR #194 merged, production verified)",
+  "active_agent": "claude opus-5 (2026-09-13 Q-101 CLOSED to PARTIAL-with-named-gaps; #194 #195 #196 merged and production-verified)",
   "prod_bug_fix_2026_07_01": {
     "B-2": "News fetch broken by yahoo-finance2 SearchResult schema drift (yf.search validation threw → news silently dropped + 66 prod errors on /api/briefs since 2026-04-03). FOUND via Vercel get_runtime_errors. FIXED with validateResult:false on the 4 news-search callers (mirrors options/chain.ts precedent) → PR #82 → main 2e6137c. LIVE-VERIFIED: /api/briefs now 200 with full news feed (was empty); 0 SearchResult validation logs on new deploy dpl_D29j.",
     "method_note": "Empirical bug-finding via Vercel runtime-errors/logs is high-signal — surfaced a real 3-month-old LIVE issue the static inspection didn't (it was a caught-and-logged error, invisible to tsc/tests/benchmark). Consider a runtime-errors sweep as a standing step."
@@ -918,6 +918,14 @@
       "prod_smoke": "npm run check:smoke — 20/20 pass against quantan.vercel.app",
       "prod_verified_by_re_render": "/desk now reads 'Market closed. Data is as of the last session close, Fri 16:15 ET.' where 90 minutes earlier the SAME page read 'Data is stale, 151223 seconds old; consider refreshing'. /stock/AAPL header reads 'CLOSED · 42h ago' where it read 'CLOSED · live'. The options tab carries 'Delayed 15m' with its aria text above the chain. All read back from the production DOM, not from the build log.",
       "could_not_verify": "The Vercel PREVIEW deployment is behind Vercel deployment protection and redirects to a login, so the preview surface was never smoked — the preview BUILD check passing is all that was confirmed there. Production was smoked instead, after merge. Noting this because the deploy protocol asks for a preview smoke and it did not happen."
-    }
+    },
+    "residuals_closed": {
+      "pr": "#196, merged 2026-09-13 as 9c351b5; production deploy 2026-09-13T15:01:03Z",
+      "1": "The degraded-feed case had NO assertion, in the package whose whole subject is that case. With the useLivePrices fallback removed, quoteTime is null whenever no quote carries a vendor stamp. The source test asserted the substitution was ABSENT; nothing asserted what the badge then RENDERS. It is unknown -> '—' because the !hasTime return precedes the calendar branch — true by construction, not by test. Now pinned, market open and closed.",
+      "2": "app/page.tsx shipped a DEAD FLAG inside the package that removes dead flags. It assigned quoteTime into a local shape nothing reads (SectorCard does not take it; the hero pill keys off marketOpen && streamConnected). #194 moved it from the emit time to the vendor stamp, making it correct and leaving it unread — a correct value in that position is still the defect. Assignment and the unread field declaration both deleted; the guard is re-pointed to 'never assigns the emit time', with a negative control proving the comment-stripper is not what makes it pass.",
+      "mutation": "15 run, 14 caught. N4's first anchor matched nothing and the harness reported TARGET-NOT-UNIQUE rather than a verdict — a mutation that never applied must never read as a survivor.",
+      "prod_health": "check:smoke 20/20; homepage re-read after deploy — 16 sector cards, MARKET CLOSED pill correct, zero console errors."
+    },
+    "next_package": "Q-114 — unify the two freshness vocabularies (lib/format.ts:69 formatFreshness vs lib/data/freshness.ts classifyFreshness). Filed, not started. Changes rendered strings on 8 surfaces, so it is its own package."
   }
 }
