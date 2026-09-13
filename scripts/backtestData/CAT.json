@@ -1,15 +1,15 @@
 {
   "ticker": "CAT",
   "sector": "Industrials",
-  "fetchedAt": "2026-09-06T23:28:44.306Z",
+  "fetchedAt": "2026-09-13T23:52:53.535Z",
   "windowStart": "2021-08-17",
-  "fingerprint": "a2e1641e",
-  "rows": 1269,
+  "fingerprint": "c67366e7",
+  "rows": 1273,
   "vintage": {
-    "appended": 15,
+    "appended": 4,
     "restated": 0,
     "missing": 0,
-    "finalized": 1
+    "finalized": 0
   },
   "candles": [
     {
@@ -10183,6 +10183,38 @@
       "low": 801,
       "close": 813.9400024414062,
       "volume": 2149500
+    },
+    {
+      "time": 1788874200,
+      "open": 823.3400268554688,
+      "high": 830.5,
+      "low": 817.0900268554688,
+      "close": 822.47998046875,
+      "volume": 2443200
+    },
+    {
+      "time": 1788960600,
+      "open": 815.6799926757812,
+      "high": 827.9600219726562,
+      "low": 813.5,
+      "close": 815.5599975585938,
+      "volume": 1929000
+    },
+    {
+      "time": 1789047000,
+      "open": 809.75,
+      "high": 811.9500122070312,
+      "low": 797.5,
+      "close": 805,
+      "volume": 1781900
+    },
+    {
+      "time": 1789133400,
+      "open": 817.75,
+      "high": 826,
+      "low": 813.510009765625,
+      "close": 818.5700073242188,
+      "volume": 1824600
     }
   ]
 }
