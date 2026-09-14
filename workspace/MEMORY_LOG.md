@@ -1972,3 +1972,95 @@ ticket forbids deleting on the strength of a text-match list.
 
 **Tier board:** I1 ASP · I2 PARTIAL · I3 PARTIAL · I4 ASP · I5 PARTIAL ·
 I6 PARTIAL · I7 VIOLATED · I8 VIOLATED. **Still no invariant is ENFORCED.**
+
+## 2026-09-14 — Q-119: prefetch measured on both sides and KEPT; the ticket's own premise was wrong by 4x
+
+Asked to take on Q-119 (router prefetch pulling "~157 kB" of other routes on a
+detail page). The answer is: **keep prefetch, it is cheap and it is load-bearing.**
+`prefetch={false}` was actually built, measured, and rejected.
+
+**The ticket was wrong about its own headline number.** It cited page chunks of
+51.6 / 25.6 / 40.8 kB. Those are on-disk decoded sizes; over the wire the same
+three chunks are 14.2 / 9.6 / 12.7 kB. Real cost is **32–48 kB per surface**, and
+it genuinely varies by surface, so "assume uniform" would also have been wrong.
+This correction moves *against* the ticket that raised it — the direction that
+needs the most scepticism, so it was re-derived from the files on disk.
+
+**Both sides, measured on production, same build, n=4 median:** prefetch costs
+~64 kB on the landing (351.0 → 286.5 kB with viewport prefetch suppressed) and
+buys `/desk` 18 ms vs 72.5 ms and `/backtest` 12.5 ms vs 72.5 ms — 4–6x. The
+product's own guide tells users to scan the desk and drill into a name, which is
+exactly the navigation prefetch serves. Keeping it.
+
+**What shipped instead was found by accident while building the harness:** the
+brand logo in the global header (`app/layout.tsx:68`, on all 16 pages) and the
+404 page's button were raw `<a href="/">`, i.e. full **document** navigations.
+Production: **190.5 ms re-issuing 16 requests, against the nav `<Link>`'s 23 ms
+and zero** — a 167 ms penalty with a *warm* cache, so pure re-parse and
+re-hydrate at zero bytes, plus the loss of every piece of client state (SWR
+caches, the open SSE quote stream, scroll position). Both are now `<Link>`.
+
+**A verification that looked right and proved nothing.** I grepped the built HTML
+for the brand element to confirm the fix was in the served bytes. It reported
+`<a>` — "YES (BAD)" — on a *correct* fix, because `<Link>` renders an `<a>`.
+The markup is identical either way; only the click handler differs. Re-verified
+behaviourally under CDP: 0 document navigations, 39 ms soft commit. **When the
+artifact is identical before and after, a textual check cannot be the check.**
+
+**Three measuring instruments were wrong in a row, and all three erred the same
+way — toward "prefetch is unnecessary".**
+1. `Network.clearBrowserCache` did not isolate samples: from the second run on,
+   **0 kB over 32 requests**, everything from the immutable HTTP cache. Fixed
+   with a fresh `Target.createBrowserContext` per sample.
+2. The hard-nav arm counted `Page.loadEventFired` without checking the loader, so
+   it latched the initial `about:blank` and reported 161 ms for a fetch that
+   cannot beat one 562 ms RTT. Fixed by keying on the post-click `loaderId`.
+3. Even with both fixed, **CDP throttling silently did not apply** to small
+   follow-up requests on a warm localhost connection — the landing load honoured
+   it at 2578 ms, while a chunk provably never requested before came back in
+   26 ms. Localhost could not answer the question; production did.
+
+The lesson is not "check your tools" but the sharper one: **all three errors
+flattered the cheap answer.** Three independent instruments agreeing on the
+convenient result is the signal to distrust them, not to ship. Cf. the standing
+note to check the DIRECTION of your own error.
+
+**Q-119 turned out to be the smallest page-weight cost on the platform**, by more
+than an order of magnitude, and measuring it surfaced the two bigger ones:
+
+| | over the wire | ticket |
+|---|---|---|
+| `/api/backtest`, every `/backtest` load | **742.6 kB** brotli (2.4 MB decoded) | `Q-121` |
+| SW precache of the whole build, first visit | **547.4 kB** | `Q-120` |
+| router prefetch, per surface | **32–48 kB** | `Q-119` |
+
+Both larger findings are filed separately rather than folded in — different
+mechanisms, and Q-120 touches installability, which is a product decision.
+`Q-121` carries its own calibration note: `next start` does **not** compress that
+route, so a local measurement reports 2.4 MB and overstates it 3.3x. The SW
+precache also includes **28 entries of 288-byte server-side API route stubs** that
+a browser can never execute — a third of the request count for 1% of the bytes.
+
+### Correction to the above, after adversarial review (same day)
+
+Two claims in the first draft were **broader than their evidence**, which is the
+exact failure these records exist to catch:
+
+1. **Every brand number was measured landing on `/stock/AAPL`** — the heaviest
+   shell in the app — while the defect sits in global chrome on all 16 pages.
+   Re-measured from `/desk`: **96 ms vs 112.5 ms**. The landing surface is *not*
+   the driver; the **session** is (the same landing moved ~78 ms between two
+   sessions). So the penalty belongs to the navigation, not the page weight, and
+   the honest figure is a **range of ~70–165 ms**, not a single 167 ms pinned to
+   "all 16 pages."
+2. **"Pure re-parse and re-hydrate at zero bytes downloaded" was wrong.** It read
+   `encodedDataLength: 0` as proof of a cache hit — **the third time that same
+   field misled this package** — without the `fromDiskCache` check that had
+   settled it twice already. Of the 16 re-issued requests, **14 are disk-cache
+   hits and 2 reach the network**: the `/` document and a Google Fonts
+   stylesheet. The document round trip is the part that cannot be cached away.
+   No byte figure is claimed for the brand click.
+
+The fix itself is unaffected — state loss alone justifies it. The lesson is
+narrower and worth keeping: **a signal that has already fooled you twice does not
+become trustworthy because this time it agrees with you.**

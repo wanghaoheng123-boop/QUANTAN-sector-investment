@@ -1,3 +1,5 @@
+import Link from 'next/link'
+
 export default function NotFound() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center text-center px-4">
@@ -6,12 +8,12 @@ export default function NotFound() {
       <p className="text-slate-400 mb-8 max-w-sm">
         This sector or brief does not exist in our intelligence database.
       </p>
-      <a
+      <Link
         href="/"
         className="px-6 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
       >
         ← Back to Markets
-      </a>
+      </Link>
     </div>
   )
 }
