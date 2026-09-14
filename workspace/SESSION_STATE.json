@@ -2,8 +2,8 @@
   "schema_version": "1.1",
   "project": "QUANTAN-sector-investment",
   "created": "2026-04-28T09:40:00Z",
-  "last_updated": "2026-09-13",
-  "active_agent": "claude opus-5 (2026-09-13 Q-101 + Q-115 shipped; #194-#199 merged, production-verified)",
+  "last_updated": "2026-09-14",
+  "active_agent": "claude opus-5 (2026-09-14 Q-117 shipped; #201 merged, production-verified)",
   "prod_bug_fix_2026_07_01": {
     "B-2": "News fetch broken by yahoo-finance2 SearchResult schema drift (yf.search validation threw → news silently dropped + 66 prod errors on /api/briefs since 2026-04-03). FOUND via Vercel get_runtime_errors. FIXED with validateResult:false on the 4 news-search callers (mirrors options/chain.ts precedent) → PR #82 → main 2e6137c. LIVE-VERIFIED: /api/briefs now 200 with full news feed (was empty); 0 SearchResult validation logs on new deploy dpl_D29j.",
     "method_note": "Empirical bug-finding via Vercel runtime-errors/logs is high-signal — surfaced a real 3-month-old LIVE issue the static inspection didn't (it was a caught-and-logged error, invisible to tsc/tests/benchmark). Consider a runtime-errors sweep as a standing step."
@@ -949,5 +949,17 @@
     ],
     "tier_board": "I1 ASP · I2 PARTIAL · I3 PARTIAL · I4 ASP · I5 PARTIAL · I6 PARTIAL · I7 VIOLATED · I8 VIOLATED. Unchanged — this package touches no invariant.",
     "next": "Q-114 (two freshness vocabularies) and Q-116 (a11y mobile viewport) are filed and not started."
+  },
+  "wave_2026_09_14_q117": {
+    "package": "Q-117 — tabbed detail pages shipped every tab's code on first paint",
+    "pr": "#201, merged as d90e134; production deploy 2026-09-14T00:00:33Z",
+    "gates": "typecheck clean; vitest 2158 passed / 17 skipped / 0 failed; next build green; 9/9 CI",
+    "measured_before_building": "A throwaway branch stubbed the seven panel imports and rebuilt: route chunk 27.9 -> 7.9 kB. That is what justified the package. At 3 kB the right answer would have been to file a ticket and stop.",
+    "real_delta": "/stock/[ticker] route 27.9 -> 6.36 kB, First Load 167 -> 134 kB (-20%); /sector/[slug] First Load 148 -> 145 kB (its route chunk GREW 0.23 kB — the dynamic() wrappers cost a little)",
+    "the_correction": "My first production check said total decoded JS was 807.8 kB after vs 809.8 before — a 2 kB move with the file count UP by three, which reads as a change with no effect. The METRIC was wrong, not the change: a total-after-20-seconds is dominated by ~157 kB of Next router prefetch for other routes and ~178 kB of lightweight-charts for the default Chart tab, neither of which this package touches. First paint is 472.7 kB across 13 files; no tab panel is in it. The behavioural proof is that clicking Options pulls 7 chunks and ~105 kB at click time.",
+    "not_claimed": "That users download 33 kB less in total. The honest claim is the route's First Load accounting and the deferral behaviour.",
+    "fcp_note": "FCP read 2456 ms right after the deploy against 528 ms before — a cold deploy, not a regression. Warm re-measure on /stock/MSFT: TTFB 538 ms, DOMContentLoaded 552 ms. One sample either side is variance; neither belongs in a result.",
+    "filed": "Q-118 (16 unused runtime exports — a first pass said 114 before splitting off 98 type-only) and Q-119 (router prefetch, ~157 kB, LARGER than what this package saved)",
+    "tier_board": "Unchanged — this package touches no invariant."
   }
 }

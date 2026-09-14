@@ -1917,3 +1917,58 @@ header warns about precisely that.
 
 **Tier board:** I1 ASP · I2 PARTIAL · I3 PARTIAL · I4 ASP · I5 PARTIAL ·
 I6 PARTIAL · I7 VIOLATED · I8 VIOLATED. **Still no invariant is ENFORCED.**
+
+---
+
+## 2026-09-14 — Q-117: every tab's code shipped on first paint
+
+Merged as #201. **No invariant moves.**
+
+`/stock/[ticker]` statically imported all five tabs' components — the four
+options panels, the QuantLab tree (1757 LOC, including a 470-LOC `LlmTab`),
+`DarkPoolPanel` and `NewsFeed` — while the default tab is Chart.
+
+**The measurement came before the change, and that is the point.** "Four of five
+tabs are unused" is not a number. A throwaway branch stubbed the seven imports
+and rebuilt: route chunk **27.9 → 7.9 kB**. Had it come back at 3 kB the right
+answer was to file a ticket saying so and stop. Real delta after the actual
+change: `/stock/[ticker]` **167 → 134 kB First Load**, `/sector/[slug]`
+148 → 145 kB — and the sector *route chunk grew* 0.23 kB, because the
+`dynamic()` wrappers cost a little. Say the number that moved, not the flattering
+one.
+
+**My first production check said the change was inert.** Total decoded JS came
+back at **807.8 kB against 809.8 before** — a 2 kB move with the file count *up*
+by three. Against a build claiming −33 kB that reads exactly like the
+green-and-inert shape this repo keeps finding.
+
+**The metric was wrong, not the change.** Split by start time: first paint is
+**472.7 kB across 13 files** and contains no tab panel; the **335.1 kB** that
+follows is ~157 kB of Next router prefetch for *other* routes and ~178 kB of
+lightweight-charts loading for the default Chart tab. A total-after-20-seconds is
+dominated by two things this package does not touch, so it could never have shown
+the delta — and my *before* number had the same confounds. **A before/after is
+only evidence if the metric is sensitive to the thing you changed.** The
+behavioural proof is that clicking Options pulls 7 chunks and ~105 kB at click
+time, not at load.
+
+What is honestly claimed: the route's First Load accounting, same tool both
+sides, and the deferral behaviour. **Not** claimed: that users download 33 kB
+less in total.
+
+**FCP read 2456 ms right after the deploy against 528 ms before.** That looks
+like a serious regression and is not one — it was a cold deploy. Warm re-measure:
+TTFB 538 ms, DOMContentLoaded 552 ms. One sample either side is variance, and
+neither number belongs in a result.
+
+**Two tickets filed, one of them bigger than what shipped.** `Q-119`: router
+prefetch pulls ~157 kB of other routes on every detail page, because the global
+nav's links are all prefetch candidates — larger than this package saved, and
+explicitly *not* to be fixed by setting `prefetch={false}`, since prefetch is
+what makes the scan-then-drill workflow the product's own guide describes feel
+instant. `Q-118`: 16 unused runtime exports — a first pass said **114** until
+98 type-only exports were split off, so the headline was wrong by 7×, and the
+ticket forbids deleting on the strength of a text-match list.
+
+**Tier board:** I1 ASP · I2 PARTIAL · I3 PARTIAL · I4 ASP · I5 PARTIAL ·
+I6 PARTIAL · I7 VIOLATED · I8 VIOLATED. **Still no invariant is ENFORCED.**
