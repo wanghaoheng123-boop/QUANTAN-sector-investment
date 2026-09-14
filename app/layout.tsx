@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next'
+import Link from 'next/link'
 import './globals.css'
 import GlobalSearch from '@/components/GlobalSearch'
 import Providers from '@/components/Providers'
@@ -65,13 +66,19 @@ export default function RootLayout({
               full destination list owned by `components/SiteNav.tsx`. */}
           <header className="sticky top-0 z-50 border-b border-slate-800/50 bg-slate-950/90 backdrop-blur-xl">
             <div className="max-w-7xl mx-auto px-4 h-14 flex items-center gap-3">
-              <a href="/" className="flex items-center gap-2.5 group shrink-0">
+              {/* Must be a <Link>, not a raw <a>. Measured on production
+                  2026-09-14 (Q-119): the raw anchor took 190.5 ms median and
+                  re-issued 16 requests against the nav <Link>'s 23 ms and zero,
+                  because a document navigation rebuilds the whole app shell —
+                  and it also discards every bit of client state (SWR caches,
+                  the open SSE stream, scroll position) that a soft nav keeps. */}
+              <Link href="/" className="flex items-center gap-2.5 group shrink-0">
                 <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center text-xs font-bold text-white shadow-lg shadow-amber-900/50 group-hover:shadow-amber-700/60 transition-shadow">
                   QU
                 </div>
                 <span className="font-bold text-white text-sm tracking-wide">QUANTAN</span>
                 <span className="text-slate-400 text-xs hidden 2xl:block font-mono">/ Market Intelligence</span>
-              </a>
+              </Link>
               {/* Breadcrumbs only where there is room — below xl the nav's
                   aria-current already communicates location. */}
               <div className="hidden xl:flex shrink-0">
