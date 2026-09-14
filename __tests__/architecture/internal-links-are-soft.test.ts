@@ -8,14 +8,18 @@ import { join } from 'node:path'
  * of client state — SWR caches, the open SSE quote stream, scroll position —
  * is discarded. Next's <Link> does a soft navigation and keeps all of it.
  *
- * Measured on production 2026-09-14 (Q-119), landing on /stock/AAPL and
- * clicking through to `/`:
+ * Measured on production 2026-09-14 (Q-119), clicking through to `/`, n=4 per
+ * cell, median — from a heavy landing (/stock/AAPL) and a lighter one (/desk):
  *
- *   nav <Link href="/">          23 ms median,   0 requests re-issued
- *   raw <a href="/"> (the brand) 190.5 ms median, 16 requests re-issued
+ *   nav <Link href="/">           23-27.5 ms,  0 requests re-issued
+ *   raw <a href="/"> (the brand)  96-190 ms,  16 requests re-issued
  *
- * Both arms had a warm HTTP cache, so the 167 ms is pure re-parse and
- * re-hydrate with zero bytes downloaded. On a cold cache it is worse.
+ * The landing surface barely moved it (~16 ms between the two); the same
+ * landing measured in two sessions moved ~78 ms. So the penalty is a property
+ * of the navigation, not the page weight, and the honest figure is a range:
+ * roughly 70-165 ms. Of the 16 re-issued requests, 14 are disk-cache hits and
+ * 2 reach the network (the `/` document and a font stylesheet) — the document
+ * round trip is the part that cannot be cached away.
  *
  * TWO RULES THIS FILE FOLLOWS, because this repo has been burned by both:
  *  1. Comments are stripped before matching. `ui-copy-promises.test.ts` v1

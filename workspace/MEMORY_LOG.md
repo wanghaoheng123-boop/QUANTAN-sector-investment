@@ -2040,3 +2040,27 @@ mechanisms, and Q-120 touches installability, which is a product decision.
 route, so a local measurement reports 2.4 MB and overstates it 3.3x. The SW
 precache also includes **28 entries of 288-byte server-side API route stubs** that
 a browser can never execute — a third of the request count for 1% of the bytes.
+
+### Correction to the above, after adversarial review (same day)
+
+Two claims in the first draft were **broader than their evidence**, which is the
+exact failure these records exist to catch:
+
+1. **Every brand number was measured landing on `/stock/AAPL`** — the heaviest
+   shell in the app — while the defect sits in global chrome on all 16 pages.
+   Re-measured from `/desk`: **96 ms vs 112.5 ms**. The landing surface is *not*
+   the driver; the **session** is (the same landing moved ~78 ms between two
+   sessions). So the penalty belongs to the navigation, not the page weight, and
+   the honest figure is a **range of ~70–165 ms**, not a single 167 ms pinned to
+   "all 16 pages."
+2. **"Pure re-parse and re-hydrate at zero bytes downloaded" was wrong.** It read
+   `encodedDataLength: 0` as proof of a cache hit — **the third time that same
+   field misled this package** — without the `fromDiskCache` check that had
+   settled it twice already. Of the 16 re-issued requests, **14 are disk-cache
+   hits and 2 reach the network**: the `/` document and a Google Fonts
+   stylesheet. The document round trip is the part that cannot be cached away.
+   No byte figure is claimed for the brand click.
+
+The fix itself is unaffected — state loss alone justifies it. The lesson is
+narrower and worth keeping: **a signal that has already fooled you twice does not
+become trustworthy because this time it agrees with you.**

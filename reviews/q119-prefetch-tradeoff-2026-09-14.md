@@ -93,18 +93,35 @@ was the signal to distrust them, not the decision.
 `app/not-found.tsx:9` were raw `<a href="/">`, which performs a full **document**
 navigation: the entire shell is re-downloaded, re-parsed and re-hydrated, and
 all client state — SWR caches, the open SSE quote stream, scroll position — is
-discarded. Production, landing on `/stock/AAPL`, clicking through to `/`, n=4:
+discarded. Next's `<Link>` does a soft navigation and keeps all of it.
 
-| element | median | requests re-issued |
+Production, clicking through to `/`, n=4 per cell, median:
+
+| landing surface | nav `<Link href="/">` | raw `<a href="/">` |
 |---|---|---|
-| nav `<Link href="/">` | **23 ms** | 0 |
-| raw `<a href="/">` (brand) | **190.5 ms** | 16 |
+| `/stock/AAPL` (heavy shell) | 25 ms | **112.5 ms** (91–129) |
+| `/desk` (lighter shell) | 27.5 ms | **96 ms** (74–156) |
+| `/stock/AAPL`, earlier session | 23 ms | **190.5 ms** (153–226) |
 
-A **167 ms** penalty with a *warm* cache — so it is pure re-parse and re-hydrate
-at zero bytes downloaded; cold, it is worse. Both are now `<Link>`. Verified
-behaviourally on the built output, not by reading the markup: `<Link>` renders an
-`<a>`, so the served HTML is identical either way. Clicking the brand now
-produces **0 document navigations** and commits in 39 ms locally.
+**The landing surface barely matters — the session does.** The heavy detail page
+and the lighter desk differ by ~16 ms, while the same landing measured in two
+sessions differs by ~78 ms. So the penalty is a property of the navigation, not
+of the page's weight, and the honest statement is a range: **the raw anchor costs
+roughly 70–165 ms more than the `<Link>`, measured 96–190 ms against 23–27.5 ms.**
+A single figure attached to "all 16 pages" would have been a false precision.
+
+**What the click actually re-issues: 16 requests, of which 14 are disk-cache hits
+and 2 go to the network** — the `/` document itself and the Google Fonts
+stylesheet. An earlier draft of this record said "zero bytes downloaded"; that
+was wrong. It read `encodedDataLength: 0` as proof of a cache hit, which is the
+*third* time that field has misled this package (§3), and it is not a reliable
+byte figure here — so no byte claim is made for the brand click. The document
+round trip is real, and it is the part that cannot be cached away.
+
+Both are now `<Link>`. Verified behaviourally, not by reading the markup:
+`<Link>` renders an `<a>`, so the served HTML is identical either way and a grep
+of the built output reported the defect on a *correct* fix. Clicking the brand
+now produces **0 document navigations** and commits in 39 ms locally.
 
 `__tests__/architecture/internal-links-are-soft.test.ts` guards it. Watched it
 fail on the committed tree (`app/layout.tsx -> /`) and go green on revert.
