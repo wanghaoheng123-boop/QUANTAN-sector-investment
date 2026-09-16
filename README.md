@@ -49,7 +49,7 @@ If no providers are configured, `/auth/signin` explains how to set env vars; the
 
 Bloomberg does **not** offer a public REST API for browser or serverless apps. Terminal data is accessed via **blpapi** (C++/Java/Python) against a logged-in Terminal or an approved **B-PIPE / Data License** stack. This repo supports **better price quality** by calling a **small HTTP bridge you host** next to that infrastructure.
 
-1. Set `BLOOMBERG_BRIDGE_URL` (e.g. `http://127.0.0.1:8099`) and optionally `BLOOMBERG_BRIDGE_SECRET` (must match your bridge).
+1. Set `BLOOMBERG_BRIDGE_URL` (e.g. `http://127.0.0.1:8099`) and optionally `BLOOMBERG_BRIDGE_SECRET` (must match your bridge). The bridge stays disabled until the owner confirms that the agreement permits this redistribution and sets server-only `BLOOMBERG_REDISTRIBUTION_ACK` to `i-confirm-our-bloomberg-agreement-permits-this-redistribution`. This flag records an acknowledgement; it does not establish a licence. Do not prefix it with `NEXT_PUBLIC_`.
 2. Your bridge must implement:
    - `GET /health` - liveness (optional auth via header `X-Bridge-Secret`).
    - `POST /quotes` - JSON body `{ "tickers": ["AAPL","SPY"] }`, response `{ "quotes": [ { "symbol": "AAPL", "last": 180.5, "pctChange": 0.3, "volume": 1e7, ... } ] }`
@@ -57,7 +57,9 @@ Bloomberg does **not** offer a public REST API for browser or serverless apps. T
 3. **Merge behaviour**: `/api/prices` and Quant Lab **prefer Bloomberg** for any ticker the bridge returns; other tickers stay on Yahoo. Fundamentals (statements, profile) remain Yahoo unless you extend the bridge yourself.
 4. **Compliance**: Obey your **Bloomberg Terminal Agreement** and **Data License**. Do not expose the bridge to the public internet without Bloomberg-approved controls. Redistribution rules are strict.
 5. **Starter stub**: `scripts/bloomberg-bridge-example.py` - replace `fetch_bloomberg_fields` with real `blpapi` code from Bloomberg's SDK.
-6. **Health check**: `GET /api/bloomberg-bridge/health` from this app verifies reachability (no secrets in response).
+6. **Health check**: anonymous `GET /api/bloomberg-bridge/health` returns only `{"status":"ok"}` and makes no outbound request. Diagnostics require the existing `QUANTAN_API_KEY` in the `x-api-key` header; all holders of that shared key can see bridge state and, when enabled, reachability. A browser login does not grant access. With no key configured, diagnostics remain unavailable. Responses are `no-store`.
+
+**Q-108 migration:** a deployment with only `BLOOMBERG_BRIDGE_URL` configured stops requesting bridge data; prices and fundamentals continue through their existing Yahoo path. Vendor labels remain intact when the acknowledged bridge is enabled. Confirm the intended production configuration before merging this change; no environment values are set by the code change.
 
 ### Deploy (Vercel)
 

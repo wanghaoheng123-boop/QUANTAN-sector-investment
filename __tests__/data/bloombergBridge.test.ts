@@ -2,7 +2,7 @@
  * Q-051 continuation (2026-07-17) — direct tests for lib/data/bloomberg/**
  * so the directory can leave the coverage exclude list.
  */
-import { describe, it, expect, afterEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import {
   toBloombergSecurity,
   fromBloombergSecurity,
@@ -13,6 +13,12 @@ import {
   fetchBloombergQuotesViaBridge,
   bridgeHealthCheck,
 } from '@/lib/data/bloomberg/bridgeClient'
+
+const ACK = 'i-confirm-our-bloomberg-agreement-permits-this-redistribution'
+
+beforeEach(() => {
+  vi.stubEnv('BLOOMBERG_REDISTRIBUTION_ACK', ACK)
+})
 
 afterEach(() => {
   vi.unstubAllEnvs()
@@ -83,6 +89,34 @@ function stubFetch(response: Partial<Response> | Error, calls?: FetchCall[]) {
   })
 }
 
+describe('Bloomberg redistribution gate', () => {
+  it.each([undefined, '', 'true', '1', 'yes', ACK.toUpperCase()])(
+    'makes zero requests without the exact acknowledgement (%s)', async acknowledgement => {
+      vi.stubEnv('BLOOMBERG_BRIDGE_URL', 'https://bridge.example')
+      vi.stubEnv('BLOOMBERG_REDISTRIBUTION_ACK', acknowledgement)
+      const calls: FetchCall[] = []
+      stubFetch({ ok: true, json: async () => ({ quotes: [] }) }, calls)
+      expect(isBloombergBridgeConfigured()).toBe(false)
+      expect(await fetchBloombergQuotesViaBridge(['AAPL'])).toBeNull()
+      expect((await bridgeHealthCheck()).ok).toBe(false)
+      expect(calls).toHaveLength(0)
+    },
+  )
+
+  it('rechecks acknowledgement after an enabled call', async () => {
+    vi.stubEnv('BLOOMBERG_BRIDGE_URL', 'https://bridge.example')
+    const calls: FetchCall[] = []
+    stubFetch({ ok: true, json: async () => ({ quotes: [{ ticker: 'AAPL', last: 100 }] }) }, calls)
+    expect((await fetchBloombergQuotesViaBridge(['AAPL']))?.get('AAPL')?.price).toBe(100)
+    expect(calls).toHaveLength(1)
+    vi.stubEnv('BLOOMBERG_REDISTRIBUTION_ACK', '')
+    expect(isBloombergBridgeConfigured()).toBe(false)
+    expect(await fetchBloombergQuotesViaBridge(['AAPL'])).toBeNull()
+    expect((await bridgeHealthCheck()).ok).toBe(false)
+    expect(calls).toHaveLength(1)
+  })
+})
+
 describe('fetchBloombergQuotesViaBridge', () => {
   it('returns null when the bridge is unconfigured or tickers empty', async () => {
     vi.stubEnv('BLOOMBERG_BRIDGE_URL', '')
@@ -125,6 +159,7 @@ describe('fetchBloombergQuotesViaBridge', () => {
     const map = await fetchBloombergQuotesViaBridge(['AAPL', 'MSFT'])
     expect(map).not.toBeNull()
     expect(calls).toHaveLength(1)
+    expect(calls[0].init.redirect).toBe('error')
     expect(calls[0].url).toBe('https://bridge.example/quotes') // trailing slash stripped
     expect((calls[0].init.headers as Record<string, string>)['X-Bridge-Secret']).toBe('topsecret')
     expect(JSON.parse(String(calls[0].init.body))).toEqual({ tickers: ['AAPL', 'MSFT'] })
@@ -154,12 +189,16 @@ describe('fetchBloombergQuotesViaBridge', () => {
   it('fail-closed: non-OK HTTP, thrown fetch, and zero usable rows → null', async () => {
     vi.stubEnv('BLOOMBERG_BRIDGE_URL', 'https://bridge.example')
     vi.spyOn(console, 'warn').mockImplementation(() => {})
-    stubFetch({ ok: false, status: 503, text: async () => 'down' } as Partial<Response>)
+    const calls: FetchCall[] = []
+    stubFetch({ ok: false, status: 503, text: async () => 'down' } as Partial<Response>, calls)
     expect(await fetchBloombergQuotesViaBridge(['AAPL'])).toBeNull()
-    stubFetch(new Error('ECONNREFUSED'))
+    expect(calls).toHaveLength(1)
+    stubFetch(new Error('ECONNREFUSED'), calls)
     expect(await fetchBloombergQuotesViaBridge(['AAPL'])).toBeNull()
-    stubFetch({ ok: true, json: async () => ({ quotes: [] }) } as Partial<Response>)
+    expect(calls).toHaveLength(2)
+    stubFetch({ ok: true, json: async () => ({ quotes: [] }) } as Partial<Response>, calls)
     expect(await fetchBloombergQuotesViaBridge(['AAPL'])).toBeNull()
+    expect(calls).toHaveLength(3)
   })
 })
 
@@ -179,6 +218,7 @@ describe('bridgeHealthCheck', () => {
     expect(healthy.ok).toBe(true)
     expect(healthy.error).toBeUndefined()
     expect(typeof healthy.latencyMs).toBe('number')
+    expect(calls[0].init.redirect).toBe('error')
     expect(calls[0].url).toBe('https://bridge.example/health')
 
     stubFetch({ ok: false, status: 500 } as Partial<Response>)

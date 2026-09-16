@@ -61,8 +61,24 @@ function pickSymbol(row: Record<string, unknown>): string {
   return sym.replace(/\s+/g, '').toUpperCase()
 }
 
+/**
+ * Q-108: a URL alone must never enable public redistribution. This server-only
+ * acknowledgement records an operator assertion, not proof of a licence.
+ * The substantive licence decision remains with the owner (Q-082/Q-083).
+ */
+const REDISTRIBUTION_ACK = 'i-confirm-our-bloomberg-agreement-permits-this-redistribution'
+
+export function bloombergBridgeState(): 'off' | 'unacknowledged' | 'enabled' {
+  if (!process.env.BLOOMBERG_BRIDGE_URL?.trim()) return 'off'
+  if (process.env.BLOOMBERG_REDISTRIBUTION_ACK?.trim() !== REDISTRIBUTION_ACK) {
+    return 'unacknowledged'
+  }
+  return 'enabled'
+}
+
+/** True only when both the bridge URL and redistribution acknowledgement are set. */
 export function isBloombergBridgeConfigured(): boolean {
-  return Boolean(process.env.BLOOMBERG_BRIDGE_URL?.trim())
+  return bloombergBridgeState() === 'enabled'
 }
 
 /**
@@ -73,7 +89,7 @@ export async function fetchBloombergQuotesViaBridge(
   tickers: string[]
 ): Promise<Map<string, BloombergQuoteNormalized> | null> {
   const base = process.env.BLOOMBERG_BRIDGE_URL?.trim()
-  if (!base || tickers.length === 0) return null
+  if (!base || tickers.length === 0 || !isBloombergBridgeConfigured()) return null
 
   const timeout = Math.min(30_000, Math.max(500, parseInt(process.env.BLOOMBERG_BRIDGE_TIMEOUT_MS || '4000', 10)))
   const secret = process.env.BLOOMBERG_BRIDGE_SECRET?.trim()
@@ -87,6 +103,8 @@ export async function fetchBloombergQuotesViaBridge(
 
     const res = await fetch(`${base.replace(/\/$/, '')}/quotes`, {
       method: 'POST',
+      // Custom secret headers can be forwarded across origins by redirects.
+      redirect: 'error',
       headers,
       body: JSON.stringify({ tickers }),
       signal: controller.signal,
@@ -169,13 +187,14 @@ export async function bridgeHealthCheck(): Promise<{
 }> {
   const base = process.env.BLOOMBERG_BRIDGE_URL?.trim()
   if (!base) return { ok: false, error: 'BLOOMBERG_BRIDGE_URL not set' }
+  if (!isBloombergBridgeConfigured()) return { ok: false, error: 'Bloomberg bridge not acknowledged' }
 
   const secret = process.env.BLOOMBERG_BRIDGE_SECRET?.trim()
   const started = Date.now()
   try {
     const headers: Record<string, string> = {}
     if (secret) headers['X-Bridge-Secret'] = secret
-    const res = await fetch(`${base.replace(/\/$/, '')}/health`, { headers, signal: AbortSignal.timeout(3000) })
+    const res = await fetch(`${base.replace(/\/$/, '')}/health`, { headers, redirect: 'error', signal: AbortSignal.timeout(3000) })
     return { ok: res.ok, latencyMs: Date.now() - started, error: res.ok ? undefined : `HTTP ${res.status}` }
   } catch (e) {
     // Phase 13 S2 fix (F4.8): never leak raw error in production responses.

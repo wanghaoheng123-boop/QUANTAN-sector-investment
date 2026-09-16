@@ -1,28 +1,39 @@
 import { NextResponse } from 'next/server'
 import { applyRateLimit } from '@/lib/api/rateLimit'
-import { bridgeHealthCheck, isBloombergBridgeConfigured } from '@/lib/data/bloomberg/bridgeClient'
+import { isValidApiKey } from '@/lib/auth/apiKey'
+import { bridgeHealthCheck, bloombergBridgeState } from '@/lib/data/bloomberg/bridgeClient'
 
-/** Check optional self-hosted Bloomberg HTTP bridge (no secrets returned). */
+export const runtime = 'nodejs'
+
+/** Bridge diagnostics are restricted to holders of the server's shared API key. */
 export async function GET(request: Request) {
+  // Authenticate before the limiter: its Redis backend can itself make outbound
+  // requests. A public probe gets the same response regardless of bridge state.
+  // Ordinary OAuth sessions do not imply permission to inspect infrastructure.
+  if (!isValidApiKey(request.headers.get('x-api-key'))) {
+    return NextResponse.json({ status: 'ok' }, { headers: { 'Cache-Control': 'no-store' } })
+  }
+
   const rateLimitResponse = await applyRateLimit(request, 'bloomberg-bridge-health', {
     maxRequests: 30,
     windowSeconds: 60,
   })
-  if (rateLimitResponse) return rateLimitResponse
+  if (rateLimitResponse) {
+    rateLimitResponse.headers.set('Cache-Control', 'no-store')
+    return rateLimitResponse
+  }
 
-  if (!isBloombergBridgeConfigured()) {
-    return NextResponse.json({
-      configured: false,
-      message:
-        'Set BLOOMBERG_BRIDGE_URL to enable. See README “Bloomberg bridge” and scripts/bloomberg-bridge-example.py.',
-    })
+  const state = bloombergBridgeState()
+  if (state !== 'enabled') {
+    return NextResponse.json({ status: 'ok', state }, { headers: { 'Cache-Control': 'no-store' } })
   }
 
   const h = await bridgeHealthCheck()
   return NextResponse.json({
-    configured: true,
+    status: 'ok',
+    state,
     reachable: h.ok,
     latencyMs: h.latencyMs,
     error: h.error,
-  })
+  }, { headers: { 'Cache-Control': 'no-store' } })
 }
