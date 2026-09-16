@@ -2064,3 +2064,54 @@ exact failure these records exist to catch:
 The fix itself is unaffected — state loss alone justifies it. The lesson is
 narrower and worth keeping: **a signal that has already fooled you twice does not
 become trustworthy because this time it agrees with you.**
+
+
+## 2026-09-16 — Q-108 local implementation and bounded algorithm discovery
+
+Selected Q-108 under priority rule (b), an audited I8 violation, after skipping owner-gated P0s. User approved continuation after the concrete plan. Work is on `codex/q108-bridge-gate-audit`. **LOCAL ONLY:** no commit, merge, deployment or environment change is claimed at this record point. The lead is completing verification.
+
+Implemented locally: central affirmative acknowledgement before Bloomberg requests, withdrawal of public health disclosure, and explicit prices status. A security probe reproduced custom-secret forwarding across redirects; both request paths now reject redirects. This records owner acknowledgement; it does not establish a licence. URL-only production configurations would stop using the bridge, so the production migration remains a deliberate publication decision.
+
+Verification so far, reported by the lead: 15 regression failures before the implementation, 29 passes after, and typecheck passed. Build, check:ci, full suite and final adversarial consumer review are still running. No red build is claimed fixed, and no advisory CI/deploy result is called green. The effect verified so far is local request gating and transport behavior; production is unverified.
+
+Algorithm discovery is in `reviews/q108-algorithm-audit-2026-09-16.md`, including executable branch-forcing probes. Filed Q122 invalid risk-exit/final-liquidation prices; Q123 exact net-fee win boundary; Q124 inconsistent single/aggregate profit factor; Q125 missing strategy dividends; Q126 missing B&H dividend compounding; Q127 inert monthlyRebalance. These are separate work packages; no algorithm was changed. Corrected Q105 and appended a ledger correction: confidenceThreshold is active in enhanced mode, while stops were intentionally retired in July. Restoring stops would change the strategy. Arbitrary parameter changes need not change every fixture; use triggering decision boundaries.
+
+Exact paths touched at this checkpoint:
+
+- `README.md`
+- `__tests__/data/bloombergBridge.test.ts`
+- `__tests__/api/bloombergHealth.test.ts`
+- `app/api/bloomberg-bridge/health/route.ts`
+- `app/api/prices/route.ts`
+- `lib/data/bloomberg/bridgeClient.ts`
+- `reviews/q108-algorithm-audit-2026-09-16.md`
+- `workspace/SESSION_STATE.json`
+- `workspace/IMPROVEMENT_BACKLOG.json`
+- `workspace/MEMORY_LOG.md`
+- `reviews/findings-ledger.csv`
+
+No historical benchmark experiment, sweep or strategy-performance claim ran; microfixtures are accounting regressions, so no strategy trial was added. Old ledger bytes were preserved and new 12-column rows appended; pre-existing corruption was not rewritten. Existing untracked `.agents/`, `.codex/`, `reviews/wsa-2026-06-23/` and `reviews/wspy-2026-06-22/` belong to prior work.
+
+Open owner actions remain Redis provisioning, vendor/regulatory counsel, branch protection, and the previously recorded exposed-key revocation/rotation. No credential values were read into the handoff. Cold-session traps: acknowledgement is not permission evidence; local tests are not a deployed fix; the audit numbers describe invented fixtures, not historical strategy performance.
+
+**Single next action:** finish Q108 verification and record actual commit/deployment status in the new state wave before session close. After that, Q122 is the next algorithm repair candidate.
+
+### Same-session verification and review checkpoint
+
+Local production build and typecheck passed. The 29 focused gate tests passed; BTC verification passed with network after an initial sandbox DNS failure. Data integrity checked 56 files / 71841 rows with zero hard errors and two known warnings. The lead reran every executable algorithm-audit probe and reproduced the recorded fixture outputs. Full suite and smoke remain in progress at this checkpoint. Additional exact test path: `__tests__/api/bloombergExposure.test.ts`.
+
+Bridge red-team also proved two pre-existing HIGH residuals, filed separately: Q128 malformed numeric prefixes (`1,234.5` becomes 1; `123oops` becomes 123), and Q129 a Bloomberg-selected price borrowing the fresh Yahoo timestamp while dropping the upstream Bloomberg timestamp. Canonical backlog and new ledger rows carry actual-module reproductions and regression requirements. **The Q108 acknowledgement gate establishes neither data validity nor freshness.** No historical measurement was rewritten.
+
+### Final local verification checkpoint
+
+Full Vitest: **2189 passed / 17 skipped**, 147 passed files and one skipped (148 total). Production build passed. Typecheck had passed before the new consumer tests; its final rerun is pending at this checkpoint. All check:ci stages passed across the sandbox/network retry: workflow lint, logic, indicators, BTC, integrity and smoke. No historical benchmark was run because algorithm code was unchanged.
+
+The consumer guard was tested adversarially: restoring URL-only permission logic produced **four failures** in the new `/prices` and `/fundamentals` tests (four others passed). The mutation was reverted before the complete suite. Built `next start` runtime returned public health status 200 with no-store and exactly `{status:ok}`; a valid synthetic operator key received `unacknowledged` while the configured bridge URL used an invalid local port. Red-team found no Q108 blocker; Q128/Q129 remain recorded data-validity/freshness defects.
+
+Production smoke passed 20/20 against the **existing deployment**. This proves current service health, not that this branch is deployed. No merge/deployment or production environment change is claimed.
+
+**Single next action:** record final typecheck and commit hash, then publish the verified branch for review. Production configuration/deployment approval remains separate. Q122 is the next algorithm candidate, subject to the I1/I2 priority of Q128/Q129.
+
+### Commit checkpoint
+
+Implementation and audit reports committed as `292c42f` on `codex/q108-bridge-gate-audit`. Final typecheck passed after the new tests. Review evidence: `reviews/q108-bridge-security-review-2026-09-16.md`; consumer coverage: `__tests__/api/bloombergExposure.test.ts`. Canonical handoff records accompany a separate commit. No production configuration was changed.

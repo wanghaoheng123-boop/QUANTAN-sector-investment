@@ -2320,24 +2320,26 @@
   },
   {
     "id": "Q-105",
-    "title": "BacktestConfig.confidenceThreshold and stopLossPct are dead configuration",
+    "title": "Backtest configuration exposes retired stops and mode-dependent confidence filtering",
     "domain": "Quant/Research",
     "priority": "P2",
     "status": "pending",
     "files": [
       "lib/backtest/signalTypes.ts",
-      "lib/backtest/core.ts"
+      "lib/backtest/core.ts",
+      "lib/backtest/signals.ts"
     ],
     "acceptance_criteria": [
-      "Either the engine reads confidenceThreshold as a decision, or the field is removed from BacktestConfig",
-      "stopLossPct either bounds the ATR-adaptive stop as documented or is removed",
-      "A test fails if a BacktestConfig field can be varied without changing any backtest output"
+      "Remove retired stopLossPct controls and misleading ATR-stop documentation without restoring the intentionally retired July strategy",
+      "Preserve confidenceThreshold in the enhanced signal path; remove or identify unsupported default-mode controls rather than deleting the shared enhanced contract",
+      "Use fixtures that force each supported decision boundary; do not require arbitrary parameter changes to alter every dataset"
     ],
     "verify_commands": [
       "npm run typecheck",
       "npm run test"
     ],
-    "notes_2026_08_22": "Found while building the Q-085 PBO producer. An 18-configuration grid over confidenceThreshold (40-65) and stopLossPct (0.06-0.14) produced BYTE-IDENTICAL trades on every instrument, and PBO came back exactly 1 with a median logit of 0 — the signature of ties. lib/backtest/core.ts echoes both fields at :239/:479 and branches on neither; maxDrawdownCap IS used at :328. Dead configuration is worse than no configuration: it invites exactly the fabricated result this nearly published. The PBO producer now refuses to publish when grid columns are not distinct, which contains the symptom; this ticket is the cause."
+    "notes_2026_08_22": "Found while building the Q-085 PBO producer. An 18-configuration grid over confidenceThreshold (40-65) and stopLossPct (0.06-0.14) produced BYTE-IDENTICAL trades on every instrument, and PBO came back exactly 1 with a median logit of 0 — the signature of ties. lib/backtest/core.ts echoes both fields at :239/:479 and branches on neither; maxDrawdownCap IS used at :328. Dead configuration is worse than no configuration: it invites exactly the fabricated result this nearly published. The PBO producer now refuses to publish when grid columns are not distinct, which contains the symptom; this ticket is the cause.",
+    "notes_2026_09_16": "CORRECTION, no algorithm change: confidenceThreshold is read in enhanced signals.ts:270; the default mode can remain invariant. stopLossPct is echoed by core.ts but the July time-only exit policy explicitly retired its stops. The old ATR-adaptive-stop explanation and blanket all-config-variations-change-output criterion were wrong. Preserve the original PBO observation, but do not infer a globally dead confidence field from that default-mode experiment. See reviews/q108-algorithm-audit-2026-09-16.md"
   },
   {
     "id": "Q-106",
@@ -2397,7 +2399,7 @@
     "title": "Bloomberg exposure: gate at the client, do not strip the labels",
     "domain": "Security/Compliance",
     "priority": "P1",
-    "status": "pending",
+    "status": "partial",
     "files": [
       "lib/data/bloomberg/bridgeClient.ts",
       "app/api/bloomberg-bridge/health/route.ts",
@@ -2409,7 +2411,10 @@
       "The unauthenticated health route no longer discloses whether a bridge is configured",
       "A test asserts zero outbound calls when the gate is closed - not merely that the result is null"
     ],
-    "notes_2026_08_29": "Designed by security-compliance review, reviews/inbox-2026-08-29/security-compliance.md. THE PRIOR RECOMMENDATION WAS REJECTED ON REVIEW: 'drop the vendor-identifying fields from public payloads' is concealment, not remediation - the licence exposure is the DATA, not the label, and on fundamentals it would be provenance FALSIFICATION, since displayPrice is Bloomberg-derived and feeds DCF, bands, anchors, signal and researchScore unlabelled. Gate first; with the gate closed there is no Bloomberg data in either payload and the disclosure question does not arise. Gate in bridgeClient.ts because isBloombergBridgeConfigured() already has three callers and a per-route check is the reachability defect this repo has hit six times. NOTE: __tests__/data/bloombergBridge.test.ts:154-163 will go GREEN WHILE CEASING TO TEST ANYTHING - it returns null at the gate and never reaches the HTTP path it exists to exercise; the load-bearing assertion is expect(calls).toHaveLength(0). Adding runtime config to a route is static-analysis-only: the Vercel build is the gate, not tsc or vitest."
+    "notes_2026_08_29": "Designed by security-compliance review, reviews/inbox-2026-08-29/security-compliance.md. THE PRIOR RECOMMENDATION WAS REJECTED ON REVIEW: 'drop the vendor-identifying fields from public payloads' is concealment, not remediation - the licence exposure is the DATA, not the label, and on fundamentals it would be provenance FALSIFICATION, since displayPrice is Bloomberg-derived and feeds DCF, bands, anchors, signal and researchScore unlabelled. Gate first; with the gate closed there is no Bloomberg data in either payload and the disclosure question does not arise. Gate in bridgeClient.ts because isBloombergBridgeConfigured() already has three callers and a per-route check is the reachability defect this repo has hit six times. NOTE: __tests__/data/bloombergBridge.test.ts:154-163 will go GREEN WHILE CEASING TO TEST ANYTHING - it returns null at the gate and never reaches the HTTP path it exists to exercise; the load-bearing assertion is expect(calls).toHaveLength(0). Adding runtime config to a route is static-analysis-only: the Vercel build is the gate, not tsc or vitest.",
+    "notes_2026_09_16": "LOCAL ONLY on codex/q108-bridge-gate-audit; uncommitted at record time, not merged or deployed. Central affirmative acknowledgement gate, public health withdrawal, and explicit prices status are implemented locally. Both bridge fetches reject redirects after a security probe reproduced custom-secret-header forwarding across origins. No environment values changed; acknowledgement is not legal evidence. Initial regression evidence: 15 failures before implementation, 29 passes after; typecheck passed. Build/check:ci/full-suite and consumer review still in progress at record time; final results belong in the new session wave. Production migration requires an intentional decision because URL-only configurations will stop bridge requests. CHECKPOINT UPDATE: local build and typecheck passed; BTC verification passed with network access after initial sandbox DNS failure; integrity checked 56 files / 71841 rows, zero hard errors and two known warnings. Full suite/smoke/review still pending. Q128/Q129 record pre-existing parsing and timestamp defects; gate approval is not data-quality approval. FINAL LOCAL CHECKPOINT: full Vitest 2189 passed / 17 skipped (148 files); build green; all check:ci stages passed across network retry. URL-only gate mutation caused four new consumer-test failures, restored before full suite. Built-server public health exact minimal body verified; operator response unacknowledged. Red-team no Q108 blockers. Existing-production smoke 20/20 is not branch-deployment evidence. Final typecheck rerun and commit status still pending at record time.",
+    "implementation_commit": "292c42f",
+    "verification_2026_09_16": "Full Vitest 2189 passed/17 skipped; final typecheck and production build passed; all check:ci stages passed across network retry; built local health responses verified. Implementation committed on codex/q108-bridge-gate-audit; unmerged/undeployed."
   },
   {
     "id": "Q-109",
@@ -2689,5 +2694,176 @@
       "curl -s -H 'Accept-Encoding: br' -o /dev/null -w '%{size_download}\\n' https://quantan.vercel.app/api/backtest"
     ],
     "notes_2026_09_14": "Found while measuring Q-119's prefetch cost per surface, and it dwarfs that ticket by more than an order of magnitude. Measured on production 2026-09-14: /api/backtest returns 760,524 bytes brotli (742.6 kB) / 802,197 gzip, decoding to 2,545,275 bytes (2.4 MB), ratio 3.3x. It is fetched on load by /backtest, which made that surface 2755.8 kB locally against 282-384 kB for every other surface measured. Of the decoded payload, `results` alone is 2480.6 kB across 56 instrument entries — 97% of it; the other top-level keys (runId, computedAt, dataSource, instruments, portfolio, _cached, _cachedAt) are noise by comparison. CALIBRATION NOTE, because the first version of this finding was wrong in the alarming direction: `next start` serves this route with NO content-encoding, so a local measurement reports the full 2.4 MB and looks like a catastrophe. Production DOES compress it (content-encoding: br, x-vercel-cache HIT, age 2410 at time of measurement). Measure this one against production or the number is inflated 3.3x. It is still the single largest transfer in the app: 742.6 kB is ~15-23x the entire router prefetch cost of any surface (31.7-48.4 kB, Q-119) and larger than the whole service-worker precache (547.4 kB, Q-120). Ranking the three honestly, the ticket that was opened (Q-119) is the smallest of them. EDGE-CACHE CAVEAT: the 742.6 kB was read from a Vercel edge HIT (x-vercel-cache: HIT, age 2410), so it is the cached-response size. That is the right figure for the payload-size claim made here; do not read it as a cold-origin measurement."
+  },
+  {
+    "id": "Q-122",
+    "title": "Drawdown exits and final liquidation accept invalid prices",
+    "domain": "Quant/Research",
+    "priority": "P1",
+    "status": "pending",
+    "files": [
+      "lib/backtest/core.ts"
+    ],
+    "acceptance_criteria": [
+      "Centralize the finite-positive fill contract and choose explicit rejection or deferral for unpriceable exits",
+      "Branch-forced tests cover drawdown, overlapping time/drawdown triggers and final liquidation with zero, negative, NaN and Infinity prices",
+      "No completed trade contains an invalid price and no successful result contains non-finite equity"
+    ],
+    "verify_commands": [
+      "npm run typecheck",
+      "npm run test",
+      "npm run benchmark"
+    ],
+    "notes_2026_09_16": "HIGH. core.ts:350 bypasses the entry/time-exit guard; final liquidation :430 has the same gap. Forced BUY of 500 shares at 100, bar 202 close 40, bar 203 open NaN yields NaN totalReturn; open zero books a zero-price exit. Deterministic invented fixture, not a historical result. Related Q02 covered entry only; Q103-RT-7 no-NaN assertion was too broad. Evidence and concrete implementation instructions: reviews/q108-algorithm-audit-2026-09-16.md"
+  },
+  {
+    "id": "Q-123",
+    "title": "Net-win classification misses exit-notional fees at break-even",
+    "domain": "Quant/Research",
+    "priority": "P2",
+    "status": "pending",
+    "files": [
+      "lib/backtest/core.ts",
+      "lib/backtest/engine.ts"
+    ],
+    "acceptance_criteria": [
+      "Single and aggregate classification use independently calculated exact cash profit after fees",
+      "Test below, at and above break-even r=2*c/(1-c), plus zero fees",
+      "Preserve the historical F-4 correction while documenting this narrower residual"
+    ],
+    "verify_commands": [
+      "npm run typecheck",
+      "npm run test",
+      "npm run benchmark"
+    ],
+    "notes_2026_09_16": "MEDIUM residual of F-4: core.ts:193-207 and engine.ts:82-84 compare return with constant 2*c although exit fee uses exit notional. Fixture buy 500 at 100, sell at 100.2201, c=.0011 loses $0.071055 yet reports winRate=1. No historical occurrence frequency measured. Evidence and concrete implementation instructions: reviews/q108-algorithm-audit-2026-09-16.md"
+  },
+  {
+    "id": "Q-124",
+    "title": "Profit factor changes under single-result aggregation",
+    "domain": "Quant/Research",
+    "priority": "P2",
+    "status": "pending",
+    "files": [
+      "lib/backtest/core.ts",
+      "lib/backtest/engine.ts",
+      "__tests__/backtest/aggregatePortfolio.golden.test.ts"
+    ],
+    "acceptance_criteria": [
+      "Document net-dollar profit factor or an explicitly named alternative before changing API semantics",
+      "Aggregating one result preserves its profit factor",
+      "Independent cash ledger tests cover unequal notionals, net loss despite gross gain, fees and zero-loss denominator"
+    ],
+    "verify_commands": [
+      "npm run typecheck",
+      "npm run test",
+      "npm run benchmark"
+    ],
+    "notes_2026_09_16": "MEDIUM. core.ts:206-207 includes a sub-fee gross gain in grossLoss; engine.ts:85-87 excludes it from both sums. Forced gross returns +10% and +0.1% produce PF=100 in core and Infinity after aggregatePortfolio([same]). Both sum percentages regardless of position size. Existing golden test ratifies the inconsistent definition; replace its oracle. Evidence and concrete implementation instructions: reviews/q108-algorithm-audit-2026-09-16.md"
+  },
+  {
+    "id": "Q-125",
+    "title": "Strategy cash accounting omits dividends on held shares",
+    "domain": "Quant/Research",
+    "priority": "P2",
+    "status": "pending",
+    "files": [
+      "lib/backtest/core.ts"
+    ],
+    "acceptance_criteria": [
+      "Confirm input price/dividend adjustment semantics before changing cash accounting",
+      "Define entitlement ordering relative to next-open execution and ex-date",
+      "Independent ledger credits only entitled holdings; cover held shares, purchase at ex-date open, sale at ex-date open, no position and zero-dividend control"
+    ],
+    "verify_commands": [
+      "npm run typecheck",
+      "npm run test",
+      "npm run benchmark"
+    ],
+    "notes_2026_09_16": "MEDIUM. Dividend reads in core.ts:43-44,287-300,432-433 affect only B&H. A held 500-share strategy position spanning dividend=2 has identical return to a dividend-free control; $1000 entitlement is absent. This is distinct from F1.5 B&H omission and Q110-Q1r warmup treatment. Do not add cash to already total-return-adjusted prices; involve data-integrity and accounting reviewers. Evidence and concrete implementation instructions: reviews/q108-algorithm-audit-2026-09-16.md"
+  },
+  {
+    "id": "Q-126",
+    "title": "Buy-and-hold dividend reinvestment omits compounding",
+    "domain": "Quant/Research",
+    "priority": "P2",
+    "status": "pending",
+    "files": [
+      "lib/backtest/core.ts"
+    ],
+    "acceptance_criteria": [
+      "Independent share ledger covers repeated distributions, unequal prices and zero-dividend control",
+      "Scalar and curve B&H implementations consistently pay dividends on all entitled reinvested shares",
+      "Three closes of 100 with two dividends of 10 yield 21 percent under the existing close-reinvestment convention"
+    ],
+    "verify_commands": [
+      "npm run typecheck",
+      "npm run test",
+      "npm run benchmark"
+    ],
+    "notes_2026_09_16": "MEDIUM. core.ts:44 adds dividend/close rather than current shares*dividend/close; :288,:300,:433 repeat the convention. The three-bar fixture yields 20% rather than 21%. Distinct from Q110-Q1r warmup/endpoint disagreement. Evidence and concrete implementation instructions: reviews/q108-algorithm-audit-2026-09-16.md"
+  },
+  {
+    "id": "Q-127",
+    "title": "Portfolio monthlyRebalance configuration is inert",
+    "domain": "Quant/Research",
+    "priority": "P2",
+    "status": "pending",
+    "files": [
+      "lib/backtest/portfolioBacktest.ts"
+    ],
+    "acceptance_criteria": [
+      "Remove the unsupported configuration and its monthly-sector-rebalance promise, or explicitly defer implementation to a separately validated strategy package",
+      "If implemented, branch-forced month-boundary fixtures demonstrate a real decision difference while within-month behavior remains unchanged",
+      "Do not silently activate a new strategy as configuration cleanup"
+    ],
+    "verify_commands": [
+      "npm run typecheck",
+      "npm run test",
+      "npm run benchmark"
+    ],
+    "notes_2026_09_16": "MEDIUM static caller audit: portfolioBacktest.ts:71 declares monthlyRebalance and :87 defaults it false; no decision reads the field. No strategy experiment or behavior change attempted. Evidence and concrete implementation instructions: reviews/q108-algorithm-audit-2026-09-16.md"
+  },
+  {
+    "id": "Q-128",
+    "title": "Bridge numeric parsing silently accepts malformed price strings",
+    "domain": "Data/Integrity",
+    "priority": "P1",
+    "status": "pending",
+    "files": [
+      "lib/data/bloomberg/bridgeClient.ts"
+    ],
+    "acceptance_criteria": [
+      "Parse numeric strings with a full-string contract or runtime schema rather than accepting prefixes",
+      "Reject formatted or malformed values unless a documented format explicitly supports them",
+      "Boundary fixtures prove malformed bridge data cannot replace a valid fallback price"
+    ],
+    "verify_commands": [
+      "npm run typecheck",
+      "npm run test -- __tests__/data/bloombergBridge.test.ts"
+    ],
+    "notes_2026_09_16": "HIGH pre-existing residual, reproduced by bridge red-team with the actual TypeScript module: num at bridgeClient.ts:47 uses parseFloat; fetchBloombergQuotesViaBridge normalizes 1,234.5 to 1 and 123oops to 123. 1e309 yields null as a finite-check control. Q108 closes the permission gate, not this data-validity defect. A separate data-integrity review and schema change are required; no production frequency measured."
+  },
+  {
+    "id": "Q-129",
+    "title": "Bloomberg-selected prices inherit the fresh Yahoo timestamp",
+    "domain": "Data/Integrity",
+    "priority": "P1",
+    "status": "pending",
+    "files": [
+      "lib/data/mergeQuotes.ts",
+      "lib/data/bloomberg/bridgeClient.ts"
+    ],
+    "acceptance_criteria": [
+      "Carry a validated Bloomberg timestamp through the normalized bridge contract",
+      "Select a price and its own source timestamp together; never attach Yahoo time to Bloomberg price",
+      "A missing or invalid selected-source timestamp remains null or visibly degraded",
+      "Regression combines a stalled bridge with fresh Yahoo data and checks timestamp, source and selected price together"
+    ],
+    "verify_commands": [
+      "npm run typecheck",
+      "npm run test -- __tests__/data/"
+    ],
+    "notes_2026_09_16": "HIGH pre-existing I1/I2 residual, reproduced by bridge red-team against actual TypeScript modules. mergeQuotes.ts:128 copies y.quoteTime while bridgeClient.ts:29-42 drops upstream time. Fixture Bloomberg last=100, quoteTime=2026-09-10T14:00:00Z plus Yahoo price=200, quoteTime=2026-09-16T14:00:00Z produces price=100, quoteTime=2026-09-16T14:00:00Z, dataSource=bloomberg. The selected price is presented under a different source clock. Q108 gates permission; it does not establish price validity or freshness. No live stale-data event is claimed."
   }
 ]

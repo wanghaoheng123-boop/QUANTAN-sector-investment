@@ -978,5 +978,62 @@
     "honest_ranking": "/api/backtest 742.6 kB (Q-121) > SW precache 547.4 kB (Q-120) > router prefetch 32-48 kB (Q-119, this). The ticket that was opened is the SMALLEST by more than an order of magnitude; both larger findings were found by measuring it.",
     "scope_correction_after_review": "Adversarial review caught two claims broader than their evidence, both now fixed in reviews/, the backlog, the guard docstring and the PR: (a) every brand number came from landing on /stock/AAPL, the heaviest shell in the app, while the defect is in global chrome on all 16 pages — re-measured from /desk, which showed the landing surface is NOT the driver; (b) \"zero bytes downloaded\" rested on the same encodedDataLength:0 signal that had already misled this package twice, and a fromDiskCache check showed 2 of 16 requests genuinely hit the network.",
     "production_verified": "Brand click on https://quantan.vercel.app/stock/AAPL: 0 document navigations, 21 ms soft commit — against 96-190 ms and 16 re-issued requests before. FIRST attempt at this verification measured the OLD build and reported a hard navigation: the merge had landed but the Production deployment was still d9cbdc3 while main was a89dccb. Checking the deployments API for a Production entry matching HEAD is what distinguished \"the fix does not work\" from \"the fix is not deployed yet\" — the same class of error as the stale dev server earlier in this session, one environment up."
+  },
+  "wave_2026_09_16_q108_local": {
+    "package": "Q-108 — centrally gate Bloomberg redistribution; bounded independent algorithm discovery",
+    "selection": "Rule (b): audited I8 violation; owner-gated P0s skipped. Q105 corrected instead of selected.",
+    "branch": "codex/q108-bridge-gate-audit",
+    "status": "LOCAL VERIFIED, awaiting commit/publication; no merge or deployment claim",
+    "attempted": "Central affirmative acknowledgement requirement, non-disclosing public health route, explicit prices status; both bridge fetches reject redirects after secret-forwarding reproduction. No environment values changed.",
+    "verification_so_far": "Full Vitest: 2189 passed, 17 skipped; 147 passed files / 1 skipped, 148 total. Production build passed. Typecheck passed before final consumer tests; final rerun pending at this checkpoint. All check:ci stages passed across the sandbox network retry: workflow lint, logic, indicators, BTC, integrity and smoke. Integrity: 56 files / 71841 rows, zero hard errors, two known warnings. Red-team reports no Q108 blockers; Q128/Q129 remain open pre-existing data defects.",
+    "paths_touched": [
+      "README.md",
+      "__tests__/data/bloombergBridge.test.ts",
+      "__tests__/api/bloombergHealth.test.ts",
+      "app/api/bloomberg-bridge/health/route.ts",
+      "app/api/prices/route.ts",
+      "lib/data/bloomberg/bridgeClient.ts",
+      "reviews/q108-algorithm-audit-2026-09-16.md",
+      "workspace/SESSION_STATE.json",
+      "workspace/IMPROVEMENT_BACKLOG.json",
+      "workspace/MEMORY_LOG.md",
+      "reviews/findings-ledger.csv",
+      "__tests__/api/bloombergExposure.test.ts"
+    ],
+    "discoveries": {
+      "Q-122": "Drawdown exits and final liquidation accept invalid prices",
+      "Q-123": "Net-win classification misses exit-notional fees at break-even",
+      "Q-124": "Profit factor changes under single-result aggregation",
+      "Q-125": "Strategy cash accounting omits dividends on held shares",
+      "Q-126": "Buy-and-hold dividend reinvestment omits compounding",
+      "Q-127": "Portfolio monthlyRebalance configuration is inert",
+      "Q-128": "Bridge numeric parsing silently accepts malformed price strings",
+      "Q-129": "Bloomberg-selected prices inherit the fresh Yahoo timestamp"
+    },
+    "correction": "Q105 confidenceThreshold is active in enhanced mode; stopLossPct follows intentional retired-stop behavior. Triggering fixtures replace the invalid demand that all variations alter every dataset.",
+    "research_trials": "None. Algorithm audit uses deterministic invented branch-forcing fixtures, not historical experiments, sweeps or published strategy results. No strategy trial appended.",
+    "open_owner_actions": [
+      "Q005 Redis provisioning",
+      "Q082/Q083 licence and regulatory legal opinions",
+      "Q097 repository protection",
+      "Q100-12 exposed credential revocation/rotation"
+    ],
+    "single_next_action": "Record final typecheck and commit hash, then publish the verified branch for review; deployment/production configuration approval and verification remain separate. Next algorithm candidate Q122, subject to I1/I2 priority of Q128/Q129.",
+    "honesty": {
+      "effect": "Zero-call and transport regression evidence observed locally; production effect unverified.",
+      "advisory": "Local gates passed as specified; no CI merge enforcement or branch deployment claimed. Existing-production smoke is not branch verification.",
+      "untested": "Production configuration/deployment behavior and historical incidence of accounting defects. Q128/Q129 prove pre-existing numeric parsing and mixed-source timestamp defects: gating is not data-validity or freshness approval.",
+      "cold_session_trap": "Do not treat acknowledgement as a licence, tests as a deployment, or globally delete confidenceThreshold. Stop activation is a different strategy."
+    },
+    "behavioral_evidence": {
+      "red_before_green": "Focused gate suite: 15 failures before implementation, 29 passes after.",
+      "mutation": "Temporarily restoring URL-only permission logic caused 4 failures / 4 passes in the new real-consumer /prices and /fundamentals tests; restored before the full suite.",
+      "built_runtime": "next start public health returned 200, no-store and exactly {status:ok}; valid synthetic operator key returned unacknowledged with URL configured to an invalid local port.",
+      "production_smoke": "20/20 on the EXISTING deployment; service-health evidence only, not proof of this branch.",
+      "algorithm_probe": "Lead reran complete deterministic audit probe and reproduced outputs; no historical benchmark run because algorithms unchanged."
+    },
+    "implementation_commit": "292c42f",
+    "final_typecheck": "PASS after all new consumer and health tests",
+    "publication": "Verified branch prepared for pull request; no merge or production deployment."
   }
 }
