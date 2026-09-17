@@ -2115,3 +2115,15 @@ Production smoke passed 20/20 against the **existing deployment**. This proves c
 ### Commit checkpoint
 
 Implementation and audit reports committed as `292c42f` on `codex/q108-bridge-gate-audit`. Final typecheck passed after the new tests. Review evidence: `reviews/q108-bridge-security-review-2026-09-16.md`; consumer coverage: `__tests__/api/bloombergExposure.test.ts`. Canonical handoff records accompany a separate commit. No production configuration was changed.
+
+### Publication checkpoint
+
+Code `292c42f` and handoff `acbbfbf` pushed to the existing public origin; draft [PR #205](https://github.com/wanghaoheng123-boop/QUANTAN-sector-investment/pull/205) is open. Initial automatic push review rejected an unverified destination/private-content concern. Read-only GitHub verification confirmed the configured public repository, matching base commit and push permission; reviewing the 13-file outgoing diff confirmed no environment, secret or market-data files. The subsequent reviewed push succeeded. CI/preview inspection is pending at this checkpoint; unmerged, production unchanged.
+
+### Final verification — 2026-09-17
+
+PR #205 at `acbbfbf84c4cd0facc62304cd8649abd7ab3014d` passed **9/9 GitHub checks**: typecheck, test, coverage, benchmark, workflows, pytest, smoke, Vercel and preview comments. CI run `35075742339`. The CI benchmark is a regression check, not a new selected strategy experiment; this package changes no algorithm. Vercel preview deployment `4HSDz7gCjB3WqQDESXweAqhm3FKw` is READY. Preview URL: https://quantan-git-codex-q108-bri-ac7484-wanghaoheng123-7549s-projects.vercel.app .
+
+**Preview runtime smoke remains unverified:** the endpoint redirects to Vercel SSO. Existing CLI authenticated access was attempted following the protected-deployment skill; the CLI has no credentials and started a device login. That process was stopped; no credentials, protection settings or environment values were changed. Built local runtime verification remains valid, but does not substitute for the protected preview. Temporary local Next server was also stopped.
+
+Code, tests, audit and handoff are complete on the draft PR; no merge or production deployment is claimed. Review the intended production bridge configuration and finish the authenticated preview smoke before merging. Q122 is the next algorithm repair candidate; Q128/Q129 remain HIGH data-integrity findings. The final record-only commit contains these verification results and no executable changes.
