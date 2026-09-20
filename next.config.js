@@ -1,10 +1,14 @@
 /** @type {import('next').NextConfig} */
+const { PRECACHE_EXCLUDE } = require('./lib/pwa/precache')
 const withPWA = require('@ducanh2912/next-pwa').default({
   dest: 'public',
   disable: process.env.NODE_ENV === 'development',
   /** Never cache Next API routes in the service worker — stale 451/empty bodies break crypto. */
   extendDefaultRuntimeCaching: true,
   workboxOptions: {
+    // Q-120: precache nothing at install. See lib/pwa/precache.js for the
+    // measurements behind this — including that installability survives it.
+    exclude: PRECACHE_EXCLUDE,
     runtimeCaching: [
       {
         urlPattern: ({ url }) => url.pathname.startsWith('/api/'),
