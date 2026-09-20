@@ -1049,5 +1049,55 @@
       "runtime_smoke": "NOT VERIFIED: HTTP302 Vercel SSO; installed authenticated curl CLI found no credentials. Login flow stopped; protection unchanged. Local built runtime verified."
     },
     "next_action": "Review production bridge configuration and complete protected-preview smoke before merging PR205. Next algorithm repair Q122; data-integrity priorities Q128/Q129 also remain open."
+  },
+  "wave_2026_09_17_q122": {
+    "package": "Q-122 — reject invalid backtest exit prices",
+    "selection": "User explicitly approved the named next algorithm package after Q108; owner-gated P0s skipped. Q128/Q129 remain separate HIGH data-integrity findings, not implicitly deprioritized or closed.",
+    "branch": "codex/q122-invalid-exit-prices",
+    "base_commit": "f2ee04c",
+    "publication_dependency": "SUPERSEDED 2026-09-20. Was: stacked on codex/q108-bridge-gate-audit with draft PR205 open and unmerged. PR #205 was marked ready and merged 2026-09-20T13:47:41Z; this work was rebased onto main and published standalone, so the stacking dependency no longer exists.",
+    "status": "LOCAL IMPLEMENTATION AND VERIFICATION CHECKPOINT; uncommitted, Q122 partial pending final verification, review and publication",
+    "attempted": "Central finite-positive price contract; reject unpriceable required exits with RangeError before accounting mutations. Apply the same policy to time exits, drawdown exits and terminal valuation, including nonempty short histories and flat terminal positions. Invalid-entry skipping remains unchanged.",
+    "scope": "Reject zero, negative, NaN and positive/negative Infinity required prices. This is not a proof that all finite-positive inputs produce finite arithmetic, nor full intermediate market-data validation. No signal policy, parameters, fees, sizing policy or net-return definition changed.",
+    "behavioral_evidence": {
+      "red_before_green": "New regression suite against the previous implementation: 38 failed, 10 passed. Patched focused suite: 64 passed, including 48 new cases and 16 existing cases. New files contain 46 core and 2 real-route tests.",
+      "full_suite": "Lead reports 2237 passed, 17 skipped; 149 passed files, 1 skipped file, 150 total. Final process completion statuses are still being collected at this checkpoint.",
+      "other_gates": "Lead reports successful typecheck, production build and check:ci logs; final process completion statuses are still being collected. Benchmark pending after the first runner hit EPERM.",
+      "valid_history_replay": {
+        "instruments": 56,
+        "input_sha256": "685ea074144fb7ed7bfe038ed6cfc5758316c655683aebbe68616f04982df006",
+        "before_output_sha256": "5d2038d09e9c9e363cd92fe9731f8effe6c9b8dadeb6ed8dfa72adbbb83114e8",
+        "after_output_sha256": "5d2038d09e9c9e363cd92fe9731f8effe6c9b8dadeb6ed8dfa72adbbb83114e8",
+        "verdict": "Inputs and complete per-instrument outputs unchanged, byte for byte. Local comparison evidence, not a performance-improvement claim."
+      }
+    },
+    "paths_touched": [
+      "lib/backtest/core.ts",
+      "__tests__/backtest/invalidExitPrice.test.ts",
+      "__tests__/api/backtestInvalidPrice.test.ts",
+      "workspace/SESSION_STATE.json",
+      "workspace/IMPROVEMENT_BACKLOG.json",
+      "workspace/MEMORY_LOG.md",
+      "reviews/findings-ledger.csv"
+    ],
+    "discovered_not_fixed": {
+      "Q-130": "Finite-positive prices can still overflow derived quantities: Number.MIN_VALUE entry produces infinite shares; Number.MAX_VALUE final close produces non-finite proceeds/equity. Both reproduced on base and patched code. Separate P2 numerical-hardening package."
+    },
+    "boundary_limitations": "Intermediate-price validation is outside this exit-price slice. Do not imply successful output is globally finite for arbitrary data, or that every API/provider input reaches the core unchanged.",
+    "research_claim": "No tuning, strategy selection or predictive-improvement claim. The fixed-input replay is regression evidence. Registry/review reporting is owned by the lead and pending at this checkpoint.",
+    "owner_actions": [
+      "Redis provisioning (Q005)",
+      "Vendor/regulatory counsel (Q082/Q083/Q100)",
+      "Repository protection (Q097)",
+      "Previously recorded exposed-key revocation/rotation"
+    ],
+    "honesty": {
+      "effect": "Observed branch-forced failures before the fix and passing rejection behavior afterward; replay establishes valid-history equivalence on the 56 checked inputs.",
+      "advisory": "Local results and existing-production smoke are not deployment evidence. CI checks remain advisory while repository protection is absent.",
+      "untested": "Production behavior and protected-preview runtime; historical incidence of the malformed-price or overflow defects.",
+      "cold_session_trap": "Finite-positive validation is not overflow protection. Q130 remains open. Q108 and Q122 are unmerged; do not conflate a stacked preview with production."
+    },
+    "single_next_action": "Collect final gate/benchmark and specialist review results, then commit and publish the isolated Q122 draft PR; append actual hashes and deployment status.",
+    "recovery_2026_09_20": "Found COMPLETE but UNCOMMITTED in the working tree, three days old and unpushed, on a local branch with no upstream. Verified rather than re-derived: typecheck clean, 2237 tests pass, benchmark exit 0. Q-122 was independently proved behaviour-neutral by re-running the benchmark on the PRE-change engine against identical data — 0 of 35 scalar fields differed — which corroborates T-0011's own claim that the 56 complete histories were unchanged. The 35-field delta against the committed benchmark-results.json (written 2026-08-22) is the weekly data refresh, not this change: alwaysBuyBaseline.nBars rose 58419 -> 59465, which no engine change can cause. Two defects found in the package's own records and fixed here: reviews/q122-invalid-exit-prices-2026-09-17.md was cited by TRIAL_REGISTRY T-0011 but never written, and this key claimed PR205 was still open."
   }
 }
