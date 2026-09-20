@@ -30,6 +30,40 @@ const CACHE_TTL_MS = 60 * 60 * 1000 // 1 hour
 // callers. With the guard, all concurrent cold requests await the same Promise.
 let computing: ReturnType<typeof runBacktest> | null = null
 
+// ─── Wire shape ──────────────────────────────────────────────────────────────
+
+/**
+ * Q-121: fields dropped from the RESPONSE after aggregation has consumed them.
+ *
+ * `bnhCurve` and `dailyReturns` are per-instrument time series ~1074 points
+ * long. They are 26.73 kB of the ~41 kB each result decodes to — together 56%
+ * of the whole payload — and the browser never reads either one.
+ *
+ * Measured, not assumed (the ticket's own criterion was "diff the consumed key
+ * set, do not eyeball it"): every result was wrapped in a recording Proxy on
+ * production and the page driven through all five tabs. The keys it actually
+ * read were ticker, sector, equityCurve, closedTrades' siblings and the scalar
+ * metrics — never these two.
+ *
+ * `bnhCurve` is NOT dead server-side: `aggregatePortfolio` walks it to compute
+ * the aligned `portfolio.bnhAvg` and therefore `alpha` (lib/backtest/engine.ts
+ * :199-213). That is why the strip happens HERE, after aggregation, rather than
+ * in core.ts — the curve is a server-side intermediate, and only its scalar
+ * result needs to cross the wire.
+ *
+ * `closedTrades` also measured as never-read, and is deliberately KEPT: it is
+ * only 1.32 kB per result, and a tab named "trades" warrants stronger evidence
+ * than a click sweep before its data is removed.
+ */
+const OMITTED_FROM_WIRE = ['bnhCurve', 'dailyReturns'] as const
+
+type WireResult = Omit<ReturnType<typeof backtestInstrument>, (typeof OMITTED_FROM_WIRE)[number]>
+
+function toWireResult(r: ReturnType<typeof backtestInstrument>): WireResult {
+  const { bnhCurve: _bnhCurve, dailyReturns: _dailyReturns, ...wire } = r
+  return wire
+}
+
 // ─── Run backtest ────────────────────────────────────────────────────────────
 
 async function runBacktest(filterTickers?: string[]): Promise<{
@@ -37,7 +71,7 @@ async function runBacktest(filterTickers?: string[]): Promise<{
   computedAt: string
   dataSource: 'local'
   instruments: { ticker: string; sector: string; candles: number }[]
-  results: ReturnType<typeof backtestInstrument>[]
+  results: WireResult[]
   portfolio: {
     avgReturn: number
     avgAnnReturn: number
@@ -98,7 +132,8 @@ async function runBacktest(filterTickers?: string[]): Promise<{
     computedAt: new Date().toISOString(),
     dataSource: 'local',
     instruments,
-    results,
+    // Strip AFTER aggregatePortfolio above — it reads bnhCurve.
+    results: results.map(toWireResult),
     portfolio: {
       avgReturn: portfolio.totalReturn,
       avgAnnReturn: portfolio.annualizedReturn,
