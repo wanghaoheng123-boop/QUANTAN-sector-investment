@@ -2702,21 +2702,24 @@
     "title": "Drawdown exits and final liquidation accept invalid prices",
     "domain": "Quant/Research",
     "priority": "P1",
-    "status": "pending",
+    "status": "partial",
     "files": [
-      "lib/backtest/core.ts"
+      "lib/backtest/core.ts",
+      "__tests__/backtest/invalidExitPrice.test.ts",
+      "__tests__/api/backtestInvalidPrice.test.ts"
     ],
     "acceptance_criteria": [
-      "Centralize the finite-positive fill contract and choose explicit rejection or deferral for unpriceable exits",
-      "Branch-forced tests cover drawdown, overlapping time/drawdown triggers and final liquidation with zero, negative, NaN and Infinity prices",
-      "No completed trade contains an invalid price and no successful result contains non-finite equity"
+      "Centralize the finite-positive price contract; explicitly reject unpriceable attempted time/drawdown exits before accounting mutations, and reject invalid terminal close for every nonempty history.",
+      "Branch-forced tests cover drawdown, time-only exits, overlapping time/drawdown triggers, final liquidation and flat/stub terminal valuation with zero, negative, NaN and positive/negative Infinity prices.",
+      "Those invalid required prices never become completed fills or successful results; invalid-entry skipping remains unchanged and valid controls reproduce their prior accounting. This criterion does not assert arithmetic remains finite for every finite-positive input (Q-130)."
     ],
     "verify_commands": [
       "npm run typecheck",
       "npm run test",
       "npm run benchmark"
     ],
-    "notes_2026_09_16": "HIGH. core.ts:350 bypasses the entry/time-exit guard; final liquidation :430 has the same gap. Forced BUY of 500 shares at 100, bar 202 close 40, bar 203 open NaN yields NaN totalReturn; open zero books a zero-price exit. Deterministic invented fixture, not a historical result. Related Q02 covered entry only; Q103-RT-7 no-NaN assertion was too broad. Evidence and concrete implementation instructions: reviews/q108-algorithm-audit-2026-09-16.md"
+    "notes_2026_09_16": "HIGH. core.ts:350 bypasses the entry/time-exit guard; final liquidation :430 has the same gap. Forced BUY of 500 shares at 100, bar 202 close 40, bar 203 open NaN yields NaN totalReturn; open zero books a zero-price exit. Deterministic invented fixture, not a historical result. Related Q02 covered entry only; Q103-RT-7 no-NaN assertion was too broad. Evidence and concrete implementation instructions: reviews/q108-algorithm-audit-2026-09-16.md",
+    "notes_2026_09_17": "LOCAL CHECKPOINT, uncommitted on codex/q122-invalid-exit-prices stacked on Q108 f2ee04c. Required exits now fail closed with RangeError before mutations; time exits no longer defer into a different holding policy. Terminal validation covers flat and nonempty short histories. New regressions: 38 failed / 10 passed before, 48 new passed after; focused total 64 including 16 existing. Lead reports full suite 2237 passed / 17 skipped, typecheck/build/check:ci successful logs; final process statuses and benchmark still pending at this checkpoint. All 56 fixed input histories and complete output hashes match before/after. Acceptance was narrowed explicitly: finite-positive input checks do not prevent arithmetic overflow, reproduced separately as Q130 on base and patched code. No tuning or historical improvement claim; Q123-Q129 untouched."
   },
   {
     "id": "Q-123",
@@ -2867,5 +2870,49 @@
       "npm run test -- __tests__/data/"
     ],
     "notes_2026_09_16": "HIGH pre-existing I1/I2 residual, reproduced by bridge red-team against actual TypeScript modules. mergeQuotes.ts:128 copies y.quoteTime while bridgeClient.ts:29-42 drops upstream time. Fixture Bloomberg last=100, quoteTime=2026-09-10T14:00:00Z plus Yahoo price=200, quoteTime=2026-09-16T14:00:00Z produces price=100, quoteTime=2026-09-16T14:00:00Z, dataSource=bloomberg. The selected price is presented under a different source clock. Q108 gates permission; it does not establish price validity or freshness. No live stale-data event is claimed."
+  },
+  {
+    "id": "Q-130",
+    "title": "Finite-positive prices overflow position sizing and liquidation arithmetic",
+    "domain": "Quant/Research",
+    "priority": "P2",
+    "status": "pending",
+    "files": [
+      "lib/backtest/core.ts"
+    ],
+    "acceptance_criteria": [
+      "Use branch-forced independent accounting regressions to reproduce Number.MIN_VALUE entry-price sizing overflow and Number.MAX_VALUE terminal-price proceeds overflow before changing behavior.",
+      "Reject non-finite derived share quantities, notionals, fees, cash and equity before committing accounting mutations; define a consistent failure contract rather than silently clamping values or fabricating prices.",
+      "Retain representable finite-price controls and the Q122 invalid-price contract. Prove both entry and liquidation arithmetic checks execute, and compare unaffected historical outputs."
+    ],
+    "verify_commands": [
+      "npm run test -- __tests__/backtest/invalidExitPrice.test.ts",
+      "npm run typecheck",
+      "npm run test",
+      "npm run benchmark"
+    ],
+    "notes_2026_09_17": "MEDIUM red-team finding during Q122, reproduced on both f2ee04c base and patched core (2/2 probes in each configuration). Deterministic 252-row fixture at price100, initialCapital10000, forced half-Kelly BUY at decision200 filled201: Number.MIN_VALUE entry open produces Infinity shares and 52 non-finite equity marks; otherwise 50 shares bought at100 and liquidated at Number.MAX_VALUE close produce NaN proceeds/cash/equity via Infinity minus Infinity. Fault sites on Q122 tree: core.ts389 (floor(allocation/entryPrice)), :208-210 (position*fillPrice and fee subtraction). No historical incidence or live exploit asserted. Separate numerical-hardening package; Q122 validates price domain only. Root will preserve repro details in the committed Q122 review report; temporary probe /private/tmp/q122-redteam-q4tqq47x/residual.test.ts is not a durable source of truth."
+  },
+  {
+    "id": "Q-131",
+    "title": "Edge over base rate has drifted BELOW the recorded hard floor (+1.72pp vs +1.81pp), and the gate that would catch it is set to 0.0",
+    "domain": "Quant/Governance",
+    "priority": "P1",
+    "status": "pending",
+    "files": [
+      "reviews/invariants-baseline.md",
+      "scripts/benchmark-signals.ts",
+      "CLAUDE.md"
+    ],
+    "acceptance_criteria": [
+      "Decide, as an owner-level call, whether +1.81pp is still the intended floor — and if it is not, amend reviews/invariants-baseline.md rather than leaving a floor nobody enforces",
+      "Whatever is decided, the three places that state this gate must agree: reviews/invariants-baseline.md:51-52, CLAUDE.md's I5 paragraph, and FLOOR_EDGE_PP in scripts/benchmark-signals.ts",
+      "Do NOT simply raise FLOOR_EDGE_PP back to 1.81 — the 0.0 was a reasoned decision (the always-buy null Sharpe on this universe is ~0.14, so a floor beneath it cannot detect absent skill). Reversing it needs the same standard of argument that set it",
+      "The drift must be attributed before it is acted on: confirm whether it is the rolling data window (I4) or a real degradation, by re-measuring on a FIXED window rather than the refreshed one"
+    ],
+    "verify_commands": [
+      "npm run benchmark"
+    ],
+    "notes_2026_09_20": "Found while verifying the recovered Q-122 work, NOT caused by it — Q-122 was proved behaviour-neutral by re-running the benchmark on the pre-change engine against identical data: 0 of 35 scalar fields differed. The 35-field delta against the committed scripts/benchmark-results.json (last written 2026-08-22) is the weekly data refresh, which is I4's documented non-reproducibility showing up in practice: alwaysBuyBaseline.nBars rose 58419 -> 59465 (+1046 bars), which no engine change can cause. THE FINDING: reviews/invariants-baseline.md:51-52 records the PRIMARY CI GATE as edge over base rate, frozen 2026-07-11 at +2.31pp with a hard floor of +1.81pp. Measured 2026-09-20 the edge is +1.72pp — below that floor. CI is green anyway because scripts/benchmark-signals.ts:620 sets FLOOR_EDGE_PP = 0.0 and the check at :651 compares against that. So the SSOT for measured floors asserts an enforcement that the code does not perform, and the metric it names has since drifted under it. THE DECOMPOSITION MATTERS AND IS NOT THE OBVIOUS ONE: the selection did not get worse. Our net WR ROSE 56.33 -> 56.56 (+0.23pp) and gross rose 57.35 -> 57.66. The always-buy base rate rose FASTER, 54.02 -> 54.84 (+0.82pp), so the edge shrank by 0.59pp. The strategy improved in absolute terms and lost ground relative to the market — which is exactly the distinction the edge metric exists to surface, and exactly what a raw-WR floor would have hidden. CLAUDE.md's I5 paragraph carries the same stale number and a stale citation: it says process.exit(1) on raw edge < 1.81pp at scripts/benchmark-signals.ts:325-331; the real constant is FLOOR_EDGE_PP = 0.0 at :620, checked at :651, and :659 branches explicitly on FLOOR_EDGE_PP === 0. Both the value and the line numbers have drifted. Caught only because a piped benchmark run masked its exit status and the numbers had to be re-read by hand — the shell-exit-status trap this repo has already recorded four times."
   }
 ]

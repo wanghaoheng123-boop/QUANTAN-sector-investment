@@ -159,6 +159,17 @@ function currentEquity(state: PortfolioState, currentPrice?: number): number {
   return state.capital + positionValue
 }
 
+function isFinitePositivePrice(price: number): boolean {
+  return Number.isFinite(price) && price > 0
+}
+
+/** Q-122: missing execution/valuation evidence invalidates the run, never a fill. */
+function requirePrice(price: number, context: string): void {
+  if (!isFinitePositivePrice(price)) {
+    throw new RangeError(`Invalid backtest ${context} price: expected a finite positive number; received ${String(price)}`)
+  }
+}
+
 /**
  * Close the current open position at `fillPrice` and book the trade.
  *
@@ -186,10 +197,14 @@ function currentEquity(state: PortfolioState, currentPrice?: number): number {
  *                   `evaluateStopHit` where applicable).
  * @returns true when an exit happened; false if there was no open trade
  *                (defensive — callers gate on state.openTrade before calling).
+ * @throws RangeError if an open position's required exit has no valid fill.
+ *         Q-122: validate before mutating any accounting; postponing an exit
+ *         would invent a different holding policy from incomplete price data.
  */
 function closePosition(state: PortfolioState, fillPrice: number): boolean {
   const open = state.openTrade
   if (!open) return false
+  requirePrice(fillPrice, `exit for ${open.ticker}`)
   const proceeds = state.position * fillPrice
   const txCost = proceeds * TX_COST_PCT_PER_SIDE
   const netProceeds = proceeds - txCost
@@ -245,10 +260,15 @@ export function backtestInstrument(
   const initialCapital = cfg.initialCapital
   const annualization = tradingDaysPerYear(ticker, sector)
 
+  // Q-122: the final close values the result and B&H even when already flat or
+  // returning a short-history stub. Empty histories retain their zero-price stub.
+  const finalPrice = rows[rows.length - 1]?.close ?? 0
+  if (rows.length > 0) requirePrice(finalPrice, `terminal for ${ticker}`)
+
   if (rows.length < 252) {
     return {
       ticker, sector,
-      initialPrice: rows[0]?.close ?? 0, finalPrice: rows[rows.length - 1]?.close ?? 0,
+      initialPrice: rows[0]?.close ?? 0, finalPrice,
       totalReturn: 0, annualizedReturn: 0, sharpeRatio: null, sortinoRatio: null,
       maxDrawdown: 0, winRate: 0, profitFactor: 0, avgTradeReturn: 0,
       totalTrades: 0, closedTrades: [], openTrade: null,
@@ -328,13 +348,10 @@ export function backtestInstrument(
     // remains active.
     if (state.openTrade && entryFillBar >= 0 &&
         i - entryFillBar >= DEFAULT_TIME_EXIT_CONFIG.maxHoldDays) {
-      // A corrupt next-open (0/NaN) cannot be traded: hold one more bar
-      // (mirrors the entry-side guard) instead of poisoning the curve.
-      if (Number.isFinite(nextOpen) && nextOpen > 0) {
-        closePosition(state, nextOpen)
-        entryFillBar = -1
-        continue
-      }
+      // Q-122: all required exits share the fail-closed price contract.
+      closePosition(state, nextOpen)
+      entryFillBar = -1
+      continue
     }
 
     // ── Portfolio max-drawdown circuit breaker ──
@@ -365,7 +382,7 @@ export function backtestInstrument(
       // Infinity or NaN — and the `shares <= 0` check below misses BOTH — which then
       // poisons `capital` and the entire equity curve / totalReturn with NaN. A bar
       // that can't be priced can't be traded: mark-to-market at today's close and skip.
-      if (!Number.isFinite(entryPrice) || entryPrice <= 0) {
+      if (!isFinitePositivePrice(entryPrice)) {
         state.equityHistory.push(currentEquity(state, signalPrice))
         continue
       }
@@ -419,7 +436,6 @@ export function backtestInstrument(
 
   // ── Close remaining open position at final price ──
   // Phase 14 wave 35: bookkeeping via the shared closePosition primitive.
-  const finalPrice = rows[rows.length - 1].close
   if (state.openTrade) {
     closePosition(state, finalPrice)
     // Mirror closePosition's equityHistory push so bnhCurve stays index-aligned.

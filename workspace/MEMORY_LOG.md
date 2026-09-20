@@ -2127,3 +2127,32 @@ PR #205 at `acbbfbf84c4cd0facc62304cd8649abd7ab3014d` passed **9/9 GitHub checks
 **Preview runtime smoke remains unverified:** the endpoint redirects to Vercel SSO. Existing CLI authenticated access was attempted following the protected-deployment skill; the CLI has no credentials and started a device login. That process was stopped; no credentials, protection settings or environment values were changed. Built local runtime verification remains valid, but does not substitute for the protected preview. Temporary local Next server was also stopped.
 
 Code, tests, audit and handoff are complete on the draft PR; no merge or production deployment is claimed. Review the intended production bridge configuration and finish the authenticated preview smoke before merging. Q122 is the next algorithm repair candidate; Q128/Q129 remain HIGH data-integrity findings. The final record-only commit contains these verification results and no executable changes.
+
+
+## 2026-09-17 — Q-122 invalid exit prices: local verification checkpoint
+
+User approved the named next algorithm package and explicitly continued code changes/review. Work is on `codex/q122-invalid-exit-prices`, starting at `f2ee04c`, stacked on `codex/q108-bridge-gate-audit`. Draft PR #205 remains open and unmerged; Q122 should use that branch as its PR base to keep the code review bounded. This is a LOCAL, uncommitted checkpoint: no Q122 publication, merge or deployment is claimed.
+
+The core now shares a finite-positive price predicate and throws `RangeError` before accounting mutation when a required exit is unpriceable. Time exits no longer defer into a different holding policy when their fill is missing; drawdown and terminal liquidation use the same contract. Terminal close is checked even while flat and for nonempty short histories. Invalid-entry skipping is preserved. Signal policy, strategy parameters, fees, sizing policy and net-return definitions are unchanged.
+
+Behavioral evidence supplied by the lead: new regressions failed **38 cases** and passed 10 against the old core; all **48 new cases** pass after the fix, and the focused run including 16 existing cases passes **64/64**. `__tests__/backtest/invalidExitPrice.test.ts` holds 46 cases; `__tests__/api/backtestInvalidPrice.test.ts` holds two real-route cases. Full suite logs report **2237 passed / 17 skipped**, 149 passed files plus one skipped (150 total). Typecheck, production build and check:ci logs report success. Final process completion statuses are still being collected; benchmark is pending after the first runner hit EPERM. Do not upgrade this checkpoint into a final all-clear.
+
+The fixed-input comparison ran all **56** historical input sets through the old and new core and compared complete outputs. Input SHA256 `685ea074144fb7ed7bfe038ed6cfc5758316c655683aebbe68616f04982df006`; before/after output SHA256 both `5d2038d09e9c9e363cd92fe9731f8effe6c9b8dadeb6ed8dfa72adbbb83114e8`. Inputs and outputs were byte-identical. This verifies compatibility on those inputs; it is not a strategy improvement or a proof about arbitrary data. The lead owns the durable review and trial/regression record.
+
+Red-team falsified the original broad acceptance wording that no successful result could contain non-finite equity: **finite-positive** prices can still overflow derived arithmetic. Both the base and patched engine reproduce (1) a `Number.MIN_VALUE` entry creating infinite shares and 52 non-finite equity marks, and (2) 50 shares bought at100, then liquidated at `Number.MAX_VALUE`, yielding non-finite proceeds and NaN equity. Filed **Q-130**, P2/MEDIUM, with explicit derived-quantity guards and independent regression requirements. Q122's acceptance is now explicitly limited to zero, negative, NaN and positive/negative Infinity required prices. Intermediate-price validation also remains outside this slice; no live reachability claim is made for arbitrary direct-core inputs.
+
+Exact implementation and canonical-record paths at this checkpoint:
+
+- `lib/backtest/core.ts`
+- `__tests__/backtest/invalidExitPrice.test.ts`
+- `__tests__/api/backtestInvalidPrice.test.ts`
+- `workspace/SESSION_STATE.json`
+- `workspace/IMPROVEMENT_BACKLOG.json`
+- `workspace/MEMORY_LOG.md`
+- `reviews/findings-ledger.csv`
+
+Historical wave keys and ledger rows were preserved. New ledger rows record the Q122 local-fix checkpoint and Q130 residual; Q122 remains `partial` until final review/publication evidence is recorded. Q123–Q129 remain separate open packages. Owner actions remain Redis provisioning, vendor/regulatory counsel, repository protection and exposed-key revocation/rotation. The four pre-existing untracked directories are unrelated to this package.
+
+**Honesty:** the rejection effect and valid-input replay were verified; local success is not deployment evidence, and existing-production smoke does not test this branch. No historical malformed-price frequency, universal numeric safety, protected-preview runtime success or strategy-performance gain is claimed. The cold-session trap is to read finite-positive validation as overflow protection or stacked work as already merged.
+
+**Single next action:** collect final gate/benchmark and specialist review results, then commit and publish the isolated Q122 draft PR; append actual commit/PR/deployment evidence.
