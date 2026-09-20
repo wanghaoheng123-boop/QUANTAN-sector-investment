@@ -2221,3 +2221,48 @@ claimed PR #205 was still open after it merged.
 Updated ranking of page-weight costs: **SW precache 547.4 kB (`Q-120`, open) is
 now the largest remaining transfer on the platform**, ahead of `/api/backtest` at
 114.2 kB and router prefetch at 32–48 kB.
+
+## 2026-09-20 — Q-120: the service worker was downloading the whole build for nothing
+
+**Shipped: precache manifest 87 → 5 entries; cold-first-visit service-worker
+traffic 587.2 kB → 68.6 kB on production, 518.6 kB saved.** Runtime caching is
+deliberately left on — the change is "stop downloading the whole build up
+front", not "stop caching".
+
+**The timing criterion decided the framing, and it went the unexciting way.**
+The precache began **51–65 ms after the load event**, with **0 of 87 requests in
+flight before load**. It never delayed first paint. So this was a bandwidth
+cost, not a latency cost — a smaller claim than the ticket implied, and the
+honest one. On Fast 3G the tail still ran **55.5 s**.
+
+**An instrument trap worth keeping: CDP throttling is per session, and a service
+worker is a separate target.** A page-session throttle leaves the precache
+running at full speed — I measured it moving 289 kB/s against a 188 kB/s cap
+before applying `emulateNetworkConditions` to the SW session too. Same family as
+Q-119's finding that throttling never reached warm-connection follow-up
+requests: *the thing you did not attach to is not being measured.*
+
+**Installability had to be tested in a non-incognito context.** The first
+attempt returned a single error, `in-incognito` — because an isolated browser
+context *is* incognito to Chrome, and that verdict masks every other one. In the
+default context, with the precache emptied: **no installability errors, no
+manifest errors, service worker still registered with a fetch handler.**
+
+**What the precache actually bought: nothing that survives its removal.** No
+`fallbacks`, no `~offline` route, every `/api/` route `NetworkOnly`. The offline
+shell comes from the `start-url` runtime cache and the immutable HTTP cache —
+emptying the precache and reloading offline rendered **byte-identically at 4786
+chars**, confirmed again on production after merge. And **28 of the 87 entries
+were 288-byte server-side API route chunks a browser can never execute**: a
+third of the request count for 1% of the bytes.
+
+**A correction I caught before it reached the record.** Measuring the offline
+state, I first reported that the prices were labelled "Live". They are not — the
+"Live" on the page is the news panel's subtitle, "Live from Yahoo Finance · 20
+articles", which a regex over `innerText` happily matched. The real finding is
+the **absence** of any data-state flag, not the presence of a false one. Weaker,
+and true. Filed as **Q-132**: offline, the app renders a full market dashboard
+with prices and percentage changes, byte-identical to online, saying nothing
+about being offline. That is the `start-url` cache, not the precache, so Q-120
+neither caused nor fixed it — and on a market-data product an honest failure may
+beat a silent stale dashboard, which makes it a product call.
