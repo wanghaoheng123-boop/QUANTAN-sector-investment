@@ -2156,3 +2156,68 @@ Historical wave keys and ledger rows were preserved. New ledger rows record the 
 **Honesty:** the rejection effect and valid-input replay were verified; local success is not deployment evidence, and existing-production smoke does not test this branch. No historical malformed-price frequency, universal numeric safety, protected-preview runtime success or strategy-performance gain is claimed. The cold-session trap is to read finite-positive validation as overflow protection or stacked work as already merged.
 
 **Single next action:** collect final gate/benchmark and specialist review results, then commit and publish the isolated Q122 draft PR; append actual commit/PR/deployment evidence.
+
+## 2026-09-20 — Recovery session: a stranded package, a stale draft, and the platform's largest transfer
+
+Picked up six days after the Q-119 wave and found the tree not as it was left.
+
+**git was entirely broken.** `/usr/bin/git` is the Xcode shim and Xcode's licence
+had not been accepted, so every `git` *and* `gh` command failed. Fixed without
+sudo by routing through the Command Line Tools git. One trap worth keeping: a
+bare symlink to that binary gives a git that **cannot do HTTPS** — `fetch` and
+`pull` then *silently no-op* while appearing to succeed, and I built a branch on
+a stale `origin/main` before noticing. `GIT_EXEC_PATH` must be exported too. The
+permanent fix is the owner running `sudo xcodebuild -license`.
+
+**Q-122 was sitting complete and uncommitted for three days**, unpushed, on a
+local branch with no upstream, stacked under an unmerged draft PR. Verified
+rather than re-derived — typecheck, 2237 tests, benchmark — then rebased onto
+main and published. **PR #205 had been green for three days and was simply still
+marked draft.** Both are now merged and deployed.
+
+**The benchmark scare, and why it was wrong twice over.** The regenerated results
+differed in 35 fields, and `edgeOverBaseRatePp` had fallen 1.91 → 1.72 against
+what CLAUDE.md calls a 1.81pp floor. Two corrections followed, in opposite
+directions:
+- I had piped the run to `tail`, masking its exit code — the trap already
+  recorded here four times. Re-run unpiped: **exit 0**, because `FLOOR_EDGE_PP`
+  is `0.0`, not 1.81. CLAUDE.md's I5 paragraph and its line citation are both
+  stale.
+- But the floor *is* recorded as 1.81pp in `reviews/invariants-baseline.md:51-52`
+  as "the primary CI gate", and 1.72 is genuinely below it. Filed as **Q-131**.
+  The decomposition is not the obvious one: **our net WR rose** 56.33 → 56.56;
+  the always-buy base rate rose *faster*, 54.02 → 54.84. The selection improved
+  in absolute terms and lost ground relative to the market — precisely what the
+  edge metric exists to surface and a raw-WR floor would have hidden.
+
+And the 35-field delta was **not** Q-122: re-running the benchmark on the
+pre-change engine against identical data differed in **0 of 35** fields.
+`alwaysBuyBaseline.nBars` rose 58419 → 59465, which no engine change can cause.
+It was the weekly data refresh — I4's non-reproducibility, observed.
+
+**Q-121 shipped: `/api/backtest` 742.6 kB → 114.2 kB brotli, 84.6% smaller,
+628.5 kB saved on every load.** The ticket demanded the consumed key set be
+measured, not eyeballed, so every result was wrapped in a recording Proxy on
+production and the page driven through all five tabs. `bnhCurve` and
+`dailyReturns` — 56% of the payload — are read by nothing in the browser.
+`bnhCurve` is *not* dead server-side (the aggregator walks it for `bnhAvg` and
+`alpha`), which is why the strip sits **after** aggregation. `closedTrades` also
+measured never-read and was **kept**: 1.32 kB isn't worth the risk, and a tab
+named "trades" deserves better evidence than a click sweep.
+
+**The mutation that beat the first guard is the lesson.** Moving the strip
+*before* aggregation survived, because with `bnhCurve` gone the aggregator falls
+back to the legacy full-history average: still finite, same shape, **worse
+number, no error**. Asserting the aggregator's *output* was finite could not tell
+the two apart. The guard now asserts its **input**. Same family as the cache-flag
+producer set defined by the property under test — and a reminder that the
+dangerous failure is not the one that throws, it's the one that returns a
+plausible number.
+
+**Two defects in another package's records, fixed:** `TRIAL_REGISTRY` entry
+`T-0011` cited a review document that was never written, and `SESSION_STATE`
+claimed PR #205 was still open after it merged.
+
+Updated ranking of page-weight costs: **SW precache 547.4 kB (`Q-120`, open) is
+now the largest remaining transfer on the platform**, ahead of `/api/backtest` at
+114.2 kB and router prefetch at 32–48 kB.
