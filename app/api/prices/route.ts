@@ -41,7 +41,7 @@ function isoQuoteTime(q: { regularMarketTime?: unknown }): string | null {
  *
  * Returns live or near-live prices for the requested tickers. Backed by
  * yahoo-finance2 with an optional Bloomberg-bridge upgrade when the
- * `BLOOMBERG_BRIDGE_URL` env var is configured.
+ * bridge URL and redistribution acknowledgement are configured.
  *
  * Rate-limit: 60 req/min per IP (per-process bucket — F4.3 distributed
  * implementation deferred to S3 with Vercel KV).
