@@ -65,6 +65,40 @@ export interface Trade {
   highestPriceAfterEntry?: number
 }
 
+/**
+ * Exact net cash P&L of a completed round trip, after per-side costs charged on
+ * the ACTUAL notional of each side.
+ *
+ * Q-123/Q-124 (2026-09-21). Two defects shared one root: win/loss and profit
+ * factor were computed from PRICE RETURNS with a constant cost approximation,
+ * in two places that did it differently.
+ *
+ *   Q-123 — a trade was a win when `r > 2c`. Charging the exit fee on exit
+ *   notional makes the exact cash profit per entry notional `r - c*(2 + r)`,
+ *   so break-even is `2c/(1-c)`, not `2c`. At c = 11 bps those differ by 2.4
+ *   bps, and every return inside that sliver was booked as a win while losing
+ *   money: 500 shares bought at 100 and sold at 100.2201 lost $0.071055 and
+ *   reported winRate = 1.
+ *
+ *   Q-124 — `core` put a gross-positive but sub-threshold trade into
+ *   grossLoss; `engine` put it into NEITHER sum. The same two trades therefore
+ *   produced profitFactor 100 in core and Infinity after aggregating that one
+ *   result. Both also summed percentages across trades of different size, so a
+ *   $100 position and a $100,000 position counted equally.
+ *
+ * Exporting one function and calling it from both places makes the divergence
+ * impossible to reintroduce by editing one site, which is why the fix is a
+ * shared definition rather than two matching edits.
+ */
+export function netCashPnl(
+  t: Pick<Trade, 'action' | 'shares' | 'entryPrice' | 'exitPrice'>,
+): number {
+  const c = TX_COST_PCT_PER_SIDE
+  return t.action === 'BUY'
+    ? t.shares * (t.exitPrice * (1 - c) - t.entryPrice * (1 + c))
+    : t.shares * (t.entryPrice * (1 - c) - t.exitPrice * (1 + c))
+}
+
 export interface BacktestResult {
   ticker: string
   sector: string
@@ -115,6 +149,7 @@ interface PortfolioState {
   openTrade: Trade | null
   tradeWins: number
   tradeLosses: number
+  /** Q-123/Q-124: net CASH, not summed percentage points. */
   grossProfit: number
   grossLoss: number
   confidenceSum: number
@@ -241,9 +276,15 @@ function closePosition(state: PortfolioState, fillPrice: number): boolean {
   // literally true. Previously a trade with 0 < pnl ≤ 22 bps counted as a win
   // even though it lost money after costs. `pnlPct` itself stays the raw price
   // move (it feeds profitFactor / avgTradeReturn and the trade log).
-  const netPnlPct = pnlPct - 2 * TX_COST_PCT_PER_SIDE
-  if (netPnlPct > 0) { state.tradeWins++; state.grossProfit += pnlPct }
-  else { state.tradeLosses++; state.grossLoss += Math.abs(pnlPct) }
+  // Q-123/Q-124: classify on exact net CASH, and accumulate the same quantity
+  // the profit factor divides. `pnlPct` remains the raw price move for the
+  // trade log and avgTradeReturn.
+  const netCash = netCashPnl({
+    action: open.action, shares: state.position,
+    entryPrice: open.entryPrice, exitPrice: fillPrice,
+  })
+  if (netCash > 0) { state.tradeWins++; state.grossProfit += netCash }
+  else { state.tradeLosses++; state.grossLoss += Math.abs(netCash) }
   state.capital += netProceeds
   open.exitPrice = fillPrice
   open.pnlPct = pnlPct

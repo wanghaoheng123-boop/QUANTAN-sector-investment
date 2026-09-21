@@ -2729,7 +2729,7 @@
     "title": "Net-win classification misses exit-notional fees at break-even",
     "domain": "Quant/Research",
     "priority": "P2",
-    "status": "pending",
+    "status": "done",
     "files": [
       "lib/backtest/core.ts",
       "lib/backtest/engine.ts"
@@ -2744,14 +2744,15 @@
       "npm run test",
       "npm run benchmark"
     ],
-    "notes_2026_09_16": "MEDIUM residual of F-4: core.ts:193-207 and engine.ts:82-84 compare return with constant 2*c although exit fee uses exit notional. Fixture buy 500 at 100, sell at 100.2201, c=.0011 loses $0.071055 yet reports winRate=1. No historical occurrence frequency measured. Evidence and concrete implementation instructions: reviews/q108-algorithm-audit-2026-09-16.md"
+    "notes_2026_09_16": "MEDIUM residual of F-4: core.ts:193-207 and engine.ts:82-84 compare return with constant 2*c although exit fee uses exit notional. Fixture buy 500 at 100, sell at 100.2201, c=.0011 loses $0.071055 yet reports winRate=1. No historical occurrence frequency measured. Evidence and concrete implementation instructions: reviews/q108-algorithm-audit-2026-09-16.md",
+    "resolution_2026_09_21": "SHIPPED. A trade counted as a win when r > 2c, but the exit fee is charged on EXIT notional, so exact cash profit per entry notional is r - c*(2+r) and break-even is 2c/(1-c) — 2.42 bps higher at c=11bps. Every return inside that sliver was booked as a win while losing money. Reproduced independently: 500 shares bought at 100 and sold at 100.2201 lose $0.071055 and reported a win. Both close together because they shared one root: win/loss and profit factor were computed from PRICE RETURNS in two places that did it differently. They now come from one exported function, netCashPnl() in core.ts, called by both core.ts and engine.ts — the divergence is impossible to reintroduce by editing one site. MEASURED IMPACT on the committed universe: portfolio profitFactor 2.9264 -> 2.7827; winRate, avgTradeReturn, totalTrades and sharpeRatio all unchanged. The number that matters is not in that list — checking each instrument's reported profitFactor against an INDEPENDENT net-cash oracle, 42 of 54 disagreed BEFORE and 0 disagree AFTER. winRate is unchanged because the misclassified band is 2.42 bps wide and no trade in the committed universe lands in it; that is a correctness fix, not a performance change, and it would have been easy to present the unchanged win rate as evidence the bug was not real. Benchmark exit 0 with edge +1.59pp, identical — the label pipeline never calls these engines, so no gated number moved. Seven instruments still report profitFactor = Infinity (CVX, BRK.B, JPM, BAC, AMZN, MCD, AMT) and that is CORRECT: each has zero net-losing trades, so grossLoss = 0 by definition. Infinity was a symptom of Q-124 in the aggregate path, not a defect in itself. Migration note: reviews/q123-q124-net-cash-metrics-2026-09-21.md, as CLAUDE.md requires for a calculation change."
   },
   {
     "id": "Q-124",
     "title": "Profit factor changes under single-result aggregation",
     "domain": "Quant/Research",
     "priority": "P2",
-    "status": "pending",
+    "status": "done",
     "files": [
       "lib/backtest/core.ts",
       "lib/backtest/engine.ts",
@@ -2767,7 +2768,8 @@
       "npm run test",
       "npm run benchmark"
     ],
-    "notes_2026_09_16": "MEDIUM. core.ts:206-207 includes a sub-fee gross gain in grossLoss; engine.ts:85-87 excludes it from both sums. Forced gross returns +10% and +0.1% produce PF=100 in core and Infinity after aggregatePortfolio([same]). Both sum percentages regardless of position size. Existing golden test ratifies the inconsistent definition; replace its oracle. Evidence and concrete implementation instructions: reviews/q108-algorithm-audit-2026-09-16.md"
+    "notes_2026_09_16": "MEDIUM. core.ts:206-207 includes a sub-fee gross gain in grossLoss; engine.ts:85-87 excludes it from both sums. Forced gross returns +10% and +0.1% produce PF=100 in core and Infinity after aggregatePortfolio([same]). Both sum percentages regardless of position size. Existing golden test ratifies the inconsistent definition; replace its oracle. Evidence and concrete implementation instructions: reviews/q108-algorithm-audit-2026-09-16.md",
+    "resolution_2026_09_21": "SHIPPED. core.ts put a gross-positive but net-losing trade into grossLoss; engine.ts put it into NEITHER sum, so the same two trades (+10%, +0.1%) gave profitFactor 100 from core and Infinity from aggregatePortfolio of that one result. Both also summed PERCENTAGES, so a $100 position and a $100,000 position counted equally; profit factor is now net dollars and position size changes it, as it must. THE EXISTING GOLDEN TEST RATIFIED THE DEFECT — aggregatePortfolio.golden.test.ts asserted profitFactor === 0.05/0.02 under the comment 'grossProfit counts WINNING trades only; grossLoss counts pnl<0 only', a comment that DESCRIBED the bug. The audit asked for the accounting ORACLE to change rather than the expected constant, and that is what was done: the expectation is recomputed from the fixture's own shares and prices. Third defect-ratifying test found this session. Both close together because they shared one root: win/loss and profit factor were computed from PRICE RETURNS in two places that did it differently. They now come from one exported function, netCashPnl() in core.ts, called by both core.ts and engine.ts — the divergence is impossible to reintroduce by editing one site. MEASURED IMPACT on the committed universe: portfolio profitFactor 2.9264 -> 2.7827; winRate, avgTradeReturn, totalTrades and sharpeRatio all unchanged. The number that matters is not in that list — checking each instrument's reported profitFactor against an INDEPENDENT net-cash oracle, 42 of 54 disagreed BEFORE and 0 disagree AFTER. winRate is unchanged because the misclassified band is 2.42 bps wide and no trade in the committed universe lands in it; that is a correctness fix, not a performance change, and it would have been easy to present the unchanged win rate as evidence the bug was not real. Benchmark exit 0 with edge +1.59pp, identical — the label pipeline never calls these engines, so no gated number moved. Seven instruments still report profitFactor = Infinity (CVX, BRK.B, JPM, BAC, AMZN, MCD, AMT) and that is CORRECT: each has zero net-losing trades, so grossLoss = 0 by definition. Infinity was a symptom of Q-124 in the aggregate path, not a defect in itself. Migration note: reviews/q123-q124-net-cash-metrics-2026-09-21.md, as CLAUDE.md requires for a calculation change."
   },
   {
     "id": "Q-125",

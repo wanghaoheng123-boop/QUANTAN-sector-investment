@@ -5,7 +5,7 @@
 
 import { sortinoRatio } from '@/lib/quant/indicators'
 import { getRiskFreeRateSync } from '@/lib/quant/riskFreeRate'
-import { tradingDaysPerYear, TX_COST_PCT_PER_SIDE } from './core'
+import { tradingDaysPerYear, TX_COST_PCT_PER_SIDE, netCashPnl } from './core'
 
 export {
   TX_COST_BPS_PER_SIDE,
@@ -80,10 +80,16 @@ export function aggregatePortfolio(results: BacktestResult[], initialCapital: nu
   // F-4 (2026-07-06): a "win" clears the round-trip transaction cost
   // (2 × 11 bps/side), matching core.ts closePosition and the page copy
   // ("net-profitable after those costs").
-  const winningTrades = allTrades.filter(t => (t.pnlPct ?? 0) > 2 * TX_COST_PCT_PER_SIDE)
+  // Q-123/Q-124: one shared definition with core.ts, so aggregating a single
+  // result reproduces that result's own metrics. Previously this filtered on a
+  // price-return approximation and excluded gross-positive sub-threshold
+  // trades from BOTH sums, while core.ts put them in grossLoss — the same
+  // trades gave profitFactor 100 here and Infinity there.
+  const cash = allTrades.map(t => netCashPnl(t))
+  const winningTrades = allTrades.filter((_, i) => cash[i] > 0)
   const winRate = allTrades.length > 0 ? winningTrades.length / allTrades.length : 0
-  const grossProfit = winningTrades.reduce((s, t) => s + (t.pnlPct ?? 0), 0)
-  const grossLoss = Math.abs(allTrades.filter(t => (t.pnlPct ?? 0) < 0).reduce((s, t) => s + (t.pnlPct ?? 0), 0))
+  const grossProfit = cash.reduce((s, v) => (v > 0 ? s + v : s), 0)
+  const grossLoss = Math.abs(cash.reduce((s, v) => (v < 0 ? s + v : s), 0))
   const profitFactor = grossLoss > 0 ? grossProfit / grossLoss : grossProfit > 0 ? Infinity : 0
   const avgTradeReturn = allTrades.length > 0 ? allTrades.reduce((s, t) => s + (t.pnlPct ?? 0), 0) / allTrades.length : 0
 
