@@ -2324,3 +2324,51 @@ reached for the top of a **29-entry stash stack whose newest entry is from June
 failed stash meant two benchmark runs executed the *same* code and reported "0
 fields differing" — the flattering answer, which I nearly believed. Re-done with
 an explicit file swap and a grep proving the swap had happened.
+
+## 2026-09-21 (cont.) — the algorithm-audit cluster, and four tests that were holding the bugs in place
+
+Merged #217 (Q-123/Q-124) and #218 (Q-126). Both change user-visible numbers;
+both carry migration notes, as the constitution requires.
+
+**Q-123/Q-124 — one root, two symptoms.** Win/loss and profit factor were
+computed from *price returns*, in two places that did it differently. They now
+come from a single exported `netCashPnl()` called by both `core.ts` and
+`engine.ts`, so the divergence cannot be reintroduced by editing one site.
+Against an independent net-cash oracle, **42 of 54 instruments disagreed before;
+0 after.** `winRate` is unchanged because the misclassified band is 2.42 bps
+wide and nothing in the universe lands in it — which made it tempting to read
+the unchanged win rate as evidence the bug wasn't real. It isn't; it's evidence
+the band is narrow.
+
+**Q-126 — and it moves against us.** Every B&H reinvestment site bought the
+dividend on *one* share however many were held, so only the first distribution
+ever compounded. Correcting it raises the benchmark: **alpha −1.1169 →
+−1.1279**, on 50 of 56 instruments. A correctly compounded buy-and-hold is a
+higher bar, and the old number flattered the strategy by under-crediting the
+comparator it is measured against. The benchmark edge (+1.59pp) is untouched in
+both packages — the label pipeline never calls these engines.
+
+It survived this long because **with a single distribution the two formulas
+agree exactly**. The bug is invisible until the second dividend.
+
+**The vendor question the audit insisted on, now settled.**
+`fetchBacktestData.mjs` takes yahoo's `close`, *not* `adjclose` — split-adjusted,
+not dividend-adjusted — and attaches dividends separately. So reinvesting cash
+is correct and not a double count. That also **unblocks Q-125**, which was
+waiting on precisely this.
+
+**The finding that spans the whole session: four defects were each pinned in
+place by a passing test.**
+
+| ticket | the test |
+|---|---|
+| Q-129 | *"keeps yahoo quoteTime even when bloomberg-sourced"* |
+| Q-124 | `profitFactor === 0.05/0.02`, under a comment describing the inconsistency |
+| Q-126 | *"agrees with an independent oracle"* — whose oracle used the implementation's own formula |
+| Q-130 | two guards on one property, so deleting either survived |
+
+**An oracle that reproduces the implementation's arithmetic is not an oracle; it
+is the implementation typed twice.** Replacement goldens were therefore derived
+from ledgers written without reading `core.ts` — which took two attempts on
+Q-126, the first mis-modelling the curve's indexing. A mismatch at index 50
+while index 0 matched is what exposed it.
