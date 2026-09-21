@@ -48,12 +48,54 @@ Round-trip cost: 22 bps (lib/backtest/executionModel.ts)
 > **§1b amendment — D1 gate re-founding (2026-07-11 rethink):** the 2026-07-11 red team
 > established the always-buy BASE RATE on this universe/window = **54.02% net** — ABOVE the
 > 53.29 floor, so the raw floor alone certifies nothing about selection skill. The **primary CI
-> gate is now EDGE OVER BASE RATE**: frozen 2026-07-11 at **+2.31pp**, hard floor **+1.81pp**
+> gate became EDGE OVER BASE RATE**: frozen 2026-07-11 at **+2.31pp**, hard floor **+1.81pp**
 > (same 50 bps tolerance convention). The raw net/gross WR floors above are retained as
 > **secondary regression guards** (they catch code breakage independent of base-rate drift).
 > A WARN (not FAIL) prints while the non-overlap Wilson 95% lower bound sits below the base
 > rate — expected until the edge becomes statistically significant at effective n; hardening
 > that into a failure is a future owner decision. See `reviews/RETHINK-2026-07-11/`.
+
+> **§1b SUPERSESSION — the +1.81pp hard floor no longer exists (`Q-131`, 2026-09-21).**
+> `FLOOR_EDGE_PP` was **1.81 from `9ef5352` (2026-07-12) until `89463b9` / #184
+> (2026-09-06)**, which lowered it to **0.0** — a floor at the null — and replaced the
+> performance bar with two structural gates (`FLOOR_BUY_SIGNALS = 3000`,
+> `FLOOR_INSTRUMENTS_WITH_TRADES = 50`). That change was deliberate and is argued in
+> `scripts/benchmark-signals.ts` itself: the always-buy null Sharpe on this universe is
+> ~0.14, so any floor beneath it cannot detect absent skill, and a floor above it punishes
+> compliance as more trials are logged. **The paragraph above went unamended for two weeks
+> and asserted a gate the code had stopped performing** — the same defect this document
+> exists to prevent, in the file that IS the record of measured floors.
+>
+> <!-- GATE:FLOOR_EDGE_PP=0.0 --> (machine-checked against the code by
+> `__tests__/architecture/edge-gate-floor.test.ts`; change both or neither.)
+>
+> **The edge has since fallen below the retired 1.81pp floor, and the cause is measured,
+> not assumed.** Holding CODE byte-identical and varying only the committed data vintage:
+>
+> | data vintage | our net WR | always-buy base | edge |
+> |---|---|---|---|
+> | 2026-07-12 | 56.72% | 54.17% | **+2.55pp** |
+> | 2026-08-02 | 56.86% | 54.48% | +2.38pp |
+> | 2026-08-16 | 56.78% | 54.87% | +1.91pp |
+> | 2026-09-06 | 56.75% | 54.88% | +1.87pp |
+> | 2026-09-20 | 56.33% | 54.74% | **+1.59pp** |
+>
+> So the decline is **data/regime drift, not a code regression** — five runs, one codebase.
+> Decomposing the −0.96pp: the base rate rose +0.57pp and our own win rate fell −0.39pp.
+> **Both contribute; roughly 60/40.** An earlier draft of `Q-131` claimed the selection had
+> *improved* in absolute terms and only the market had moved. That was wrong — it compared a
+> frozen document number against a measurement taken on a different data vintage. Held
+> constant, our win rate slips slightly too. The flattering half of that claim is withdrawn.
+>
+> **Incidental, and it corroborates I4:** `nBars` went 58420 → 58420 → **58419** → 59245 →
+> 59740. A bar *disappeared* between the 2026-08-02 and 2026-08-16 vintages. The window start
+> is supposed to be pinned so bars only accumulate (`benchmark-signals.ts` says so in the
+> `FLOOR_BUY_SIGNALS` message); a vendor restatement removing history is exactly what I4
+> warns presents as signal drift.
+>
+> **What is NOT decided here:** whether +1.81pp should be restored as a floor. That is an
+> owner call. Reversing `89463b9` needs the same standard of argument that set it, and the
+> measurement above says a restored 1.81pp floor would currently FAIL CI on data drift alone.
 
 ## 1c. Engine exit timing — T+1 symmetry (2026-05-29)
 
