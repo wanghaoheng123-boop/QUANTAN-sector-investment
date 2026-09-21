@@ -68,7 +68,19 @@ function netPnlPctFromPrices(entryPrice: number, exitPrice: number): number {
 export interface PortfolioConfig extends BacktestConfig {
   maxPositions: number        // max concurrent positions (default 10)
   maxSinglePositionPct: number // max % of portfolio in one stock (default 0.20)
-  monthlyRebalance: boolean   // rebalance based on sector rotation monthly
+  // Q-127 (2026-09-21): `monthlyRebalance: boolean` was REMOVED, not implemented.
+  // It was declared here and defaulted to false below, and no decision anywhere
+  // read it — a config field named for a strategy the engine does not run.
+  //
+  // That is not merely dead code. A backtest configuration that advertises
+  // "rebalance based on sector rotation monthly" tells its reader the reported
+  // results model monthly rebalancing. They never did. Same family as the
+  // DELAYED badge declared under I1 and rendered by nobody.
+  //
+  // It is deliberately NOT implemented here: monthly sector rotation is a
+  // strategy change and would need its own out-of-sample validation under I5.
+  // Activating a new strategy under cover of configuration cleanup is exactly
+  // what this ticket's third acceptance criterion forbids.
   correlationGate: number     // max correlation increase before reducing Kelly
   exit: ExitConfig
   /**
@@ -84,7 +96,6 @@ export const DEFAULT_PORTFOLIO_CONFIG: PortfolioConfig = {
   ...DEFAULT_CONFIG,
   maxPositions: 10,
   maxSinglePositionPct: 0.20,
-  monthlyRebalance: false,
   correlationGate: 0.20,
   // D2/D4 (2026-07-11): time-only exits are the default — ATR/trailing/panic
   // stops and the falling-knife SELL exit are retired per the acceptance
