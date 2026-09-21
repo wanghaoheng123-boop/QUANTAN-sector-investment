@@ -278,7 +278,11 @@ describe('backtestInstrument — dividend-reinvested B&H goldens (production pat
     // share count either — the B&H investor buys at bar 200 and did not hold
     // through the warmup ex-dates.
     expect(res.bnhReturn).toBe(computeBuyAndHoldReturn(rows.slice(BACKTEST_WARMUP_BARS)))
-    expect(res.bnhReturn).toBeCloseTo(0.456647, 5) // was 2.409595 (full history)
+    // MIGRATION — Q-126 (2026-09-21): 0.456647 -> 0.457114. Dividends now
+    // compound across every share held; the old value reinvested each
+    // distribution on ONE share. Recomputed from an independent ledger, not
+    // read back out of the new implementation.
+    expect(res.bnhReturn).toBeCloseTo(0.457114, 5) // was 0.456647 (no compounding)
     // Reachability: the corrected window really is a different number, so the
     // identity above is not accidentally equivalent to the old one.
     expect(res.bnhReturn).not.toBeCloseTo(computeBuyAndHoldReturn(rows), 3)
@@ -291,9 +295,10 @@ describe('backtestInstrument — dividend-reinvested B&H goldens (production pat
     // residual is asserted in excessReturnWindow.regression.test.ts.
     // bnhCurve[0] = shares-after-200-bar-warmup × close[200]: four ex-dates
     // (25/75/125/175) accrued before the walk begins
-    expect(res.bnhCurve![0]).toBeCloseTo(234.423281, 5)
-    expect(res.bnhCurve![50]).toBeCloseTo(287.271853, 5)
-    expect(res.bnhCurve![179]).toBeCloseTo(339.263227, 5)
+    // Q-126 migration, all three independently recomputed with compounding.
+    expect(res.bnhCurve![0]).toBeCloseTo(234.673547, 5)   // was 234.423281
+    expect(res.bnhCurve![50]).toBeCloseTo(287.699760, 5)  // was 287.271853
+    expect(res.bnhCurve![179]).toBeCloseTo(340.244837, 5) // was 339.263227
     // dividends touch only the B&H side — the strategy trade is unchanged
     expect(res.totalReturn).toBeCloseTo(0.052381, 5)
     expect(res.totalTrades).toBe(1)

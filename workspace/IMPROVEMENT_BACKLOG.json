@@ -2790,14 +2790,15 @@
       "npm run test",
       "npm run benchmark"
     ],
-    "notes_2026_09_16": "MEDIUM. Dividend reads in core.ts:43-44,287-300,432-433 affect only B&H. A held 500-share strategy position spanning dividend=2 has identical return to a dividend-free control; $1000 entitlement is absent. This is distinct from F1.5 B&H omission and Q110-Q1r warmup treatment. Do not add cash to already total-return-adjusted prices; involve data-integrity and accounting reviewers. Evidence and concrete implementation instructions: reviews/q108-algorithm-audit-2026-09-16.md"
+    "notes_2026_09_16": "MEDIUM. Dividend reads in core.ts:43-44,287-300,432-433 affect only B&H. A held 500-share strategy position spanning dividend=2 has identical return to a dividend-free control; $1000 entitlement is absent. This is distinct from F1.5 B&H omission and Q110-Q1r warmup treatment. Do not add cash to already total-return-adjusted prices; involve data-integrity and accounting reviewers. Evidence and concrete implementation instructions: reviews/q108-algorithm-audit-2026-09-16.md",
+    "notes_2026_09_21_precondition": "UNBLOCKED by the Q-126 recheck. The audit said 'do not add cash to already total-return-adjusted prices... Data-vendor semantics should be rechecked by the implementation agent before historical claims.' Rechecked 2026-09-21: scripts/fetchBacktestData.mjs:164-191 uses yf.chart()'s `q.close`, NOT `q.adjclose`, so closes are SPLIT-adjusted and NOT dividend-adjusted, and dividends arrive as a separate per-bar `dividend` field (20 bars for AAPL). Crediting dividend cash to the strategy ledger is therefore NOT a double count and the package may proceed. Left open deliberately rather than bundled into Q-126: it changes the STRATEGY's own reported return — the platform's headline number — and needs entitlement ordering decided against next-open fills (purchase on ex-date not entitled, exit at ex-date open entitled), which is more than a formula fix. Note the asymmetry is now WIDER: Q-126 raised the benchmark's dividend credit while the strategy still receives none."
   },
   {
     "id": "Q-126",
     "title": "Buy-and-hold dividend reinvestment omits compounding",
     "domain": "Quant/Research",
     "priority": "P2",
-    "status": "pending",
+    "status": "done",
     "files": [
       "lib/backtest/core.ts"
     ],
@@ -2811,7 +2812,8 @@
       "npm run test",
       "npm run benchmark"
     ],
-    "notes_2026_09_16": "MEDIUM. core.ts:44 adds dividend/close rather than current shares*dividend/close; :288,:300,:433 repeat the convention. The three-bar fixture yields 20% rather than 21%. Distinct from Q110-Q1r warmup/endpoint disagreement. Evidence and concrete implementation instructions: reviews/q108-algorithm-audit-2026-09-16.md"
+    "notes_2026_09_16": "MEDIUM. core.ts:44 adds dividend/close rather than current shares*dividend/close; :288,:300,:433 repeat the convention. The three-bar fixture yields 20% rather than 21%. Distinct from Q110-Q1r warmup/endpoint disagreement. Evidence and concrete implementation instructions: reviews/q108-algorithm-audit-2026-09-16.md",
+    "resolution_2026_09_21": "SHIPPED. All four reinvestment sites did `shares += dividend / close`, buying the distribution on ONE share however many were held, so only the first distribution ever compounded. Now one shared helper, reinvestDividend(), at all four sites. The audit's fixture (three bars at 100, dividend 10 on each of the last two) returned 20% and now returns 21%. WHY IT SURVIVED: with a SINGLE distribution the two formulas agree exactly, because shares is still 1 — asserted as a control in the new suite. VENDOR-SEMANTICS PRECONDITION RECHECKED, as the audit required before any historical claim: scripts/fetchBacktestData.mjs:164-191 takes yf.chart()'s `q.close`, NOT `q.adjclose` — split-adjusted, not dividend-adjusted — and attaches each cash dividend to its ex-date bar separately (20 bars for AAPL). Reinvesting the cash is therefore correct and does not double-count. This also unblocks Q-125, which was waiting on the same question. MEASURED IMPACT, and it moves AGAINST the platform: portfolio bnhAvg 1.150281 -> 1.161278, alpha -1.116943 -> -1.127941, mean bnhReturn 1.133437 -> 1.141312, mean excessReturn -1.100100 -> -1.107974, 50 of 56 instruments moved. Strategy-side metrics (avgReturn, winRate, profitFactor) are untouched — this is the benchmark side only. A correctly compounded buy-and-hold is a HIGHER BAR, so alpha falls 1.1pp; the previous number flattered the strategy by under-crediting its comparator. Benchmark exit 0, edge +1.59pp unchanged. A FOURTH DEFECT-RATIFYING TEST, named for the job it failed: excessReturnWindow.regression.test.ts's 'agrees with an independent oracle, dividends included' used a helper that reinvested d/close — the SAME formula as the implementation it checked. An oracle that reproduces the implementation's arithmetic is not an oracle; it is the implementation typed twice. Golden constants were recomputed from a ledger written independently of core.ts (bnhReturn 0.456647 -> 0.457114; bnhCurve[0] 234.423281 -> 234.673547, [50] 287.271853 -> 287.699760, [179] 339.263227 -> 340.244837), which took two attempts because the first ledger mis-modelled the curve indexing — the loop pushes at i=W as well as the pre-loop mark, so bnhCurve[k>=1] tracks rows[W+k-1] and curve[0] is duplicated at curve[1]. Migration note: reviews/q126-dividend-compounding-2026-09-21.md"
   },
   {
     "id": "Q-127",

@@ -52,12 +52,19 @@ function seriesFromCloses(closes: number[]): OhlcvRow[] {
 }
 
 /** Independent oracle: buy 1 share at the warmup close, reinvest, mark at the end. */
+/**
+ * Q-126 (2026-09-21): this reinvested `d / close` — ONE share's dividend,
+ * however many were held — which is the exact formula the implementation it
+ * checks was using. **An oracle that reproduces the implementation's arithmetic
+ * is not an oracle**, and this one was named "independent". It agreed with the
+ * bug for as long as the bug existed. It now reinvests across all shares held.
+ */
 function holdFromWarmup(rows: OhlcvRow[]): number {
   const base = rows[W].close
   let shares = 1
   for (let i = W + 1; i < rows.length; i++) {
     const d = rows[i].dividend ?? 0
-    if (d > 0 && rows[i].close > 0) shares += d / rows[i].close
+    if (d > 0 && rows[i].close > 0) shares += (shares * d) / rows[i].close
   }
   return (shares * rows[rows.length - 1].close - base) / base
 }

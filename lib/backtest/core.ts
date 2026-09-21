@@ -33,6 +33,30 @@ export interface OhlcvRow extends OhlcBar {
  */
 export const BACKTEST_WARMUP_BARS = 200
 
+/**
+ * Shares after reinvesting a per-share cash dividend at that bar's close.
+ *
+ * Q-126 (2026-09-21). Every one of the four reinvestment sites did
+ * `shares += dividend / close`, which buys the dividend on exactly ONE share
+ * however many are held — so only the first distribution ever compounded.
+ * Three bars at 100 with a dividend of 10 on each of the last two returned
+ * 20% where reinvesting both yields 21% (1.1 * 1.1 - 1).
+ *
+ * The prices this is applied to are split-adjusted but NOT dividend-adjusted:
+ * `scripts/fetchBacktestData.mjs` takes yahoo-finance2's `close` (not
+ * `adjclose`) and attaches each cash dividend to its ex-date bar separately.
+ * So reinvesting the cash is correct here and does not double-count a
+ * total-return-adjusted series — a precondition the audit asked to be
+ * rechecked before any historical claim, and this is that recheck.
+ *
+ * One function, four call sites, for the same reason as Q-123/Q-124: four
+ * copies of a convention drift, and these four already had.
+ */
+function reinvestDividend(shares: number, dividend: number, close: number): number {
+  if (!(dividend > 0) || !(close > 0)) return shares
+  return shares * (1 + dividend / close)
+}
+
 /** Total-return buy-and-hold including optional per-bar dividends (F1.5). */
 export function computeBuyAndHoldReturn(rows: OhlcvRow[]): number {
   if (rows.length < 2) return 0
@@ -40,8 +64,7 @@ export function computeBuyAndHoldReturn(rows: OhlcvRow[]): number {
   if (initial <= 0) return 0
   let shares = 1
   for (let i = 1; i < rows.length; i++) {
-    const div = rows[i].dividend ?? 0
-    if (div > 0 && rows[i].close > 0) shares += div / rows[i].close
+    shares = reinvestDividend(shares, rows[i].dividend ?? 0, rows[i].close)
   }
   const finalValue = shares * rows[rows.length - 1].close
   return (finalValue - initial) / initial
@@ -369,8 +392,7 @@ export function backtestInstrument(
   // Dividends from the warmup are accumulated into the starting shares.
   let bnhShares = 1
   for (let k = 1; k <= BACKTEST_WARMUP_BARS; k++) {
-    const div = rows[k].dividend ?? 0
-    if (div > 0 && rows[k].close > 0) bnhShares += div / rows[k].close
+    bnhShares = reinvestDividend(bnhShares, rows[k].dividend ?? 0, rows[k].close)
   }
   const bnhCurve: number[] = [bnhShares * rows[BACKTEST_WARMUP_BARS].close]
 
@@ -381,8 +403,7 @@ export function backtestInstrument(
 
   for (let i = BACKTEST_WARMUP_BARS; i < rows.length - 1; i++) {
     if (i > BACKTEST_WARMUP_BARS) {
-      const div = rows[i].dividend ?? 0
-      if (div > 0 && rows[i].close > 0) bnhShares += div / rows[i].close
+      bnhShares = reinvestDividend(bnhShares, rows[i].dividend ?? 0, rows[i].close)
     }
     bnhCurve.push(bnhShares * rows[i].close)
     const signalDate = new Date(rows[i].time * 1000).toISOString().split('T')[0]
@@ -513,8 +534,7 @@ export function backtestInstrument(
   if (state.openTrade) {
     closePosition(state, finalPrice)
     // Mirror closePosition's equityHistory push so bnhCurve stays index-aligned.
-    const div = rows[rows.length - 1].dividend ?? 0
-    if (div > 0 && finalPrice > 0) bnhShares += div / finalPrice
+    bnhShares = reinvestDividend(bnhShares, rows[rows.length - 1].dividend ?? 0, finalPrice)
     bnhCurve.push(bnhShares * finalPrice)
   }
 
