@@ -235,3 +235,54 @@ describe('bridgeHealthCheck', () => {
     expect(res.error!.length).toBeGreaterThan(0)
   })
 })
+
+// ─── Q-128 / Q-129: the normalized contract, end to end ──────────────────────
+
+describe('Q-128/Q-129 — malformed bridge data cannot replace a valid price', () => {
+  const ok = (quotes: unknown[]) =>
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ quotes }), {
+      status: 200, headers: { 'Content-Type': 'application/json' },
+    })))
+
+  beforeEach(() => {
+    vi.stubEnv('BLOOMBERG_BRIDGE_URL', 'http://bridge.local')
+  })
+
+  it('DROPS a row whose price is a formatted string, leaving yahoo standing', async () => {
+    // '1,234.5' used to normalize to 1 — a real quote replaced by a prefix.
+    ok([{ symbol: 'AAPL', last: '1,234.5' }])
+    const map = await fetchBloombergQuotesViaBridge(['AAPL'])
+    expect(map).toBeNull()
+  })
+
+  it('DROPS a row whose price carries trailing junk', async () => {
+    ok([{ symbol: 'AAPL', last: '123oops' }])   // used to normalize to 123
+    expect(await fetchBloombergQuotesViaBridge(['AAPL'])).toBeNull()
+  })
+
+  it('falls through to a VALID alternate key instead of taking the malformed one', async () => {
+    ok([{ symbol: 'AAPL', last: '1,234.5', LAST_PRICE: 250.25 }])
+    const map = await fetchBloombergQuotesViaBridge(['AAPL'])
+    expect(map?.get('AAPL')?.price).toBe(250.25)
+  })
+
+  it('keeps a genuinely valid quote working', async () => {
+    ok([{ symbol: 'AAPL', last: 201.5, volume: 1000, quoteTime: '2026-09-10T14:00:00Z' }])
+    const q = (await fetchBloombergQuotesViaBridge(['AAPL']))?.get('AAPL')
+    expect(q?.price).toBe(201.5)
+    expect(q?.volume).toBe(1000)
+    expect(q?.quoteTime).toBe('2026-09-10T14:00:00.000Z')
+  })
+
+  it('a malformed secondary field degrades to 0 (read as absent), not to a prefix', async () => {
+    ok([{ symbol: 'AAPL', last: 201.5, volume: '1,000,000' }])
+    const q = (await fetchBloombergQuotesViaBridge(['AAPL']))?.get('AAPL')
+    expect(q?.price).toBe(201.5)
+    expect(q?.volume).toBe(0)   // was 1
+  })
+
+  it('carries null when the bridge supplies no timestamp', async () => {
+    ok([{ symbol: 'AAPL', last: 201.5 }])
+    expect((await fetchBloombergQuotesViaBridge(['AAPL']))?.get('AAPL')?.quoteTime).toBeNull()
+  })
+})

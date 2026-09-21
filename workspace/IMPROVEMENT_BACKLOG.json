@@ -2836,7 +2836,7 @@
     "title": "Bridge numeric parsing silently accepts malformed price strings",
     "domain": "Data/Integrity",
     "priority": "P1",
-    "status": "pending",
+    "status": "done",
     "files": [
       "lib/data/bloomberg/bridgeClient.ts"
     ],
@@ -2849,14 +2849,15 @@
       "npm run typecheck",
       "npm run test -- __tests__/data/bloombergBridge.test.ts"
     ],
-    "notes_2026_09_16": "HIGH pre-existing residual, reproduced by bridge red-team with the actual TypeScript module: num at bridgeClient.ts:47 uses parseFloat; fetchBloombergQuotesViaBridge normalizes 1,234.5 to 1 and 123oops to 123. 1e309 yields null as a finite-check control. Q108 closes the permission gate, not this data-validity defect. A separate data-integrity review and schema change are required; no production frequency measured."
+    "notes_2026_09_16": "HIGH pre-existing residual, reproduced by bridge red-team with the actual TypeScript module: num at bridgeClient.ts:47 uses parseFloat; fetchBloombergQuotesViaBridge normalizes 1,234.5 to 1 and 123oops to 123. 1e309 yields null as a finite-check control. Q108 closes the permission gate, not this data-validity defect. A separate data-integrity review and schema change are required; no production frequency measured.",
+    "resolution_2026_09_21": "SHIPPED. parseBridgeNumber() replaces the parseFloat-based num() with a FULL-STRING contract returning number|null. The old function failed twice over: parseFloat reads a PREFIX, so '1,234.5' normalized to 1 and '123oops' to 123 — a malformed vendor field silently became a plausible number, and for price a plausible wrong number outranks a correct fallback; and it returned 0 when nothing parsed, which FABRICATES a value (for a price, 0 is not a neutral default but a false quote). A malformed price now drops the row, leaving the Yahoo quote standing rather than overwriting it — the third acceptance criterion, exercised end to end through the real fetchBloombergQuotesViaBridge with a stubbed fetch. Malformed SECONDARY fields degrade to 0, which the merge already reads as absent and attributes to Yahoo, so the degradation path is unchanged for valid data. pickNumber() preserves the previous `a || b || c` preference for a non-zero alternate while distinguishing 'every key absent or malformed' (null) from 'a key genuinely said zero' (0), so valid data behaves exactly as before. 1e309 is rejected by the finite check, as the red team's control expected. Guards: __tests__/data/bridgeNumericContract.test.ts (9) and six new end-to-end cases in __tests__/data/bloombergBridge.test.ts. Watched failing on mutations restoring parseFloat and restoring the 0 fabrication."
   },
   {
     "id": "Q-129",
     "title": "Bloomberg-selected prices inherit the fresh Yahoo timestamp",
     "domain": "Data/Integrity",
     "priority": "P1",
-    "status": "pending",
+    "status": "done",
     "files": [
       "lib/data/mergeQuotes.ts",
       "lib/data/bloomberg/bridgeClient.ts"
@@ -2871,7 +2872,8 @@
       "npm run typecheck",
       "npm run test -- __tests__/data/"
     ],
-    "notes_2026_09_16": "HIGH pre-existing I1/I2 residual, reproduced by bridge red-team against actual TypeScript modules. mergeQuotes.ts:128 copies y.quoteTime while bridgeClient.ts:29-42 drops upstream time. Fixture Bloomberg last=100, quoteTime=2026-09-10T14:00:00Z plus Yahoo price=200, quoteTime=2026-09-16T14:00:00Z produces price=100, quoteTime=2026-09-16T14:00:00Z, dataSource=bloomberg. The selected price is presented under a different source clock. Q108 gates permission; it does not establish price validity or freshness. No live stale-data event is claimed."
+    "notes_2026_09_16": "HIGH pre-existing I1/I2 residual, reproduced by bridge red-team against actual TypeScript modules. mergeQuotes.ts:128 copies y.quoteTime while bridgeClient.ts:29-42 drops upstream time. Fixture Bloomberg last=100, quoteTime=2026-09-10T14:00:00Z plus Yahoo price=200, quoteTime=2026-09-16T14:00:00Z produces price=100, quoteTime=2026-09-16T14:00:00Z, dataSource=bloomberg. The selected price is presented under a different source clock. Q108 gates permission; it does not establish price validity or freshness. No live stale-data event is claimed.",
+    "resolution_2026_09_21": "SHIPPED. BloombergQuoteNormalized now carries quoteTime (ISO or null) read from the bridge row by pickBridgeQuoteTime() via the canonical parseQuoteTime SSOT, and mergeQuotes.ts uses bb.quoteTime on every Bloomberg-priced row instead of y.quoteTime. Bloomberg-only rows previously carried NO timestamp at all and now carry their own. Null when the bridge gives none — I2's 'missing displays as MISSING'; borrowing another vendor's clock to avoid a blank is the failure, not the fix. The reported reproduction is now a regression test: a stalled bridge at 100 (2026-09-10) beside fresh Yahoo at 200 (2026-09-16) emits price=100 with the 2026-09-10 stamp, not the 2026-09-16 one. THE DEFECT WAS PINNED IN PLACE BY A PASSING TEST, which is the part worth remembering. __tests__/data/mergeQuotes.test.ts carried 'keeps yahoo quoteTime even when bloomberg-sourced (bridge does not provide it)' — asserting quoteTime === Yahoo's time on a Bloomberg-priced row, and naming the behaviour approvingly. Its parenthetical was the whole problem: because the bridge supplied no time, Yahoo's was borrowed rather than the row being marked unknown. Replaced by four tests asserting the contract. A passing test that ratifies a bug is worse than no test — recorded again, now on a second package. Same defect family as Q-101 ('whose clock is this timestamp?'), one vendor further out. Watched failing on mutations that re-borrow the Yahoo clock and that stop the bridge reporting its own."
   },
   {
     "id": "Q-130",

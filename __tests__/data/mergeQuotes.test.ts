@@ -18,6 +18,9 @@ const yahoo = (overrides: Partial<YahooQuoteLike> = {}): YahooQuoteLike => ({
 
 const bb = (overrides: Partial<BloombergQuoteNormalized> = {}): BloombergQuoteNormalized => ({
   ticker: 'AAPL',
+  // Q-129: the bridge's OWN clock. Default null — a bridge that supplies no
+  // usable time is the common case, and the merge must not paper over it.
+  quoteTime: null,
   price: 201,
   change: 2,
   changePct: 1.0,
@@ -55,10 +58,47 @@ describe('mergeYahooAndBloomberg', () => {
     expect(out[0].ask).toBe(201.01)
   })
 
-  it('keeps yahoo quoteTime even when bloomberg-sourced (bridge does not provide it)', () => {
-    const bbMap = new Map([['AAPL', bb()]])
-    const out = mergeYahooAndBloomberg([yahoo()], bbMap)
-    expect(out[0].quoteTime).toBe('2026-05-07T15:30:00.000Z')
+  /**
+   * Q-129. This block replaces a test named
+   *   "keeps yahoo quoteTime even when bloomberg-sourced (bridge does not provide it)"
+   * which asserted `quoteTime === yahoo's time` on a Bloomberg-priced row and
+   * passed for as long as the defect existed. Its parenthetical was the whole
+   * problem: because the bridge supplied no time, Yahoo's was borrowed rather
+   * than the row being marked unknown — so the suite PINNED the defect in
+   * place and named it approvingly. The bridge now carries its own clock.
+   */
+  it('a bloomberg-priced row carries the BLOOMBERG timestamp, never yahoo\'s', () => {
+    const bbMap = new Map([['AAPL', bb({ quoteTime: '2026-05-01T10:00:00.000Z' })]])
+    const out = mergeYahooAndBloomberg([yahoo({ quoteTime: '2026-05-07T15:30:00.000Z' })], bbMap)
+    expect(out[0].dataSource).toBe('bloomberg')
+    expect(out[0].quoteTime).toBe('2026-05-01T10:00:00.000Z')
+  })
+
+  it('a bloomberg price with no usable time is MISSING, not yahoo-stamped', () => {
+    const bbMap = new Map([['AAPL', bb({ quoteTime: null })]])
+    const out = mergeYahooAndBloomberg([yahoo({ quoteTime: '2026-05-07T15:30:00.000Z' })], bbMap)
+    expect(out[0].price).toBe(201)
+    expect(out[0].dataSource).toBe('bloomberg')
+    expect(out[0].quoteTime).toBeNull()
+  })
+
+  it('THE REPORTED SCENARIO: a stalled bridge beside fresh yahoo data', () => {
+    // Q-129's reproduction. Previously emitted price=100 with Yahoo's
+    // 2026-09-16 stamp and dataSource='bloomberg' — a six-day-old price
+    // presented under a different vendor's clock.
+    const bbMap = new Map([['AAPL', bb({ price: 100, quoteTime: '2026-09-10T14:00:00.000Z' })]])
+    const out = mergeYahooAndBloomberg(
+      [yahoo({ price: 200, quoteTime: '2026-09-16T14:00:00.000Z' })], bbMap)
+    expect(out[0].price).toBe(100)
+    expect(out[0].quoteTime).toBe('2026-09-10T14:00:00.000Z')
+    expect(out[0].quoteTime).not.toBe('2026-09-16T14:00:00.000Z')
+  })
+
+  it('a bloomberg-only row also carries its own time (it carried none at all before)', () => {
+    const bbMap = new Map([['MSFT', bb({ ticker: 'MSFT', quoteTime: '2026-05-02T09:00:00.000Z' })]])
+    const out = mergeYahooAndBloomberg([], bbMap)
+    expect(out[0].ticker).toBe('MSFT')
+    expect(out[0].quoteTime).toBe('2026-05-02T09:00:00.000Z')
   })
 
   it('falls back to yahoo for missing bloomberg fields (volume, 52w, pe, marketCap)', () => {

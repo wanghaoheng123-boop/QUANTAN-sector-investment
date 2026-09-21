@@ -125,7 +125,16 @@ export function mergeYahooAndBloomberg(
         low52w: bb.low52w || y.low52w,
         pe: bb.pe || y.pe,
         marketCap: bb.marketCap !== 'N/A' ? bb.marketCap : y.marketCap,
-        quoteTime: y.quoteTime ?? null,
+        // Q-129: the price on this row is Bloomberg's, so the timestamp must be
+        // Bloomberg's too. It previously carried `y.quoteTime` — Yahoo's clock
+        // — which presented a possibly stale bridge price as freshly stamped:
+        // a stalled bridge at 100 alongside a live Yahoo at 200 emitted
+        // price=100 with Yahoo's time and dataSource='bloomberg'.
+        //
+        // Null when the bridge gave no usable time. That renders as `—` rather
+        // than a number, which is I2's "missing displays as MISSING": borrowing
+        // another vendor's clock to avoid a blank is the failure, not the fix.
+        quoteTime: bb.quoteTime ?? null,
         bid: bb.bid,
         ask: bb.ask,
         dataSource: 'bloomberg',
@@ -186,6 +195,9 @@ export function mergeYahooAndBloomberg(
       low52w: bb.low52w,
       pe: bb.pe,
       marketCap: bb.marketCap,
+      // Q-129: Bloomberg-only rows carried no timestamp at all, so every
+      // consumer saw `undefined` and had nothing to age the price against.
+      quoteTime: bb.quoteTime ?? null,
       bid: bb.bid,
       ask: bb.ask,
       dataSource: 'bloomberg',
