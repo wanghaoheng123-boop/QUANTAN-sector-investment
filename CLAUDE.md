@@ -371,11 +371,26 @@ entry in `.quantlab/TRIAL_REGISTRY.jsonl` recording how many configurations
 were tried. Report the deflated number as the headline, never the raw one.
 
 *Today:* **I5 is a gate with no gate** — no enforcing `file:line` can be named.
-The only executing performance gate is `scripts/benchmark-signals.ts:325-331`
-(`process.exit(1)` on **raw** edge < 1.81pp) via `ci.yml:73`, and `ci.yml:82-96`
-reads only `aggregateNetWinRate`/`aggregateWinRate`, never `tradeStats`. I5 says
-report the deflated number; CI enforces the raw one. It passes identically if
-DSR is null, the registry is deleted, and no OOS run ever happened.
+`ci.yml:82-96` reads only `aggregateNetWinRate`/`aggregateWinRate`, never
+`tradeStats`. I5 says report the deflated number; CI never gates on it. It
+passes identically if DSR is null, the registry is deleted, and no OOS run ever
+happened.
+
+*Corrected 2026-09-21 (`Q-131`) — the previous sentence here was false in both
+its number and its citation.* It said the executing gate was
+`scripts/benchmark-signals.ts:325-331`, `process.exit(1)` on raw edge < **1.81pp**.
+`FLOOR_EDGE_PP` was 1.81 only between `9ef5352` (2026-07-12) and `89463b9` / #184
+(2026-09-06); it is now **`0.0` at `:620`, checked at `:651`**, and `:659`
+branches explicitly on `FLOOR_EDGE_PP === 0`. The performance bar was deliberately
+replaced by a floor **at the null** plus two structural breakage gates
+(`FLOOR_BUY_SIGNALS = 3000` at `:629`, `FLOOR_INSTRUMENTS_WITH_TRADES = 50` at
+`:630`), because the always-buy null Sharpe here is ~0.14 and a floor beneath it
+cannot detect absent skill. **Do not restate a floor from memory — the number and
+the line are both checked against the code by
+`__tests__/architecture/edge-gate-floor.test.ts`, and `reviews/invariants-baseline.md`
+§1b carries the supersession and the measured drift series.** This paragraph
+asserting a gate the code had stopped performing is the exact failure the tier
+definitions above warn about, committed in the file that defines them.
 
 Sub-tiers, which are not level:
 - **OOS · PARTIAL** — purged walk-forward exists and is unit-tested, and
