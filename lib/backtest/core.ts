@@ -171,6 +171,22 @@ function requirePrice(price: number, context: string): void {
 }
 
 /**
+ * Q-130: a price can pass `requirePrice` and still destroy the accounting.
+ * `Number.MAX_VALUE` is finite and positive, but `position * price` overflows
+ * to Infinity, the fee is Infinity, and `proceeds - fee` is `Infinity -
+ * Infinity` = NaN — which then enters `capital` and poisons every later mark.
+ *
+ * So the DERIVED quantity is checked, not only its inputs. Same contract as
+ * Q-122 on the exit side: a required exit whose arithmetic cannot be
+ * represented has not produced a worse result, it has failed to produce one.
+ */
+function requireFiniteAmount(value: number, context: string): void {
+  if (!Number.isFinite(value)) {
+    throw new RangeError(`Invalid backtest ${context}: expected a finite number; received ${String(value)}`)
+  }
+}
+
+/**
  * Close the current open position at `fillPrice` and book the trade.
  *
  * Phase 14 wave 35 (SSOT extraction): this exit-bookkeeping sequence was
@@ -208,6 +224,14 @@ function closePosition(state: PortfolioState, fillPrice: number): boolean {
   const proceeds = state.position * fillPrice
   const txCost = proceeds * TX_COST_PCT_PER_SIDE
   const netProceeds = proceeds - txCost
+  // Q-130. Checked here rather than after the mutations below purely for
+  // clarity: the throw invalidates the whole run, so the two orderings are
+  // observationally equivalent and a mutation swapping them survives by
+  // design. `netProceeds` is the one that actually catches the reported
+  // case — Infinity - Infinity is NaN, while `proceeds` alone is merely
+  // Infinity — but both are asserted because they fail on different inputs.
+  requireFiniteAmount(proceeds, `exit proceeds for ${open.ticker}`)
+  requireFiniteAmount(netProceeds, `exit net proceeds for ${open.ticker}`)
   const pnlPct = open.action === 'BUY'
     ? (fillPrice - open.entryPrice) / open.entryPrice
     : (open.entryPrice - fillPrice) / open.entryPrice
@@ -386,8 +410,17 @@ export function backtestInstrument(
         state.equityHistory.push(currentEquity(state, signalPrice))
         continue
       }
+      // Q-130: `shares <= 0` misses Infinity and NaN. A legal but denormal
+      // entry price (Number.MIN_VALUE is finite and positive, so it passes the
+      // guard above) makes `allocation / entryPrice` overflow, and
+      // Math.floor(Infinity) is Infinity — which then sizes an infinite
+      // position and drives capital to -Infinity.
+      //
+      // An entry is discretionary, so the contract here is to SKIP the bar,
+      // matching the unpriceable-entry guard directly above. Only a required
+      // exit throws.
       const shares = Math.floor(allocation / entryPrice)
-      if (shares <= 0) {
+      if (!Number.isFinite(shares) || shares <= 0) {
         state.equityHistory.push(currentEquity(state))
         continue
       }
