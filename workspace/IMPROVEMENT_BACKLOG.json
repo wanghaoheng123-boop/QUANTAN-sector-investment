@@ -2704,7 +2704,7 @@
     "title": "Drawdown exits and final liquidation accept invalid prices",
     "domain": "Quant/Research",
     "priority": "P1",
-    "status": "partial",
+    "status": "done",
     "files": [
       "lib/backtest/core.ts",
       "__tests__/backtest/invalidExitPrice.test.ts",
@@ -2721,7 +2721,8 @@
       "npm run benchmark"
     ],
     "notes_2026_09_16": "HIGH. core.ts:350 bypasses the entry/time-exit guard; final liquidation :430 has the same gap. Forced BUY of 500 shares at 100, bar 202 close 40, bar 203 open NaN yields NaN totalReturn; open zero books a zero-price exit. Deterministic invented fixture, not a historical result. Related Q02 covered entry only; Q103-RT-7 no-NaN assertion was too broad. Evidence and concrete implementation instructions: reviews/q108-algorithm-audit-2026-09-16.md",
-    "notes_2026_09_17": "LOCAL CHECKPOINT, uncommitted on codex/q122-invalid-exit-prices stacked on Q108 f2ee04c. Required exits now fail closed with RangeError before mutations; time exits no longer defer into a different holding policy. Terminal validation covers flat and nonempty short histories. New regressions: 38 failed / 10 passed before, 48 new passed after; focused total 64 including 16 existing. Lead reports full suite 2237 passed / 17 skipped, typecheck/build/check:ci successful logs; final process statuses and benchmark still pending at this checkpoint. All 56 fixed input histories and complete output hashes match before/after. Acceptance was narrowed explicitly: finite-positive input checks do not prevent arithmetic overflow, reproduced separately as Q130 on base and patched code. No tuning or historical improvement claim; Q123-Q129 untouched."
+    "notes_2026_09_17": "LOCAL CHECKPOINT, uncommitted on codex/q122-invalid-exit-prices stacked on Q108 f2ee04c. Required exits now fail closed with RangeError before mutations; time exits no longer defer into a different holding policy. Terminal validation covers flat and nonempty short histories. New regressions: 38 failed / 10 passed before, 48 new passed after; focused total 64 including 16 existing. Lead reports full suite 2237 passed / 17 skipped, typecheck/build/check:ci successful logs; final process statuses and benchmark still pending at this checkpoint. All 56 fixed input histories and complete output hashes match before/after. Acceptance was narrowed explicitly: finite-positive input checks do not prevent arithmetic overflow, reproduced separately as Q130 on base and patched code. No tuning or historical improvement claim; Q123-Q129 untouched.",
+    "resolution_2026_09_21": "Closed from 'partial'. The record was stale, not the work: it was left partial while publication was pending, and the package shipped as PR #207 (merged 1d6f632) and was production-verified — /api/backtest returns 200 with 56 results, so the fail-closed guard does not fire on real data. Its named residual, the arithmetic overflow that a finite positive price can still cause, is closed separately as Q-130."
   },
   {
     "id": "Q-123",
@@ -2815,7 +2816,7 @@
     "title": "Portfolio monthlyRebalance configuration is inert",
     "domain": "Quant/Research",
     "priority": "P2",
-    "status": "pending",
+    "status": "done",
     "files": [
       "lib/backtest/portfolioBacktest.ts"
     ],
@@ -2829,7 +2830,8 @@
       "npm run test",
       "npm run benchmark"
     ],
-    "notes_2026_09_16": "MEDIUM static caller audit: portfolioBacktest.ts:71 declares monthlyRebalance and :87 defaults it false; no decision reads the field. No strategy experiment or behavior change attempted. Evidence and concrete implementation instructions: reviews/q108-algorithm-audit-2026-09-16.md"
+    "notes_2026_09_16": "MEDIUM static caller audit: portfolioBacktest.ts:71 declares monthlyRebalance and :87 defaults it false; no decision reads the field. No strategy experiment or behavior change attempted. Evidence and concrete implementation instructions: reviews/q108-algorithm-audit-2026-09-16.md",
+    "resolution_2026_09_21": "REMOVED, not implemented. PortfolioConfig.monthlyRebalance was declared at portfolioBacktest.ts:71 and defaulted to false at :87, and no decision anywhere read it — typecheck after deletion was clean, which is itself the proof that it was inert. The choice between the ticket's two options was made on criterion 3: monthly sector rotation is a STRATEGY change and would need its own out-of-sample validation under I5. Activating a new strategy under cover of configuration cleanup is what that criterion forbids, so the knob is gone and the deferral is written into the file where the field used to be. WHY THIS IS MORE THAN DEAD CODE: a backtest configuration advertising 'rebalance based on sector rotation monthly' tells its reader that the reported results model monthly rebalancing. They never did. Same family as _cached set by three routes and consumed by none (I2) and the DELAYED badge declared and rendered by nobody (I1) — a DECLARED FACT WITH NO CONSUMER, where the declaration is the claim and the missing reader makes the claim false. GUARDED AT THE SHAPE, NOT THE INSTANCE: __tests__/architecture/backtest-config-consumed.test.ts fails when ANY field declared on PortfolioConfig has no reader outside the declaration and the default object. Watched failing on three mutations — re-introducing monthlyRebalance, adding a DIFFERENT inert field (quarterlyReview, proving it guards the shape), and breaking the scan so it reads zero fields, which must fail on reachability rather than pass vacuously. Carries a positive control proving the parser finds inert fields and does not mistake a commented-out line for a declaration."
   },
   {
     "id": "Q-128",
