@@ -9,6 +9,7 @@
  * annualization, and the Sharpe/Sortino window gates.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { netCashPnl } from '@/lib/backtest/core'
 import {
   aggregatePortfolio,
   TX_COST_PCT_PER_SIDE,
@@ -99,14 +100,46 @@ describe('aggregatePortfolio — end-aligned combine goldens', () => {
     expect(s.sortinoRatio).not.toBeNull()
   })
 
-  it('F-4: a win must clear the ROUND-TRIP cost, not just zero', () => {
-    // trades: +5% (win), +0.1% (gross win but ≤ 22 bps → NOT a win), −2% (loss)
-    expect(TX_COST_PCT_PER_SIDE).toBeCloseTo(0.0011, 12)
+  it('F-4/Q-123/Q-124: win and profit factor are exact NET CASH', () => {
+    // trades: +5% (win), +0.1% (gross gain, net loss), −2% (loss).
+    //
+    // This test previously asserted `profitFactor === 0.05 / 0.02` with the
+    // comment "grossProfit counts WINNING trades only; grossLoss counts pnl<0
+    // only". That comment DESCRIBED THE DEFECT: the +0.1% trade was excluded
+    // from both sums here while core.ts put it in grossLoss, so the same
+    // trades gave a different profit factor depending on which one you asked.
+    // The audit that found it asked for the accounting ORACLE to change, not
+    // just the expected constant — so the expectation below is recomputed from
+    // the fixture's own shares and prices rather than restated.
+    const c = TX_COST_PCT_PER_SIDE
+    expect(c).toBeCloseTo(0.0011, 12)
+    // Independent oracle: 10 shares, entry 100, exit 100*(1+r), costs charged
+    // on each side's actual notional.
+    const cash = (r: number) => 10 * (100 * (1 + r) * (1 - c) - 100 * (1 + c))
+    const cashes = [cash(0.05), cash(0.001), cash(-0.02)]
+    // The +0.1% trade is a NET LOSS: 0.1% gross cannot clear 22 bps of costs.
+    expect(cashes[1]).toBeLessThan(0)
+    const wins = cashes.filter(v => v > 0)
+    const losses = cashes.filter(v => v < 0)
+
     expect(s.totalTrades).toBe(3)
-    expect(s.winRate).toBeCloseTo(1 / 3, 12)
-    // grossProfit counts WINNING trades only; grossLoss counts pnl<0 only
-    expect(s.profitFactor).toBeCloseTo(0.05 / 0.02, 12)
+    expect(s.winRate).toBeCloseTo(wins.length / 3, 12)
+    expect(s.profitFactor).toBeCloseTo(
+      wins.reduce((a, b) => a + b, 0) / Math.abs(losses.reduce((a, b) => a + b, 0)), 10)
+    // avgTradeReturn is unchanged: it is the raw price move, by design.
     expect(s.avgTradeReturn).toBeCloseTo((0.05 + 0.001 - 0.02) / 3, 12)
+  })
+
+  it('Q-124: aggregating ONE result reproduces that result\'s own profit factor', () => {
+    // The divergence this ticket names: core.ts and engine.ts computed the
+    // metric differently, so a single result and its own aggregation disagreed.
+    const single = aggregatePortfolio([r1], 100_000)
+    const cashOf = (t: Trade) => netCashPnl(t)
+    const cs = r1.closedTrades.map(cashOf)
+    const gp = cs.reduce((a, v) => (v > 0 ? a + v : a), 0)
+    const gl = Math.abs(cs.reduce((a, v) => (v < 0 ? a + v : a), 0))
+    expect(single.profitFactor).toBeCloseTo(gp / gl, 10)
+    expect(Number.isFinite(single.profitFactor)).toBe(true)
   })
 
   it('F-2: alpha uses the ALIGNED common-window B&H average', () => {
