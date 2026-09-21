@@ -2266,3 +2266,61 @@ with prices and percentage changes, byte-identical to online, saying nothing
 about being offline. That is the `start-url` cache, not the precache, so Q-120
 neither caused nor fixed it — and on a market-data product an honest failure may
 beat a silent stale dashboard, which makes it a product call.
+
+## 2026-09-21 — Five packages, and two of them were pinned in place by passing tests
+
+Merged #212–#215. Q-131 (records vs the gate), Q-128/Q-129 (bridge contract),
+Q-130 (arithmetic overflow), Q-127 (inert config).
+
+**Q-131 — two records asserted a CI gate the code stopped performing.**
+`FLOOR_EDGE_PP` was 1.81 from 2026-07-12 until `89463b9`/#184 lowered it to 0.0
+**deliberately**, replacing the performance bar with a floor at the null plus
+two structural gates. `invariants-baseline.md` kept calling +1.81pp "the primary
+CI gate" and `CLAUDE.md`'s I5 was false in *both* its number and its citation.
+Now corrected as dated corrections and, more importantly, **guarded**: a
+machine-readable marker in the baseline is tied to the constant the gate
+applies, so the two cannot drift again.
+
+**The attribution corrected my own earlier claim, unflatteringly.** Holding code
+byte-identical and varying only the data vintage: +2.55 → 2.38 → 1.91 → 1.87 →
++1.59pp. Data drift, not a code regression. But I had filed this ticket saying
+*the selection improved absolutely and only the market moved*. Wrong — that
+compared a frozen document number against a measurement on a different vintage.
+Held constant, **our win rate falls 0.39pp** while the base rate rises 0.57pp:
+roughly 60/40, not 100/0. Incidental and corroborating I4: `nBars` went 58420 →
+58420 → **58419** → 59245 → 59740, so a bar *disappeared* between two vintages
+while the script asserts the window start is pinned.
+
+**Q-129 — a Bloomberg price wearing Yahoo's clock**, and the defect was **pinned
+in place by a passing test**: `keeps yahoo quoteTime even when bloomberg-sourced
+(bridge does not provide it)`. It asserted the bug and named it approvingly; its
+parenthetical was the whole problem. That is the second time in one session a
+green test ratified the thing it should have caught, and Q-124 (still open)
+carries a third.
+
+**Q-128 — `parseFloat` reads a prefix.** `'1,234.5'` became `1`, `'123oops'`
+became `123`, and a failed parse returned **0**, which for a price is not a
+neutral default but a false quote.
+
+**Q-130 — mutation testing changed the code, not just the confidence.** The
+first draft carried two entry-site guards, and deleting one **survived**: when
+`shares` is non-finite, `costBasis` always is, so they were two guards on one
+property with neither independently exercised. Removed the redundant one. A
+second surviving mutation (validate before vs after mutating capital) is
+recorded as a genuine **equivalent mutant** — the throw discards the run either
+way — and the comment that had claimed otherwise was an over-claim, corrected.
+
+**Q-127 — a knob promising a strategy the engine never ran.**
+`monthlyRebalance` was declared, defaulted, and read by nobody; typecheck after
+deleting it was clean, which is the proof. Removed rather than implemented,
+because activating a strategy under cover of cleanup is what the ticket
+forbade. Guarded at the *shape*: any declared `PortfolioConfig` field without a
+reader now fails.
+
+**A hazard worth not repeating.** `git stash -q push -- <path>` fails on Apple
+git (the flag must follow the subcommand), and the paired `git stash pop` then
+reached for the top of a **29-entry stash stack whose newest entry is from June
+2026**. It only failed to apply because untracked files collided. Worse, the
+failed stash meant two benchmark runs executed the *same* code and reported "0
+fields differing" — the flattering answer, which I nearly believed. Re-done with
+an explicit file swap and a grep proving the swap had happened.
