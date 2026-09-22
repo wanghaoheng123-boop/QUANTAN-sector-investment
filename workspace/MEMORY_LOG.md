@@ -2372,3 +2372,45 @@ is the implementation typed twice.** Replacement goldens were therefore derived
 from ledgers written without reading `core.ts` — which took two attempts on
 Q-126, the first mis-modelling the curve's indexing. A mismatch at index 50
 while index 0 matched is what exposed it.
+
+## 2026-09-21 — Q-125 closes the q108 algorithm audit
+
+Merged #220. With it, **every algorithm defect from
+`reviews/q108-algorithm-audit-2026-09-16.md` is resolved** — Q-122, Q-123,
+Q-124, Q-125, Q-126, Q-127 and Q-130.
+
+**The strategy had never collected a dividend.** Every dividend read in
+`core.ts` fed the buy-and-hold comparator; the strategy's own cash ledger got
+nothing. A 500-share position spanning a $2 dividend returned exactly what a
+dividend-free control did, while the benchmark it is measured against collected.
+Q-126 had just widened that gap.
+
+**Entitlement ordering was the whole design question, and one placement settles
+it.** Fills execute at `rows[i+1].open`, so crediting *before* the fill pays the
+holding that owned the shares through bar *i*'s close. Held across → entitled
+once. Sold at the ex-date open → entitled, because it owned them before the open.
+Bought at the ex-date open → not entitled, because the fill hasn't happened yet.
+Flat → nothing. No special cases.
+
+**This is the only correction all session that flattered the platform** —
+strategy return +0.34pp, alpha −1.1279 → −1.1245. Recorded as such, because a
+result that helps deserves more scepticism than one that hurts. It stands
+because the accounting was asymmetric *against* the strategy, and alpha remains
+≈ −1.12 either way.
+
+**The verification was wrong three times before the implementation was suspected
+once.** Checking the delta against an independent dividend ledger started at 21
+of 49 agreeing. Each round of disagreement turned out to be my *checker*:
+matching a trade's entry bar by price is ambiguous when several bars share an
+open (over-counted 5 instruments); keying on `trade.date` fixed four; the last,
+PG, needed its exit bar disambiguated toward the 60-bar time exit because its
+exit price also matched two bars. Final: **26 exact, 23 explained by dividend
+cash resizing later half-Kelly entries, 0 unexplained.**
+
+That is worth keeping next to the four defect-ratifying tests. When an
+independent check disagrees with the implementation, the check is a suspect too
+— and here it was guilty every time.
+
+A **fifth** comment documenting a defect turned up in the same golden file:
+*"dividends touch only the B&H side — the strategy trade is unchanged."* True,
+and the bug.
