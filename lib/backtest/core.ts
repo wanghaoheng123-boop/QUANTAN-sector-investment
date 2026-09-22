@@ -411,6 +411,41 @@ export function backtestInstrument(
     const signalPrice = rows[i].close
     // Execute at TOMORROW's open price (realistic execution model)
     const nextOpen = rows[i + 1].open
+
+    // ── Q-125 (2026-09-21): dividends on shares the STRATEGY holds ──
+    //
+    // Every dividend read in this file fed the B&H comparator; the strategy's
+    // own cash ledger never received one. A 500-share position spanning a $2
+    // dividend had exactly the same return as a dividend-free control — $1000
+    // of entitlement simply absent — while the benchmark it is measured
+    // against DID collect. The accounting was asymmetric, and Q-126 widened
+    // that gap by making the benchmark's side compound correctly.
+    //
+    // ENTITLEMENT ORDERING, which is the whole design question here. Fills
+    // happen at `rows[i+1].open`, so the holding that exists at THIS point in
+    // the iteration is the one that owned the shares through bar i's close —
+    // i.e. before bar i+1's ex-date opened. Crediting here therefore gives:
+    //   • held across the ex-date        -> entitled (credited exactly once)
+    //   • SOLD at the ex-date open       -> entitled: owned before it opened
+    //   • BOUGHT at the ex-date open     -> NOT entitled: the fill below has
+    //                                       not happened yet, so there is no
+    //                                       position to credit
+    //   • flat                           -> nothing credited
+    //
+    // Paid as CASH, not reinvested: the strategy holds a fixed share count
+    // until its exit, so there is no share to compound onto. `pnlPct` is
+    // deliberately untouched — it remains the raw price move (Q-123/Q-124), so
+    // dividends reach `totalReturn` through capital rather than through the
+    // per-trade log.
+    //
+    // Safe against double counting: prices here are yahoo `close`, which is
+    // split-adjusted and NOT dividend-adjusted (scripts/fetchBacktestData.mjs
+    // takes `q.close`, not `q.adjclose`, and attaches each cash dividend to its
+    // ex-date bar separately). Verified under Q-126.
+    const exDivCash = rows[i + 1].dividend ?? 0
+    if (exDivCash > 0 && state.openTrade && state.position > 0) {
+      state.capital += state.position * exDivCash
+    }
     // Entry price + slippage is computed only when opening a BUY (after signal below).
     // OhlcvRow has no `action`; using rows[i].action was always undefined and forced
     // the sell branch (downward slippage), biasing long entries optimistically.

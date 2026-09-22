@@ -299,8 +299,17 @@ describe('backtestInstrument — dividend-reinvested B&H goldens (production pat
     expect(res.bnhCurve![0]).toBeCloseTo(234.673547, 5)   // was 234.423281
     expect(res.bnhCurve![50]).toBeCloseTo(287.699760, 5)  // was 287.271853
     expect(res.bnhCurve![179]).toBeCloseTo(340.244837, 5) // was 339.263227
-    // dividends touch only the B&H side — the strategy trade is unchanged
-    expect(res.totalReturn).toBeCloseTo(0.052381, 5)
+    // Q-125 MIGRATION (2026-09-21): 0.052381 -> 0.053781.
+    //
+    // The comment that stood here said "dividends touch only the B&H side —
+    // the strategy trade is unchanged". That was TRUE, and it was the defect:
+    // the benchmark collected dividends and the strategy never did. It is now
+    // false by design.
+    //
+    // Derived independently, not read out of the new implementation: the single
+    // trade holds 70 shares and spans exactly ONE in-loop ex-date at $2.00, so
+    // 70 x 2 = $140 of dividend cash on $100,000 of capital = +0.0014 exactly.
+    expect(res.totalReturn).toBeCloseTo(0.053781, 5) // was 0.052381 (no strategy dividends)
     expect(res.totalTrades).toBe(1)
     expect(res.excessReturn).toBeCloseTo(res.totalReturn - res.bnhReturn, 10)
   })
