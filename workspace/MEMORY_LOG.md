@@ -2414,3 +2414,55 @@ independent check disagrees with the implementation, the check is a suspect too
 A **fifth** comment documenting a defect turned up in the same golden file:
 *"dividends touch only the B&H side — the strategy trade is unchanged."* True,
 and the bug.
+
+## 2026-09-24 — Two claims the product could not support
+
+Merged #222 (Q-109) and #223 (Q-114). Different surfaces, same failure: the
+product asserting something it had not checked.
+
+**Q-109 — the compliance banner named the wrong regulators.** It said the
+product does not provide recommendations *"regulated under MiFID II, SEC RIA,
+or equivalent regimes"* — a regulatory **self-classification** that named two
+regimes which do not govern and omitted MAS, which does. The clause is deleted
+and **no regime is named at all**.
+
+The guard exists for the *obvious* correction: writing "not regulated under
+MAS" is the identical error aimed at the regulator that actually bites, and
+worse — an unlicensed self-exemption. Whether the FAA/SFA line is crossed stays
+with the owner and counsel (Q-083). Both the original clause and the MAS
+substitution fail as mutations.
+
+The rest of the copy was **checked rather than re-shipped on trust**, as the
+audit warned. "Does not route or execute orders" and "does not hold customer
+funds" are both true — no such path exists. But *"market data is delayed or
+aggregated"* was **false**: the crypto order-book feeds stream browser-direct
+from Coinbase and Kraken. Replaced with a statement that terms differ per vendor
+and each surface labels its own age — true only because Q-101 built that.
+
+**And the guard shipped with the bug it guards against.** It strips comments,
+because the comment explaining the fix necessarily names MiFID II and MAS. Its
+first draft then read *raw* source for the "still makes the verifiable claims"
+assertion — so deleting the **rendered** copy passed, because my own comment
+satisfied it. Caught by mutation. The comment-satisfies-the-assertion defect,
+committed inside the test written to strip comments.
+
+**Q-114 — two freshness vocabularies, and the wrong clock on four surfaces.**
+`formatFreshness` was a second independent age-to-label mapping: "live" under
+30s where the classifier says 10, with no notion of caching, delay or session.
+The same datum could read "live" from one and "Stale" three inches away.
+
+The tidy-up was not the point. **Half the call sites pass our own clock** —
+`fetchedAt`, `computedAt`. Calling a five-second-old *fetch* "live" describes
+our clock and claims the vendor's: the exact substitution Q-101 found in three
+files, still running on four surfaces a fortnight later. A
+`stamp: 'vendor' | 'ours'` parameter separates them, `'ours'` renders "just
+now", and **`'ours'` is the default** — so forgetting it cannot manufacture a
+liveness claim. `/backtest` now reads "just now" where it read "live".
+
+**A "CANNOT DO" assertion broke, and that is the good kind.** The Q-101 suite
+explicitly recorded that this function knew nothing about caching, delay or the
+session — and failed the moment that stopped being true. That is precisely what
+such an assertion is for, and the exact opposite of the four defect-ratifying
+tests found earlier this session. It is replaced by assertions of the
+capability, plus a narrower one: without a calendar it is still wall-clock
+naive, which is the deliberate over-alarming default.
