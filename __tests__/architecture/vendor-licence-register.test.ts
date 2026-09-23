@@ -130,6 +130,8 @@ const surfaces = attributeSurfaces(files, points)
 
 /** No surface map — for virtual-file cases whose rows are not end-user exposed. */
 const NO_SURFACES = new Map<string, readonly string[]>()
+/** Q-111 companion to NO_SURFACES: a run that walked nothing. */
+const NO_FILES: readonly SourceFile[] = []
 
 // ─────────────────────────────────────────────────────────────────────────────
 describe('I8 — the scan is reachable', () => {
@@ -278,7 +280,7 @@ describe('I8 — the import graph is reachable', () => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 describe('I8 — every vendor this repository reaches is recorded', () => {
-  const violations = checkRegister(points, register.entries, surfaces)
+  const violations = checkRegister(points, register.entries, surfaces, files)
 
   it('has no unregistered egress point', () => {
     const unregistered = violations
@@ -419,7 +421,7 @@ describe('I8 — the register has not been quietly softened', () => {
 describe('I8 — the guard catches what it claims to catch', () => {
   const f = (path: string, source: string): SourceFile[] => [{ path, source }]
   const unregistered = (pts: EgressPoint[]) =>
-    checkRegister(pts, register.entries, NO_SURFACES).filter((v) => v.rule === 'unregistered').map((v) => v.id)
+    checkRegister(pts, register.entries, NO_SURFACES, NO_FILES).filter((v) => v.rule === 'unregistered').map((v) => v.id)
 
   it('catches a new host in a new nested file', () => {
     expect(unregistered(detectEgress(f('lib/data/providers/newVendor.ts', `const B = 'https://api.polygon.io/v2'`))))
@@ -535,7 +537,7 @@ describe('I8 — a new surface cannot quietly start serving a vendor', () => {
   const run = (fs: SourceFile[], entry: RegisterEntry) => {
     const all = [VENDOR, ...fs]
     const pts = detectEgress(all)
-    return checkRegister(pts, [entry], attributeSurfaces(all, pts)).map((v) => v.rule)
+    return checkRegister(pts, [entry], attributeSurfaces(all, pts), all).map((v) => v.rule)
   }
   const known: SourceFile = {
     path: 'app/api/known/route.ts',
@@ -634,7 +636,7 @@ describe('I8 — a new surface cannot quietly start serving a vendor', () => {
     }
     const all = [VENDOR, known, added]
     const pts = detectEgress(all)
-    const v = checkRegister(pts, [exposedRow()], attributeSurfaces(all, pts))
+    const v = checkRegister(pts, [exposedRow()], attributeSurfaces(all, pts), all)
     expect(v[0].detail).toContain('Computed set: app/api/brand-new/route.ts, app/api/known/route.ts')
   })
 })
@@ -654,34 +656,34 @@ describe('I8 — the lifecycle cannot punish doing the right thing', () => {
     // gate red, the route to green would be deleting the audit trail — the same
     // shape as the DSR floor that made "stop logging trials" the way to pass.
     const withdrawn = row({ lifecycle: 'withdrawn', withdrawn_on: '2026-08-27', withdrawn_reason: 'surface removed' })
-    expect(checkRegister([], [withdrawn], NO_SURFACES)).toEqual([])
+    expect(checkRegister([], [withdrawn], NO_SURFACES, NO_FILES)).toEqual([])
   })
 
   it('but a row still recorded active with nothing reaching it is flagged, not deleted', () => {
-    expect(checkRegister([], [row({})], NO_SURFACES).map((v) => v.rule)).toEqual(['stale-active'])
+    expect(checkRegister([], [row({})], NO_SURFACES, NO_FILES).map((v) => v.rule)).toEqual(['stale-active'])
   })
 
   it('and claiming a withdrawal that did not happen is itself a violation', () => {
     const pts: EgressPoint[] = [{ kind: 'http-host', id: 'api.gone.example', where: 'lib/x.ts:1' }]
     const withdrawn = row({ lifecycle: 'withdrawn', withdrawn_on: '2026-08-27', withdrawn_reason: 'surface removed' })
-    expect(checkRegister(pts, [withdrawn], NO_SURFACES).map((v) => v.rule)).toEqual(['withdrawn-but-live'])
+    expect(checkRegister(pts, [withdrawn], NO_SURFACES, NO_FILES).map((v) => v.rule)).toEqual(['withdrawn-but-live'])
   })
 
   it('rejects PERMITTED without a document, so the status cannot be typed to pass', () => {
     const pts: EgressPoint[] = [{ kind: 'http-host', id: 'api.gone.example', where: 'lib/x.ts:1' }]
-    expect(checkRegister(pts, [row({ licence_status: 'PERMITTED' })], NO_SURFACES).map((v) => v.rule))
+    expect(checkRegister(pts, [row({ licence_status: 'PERMITTED' })], NO_SURFACES, NO_FILES).map((v) => v.rule))
       .toEqual(['permitted-without-evidence'])
   })
 
   it('accepts PERMITTED once a document is named', () => {
     const pts: EgressPoint[] = [{ kind: 'http-host', id: 'api.gone.example', where: 'lib/x.ts:1' }]
-    expect(checkRegister(pts, [row({ licence_status: 'PERMITTED', licence_evidence: 'MSA 2026-09-01 §4.2, countersigned' })], NO_SURFACES))
+    expect(checkRegister(pts, [row({ licence_status: 'PERMITTED', licence_evidence: 'MSA 2026-09-01 §4.2, countersigned' })], NO_SURFACES, NO_FILES))
       .toEqual([])
   })
 
   it('refuses to serve a surface whose licence is recorded as forbidding it', () => {
     const pts: EgressPoint[] = [{ kind: 'http-host', id: 'api.gone.example', where: 'lib/x.ts:1' }]
-    expect(checkRegister(pts, [row({ licence_status: 'RESTRICTED' })], NO_SURFACES).map((v) => v.rule))
+    expect(checkRegister(pts, [row({ licence_status: 'RESTRICTED' })], NO_SURFACES, NO_FILES).map((v) => v.rule))
       .toEqual(['restricted-but-active'])
   })
 })
@@ -691,10 +693,85 @@ describe('I8 — the lifecycle cannot punish doing the right thing', () => {
 // never be read as a proof. Q-098 established the idiom: an escape written in a
 // review document is a claim, an escape written as a test is a measurement.
 // ─────────────────────────────────────────────────────────────────────────────
+describe('I8 — `evidence` has a reader (Q-111)', () => {
+  // A rule whose only instances live in the real register has zero reachable
+  // instances the day the register is clean — which is today. These are the
+  // named instances, so the rule cannot go quietly inert.
+  const VENDOR_FILE: SourceFile = {
+    path: 'lib/vendorClient.ts',
+    source: `export const q = () => fetch('https://api.vendor.example/v1')`,
+  }
+  const base = (over: Partial<RegisterEntry> = {}): RegisterEntry => ({
+    kind: 'http-host', id: 'api.vendor.example', lifecycle: 'active',
+    classification: 'market-data-vendor', vendor: 'Vendor', end_user_exposed: false,
+    authenticated: false, licence_status: 'UNVERIFIED', finding: 'recorded',
+    recorded_by: 'test', recorded_on: '2026-09-24',
+    evidence: ['lib/vendorClient.ts:1'],
+    ...over,
+  })
+  const run = (entry: RegisterEntry, extra: SourceFile[] = []) => {
+    const all = [VENDOR_FILE, ...extra]
+    const pts = detectEgress(all)
+    return checkRegister(pts, [entry], attributeSurfaces(all, pts), all).map((v) => v.rule)
+  }
+
+  it('is green when the evidence lands on the detected egress', () => {
+    expect(run(base())).toEqual([])
+  })
+
+  it('THE FINDING: evidence that lands on nothing detected is flagged', () => {
+    // The scikit-learn/xgboost shape: the citation names a real, walked file
+    // that simply is not where this row's egress lives.
+    const other: SourceFile = { path: 'lib/unrelated.ts', source: 'export const x = 1' }
+    expect(run(base({ evidence: ['lib/unrelated.ts'] }), [other])).toContain('evidence-unsupported')
+  })
+
+  it('evidence naming a file the walk never visited is a VIOLATION, not a skip', () => {
+    // Criterion 3, and the shape found on the real tree: a `.json` payload the
+    // extension set excludes. Unverifiable is not the same as absent.
+    expect(run(base({ evidence: ['lib/vendorClient.ts:1', 'data/never/walked.json'] })))
+      .toContain('evidence-unwalked')
+  })
+
+  it('the USE TRAIL is allowed — extra citations off the egress are not flagged', () => {
+    // Evidence documents where a vendor is USED, not only where it is detected.
+    // A first draft of this rule demanded every citation sit on a point and
+    // produced ten false positives on legitimate rows.
+    const caller: SourceFile = {
+      path: 'app/api/uses-it/route.ts',
+      source: `import { q } from '@/lib/vendorClient'\nexport const GET = () => q()`,
+    }
+    expect(run(base({ evidence: ['lib/vendorClient.ts:1', 'app/api/uses-it/route.ts'] }), [caller])).toEqual([])
+  })
+
+  it('a WITHDRAWN row is exempt — its evidence describes history', () => {
+    const withdrawn = base({
+      lifecycle: 'withdrawn', withdrawn_on: '2026-09-24', withdrawn_reason: 'surface removed',
+      evidence: ['lib/long/gone.ts'],
+    })
+    expect(checkRegister([], [withdrawn], NO_SURFACES, NO_FILES)).toEqual([])
+  })
+
+  it('CANNOT DO: it does not require a row to CARRY evidence', () => {
+    // Deliberate. Making it mandatory here fails every synthetic fixture that
+    // exercises an unrelated rule, and a guard that forces unrelated tests to
+    // carry ceremony is how fixtures start lying. Asserted on the real register
+    // instead, in the block above.
+    expect(run(base({ evidence: undefined }))).toEqual([])
+  })
+
+  it('CANNOT DO: it checks the FILE, not the line number', () => {
+    // `lib/vendorClient.ts:999` passes though the host sits on line 1. Line
+    // drift is real — BLOOMBERG_BRIDGE_URL cites :75 where the reads are at
+    // 120/139/232 — and this rule does not catch it.
+    expect(run(base({ evidence: ['lib/vendorClient.ts:999'] }))).toEqual([])
+  })
+})
+
 describe('I8 — what this guard CANNOT do', () => {
   const f = (path: string, source: string): SourceFile[] => [{ path, source }]
   const unregistered = (pts: EgressPoint[]) =>
-    checkRegister(pts, register.entries, NO_SURFACES).filter((v) => v.rule === 'unregistered').map((v) => v.id)
+    checkRegister(pts, register.entries, NO_SURFACES, NO_FILES).filter((v) => v.rule === 'unregistered').map((v) => v.id)
 
   // ── Q107-S9: what the IMPORT GRAPH cannot do ────────────────────────────────
   const surfacesOf = (fs: SourceFile[]) => attributeSurfaces(fs, detectEgress(fs))
@@ -759,7 +836,7 @@ describe('I8 — what this guard CANNOT do', () => {
       classification: 'market-data-vendor', vendor: 'Quiet', end_user_exposed: false,
       authenticated: false, licence_status: 'UNVERIFIED', finding: 'x', recorded_by: 'y', recorded_on: '2026-09-09',
     }
-    expect(checkRegister(pts, [row], attributeSurfaces(fs, pts))).toEqual([])
+    expect(checkRegister(pts, [row], attributeSurfaces(fs, pts), fs)).toEqual([])
   })
 
   it('CANNOT see an entry point outside app/ that is not one of the two named root files', () => {
@@ -814,7 +891,7 @@ describe('I8 — what this guard CANNOT do', () => {
       authenticated: false, licence_status: 'NOT_APPLICABLE', finding: 'not a vendor, honest',
       recorded_by: 'someone', recorded_on: '2026-08-27',
     }
-    expect(checkRegister(detectEgress([], { dependencies: { 'definitely-a-vendor-client': '^1.0.0' } }), [mis], NO_SURFACES))
+    expect(checkRegister(detectEgress([], { dependencies: { 'definitely-a-vendor-client': '^1.0.0' } }), [mis], NO_SURFACES, NO_FILES))
       .toEqual([])
   })
 
