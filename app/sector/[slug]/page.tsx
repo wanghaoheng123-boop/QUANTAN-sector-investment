@@ -322,7 +322,7 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
                       />
                       {live.connected ? (live.marketOpen ? 'LIVE' : 'CLOSED') : 'RECONNECT'}
                     </span>
-                    <span className="text-[10px] text-slate-400">{formatFreshness(quote.quoteTime)}</span>
+                    <span className="text-[10px] text-slate-400">{formatFreshness(quote.quoteTime, { stamp: 'vendor', calendar: 'us-equity' })}</span>
                   </div>
                 </div>
               ) : (

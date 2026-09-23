@@ -158,7 +158,7 @@ function SignalCard({ signal, color, compact = false }: SignalCardProps) {
           )}
           {session && signal.quoteTime && (
             <div className="text-[10px] text-slate-400 mt-0.5 font-mono">
-              Quote {formatFreshness(signal.quoteTime)}
+              Quote {formatFreshness(signal.quoteTime, { stamp: 'vendor', calendar: 'us-equity' })}
             </div>
           )}
         </div>

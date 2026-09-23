@@ -1,3 +1,4 @@
+import { classifyFreshness, formatAge, type TradingCalendar } from '@/lib/data/freshness'
 /**
  * Safe numeric formatter — returns a placeholder for null / undefined /
  * NaN / ±Infinity instead of letting `.toFixed()` emit "NaN"/"Infinity"
@@ -49,34 +50,64 @@ export function formatCompactNumber(value: number | null | undefined, digits = 1
 }
 
 /**
- * Render a timestamp's age as a short human string.
+ * Short freshness phrase for inline display — ONE vocabulary, shared with
+ * `DataFreshnessIndicator`.
  *
- * Q-101 (2026-09-13) — a missing timestamp returned the word `'stale'`, which
- * is a claim about the data's AGE made when the age is unknown. I2's wording is
- * the opposite: "Stale data displays as STALE with age. Missing data displays as
- * MISSING." Rendered on eight user-visible surfaces (SignalCard:161,
- * DarkPoolPanel:204, SectorRotationPanel:159, QuantLabPanel:65,
- * BtcQuantLab:409, sector:318, stock:385, backtest:181) with zero tests, and
- * three of those pass an explicitly-optional value. `formatCompactNumber`
- * directly above already returns '—' for the same case, so this was the odd one
- * out in its own file.
+ * Q-114 (2026-09-24). This used to be a SECOND, independent age-to-label
+ * mapping: it called anything under 30 seconds "live" where the component's
+ * classifier says 10, and it knew nothing about caching, vendor delay or the
+ * market session. Two vocabularies on overlapping surfaces meant the same datum
+ * could read "live" here and "Stale" three inches away. It now delegates to
+ * `classifyFreshness`, so there is exactly one set of thresholds and one
+ * precedence order in the codebase.
  *
- * NOT the same vocabulary as `DataFreshnessIndicator`, and that divergence is a
- * real finding rather than a tidy-up: this says "live" under 30s where the
- * component says 10s, and it knows nothing about caching, vendor delay or the
- * market session. Filed as Q-114 rather than unified here.
+ * `stamp` IS THE PART THAT MATTERS, and it is not cosmetic. Half these call
+ * sites pass a VENDOR quote time and half pass OUR OWN fetch/compute time:
+ *
+ *   vendor : quote.quoteTime            — when the exchange/vendor stamped it
+ *   ours   : data.fetchedAt, computedAt — when WE last pulled or computed
+ *
+ * Only the first can be called "live". Saying "live" about our own fetch
+ * recency describes our clock and claims the vendor's — the exact substitution
+ * Q-101 found in three files and removed. So `stamp: 'ours'` renders "just now"
+ * instead: true about what it measures, and silent about what it does not.
+ *
+ * Callers supply their own prefix ("Quote …", "Updated: …"), so this returns
+ * the phrase alone.
  */
-export function formatFreshness(iso: string | null | undefined): string {
+export function formatFreshness(
+  iso: string | null | undefined,
+  opts: {
+    /** Whose clock wrote this timestamp. Defaults to the safer reading. */
+    stamp?: 'vendor' | 'ours'
+    cached?: boolean
+    delayedMinutes?: number | null
+    calendar?: TradingCalendar
+    /** Injected in tests; real callers use the wall clock. */
+    now?: number
+  } = {},
+): string {
+  const { stamp = 'ours', cached = false, delayedMinutes = null, calendar = 'always-open', now = Date.now() } = opts
   if (!iso) return '—'
   const ts = new Date(iso).getTime()
   if (!Number.isFinite(ts)) return '—'
-  const deltaSec = Math.max(0, Math.floor((Date.now() - ts) / 1000))
-  if (deltaSec < 30) return 'live'
-  if (deltaSec < 120) return `${deltaSec}s ago`
-  const min = Math.floor(deltaSec / 60)
-  if (min < 60) return `${min}m ago`
-  const hr = Math.floor(min / 60)
-  return `${hr}h ago`
+
+  const f = classifyFreshness({ quoteTime: ts, now, cached, delayedMinutes, calendar })
+  switch (f.kind) {
+    case 'unknown':
+      return '—'
+    case 'cached':
+      return f.ageSec == null ? 'cached' : `cached · ${formatAge(f.ageSec)} ago`
+    case 'delayed':
+      return `delayed ${f.delayedMinutes}m`
+    case 'atClose':
+      return 'at close'
+    case 'live':
+      // The one place the two stamp kinds diverge, and the reason `stamp` exists.
+      return stamp === 'vendor' ? 'live' : 'just now'
+    default:
+      return `${formatAge(f.ageSec as number)} ago`
+  }
 }
 
 /**
