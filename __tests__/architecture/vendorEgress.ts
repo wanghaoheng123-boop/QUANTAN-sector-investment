@@ -492,6 +492,15 @@ export interface Violation {
   detail: string
 }
 
+/**
+ * The FILE part of an egress `where` or a register `evidence` citation.
+ * `app/api/x/route.ts:118` -> `app/api/x/route.ts`
+ * `package.json#dependencies` -> `package.json`
+ * Windows-style drive letters are not a concern here; every path in this repo
+ * is posix-relative.
+ */
+const evidenceFileOf = (where: string): string => where.split('#')[0].split(':')[0]
+
 const key = (kind: EgressKind, id: string) => `${kind}|${id}`
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
 
@@ -511,6 +520,13 @@ export function checkRegister(
   points: EgressPoint[],
   entries: RegisterEntry[],
   surfaces: ReadonlyMap<string, readonly string[]>,
+  /**
+   * The files the walk actually visited. REQUIRED for the same reason
+   * `surfaces` is: rule 9 must be able to tell "this evidence is wrong" from
+   * "this evidence names something I never looked at", and an optional
+   * parameter is how that distinction quietly becomes the second one forever.
+   */
+  files: readonly SourceFile[],
 ): Violation[] {
   const v: Violation[] = []
   const byKey = new Map<string, RegisterEntry>()
@@ -655,6 +671,73 @@ export function checkRegister(
             })
           }
         }
+      }
+    }
+  }
+
+  // ─── 9. `evidence` must be checkable, and must check out (Q-111) ───────────
+  //
+  // `RegisterEntry.evidence` was declared, carried by all 94 rows, and read by
+  // NOTHING — the same built-and-inert shape as `_cached` (Q-101) and
+  // `QuoteProvenance` (I1), in the one artifact whose entire purpose is an
+  // auditable trail. Q107-S9's own diagnosis was "an unchecked field drifted",
+  // and its fix added a SECOND field beside it rather than a reader for the
+  // first.
+  //
+  // WHAT `evidence` ACTUALLY MEANS, established by reading all 94 rows rather
+  // than assumed: it is the USE TRAIL, not the detection point. An npm package
+  // is DETECTED in `package.json#dependencies` but cited at the routes that
+  // import it; an env-host is detected where the variable is read but cited at
+  // the callers that reach it. A first draft of this rule required every
+  // citation to sit on a detected point and produced ten false positives on
+  // legitimate rows — the same mistake the ticket warned about for
+  // `exposed_via`, one field along.
+  //
+  // So the rule is: at least ONE citation must land on a detected egress point
+  // for this row. That catches evidence which has drifted entirely off the
+  // thing it documents, while leaving the use trail alone.
+  //
+  //   evidence-unsupported : NO citation lands on this row's egress. The trail
+  //                          no longer starts anywhere real.
+  //   evidence-unwalked    : a citation names a file outside everything the
+  //                          walk touched, so it cannot be checked AT ALL.
+  //                          A violation, NOT a silent skip — an unreachable
+  //                          rule is the defect this repository has shipped
+  //                          eight times, and evidence pointing outside the
+  //                          walk is exactly how this one would arrive.
+  //
+  // Withdrawn rows are exempt: their evidence describes history and the tree is
+  // expected to have moved on. `withdrawn-but-live` covers the case where it
+  // has not.
+  //
+  // NOT CHECKED: that a row HAS evidence at all. Every real row does, but
+  // making it mandatory here would fail every synthetic fixture that exercises
+  // an unrelated rule, and a guard that forces unrelated tests to carry
+  // ceremony is how fixtures start lying. Asserted instead against the real
+  // register, where it belongs.
+  {
+    const walked = new Set(files.map((f) => f.path))
+    // Manifests never appear in `files` — they arrive as a separate parameter —
+    // but every npm point cites one in `where`, so the points themselves say
+    // which manifest paths this run can see.
+    const verifiable = new Set([...walked, ...points.map((p) => evidenceFileOf(p.where))])
+
+    for (const e of entries) {
+      if (e.lifecycle !== 'active') continue
+      const cites = e.evidence ?? []
+      if (cites.length === 0) continue
+
+      const supporting = new Set((detected.get(key(e.kind, e.id)) ?? []).map((p) => evidenceFileOf(p.where)))
+      let anchored = false
+      for (const cite of cites) {
+        const file = evidenceFileOf(cite)
+        if (supporting.has(file)) { anchored = true; continue }
+        if (!verifiable.has(file)) {
+          v.push({ rule: 'evidence-unwalked', kind: e.kind, id: e.id, detail: `evidence cites ${cite}, which nothing in this walk visited. The citation cannot be checked, so it cannot be relied on.` })
+        }
+      }
+      if (!anchored) {
+        v.push({ rule: 'evidence-unsupported', kind: e.kind, id: e.id, detail: `none of this row's ${cites.length} evidence citation(s) lands on a detected egress point for it — the trail no longer starts anywhere real` })
       }
     }
   }
