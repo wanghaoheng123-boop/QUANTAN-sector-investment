@@ -201,7 +201,7 @@ export default function DarkPoolPanel({
               )}
               {apiData.quote.quoteTime && (
                 <span className="text-slate-400">
-                  {formatFreshness(apiData.quote.quoteTime)}
+                  {formatFreshness(apiData.quote.quoteTime, { stamp: 'vendor', calendar: 'us-equity' })}
                 </span>
               )}
             </div>

@@ -156,7 +156,7 @@ export default function SectorRotationPanel() {
       </div>
 
       <p className="text-xs text-gray-400">
-        Updated: {formatFreshness(data.fetchedAt)} · 1-hour cache
+        Updated: {formatFreshness(data.fetchedAt)} · 1-hour cache{/* Q-114: fetchedAt is OUR clock, so the default stamp:'ours' is correct — this never claims the data is live. */}
       </p>
     </div>
   )

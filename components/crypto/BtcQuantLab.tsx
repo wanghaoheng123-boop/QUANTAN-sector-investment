@@ -406,7 +406,7 @@ export default function BtcQuantLab({ candles }: Props) {
             {liqLoading && <div className="text-[10px] text-slate-400 mb-2">Refreshing liquidations data…</div>}
           {liqFetchedAt && (
             <div className="text-[10px] text-slate-400 mb-2 flex items-center gap-2">
-              <span>Last updated: {formatFreshness(liq?.fetchedAt)}</span>
+              <span>Last updated: {formatFreshness(liq?.fetchedAt)}{/* Q-114: OUR fetch time, and crypto trades 24/7 so no us-equity calendar. */}</span>
               {liqCached && <DataFreshnessIndicator cached compact />}
             </div>
           )}

@@ -62,7 +62,7 @@ export default function QuantLabPanel({ ticker }: { ticker: string }) {
             {data?.narrative?.industry ? ` · ${data.narrative.industry}` : ''}
           </p>
           {data?.fetchedAt && (
-            <p className="text-[10px] text-slate-400 mt-1">Freshness: {formatFreshness(data.fetchedAt)}</p>
+            <p className="text-[10px] text-slate-400 mt-1">Freshness: {formatFreshness(data.fetchedAt)}{/* Q-114: OUR fetch time — stamp defaults to 'ours'. */}</p>
           )}
         </div>
         <button

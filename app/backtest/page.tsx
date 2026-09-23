@@ -178,7 +178,7 @@ export default function BacktestPage() {
                   <div className="text-xs text-slate-400">Last computed</div>
                 </div>
                 <div className="text-sm font-mono text-slate-300">{new Date(computedAt).toLocaleString()}</div>
-                <div className="text-[10px] text-slate-400">{formatFreshness(computedAt)}</div>
+                <div className="text-[10px] text-slate-400">{formatFreshness(computedAt)}{/* Q-114: computedAt is when WE ran the backtest, not a vendor stamp. */}</div>
               </div>
               <button
                 onClick={() => fetchData(true, selectedTickers.length > 0 ? selectedTickers : undefined)}
