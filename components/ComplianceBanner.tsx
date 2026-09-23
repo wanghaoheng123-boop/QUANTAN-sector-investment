@@ -3,6 +3,34 @@
 import { useState } from 'react'
 import { ChevronDown, ChevronUp, ShieldAlert } from 'lucide-react'
 
+/**
+ * Q-109 (2026-09-24) — this banner named the WRONG regulators, and the fix is
+ * to name none.
+ *
+ * It asserted the product does not provide recommendations "regulated under
+ * MiFID II, SEC RIA, or equivalent regimes". That is a regulatory
+ * SELF-CLASSIFICATION: it claims to know which regimes do and do not govern
+ * this product. It named two that do not and omitted MAS, which does — this
+ * platform's regulatory posture is Singapore/MAS (see CLAUDE.md, Q-083).
+ *
+ * DO NOT "FIX" THIS BY WRITING "not regulated under MAS". That is the identical
+ * error aimed at the regulator that actually bites, and it would be worse: an
+ * unlicensed self-exemption from the regime that applies. Whether the FAA/SFA
+ * licensing line is crossed is a legal question for the owner and external
+ * counsel (Q-083), not a sentence a component can settle.
+ *
+ * So the clause is DELETED and no regime is named at all. Everything left below
+ * is a mechanical fact about what the software does, each verified against the
+ * code on 2026-09-24:
+ *   • does not route or execute orders — no broker/execution path exists;
+ *     the only "order"/"broker" matches in the tree are cost-model comments
+ *     (lib/options/flow.ts:71, components/backtest/OverviewTab.tsx:29)
+ *   • does not hold customer funds — no custody or balance path exists
+ *
+ * `__tests__/architecture/compliance-wording.test.ts` fails if a regime name
+ * returns.
+ */
+
 export default function ComplianceBanner() {
   const [open, setOpen] = useState(false)
 
@@ -28,12 +56,13 @@ export default function ComplianceBanner() {
         {open && (
           <div id="compliance-detail" className="mt-3 text-xs text-slate-400 space-y-2 leading-relaxed border-t border-slate-800/80 pt-3">
             <p>
-              QUANTAN is a research and visualization tool. It does not route orders, hold customer funds, or provide personalized recommendations
-              regulated under MiFID II, SEC RIA, or equivalent regimes unless you separately engage a licensed entity.
+              QUANTAN is a research and visualization tool. It does not route or execute orders, and does not hold customer funds.
             </p>
             <p>
-              Market data is delayed or aggregated per your data provider (e.g. Yahoo Finance via this demo). Trading floors should map APIs to Bloomberg Refinitiv, FactSet,
-              or internal tick plants before using any level for execution or risk limits.
+              Data arrives from several vendors on different terms: some feeds are vendor-delayed, and others — the crypto order-book
+              feeds — stream live to your browser. Each surface labels the age and state of what it is showing, so read that label rather
+              than assuming a single freshness for the whole product. Map any level to your own tick plant before using it for execution
+              or risk limits.
             </p>
             <p>
               Past performance and backtests do not guarantee future results. You are responsible for suitability, best execution, and record-keeping.
