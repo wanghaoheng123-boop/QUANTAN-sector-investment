@@ -313,8 +313,12 @@ export default function HomePage() {
               <div className="flex items-center gap-2 mb-1">
                 <h2 id="section-backtest" className="text-lg font-bold text-white">Institutional Backtest Dashboard</h2>
               </div>
+              {/* Q-105: this also said "label WR ~55% gross / ~54% net" — a
+                  hand-written, stale figure from the 20-day LABEL benchmark
+                  (a different rulebook from the 60-bar engine described
+                  beside it), whose net value sat at the always-buy base rate. */}
               <p className="text-sm text-slate-400 max-w-lg">
-                5Y walk-forward backtest across 56 instruments (11 GICS sectors + BTC). {ENGINE_ONE_LINE} — label WR ~55% gross / ~54% net after costs (not a live accuracy guarantee).
+                5Y walk-forward backtest across 56 instruments (11 GICS sectors + BTC). {ENGINE_ONE_LINE}. Simulated results, not a live accuracy guarantee.
               </p>
             </div>
             <Link

@@ -338,8 +338,8 @@ export function resolveBacktestSignal(
   let kellyFrac = 0.10
   if (regime.action === 'BUY') {
     kellyFrac = cfg.halfKelly
-      ? REGIME_PATH_POSITION_FRACTION.halfKelly
-      : REGIME_PATH_POSITION_FRACTION.fullKelly
+      ? REGIME_PATH_POSITION_FRACTION.half
+      : REGIME_PATH_POSITION_FRACTION.full
   }
   if (regime.action === 'SELL') kellyFrac = 1.0
   return {

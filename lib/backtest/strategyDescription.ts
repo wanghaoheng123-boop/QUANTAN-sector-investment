@@ -30,6 +30,7 @@ import {
 } from './executionModel'
 import {
   ENGINE_MAX_HOLD_DAYS,
+  FIRST_DIP_FLOOR_PCT,
   MIN_SMA200_SLOPE,
   NEAR_SMA200_PCT,
   REGIME_PATH_POSITION_FRACTION,
@@ -45,8 +46,16 @@ export function pct(fraction: number): string {
  * the regime-only path selects a FIXED fraction — not a Kelly computation.
  */
 const POSITION_FRACTION = DEFAULT_CONFIG.halfKelly
-  ? REGIME_PATH_POSITION_FRACTION.halfKelly
-  : REGIME_PATH_POSITION_FRACTION.fullKelly
+  ? REGIME_PATH_POSITION_FRACTION.half
+  : REGIME_PATH_POSITION_FRACTION.full
+
+/**
+ * The first allocation, on the starting capital. `core.ts` rounds shares DOWN,
+ * so an instrument priced above this cannot open its first position at all —
+ * Q-105 red-team R1: BTC skipped all 167 regime BUY bars this way, while the
+ * copy said "a fixed 15% per BUY".
+ */
+const FIRST_ALLOCATION = DEFAULT_CONFIG.initialCapital * POSITION_FRACTION
 
 /**
  * UX-14. The Transaction Costs row was the hardcoded string
@@ -78,22 +87,25 @@ export const ENGINE_RULES: ReadonlyArray<readonly [string, string]> = [
     `20 bars, and price no more than ${NEAR_SMA200_PCT}% below the SMA at some bar of those 20. ` +
     'Observed at the close, filled at the next open. One position per instrument at a time.'],
   ['HOLD',
-    'No new position otherwise: price at or above the 200-day SMA, or a dip that fails the slope or ' +
-    'proximity test. RSI changes the confidence shown on a signal, but the production path applies no ' +
-    'confidence threshold.'],
+    `No new position otherwise: price at or above the 200-day SMA, or a dip of up to ${FIRST_DIP_FLOOR_PCT}% ` +
+    'that fails the slope or proximity test. Confidence is a fixed label per zone (RSI below 35 raises it ' +
+    'on the mildest dips); the production path applies no confidence threshold.'],
   ['SELL Signal',
-    'Deeper dips that fail the slope or proximity test are labelled SELL. The label is shown for ' +
-    'information only and does not close positions (retired as an exit on 2026-07-11).'],
+    `Dips deeper than ${FIRST_DIP_FLOOR_PCT}% that fail the slope or proximity test are labelled SELL. ` +
+    'The label is shown for information only and does not close positions (retired as an exit on ' +
+    '2026-07-11).'],
   ['Exit',
-    `Time exit only: a position closes ${ENGINE_MAX_HOLD_DAYS} daily bars after its fill, at the next open. ` +
+    `Time exit only: once ${ENGINE_MAX_HOLD_DAYS} daily bars have passed since a position's fill, it closes at the next open. ` +
     'There is no stop-loss, no trailing stop and no profit target (all retired on 2026-07-11). ' +
     'A position still open when the data ends is closed at the final close.'],
   ['Drawdown Breaker',
     `If this instrument's equity falls ${pct(DEFAULT_CONFIG.maxDrawdownCap)}% or more from its peak, ` +
     'the open position closes at the next open.'],
   ['Position Sizing',
-    `A fixed ${pct(POSITION_FRACTION)}% of capital per BUY. This is not a Kelly calculation; only the ` +
-    'research-only enhanced path computes one.'],
+    `${pct(POSITION_FRACTION)}% of the instrument's cash at entry, rounded down to whole shares. A BUY that ` +
+    'cannot afford one share is skipped, so an instrument priced above ' +
+    `$${FIRST_ALLOCATION.toLocaleString('en-US')} cannot open its first position. This is not a Kelly ` +
+    'calculation; only the research-only enhanced path computes one.'],
   ['Transaction Costs', TX_COST_RULE],
 ] as const
 
@@ -102,7 +114,7 @@ export const ENGINE_SUMMARY: ReadonlyArray<readonly [string, string]> = [
   ['Strategy', 'Regime dip-buy vs 200-day SMA (resolveBacktestSignal; enhanced path is research-only)'],
   ['Capital', `$${DEFAULT_CONFIG.initialCapital.toLocaleString('en-US')} per instrument`],
   ['Exit', `${ENGINE_MAX_HOLD_DAYS}-bar time exit, no stop-loss`],
-  ['Position size', `fixed ${pct(POSITION_FRACTION)}% of capital`],
+  ['Position size', `${pct(POSITION_FRACTION)}% of cash, whole shares`],
   ['Drawdown breaker', `${pct(DEFAULT_CONFIG.maxDrawdownCap)}% per instrument`],
 ] as const
 
@@ -110,4 +122,4 @@ export const ENGINE_SUMMARY: ReadonlyArray<readonly [string, string]> = [
 export const ENGINE_ONE_LINE =
   'Regime dip-buy vs 200SMA (SSOT: resolveBacktestSignal), ' +
   `a ${ENGINE_MAX_HOLD_DAYS}-bar time exit with no stop-loss, ` +
-  `and a fixed ${pct(POSITION_FRACTION)}% position size`
+  `and ${pct(POSITION_FRACTION)}% of cash per position`

@@ -20,9 +20,9 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { loadStockHistory, type OhlcvRow } from '@/lib/backtest/dataLoader'
+import { loadBtcHistory, loadStockHistory, type OhlcvRow } from '@/lib/backtest/dataLoader'
 import { backtestInstrument } from '@/lib/backtest/engine'
-import { enhancedCombinedSignal, resolveBacktestSignal } from '@/lib/backtest/signals'
+import { DEFAULT_CONFIG, enhancedCombinedSignal, resolveBacktestSignal } from '@/lib/backtest/signals'
 import { REGIME_PATH_POSITION_FRACTION } from '@/lib/backtest/strategyConstants'
 
 /** SO trades on both paths over the committed window (8 regime, 3 enhanced). */
@@ -94,14 +94,37 @@ describe('the regime-only path — the production default — does NOT read it',
     expect(b).toEqual(a)
   }, 120_000)
 
-  it('sizes every BUY at the fixed regime-path fraction the /backtest copy quotes', () => {
-    // The two paths disagree bar by bar, so scan the regime path directly.
-    let j = -1
-    for (let k = rows.length - 1; k > rows.length - 900 && k >= 220; k--) {
-      if (signalAt(k, 0, 'resolve').action === 'BUY') { j = k; break }
-    }
-    expect(j, 'no regime BUY bar found').toBeGreaterThan(0)
-    expect(signalAt(j, 0, 'resolve').KellyFraction).toBe(REGIME_PATH_POSITION_FRACTION.halfKelly)
-    expect(signalAt(j, 0, 'resolve').reason).toContain('regime-only path')
+  it('the REALISED first position is 15% of starting cash, rounded down to whole shares', () => {
+    // Red-team R1: the previous test here read one bar's KellyFraction FIELD and
+    // was titled "sizes every BUY" — it never looked at a position the engine
+    // opened. This checks the position: cash is exactly the starting capital at
+    // the first entry, so the bound is exact.
+    const r = backtestInstrument(TICKER, SECTOR, rows)
+    expect(r.closedTrades.length).toBeGreaterThan(0)
+    const first = r.closedTrades[0]
+    const allocation = DEFAULT_CONFIG.initialCapital * REGIME_PATH_POSITION_FRACTION.half
+    expect(Number.isInteger(first.shares)).toBe(true)
+    expect(first.value).toBeLessThanOrEqual(allocation)
+    expect(first.value).toBeGreaterThan(allocation - first.entryPrice)
+    expect(first.reason).toContain('regime-only path')
   }, 120_000)
+
+  it('R1: a BUY that cannot afford one whole share is skipped — BTC never trades at this capital', () => {
+    // The disclosure in the Rules grid ("an instrument priced above $15,000
+    // cannot open its first position") is pinned to what the engine does.
+    const btc = loadBtcHistory()
+    const allocation = DEFAULT_CONFIG.initialCapital * REGIME_PATH_POSITION_FRACTION.half
+    const closes = btc.map((r) => r.close)
+    const bars = btc.map(({ open, high, low, close }) => ({ open, high, low, close }))
+    const buyBars: number[] = []
+    for (let i = 221; i < btc.length - 1; i += 1) {
+      const date = new Date(btc[i].time * 1000).toISOString().split('T')[0]
+      const sig = resolveBacktestSignal('BTC', date, btc[i].close, closes.slice(0, i + 1), bars.slice(0, i + 1), btc.slice(0, i + 1))
+      if (sig.action === 'BUY') buyBars.push(i)
+    }
+    // Zero trades must come from the skip, not from an absence of signals.
+    expect(buyBars.length, 'BTC has no regime BUY bars — the skip is untested').toBeGreaterThan(0)
+    for (const i of buyBars) expect(btc[i + 1].open).toBeGreaterThan(allocation)
+    expect(backtestInstrument('BTC', 'Crypto', btc).totalTrades).toBe(0)
+  }, 240_000)
 })

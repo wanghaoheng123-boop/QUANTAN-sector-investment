@@ -13,9 +13,11 @@
  */
 
 /**
- * H-DECISION (2026-07-16): the engine exits every position this many bars after
- * its fill — the only position-level exit besides the drawdown breaker. See
- * `DEFAULT_TIME_EXIT_CONFIG` in `exitRules.ts` for the acceptance evidence.
+ * H-DECISION (2026-07-16): once this many bars have elapsed since a position's
+ * fill, the exit is observed at that bar's close and filled at the NEXT open —
+ * so the position is held 61 bars open-to-open. The only position-level exit
+ * besides the drawdown breaker. See `DEFAULT_TIME_EXIT_CONFIG` in
+ * `exitRules.ts` for the acceptance evidence.
  */
 export const ENGINE_MAX_HOLD_DAYS = 60
 
@@ -26,14 +28,27 @@ export const ENGINE_MAX_HOLD_DAYS = 60
 export const MIN_SMA200_SLOPE = 0.005
 
 /**
+ * The FIRST_DIP zone is a close from 0% down to this many percent below the
+ * 200SMA. A dip here that fails the slope or proximity test is a HOLD; a deeper
+ * one that fails them is labelled SELL (FALLING_KNIFE).
+ */
+export const FIRST_DIP_FLOOR_PCT = 10
+
+/**
  * FIX D: a dip is bought only if, at some bar of the last 20, price sat no more
  * than this many percent below its 200SMA — not a "forever falling" name.
  */
 export const NEAR_SMA200_PCT = 5
 
 /**
- * Position size on the regime-only path, as a fraction of capital. NOT a Kelly
- * computation — a fixed fraction selected by the `halfKelly` flag. The enhanced
- * path computes a Kelly fraction from confidence instead.
+ * Position size on the regime-only path, as a fraction of the instrument's CASH
+ * at entry (`core.ts` sizes `capital * fraction`, then rounds DOWN to whole
+ * shares and skips the bar when that is zero). NOT a Kelly computation — a
+ * fixed fraction selected by the `halfKelly` flag; the enhanced path computes a
+ * Kelly fraction from confidence instead.
+ *
+ * Keys are `half`/`full`, not `halfKelly`/`fullKelly`: a `.halfKelly` member
+ * here satisfied the inert-config guard's name match for
+ * `BacktestConfig.halfKelly` (Q-105 red-team R4).
  */
-export const REGIME_PATH_POSITION_FRACTION = { halfKelly: 0.15, fullKelly: 0.30 } as const
+export const REGIME_PATH_POSITION_FRACTION = { half: 0.15, full: 0.30 } as const

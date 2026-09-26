@@ -4,7 +4,8 @@ import { useState, useMemo } from 'react'
 import type { Trade } from '@/lib/backtest/engine'
 import { MetricTooltip } from '@/components/MetricTooltip'
 
-const HEADER_TOOLTIPS: Record<string, { metricKey?: string; content?: string }> = {
+/** Exported so the /backtest copy spec scans the glossary text these keys resolve to. */
+export const HEADER_TOOLTIPS: Record<string, { metricKey?: string; content?: string }> = {
   'PnL %': { content: 'Profit or loss as % of entry price. Negative = loss. "Open" = position still active.' },
   'Regime': { metricKey: 'regime' },
   'Signal': { metricKey: 'dipSignal' },
@@ -12,7 +13,7 @@ const HEADER_TOOLTIPS: Record<string, { metricKey?: string; content?: string }> 
   // Q-105: these two described exit codes (STOP_LOSS, TRAILING_STOP, PARTIAL…)
   // the engine has not produced since the 2026-07-11 stop retirement. The
   // column renders `trade.reason`, which is the ENTRY signal's reason.
-  'Reason': { content: 'Why the position was opened: the regime zone and dip classification behind the BUY signal. The engine does not record why a trade closed (time exit, drawdown breaker or end of data).' },
+  'Reason': { content: 'Why the position was opened: the regime zone behind the BUY signal. The engine does not record why a trade closed (time exit, drawdown breaker or end of data).' },
   'Action': { content: 'Every row is a long position opened on a BUY signal. Exit Price is where it closed.' },
 }
 
