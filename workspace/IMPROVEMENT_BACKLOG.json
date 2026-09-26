@@ -2323,11 +2323,20 @@
     "title": "Backtest configuration exposes retired stops and mode-dependent confidence filtering",
     "domain": "Quant/Research",
     "priority": "P2",
-    "status": "pending",
+    "status": "done",
     "files": [
-      "lib/backtest/signalTypes.ts",
+      "__tests__/architecture/backtest-config-consumed.test.ts",
+      "app/backtest/page.tsx",
+      "app/page.tsx",
+      "components/backtest/LiveSignalsPanel.tsx",
+      "components/backtest/OverviewTab.tsx",
+      "components/backtest/TradeLog.tsx",
       "lib/backtest/core.ts",
-      "lib/backtest/signals.ts"
+      "lib/backtest/signalTypes.ts",
+      "lib/backtest/signals.ts",
+      "lib/backtest/strategyConstants.ts",
+      "lib/backtest/strategyDescription.ts",
+      "lib/metricGlossary.ts"
     ],
     "acceptance_criteria": [
       "Remove retired stopLossPct controls and misleading ATR-stop documentation without restoring the intentionally retired July strategy",
@@ -2339,7 +2348,9 @@
       "npm run test"
     ],
     "notes_2026_08_22": "Found while building the Q-085 PBO producer. An 18-configuration grid over confidenceThreshold (40-65) and stopLossPct (0.06-0.14) produced BYTE-IDENTICAL trades on every instrument, and PBO came back exactly 1 with a median logit of 0 — the signature of ties. lib/backtest/core.ts echoes both fields at :239/:479 and branches on neither; maxDrawdownCap IS used at :328. Dead configuration is worse than no configuration: it invites exactly the fabricated result this nearly published. The PBO producer now refuses to publish when grid columns are not distinct, which contains the symptom; this ticket is the cause.",
-    "notes_2026_09_16": "CORRECTION, no algorithm change: confidenceThreshold is read in enhanced signals.ts:270; the default mode can remain invariant. stopLossPct is echoed by core.ts but the July time-only exit policy explicitly retired its stops. The old ATR-adaptive-stop explanation and blanket all-config-variations-change-output criterion were wrong. Preserve the original PBO observation, but do not infer a globally dead confidence field from that default-mode experiment. See reviews/q108-algorithm-audit-2026-09-16.md"
+    "notes_2026_09_16": "CORRECTION, no algorithm change: confidenceThreshold is read in enhanced signals.ts:270; the default mode can remain invariant. stopLossPct is echoed by core.ts but the July time-only exit policy explicitly retired its stops. The old ATR-adaptive-stop explanation and blanket all-config-variations-change-output criterion were wrong. Preserve the original PBO observation, but do not infer a globally dead confidence field from that default-mode experiment. See reviews/q108-algorithm-audit-2026-09-16.md",
+    "resolution_2026_09_27": "SHIPPED. stopLossPct removed from BacktestConfig, DEFAULT_CONFIG, BacktestResult and both core.ts echoes (wire change: /api/backtest no longer ships stopLossPct: 0.1 beside results no stop touched; no consumer existed). confidenceThreshold kept, JSDoc says only enhancedCombinedSignal reads it. SCOPE WIDENED, deliberately: the dead knob was the small part. Three user-visible surfaces (/backtest info bar, Strategy Rules grid, landing CTA) described ATR and trailing stops (retired D2), SELL exits (retired D4), '≥2 confirms' and tiered Kelly (enhanced path, off in production) and a 55% confidence minimum (default 50; production never reads it) — and none mentioned the 60-bar time exit, the only exit the engine has. Now built from engine constants in lib/backtest/strategyDescription.ts via a zero-import leaf, strategyConstants.ts. Trade-log Reason/Action tooltips described exit codes the engine never emits. The Q-127 guard was green on stopLossPct for two reasons — it parsed only PortfolioConfig's body (the field lived on the EXTENDED BacktestConfig) and it counted the echo `stopLossPct: cfg.stopLossPct` as a read. Both closed; watched failing on the original tree. Behaviour-neutral: 56 fixtures x 2 modes (224 / 52 trades), 0 fields differing; benchmark +1.59pp unchanged. 13/13 mutations fail as designed. reviews/q105-strategy-description-2026-09-27.md.",
+    "resolution_2026_09_27_redteam": "RED-TEAM ROUND 1 broke two sentences this package wrote, both HIGH: 'a fixed 15% of capital per BUY' (shares are floored; BTC's 167 regime BUY bars all skip, so BTC never trades yet counts in the aggregate) and the trade-log tooltips (glossary text behind metricKeys still said '<55% triggers HOLD', 'act with full size', 'EXIT = OVERBOUGHT', and described a classifier the platform lacks). Also: a 'Kelly' column showing SELL=100%; the config guard accepting the copy module as a reader; 18/22 paraphrases passing the copy guard; a stale 20-day label WR on the landing line this PR edited. All fixed in-PR (Q105-R1..R6, R8); engine questions filed as Q-136 (BTC) and Q-137 (breaker). Re-verified: A/B 0 fields differing both modes; benchmark +1.59pp; 25 mutations all fail as designed — the first run of R4b SURVIVED (a loop over the exclusion set went vacuous when emptied) and was fixed."
   },
   {
     "id": "Q-106",
@@ -2954,5 +2965,109 @@
       "npm run build"
     ],
     "notes_2026_09_20": "Found while measuring Q-120, and it is NOT what that ticket was about. Reproduced on production and on a local build 2026-09-20: install the service worker, go fully offline, reload, and the page renders 4786 characters — byte-identical to online — including 'XLK $189.60 ▲0.82% | XLE $64.31 ▼0.26%' with direction arrows and percentage changes. The body contains no 'offline', no 'stale', no 'cached', and no age anywhere. MECHANISM: the `start-url` runtime cache created by extendDefaultRuntimeCaching serves `/` offline, and the immutable HTTP cache serves the chunks. It is NOT the precache — verified by emptying the precache (Q-120) and reloading offline, which rendered identically. So Q-120 neither caused nor fixed this. A CORRECTION TO MY OWN FIRST READING, recorded because it nearly went into the record as fact: I initially reported that the offline prices were labelled 'Live'. They are not. The 'Live' token on the page is the news panel's subtitle, 'Live from Yahoo Finance · 20 articles' — itself misleading offline, but it is not a price-freshness badge. A regex over innerText matched it and I nearly published a stronger claim than the evidence supported. The real finding is the ABSENCE of any data-state flag, not the presence of a false one. Why this matters here specifically: I2 says a broken feed must degrade the UI, not invisibly poison it, and the PRIME DIRECTIVE is calibrated confidence. A dashboard that looks identical with and without a network is the case that invariant exists to forbid. Related to Q-101 (which fixed the same class of defect for closed markets and vendor timestamps) and Q-114 (two divergent freshness vocabularies)."
+  },
+  {
+    "id": "Q-133",
+    "title": "The backtest trade log cannot say why a trade closed, and its SELL filter is always empty",
+    "domain": "Frontend/UX",
+    "priority": "P3",
+    "status": "pending",
+    "files": [
+      "lib/backtest/core.ts",
+      "components/backtest/TradeLog.tsx"
+    ],
+    "acceptance_criteria": [
+      "backtestInstrument records an exit reason per closed trade (time_exit, max_drawdown, end_of_data) using the existing ExitReason vocabulary",
+      "The trade log renders it in its own column; the Reason column keeps the entry reason under an accurate header",
+      "The Action filter offers only actions the engine records, or is removed"
+    ],
+    "verify_commands": [
+      "npm run test",
+      "npm run benchmark"
+    ],
+    "notes_2026_09_27": "Found during Q-105. The Reason column renders trade.reason, the ENTRY signal's reason, while its tooltip said 'why the trade exited' (tooltip corrected in Q-105). There is no exit reason to show: core.ts closes positions through three paths and records none of them. Every closed trade has action 'BUY' (224/224 regime, 52/52 enhanced over the committed fixtures), so the SELL option of the Action filter always renders an empty table. Adding a field is a wire change on /api/backtest; keep the time-exit accounting untouched and A/B it."
+  },
+  {
+    "id": "Q-134",
+    "title": "Strategy copy asserts the production signal path; nothing ties it to the path that actually ran",
+    "domain": "Quant/Research",
+    "priority": "P2",
+    "status": "pending",
+    "files": [
+      "lib/backtest/strategyDescription.ts",
+      "app/api/backtest/route.ts",
+      "lib/featureFlags.ts"
+    ],
+    "acceptance_criteria": [
+      "/api/backtest reports which signal path produced the results",
+      "The /backtest copy renders the rules for the path that ran, or states it cannot, rather than assuming the default",
+      "A test fails when the flag is on and the copy still describes the regime-only path"
+    ],
+    "verify_commands": [
+      "npm run test"
+    ],
+    "notes_2026_09_27": "Named residual of Q-105. The Rules grid, info bar and landing CTA now describe the regime-only path because production runs it by default (observed: every live trade reason reads 'regime-only path'). If QUANTAN_USE_ENHANCED_SIGNAL=1 were set in Vercel, the BUY, HOLD and sizing rows would become false with every test green — the copy would be asserting a default, not a fact. Same shape as a hand-written count in prose: correct today, silently wrong after one environment change."
+  },
+  {
+    "id": "Q-135",
+    "title": "Landing 'Price Signals' card promises entry, stop-loss and target levels and risk/reward that no producer supplies",
+    "domain": "Frontend/UX",
+    "priority": "P3",
+    "status": "pending",
+    "files": [
+      "app/page.tsx",
+      "components/SignalCard.tsx",
+      "lib/sessionSignalsFromQuotes.ts"
+    ],
+    "acceptance_criteria": [
+      "The feature card describes what the signal cards render (session move vs prior close), or real levels are produced",
+      "SignalCard's Entry/Stop/Target branch is either reachable from a real producer or removed"
+    ],
+    "verify_commands": [
+      "npm run test"
+    ],
+    "notes_2026_09_27": "Found during Q-105 while checking a lead that turned out benign: lib/sessionSignalsFromQuotes.ts sets entry = stopLoss = target = price, but SignalCard switches yahoo-session signals to a 'Session vs prior' layout and renders R/R as '—', so equal levels never show. The real defect is one level up: session rows are the ONLY PriceSignal producer, so the landing feature card's 'Entry, stop loss, and target levels with confidence scores and risk/reward ratios' (app/page.tsx ~593) describes a card no user can see, and SignalCard's level branch is unreachable."
+  },
+  {
+    "id": "Q-136",
+    "title": "BTC can never open a position at the backtest's capital, yet counts in the 56-instrument aggregate",
+    "domain": "Quant/Research",
+    "priority": "P2",
+    "status": "pending",
+    "files": [
+      "lib/backtest/core.ts",
+      "app/api/backtest/route.ts",
+      "lib/backtest/engine.ts"
+    ],
+    "acceptance_criteria": [
+      "Decide, with the owner, between fractional sizing for instruments priced above the allocation, excluding structurally untradeable instruments from the aggregate, or disclosing them per row — each changes a published number and needs a migration note",
+      "Whatever is chosen, a zero-trade instrument is never averaged into portfolio return or excess as if it were a strategy result without being labelled",
+      "A test pins the chosen behaviour on the BTC fixture"
+    ],
+    "verify_commands": [
+      "npm run test",
+      "npm run benchmark"
+    ],
+    "notes_2026_09_27": "Found by the Q-105 red-team (R1). core.ts:518-521 floors shares = allocation / nextOpen and skips the bar when that is 0. At 15% of $100,000 BTC (lowest next open on a BUY bar $25,160) rounds to zero on all 167 regime BUY bars, so BTC shows 0 trades, 0% return and -59.5% excess, and aggregatePortfolio includes it (alpha -1.1245 with BTC vs -1.1190 without, per red-team). Q-105 disclosed the rule in copy; it did not change the engine, because every option here moves a published figure."
+  },
+  {
+    "id": "Q-137",
+    "title": "The backtest drawdown breaker has never fired, and its peak never resets",
+    "domain": "Quant/Research",
+    "priority": "P3",
+    "status": "pending",
+    "files": [
+      "lib/backtest/core.ts"
+    ],
+    "acceptance_criteria": [
+      "State whether the breaker is meant to be a one-way kill switch or a per-position guard, and make the code match",
+      "If it stays, a branch-forcing fixture exercises it, including what happens to entries after it trips",
+      "The /backtest copy describes the chosen behaviour"
+    ],
+    "verify_commands": [
+      "npm run test",
+      "npm run benchmark"
+    ],
+    "notes_2026_09_27": "Found by the Q-105 red-team (R7). 0 of 224 exits over the 56 fixtures were breaker exits (210 time exits, 14 end-of-data); the worst instrument drawdown was 10.26%. At 15% sizing a single position opened at the equity peak can lose at most 15%, so the 25% breaker needs a prior drawdown or a large in-trade gain first. state.peakEquity is never reset, so once tripped the breaker would close every subsequent position one bar after entry — latent, untested behaviour behind a rule the page describes."
   }
 ]

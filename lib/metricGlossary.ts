@@ -109,11 +109,14 @@ export const METRIC_GLOSSARY: Record<string, MetricMeta> = {
     range: '-1 to +1. +1 = all timeframes bullish.',
     howToUse: '+0.6 or higher = high-conviction long. Below 0 with daily long signal = day-trade only, no swing position.',
   },
+  // Q-105: this described a seven-state bull/bear/euphoria classifier the
+  // platform does not have. Its only render site is the backtest trade log,
+  // whose Regime column shows the 200-SMA deviation zones below.
   regime: {
-    label: 'Regime',
-    definition: 'Discrete market state classification (Strong Bull / Bull / Neutral / Bear / Strong Bear / Euphoria / Capitulation).',
-    range: '7 states.',
-    howToUse: 'Match strategy to regime. Trend-following best in Strong Bull/Bear. Mean-reversion best in Neutral. Reduce size in Euphoria/Capitulation (regime change risk).',
+    label: 'Regime Zone',
+    definition: 'Where the close sits against its 200-day SMA: EXTREME_BULL (more than 20% above), EXTENDED_BULL (10–20% above), HEALTHY_BULL (0–10% above), FIRST_DIP (0–10% below), DEEP_DIP (10–20% below), BEAR_ALERT (20–30% below), CRASH_ZONE (more than 30% below).',
+    range: '7 zones, plus INSUFFICIENT_DATA.',
+    howToUse: 'The zones below the SMA are where the strategy looks for dips; whether it buys also depends on the slope and proximity tests in the Strategy Rules.',
   },
   goldenCross: {
     label: 'Golden Cross',
@@ -228,11 +231,16 @@ export const METRIC_GLOSSARY: Record<string, MetricMeta> = {
     range: '0–5+. ≥1.5 is the institutional minimum for new entries.',
     howToUse: '<1.0 = bad bet. 2.0 = standard swing setup. >3.0 = high-conviction setup, can size up.',
   },
+  // Q-105: this said "<55% triggers HOLD" (the default is 50, and the production
+  // backtest path reads no threshold at all), called the number a composite of
+  // trend + momentum + vol regime + multi-TF (true only of the research-only
+  // enhanced path), and told the reader to "act with full size" at 70%+ — advice
+  // wording on the surface closest to the regulated line (Q-083).
   confidence: {
     label: 'Signal Confidence',
-    definition: 'Composite score (0–100%) measuring agreement across all sub-signals (trend + momentum + vol regime + multi-TF).',
-    range: '0–100%. <55% triggers HOLD; >75% = high conviction.',
-    howToUse: '70%+ = act with full size. 55–70% = trade smaller. <55% = wait for higher-confidence setup.',
+    definition: 'A 0–100 label attached to each signal. On the production regime path it is a fixed value per zone — 75 for a buyable mild dip, 90 when RSI is also below 35, 78–88 for deeper buyable dips. The research-only enhanced path adds a weighted confluence score.',
+    range: '0–100. The production backtest applies no confidence threshold and does not size by it.',
+    howToUse: 'Read it as the strength of the classifier\'s label, not as a probability that the trade will profit.',
   },
 
   // -------- Indicators --------
@@ -263,11 +271,14 @@ export const METRIC_GLOSSARY: Record<string, MetricMeta> = {
   },
 
   // -------- Regimes / Dip Signals --------
+  // Q-105: this listed states the classifier does not emit (HEALTHY_BULL,
+  // EXTENDED_BULL and NEUTRAL are zones or nothing) and said "EXIT =
+  // OVERBOUGHT/EXTENDED_BULL" — the engine has no such exit.
   dipSignal: {
     label: 'Dip Signal State',
-    definition: 'Discrete classification of how price relates to 200SMA: HEALTHY_BULL / EXTENDED_BULL / STRONG_DIP / FALLING_KNIFE / NEUTRAL / OVERBOUGHT.',
+    definition: 'How the signal classifies a price against its 200-day SMA: STRONG_DIP (a dip that passes the slope and proximity tests — the only BUY case), WATCH_DIP (a mild dip that fails them, or any dip while the slope cannot yet be measured), FALLING_KNIFE (a deeper dip that fails them, labelled SELL), IN_TREND (at or up to 10% above the SMA), OVERBOUGHT (more than 10% above), INSUFFICIENT_DATA.',
     range: '6 states.',
-    howToUse: 'BUY zone = STRONG_DIP (in rising 200SMA). AVOID = FALLING_KNIFE (declining 200SMA + dip). EXIT = OVERBOUGHT/EXTENDED_BULL.',
+    howToUse: 'Only STRONG_DIP opens a position in the backtest. No state closes one: exits are the time exit and the drawdown breaker.',
   },
   ma200Zone: {
     label: '200SMA Zone',

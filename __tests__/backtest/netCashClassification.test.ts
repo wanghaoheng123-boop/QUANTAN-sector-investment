@@ -65,7 +65,7 @@ describe('Q-124 — profit factor is net dollars, and size matters', () => {
     equityCurve: Array.from({ length: 300 }, (_, i) => 100_000 + i),
     bnhCurve: Array.from({ length: 300 }, (_, i) => 100_000 + i),
     dailyReturns: Array.from({ length: 299 }, () => 0.0001),
-    days: 300, bnhReturn: 0.1, excessReturn: 0, stopLossPct: 0, confidenceAvg: 90,
+    days: 300, bnhReturn: 0.1, excessReturn: 0, confidenceAvg: 90,
   })
 
   it('a gross gain that cannot clear costs is a LOSS in both sums, not neither', () => {

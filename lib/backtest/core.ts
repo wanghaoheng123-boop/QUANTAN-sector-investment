@@ -156,7 +156,6 @@ export interface BacktestResult {
   bnhCurve?: number[]
   days: number
   confidenceAvg: number
-  stopLossPct: number
   bnhReturn: number
   excessReturn: number
 }
@@ -361,7 +360,7 @@ export function backtestInstrument(
       maxDrawdown: 0, winRate: 0, profitFactor: 0, avgTradeReturn: 0,
       totalTrades: 0, closedTrades: [], openTrade: null,
       dailyReturns: [], equityCurve: [initialCapital],
-      days: rows.length, confidenceAvg: 0, stopLossPct: cfg.stopLossPct,
+      days: rows.length, confidenceAvg: 0,
       bnhReturn: 0, excessReturn: 0,
     }
   }
@@ -668,7 +667,6 @@ export function backtestInstrument(
     equityCurve: state.equityHistory,
     bnhCurve,
     days, confidenceAvg: state.confidenceCount > 0 ? state.confidenceSum / state.confidenceCount : 0,
-    stopLossPct: cfg.stopLossPct,
     bnhReturn, excessReturn: totalReturn - bnhReturn,
   }
 }

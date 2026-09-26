@@ -18,6 +18,17 @@ import { apiUrl } from '@/lib/apiBase'
 
 type SortKey = 'ticker' | 'sector' | 'price' | 'changePct' | 'zone' | 'action' | 'confidence' | 'rsi14' | 'atrPct' | 'deviationPct' | 'slopePct'
 
+/**
+ * Q-105: the Size cell. Only a BUY opens a position, so only a BUY has a size.
+ * The signal's `KellyFraction` is a placeholder on HOLD (0.10) and 1.0 on SELL,
+ * and rendering those under a "Kelly" header told users SELL meant "100%" on a
+ * page whose rules say SELL closes nothing and sizing is not a Kelly calculation.
+ */
+export function positionSizeLabel(action: unknown, fraction: number | null): string {
+  if (action !== 'BUY' || fraction == null || !Number.isFinite(fraction)) return '—'
+  return `${Math.round(fraction * 100)}%`
+}
+
 export function LiveSignalsPanel() {
   const [signals, setSignals] = useState<Record<string, unknown> | null>(null)
   const [loading, setLoading] = useState(true)
@@ -267,13 +278,18 @@ export function LiveSignalsPanel() {
         <table className="w-full text-xs">
           <thead className="bg-slate-900 border-b border-slate-800">
             <tr>
-              {[['ticker','Ticker'],['sector','Sector'],['price','Price'],['changePct','Chg%'],['zone','Regime'],['action','Signal'],['confidence','Conf%'],['rsi14','RSI'],['atrPct','ATR%'],['deviationPct','200EMA Dev'],['slopePct','Slope']].map(([k, h]) => (
+              {[['ticker','Ticker'],['sector','Sector'],['price','Price'],['changePct','Chg%'],['zone','Regime'],['action','Signal'],['confidence','Conf%'],['rsi14','RSI'],['atrPct','ATR%'],['deviationPct','200SMA Dev'],['slopePct','Slope']].map(([k, h]) => (
                 <th key={k} className={thClass(k as SortKey)} aria-sort={sortKey === k ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'} onClick={() => {
                   if (sortKey === k) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
                   else { setSortKey(k as SortKey); setSortDir('desc') }
                 }}>{h}{sortIcon(k as SortKey)}</th>
               ))}
-              <th className="px-3 py-2 text-left text-slate-400 uppercase tracking-wider font-medium">Kelly</th>
+              {/* Q-105: this column was headed "Kelly" and showed SELL at 100% and
+                  every HOLD at 10% — the signal's KellyFraction field, which on
+                  the production path is a fixed 15% for BUY and a placeholder
+                  otherwise. The engine sizes only BUYs and SELL closes nothing,
+                  so only a BUY has a size to show. */}
+              <th className="px-3 py-2 text-left text-slate-400 uppercase tracking-wider font-medium">Size</th>
               <th className="px-3 py-2 text-left text-slate-400 uppercase tracking-wider font-medium">Last Data</th>
             </tr>
           </thead>
@@ -360,7 +376,7 @@ export function LiveSignalsPanel() {
                     {slopePct != null ? `${slopePct >= 0 ? '+' : ''}${(slopePct * 100).toFixed(4)}%` : '—'}
                   </td>
                   <td className="px-3 py-2 font-mono text-slate-400">
-                    {kellyFraction != null ? `${(kellyFraction * 100).toFixed(0)}%` : '—'}
+                    {positionSizeLabel(action, kellyFraction)}
                   </td>
                   <td className="px-3 py-2 font-mono text-slate-400 text-[10px]">{lastDate ?? '—'}</td>
                 </tr>
