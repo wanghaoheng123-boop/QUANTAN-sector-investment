@@ -37,7 +37,7 @@ function mkResult(over: Partial<BacktestResult> & { ticker: string }): BacktestR
     maxDrawdown: 0.05, winRate: 0.5, profitFactor: 1.5, avgTradeReturn: 0.01,
     totalTrades: 0, closedTrades: [], openTrade: null,
     dailyReturns: [], equityCurve: [], bnhCurve: undefined,
-    days: 300, confidenceAvg: 90, stopLossPct: 0.08,
+    days: 300, confidenceAvg: 90,
     bnhReturn: 0.2, excessReturn: -0.1,
     ...over,
   }

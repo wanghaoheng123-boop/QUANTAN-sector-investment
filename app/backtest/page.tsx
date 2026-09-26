@@ -17,6 +17,7 @@ import { AnalysisTab } from '@/components/backtest/AnalysisTab'
 import { LiveSignalsPanel } from '@/components/backtest/LiveSignalsPanel'
 import { OverviewTab } from '@/components/backtest/OverviewTab'
 import { KeyMetricsStrip } from '@/components/backtest/KeyMetricsStrip'
+import { ENGINE_SUMMARY } from '@/lib/backtest/strategyDescription'
 
 interface BacktestData {
   runId: string
@@ -239,15 +240,14 @@ export default function BacktestPage() {
             )}
           </div>
 
-          {/* Strategy info bar */}
+          {/* Strategy info bar. Q-105: this listed an ATR-adaptive stop, a
+              trailing stop, Half-Kelly sizing and a 55% confidence threshold —
+              none of which the engine had run since 2026-07-11 — and omitted the
+              time exit, the only position exit it has. Derived now. */}
           <div className="flex flex-wrap gap-4 text-[11px] text-slate-400 border border-slate-800 rounded-lg px-4 py-2 bg-slate-900/40">
-            <span><span className="text-slate-400">Strategy:</span> resolveBacktestSignal (regime dip-buy; enhanced in dev only)</span>
-            <span><span className="text-slate-400">Capital:</span> $100,000 per instrument</span>
-            <span><span className="text-slate-400">Stop Loss:</span> ATR-adaptive (1.5× ATR, 3–15%)</span>
-            <span><span className="text-slate-400">Trailing Stop:</span> 2× ATR → break-even, 4× ATR → 1× ATR lock</span>
-            <span><span className="text-slate-400">Kelly:</span> Half-Kelly sizing (max 25%)</span>
-            <span><span className="text-slate-400">Confidence threshold:</span> 55%</span>
-            <span><span className="text-slate-400">Max Portfolio DD:</span> 25% circuit breaker</span>
+            {ENGINE_SUMMARY.map(([label, value]) => (
+              <span key={label}><span className="text-slate-400">{label}:</span> {value}</span>
+            ))}
           </div>
         </div>
       </div>

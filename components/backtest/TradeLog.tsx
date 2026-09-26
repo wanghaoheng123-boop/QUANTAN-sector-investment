@@ -9,8 +9,11 @@ const HEADER_TOOLTIPS: Record<string, { metricKey?: string; content?: string }> 
   'Regime': { metricKey: 'regime' },
   'Signal': { metricKey: 'dipSignal' },
   'Conf%': { metricKey: 'confidence' },
-  'Reason': { content: 'Why the trade exited: TP_PARTIAL (partial profit-take), STOP_LOSS, TRAILING_STOP, MAX_HOLD, SIGNAL_FLIP, etc.' },
-  'Action': { content: 'BUY = entry, SELL = full exit, PARTIAL = profit-take leaving runner.' },
+  // Q-105: these two described exit codes (STOP_LOSS, TRAILING_STOP, PARTIAL…)
+  // the engine has not produced since the 2026-07-11 stop retirement. The
+  // column renders `trade.reason`, which is the ENTRY signal's reason.
+  'Reason': { content: 'Why the position was opened: the regime zone and dip classification behind the BUY signal. The engine does not record why a trade closed (time exit, drawdown breaker or end of data).' },
+  'Action': { content: 'Every row is a long position opened on a BUY signal. Exit Price is where it closed.' },
 }
 
 interface Props {

@@ -14,6 +14,7 @@
 
 import type { OhlcBar } from '@/lib/quant/indicators'
 import { atrArray } from '@/lib/quant/indicators'
+import { ENGINE_MAX_HOLD_DAYS } from './strategyConstants'
 
 export interface ExitConfig {
   /** Max calendar trading days to hold a position (default 20) */
@@ -84,7 +85,7 @@ export const LABEL_MATCHED_EXIT_CONFIG: ExitConfig = {
  */
 export const DEFAULT_TIME_EXIT_CONFIG: ExitConfig = {
   ...LABEL_MATCHED_EXIT_CONFIG,
-  maxHoldDays: 60,
+  maxHoldDays: ENGINE_MAX_HOLD_DAYS,
 }
 
 export type ExitReason =

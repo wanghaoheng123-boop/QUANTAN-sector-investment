@@ -8,6 +8,7 @@ import type { RegimeState as VolRegimeState } from '@/lib/quant/regimeDetection'
 import type { PriceZone } from '@/lib/quant/volumeProfile'
 import { sma200DeviationPct, sma200Slope, priceWasNearSmaRecently } from './signalHelpers'
 import type { DipSignal, RegimeSignal } from './signalTypes'
+import { MIN_SMA200_SLOPE, NEAR_SMA200_PCT } from './strategyConstants'
 
 export type { DipSignal, RegimeSignal }
 
@@ -80,8 +81,9 @@ export function volRegimeScore(regime: VolRegimeState): number {
 /**
  * Classify price regime based on 200SMA deviation and slope.
  *
- * FIX A: Require slope > 0.005 (0.5% over 20 bars) to filter flat/noise markets.
- * FIX D: Require price was within +5% of 200SMA in last 20 bars for dip BUY zones.
+ * FIX A: Require slope > MIN_SMA200_SLOPE (0.5% over 20 bars) to filter flat/noise markets.
+ * FIX D: Require price no more than NEAR_SMA200_PCT (5%) below the 200SMA at some
+ * bar of the last 20 for dip BUY zones. Both constants: `strategyConstants.ts`.
  *
  * Deviation zones (price vs 200SMA):
  *   >+20%  EXTREME_BULL  → HOLD (overbought, don't chase)
@@ -104,9 +106,9 @@ export function regimeSignal(price: number, closes: number[], rsi14?: number): R
   const dev = sma200DeviationPct(price, sma(closes, 200)!)
   const slope = sma200Slope(closes)
   // FIX A: Require meaningful slope > 0.005 (0.5%)
-  const slopePos = slope != null ? slope > 0.005 : null
+  const slopePos = slope != null ? slope > MIN_SMA200_SLOPE : null
   // FIX D: Was price recently within +5% of SMA?
-  const nearSma = priceWasNearSmaRecently(closes, 5)
+  const nearSma = priceWasNearSmaRecently(closes, NEAR_SMA200_PCT)
 
   // Fail-closed when deviation can't be computed (non-finite price, broken
   // SMA). Previously the function fell through every `if (dev != null ...)`
