@@ -2466,3 +2466,28 @@ such an assertion is for, and the exact opposite of the four defect-ratifying
 tests found earlier this session. It is replaced by assertions of the
 capability, plus a narrower one: without a calendar it is still wall-clock
 naive, which is the deliberate over-alarming default.
+
+## 2026-09-24 — The register's `evidence` field finally has a reader (Q-111)
+
+Merged #225. `RegisterEntry.evidence` was declared, carried by every row of
+`reviews/vendor-licence-register.json`, and **read by nothing** — the same
+built-and-inert shape as `_cached` and `QuoteProvenance`, in the one artifact
+whose whole purpose is an auditable trail. Q107-S9 had diagnosed "an unchecked
+field drifted" and responded by adding a second field beside it.
+
+**My first rule was wrong, and the data said so.** Requiring every citation to
+sit on a detected egress point flagged ten legitimate rows. Reading all of them
+showed that `evidence` is the **use trail**, not the detection point — a package
+is detected in `package.json` and cited where it is imported. The rule is now
+"at least one citation lands on a detected point", with a separate
+`evidence-unwalked` for citations the walk cannot verify.
+
+It found three real defects: scikit-learn and xgboost cited `requirements.txt`
+when both live in `ml/requirements.txt`, and the backtest-data row cited a file
+the walk never visits.
+
+**The synthetic controls are the actual safeguard.** A rule whose only instances
+live in the real register has zero reachable instances on the day the register
+is clean — which is now. Deleting the rule body makes the synthetic controls
+fail while a mutated real row sails through. `files` is a required parameter so
+the compiler, not a reviewer, notices a call site that forgot it.
