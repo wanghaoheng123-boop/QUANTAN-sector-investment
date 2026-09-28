@@ -58,11 +58,9 @@ export const MAX_VOL_OI_RATIO = 9_999
  *
  * We use 500 (above the requested floor of 100) because most spread
  * trades clear in lots of 100-200, and 500 reliably filters retail
- * single-legged "lottery ticket" buys from institutional flow. The
- * MIN_ABSOLUTE_VOL_FOR_UNUSUAL alias documents the floor explicitly.
+ * single-legged "lottery ticket" buys from institutional flow.
  */
 const MIN_UNUSUAL_VOLUME = 500
-export const MIN_ABSOLUTE_VOL_FOR_UNUSUAL = MIN_UNUSUAL_VOLUME
 
 /**
  * Fraction of the bid–ask range at which a trade is classified as "near ask"

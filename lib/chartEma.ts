@@ -62,16 +62,22 @@ export const CHART_EMA_COLORS: Record<ChartEmaPeriod, string> = {
   250: '#fb923c',   // orange-400 (1-year round number)
 }
 
-/** Default enabled EMAs when user selects EMA preset (TradingView-style: 9 / 20 / 50 / 200). */
-export const DEFAULT_ACTIVE_EMAS: ChartEmaKey[] = ['ema9', 'ema20', 'ema50', 'ema200']
+/**
+ * Default enabled EMAs (TradingView-style: 9 / 20 / 50 / 200), used by the
+ * `ema` preset via `tradingDefaultEmaFlags`.
+ *
+ * Q-118: this module's consumers moved to the preset builders below
+ * (`buildVisFromIndicatorPreset`, `tradingDefaultEmaFlags`, `buildIndicatorConfig`),
+ * leaving five exports nobody imported. Two were pure leftovers and are gone:
+ * `DEFAULT_ACTIVE_EMAS` duplicated this list exactly, and `ALWAYS_ON_EMAS = []`
+ * was documented as "EMAs that are always shown regardless of preset" while
+ * nothing read it — a declared behaviour with no implementation. The other
+ * three (this list, `chartEmaKey`, `allEmaOn`) are used inside this module and
+ * are simply no longer exported.
+ */
+const TRADING_DEFAULT_EMA_KEYS: ChartEmaKey[] = ['ema9', 'ema20', 'ema50', 'ema200']
 
-/** Same set for stock/sector charts that omit per-line toggles. */
-export const TRADING_DEFAULT_EMA_KEYS: ChartEmaKey[] = ['ema9', 'ema20', 'ema50', 'ema200']
-
-/** EMAs that are always shown regardless of preset (key reference lines). */
-export const ALWAYS_ON_EMAS: ChartEmaKey[] = []
-
-export function chartEmaKey(period: ChartEmaPeriod): ChartEmaKey {
+function chartEmaKey(period: ChartEmaPeriod): ChartEmaKey {
   return `ema${period}` as ChartEmaKey
 }
 
@@ -83,7 +89,7 @@ export function allEmaOff(): Record<ChartEmaKey, boolean> {
 }
 
 /** Build a Record<ChartEmaKey, boolean> with all true. */
-export function allEmaOn(): Record<ChartEmaKey, boolean> {
+function allEmaOn(): Record<ChartEmaKey, boolean> {
   const out: Partial<Record<ChartEmaKey, boolean>> = {}
   for (const p of CHART_EMA_PERIODS) out[chartEmaKey(p)] = true
   return out as Record<ChartEmaKey, boolean>

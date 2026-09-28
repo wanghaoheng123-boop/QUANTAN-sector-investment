@@ -162,10 +162,6 @@ export function getSectorBySlug(slug: string): Sector | undefined {
   return SECTORS.find(s => s.slug === slug)
 }
 
-export function getSectorByEtf(etf: string): Sector | undefined {
-  return SECTORS.find(s => s.etf === etf)
-}
-
 // Signal types
 export type SignalDirection = 'BUY' | 'SELL' | 'HOLD' | 'WATCH'
 export type Timeframe = '1D' | '1W' | '1M' | '3M'

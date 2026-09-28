@@ -11,7 +11,3 @@ export const DESK_TICKERS = [
   ...SECTORS.map((s) => s.etf),
   ...COMMODITY_TICKERS,
 ]
-
-export function deskTickersParam(): string {
-  return DESK_TICKERS.join(',')
-}

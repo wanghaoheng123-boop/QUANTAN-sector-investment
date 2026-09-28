@@ -59,14 +59,14 @@ interface NavGroup {
  * on desktop; `groups` collapse into disclosure menus. The mobile drawer
  * renders all of them.
  */
-export const NAV_PRIMARY: NavItem[] = [
+const NAV_PRIMARY: NavItem[] = [
   { href: '/', label: 'Markets', hint: 'All 11 GICS sectors, live' },
   { href: '/desk', label: 'Desk', hint: 'Multi-instrument monitor' },
   { href: '/backtest', label: 'Backtest', hint: '5Y walk-forward engine' },
   { href: '/briefs', label: 'Briefs', hint: 'Curated sector news' },
 ]
 
-export const NAV_GROUPS: NavGroup[] = [
+const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Research',
     items: [
