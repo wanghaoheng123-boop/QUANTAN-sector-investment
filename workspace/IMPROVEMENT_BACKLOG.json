@@ -3097,7 +3097,7 @@
     "title": "Every number on the BTC liquidations panel was wrong: 100x volumes, a '24h' window of ~1.4h, swapped long/short, an inverted bias, and a failed feed shown as zeros",
     "domain": "Data/Integrity",
     "priority": "P1",
-    "status": "partial",
+    "status": "done",
     "files": [
       "__tests__/components/crypto/LiquidationsPanel.test.tsx",
       "app/api/crypto/btc/liquidations/route.ts",
@@ -3120,7 +3120,8 @@
     ],
     "notes_2026_09_28": "Found while scoping Q-118: three routes emit degraded:true and no client reads it. Checking the liquidations one against live OKX data found the panel wrong seven ways (see reviews/q138-btc-liquidations-2026-09-28.md). Verified locally against an independent pull: 100/23/77 orders, $166,283/$997,534, identical oldest timestamp.",
     "resolution_2026_09_28": "Fix complete in PR #229; status stays PARTIAL until verified against an independent OKX pull on production (its own acceptance criterion — red-team R7 caught it marked done early). Red-team round 1 broke two display paths (schema drift rendered '0 · Balanced'; an undated coloured bias card in the signals grid) and five self-describing sentences; all fixed. 20 mutations all fail as designed.",
-    "resolution_2026_09_28_r2": "Red-team round 2: one HIGH (net-mode records rendered 'Balanced') and three MEDIUM (cache-flag guard green via a dead import; lab-to-panel wiring untested; 'daily candles' false off 1D). All fixed; the panel now owns its fetch. 19 round-2 mutations all fail as designed. Still PARTIAL until production is checked against an independent pull."
+    "resolution_2026_09_28_r2": "Red-team round 2: one HIGH (net-mode records rendered 'Balanced') and three MEDIUM (cache-flag guard green via a dead import; lab-to-panel wiring untested; 'daily candles' false off 1D). All fixed; the panel now owns its fetch. 19 round-2 mutations all fail as designed. Still PARTIAL until production is checked against an independent pull.",
+    "verified_2026_09_28": "Production verified after merge f657b52 (#229): /api/crypto/btc/liquidations (cache-busted) equal to a simultaneous independent OKX pull on count, per-side count, per-side USDT and oldest timestamp (100/93/7, 1,676,725 / 6,548, 14:44:07.758Z); the live panel read 'latest 100 only · last 36m · 1.68M USDT'; no liquidation card in the signals grid; no 'on-chain' anywhere; smoke passed."
   },
   {
     "id": "Q-140",

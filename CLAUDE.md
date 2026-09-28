@@ -771,7 +771,11 @@ npm run typecheck && npm run test
 npm run check:ci          # verify:data + smoke
 npm run benchmark         # after ANY signal/backtest change; WR floor in reviews/invariants-baseline.md
 ```
-Note: jsdom component tests are CI-only on this machine. Stryker does not run
+Note: jsdom component tests run locally — all 15 component/hook files in ~3s
+(2026-09-28). They have frozen here on a COLD start over the Google Drive
+filesystem, because vitest's worker-start timeouts are hardcoded; if a jsdom
+run hangs, suspect that, not the test. (This line used to say "CI-only"; a
+check "confirming" it used `timeout`, which macOS lacks.) Stryker does not run
 on PRs. The a11y workflow is schedule-only AND advisory — a green check is not
 zero violations; read the job log.
 
