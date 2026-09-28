@@ -71,6 +71,7 @@ import type {
   SectorGateConfig,
 } from './signalTypes'
 import { DEFAULT_CONFIG } from './signalTypes'
+import { REGIME_PATH_POSITION_FRACTION } from './strategyConstants'
 import { regimeSignal, clamp, WEIGHT_PROFILES, volumeZoneScore, volRegimeScore } from './regimeSignal'
 
 // ─── Enhanced weighted confluence signal ──────────────────────────────────────
@@ -335,7 +336,11 @@ export function resolveBacktestSignal(
   const regime = regimeSignal(price, closes, rsi14)
   const cfg = { ...DEFAULT_CONFIG, ...config }
   let kellyFrac = 0.10
-  if (regime.action === 'BUY') kellyFrac = cfg.halfKelly ? 0.15 : 0.30
+  if (regime.action === 'BUY') {
+    kellyFrac = cfg.halfKelly
+      ? REGIME_PATH_POSITION_FRACTION.half
+      : REGIME_PATH_POSITION_FRACTION.full
+  }
   if (regime.action === 'SELL') kellyFrac = 1.0
   return {
     ticker,

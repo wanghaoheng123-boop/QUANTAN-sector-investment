@@ -410,7 +410,7 @@ describe('F-4: net-of-cost win classification', () => {
     maxDrawdown: 0, winRate: 0, profitFactor: 0, avgTradeReturn: 0,
     totalTrades: trades.length, closedTrades: trades, openTrade: null,
     dailyReturns: [], equityCurve: new Array(40).fill(100_000),
-    days: 300, confidenceAvg: 80, stopLossPct: 0.08, bnhReturn: 0, excessReturn: 0,
+    days: 300, confidenceAvg: 80, bnhReturn: 0, excessReturn: 0,
   })
 
   it('a positive price move inside the 22 bps round-trip cost is NOT a win', () => {

@@ -95,9 +95,14 @@ describe('STRATEGY RULES → Transaction Costs (components/backtest/OverviewTab.
   })
 
   it('is derived, not hardcoded', () => {
-    const code = flatCode('components/backtest/OverviewTab.tsx')
-    expect(code).toContain("from '@/lib/backtest/executionModel'")
-    expect(code).not.toContain('11bps round-trip')
+    // Q-105 moved the derivation into lib/backtest/strategyDescription.ts, which
+    // both /backtest surfaces render from; the component re-exports it.
+    const component = flatCode('components/backtest/OverviewTab.tsx')
+    expect(component).toContain("from '@/lib/backtest/strategyDescription'")
+    expect(component).not.toContain('11bps round-trip')
+    const description = flatCode('lib/backtest/strategyDescription.ts')
+    expect(description).toContain("from './executionModel'")
+    expect(description).not.toContain('11bps round-trip')
   })
 
   it('the grid renders the DERIVED constant, not a literal that happens to match', () => {

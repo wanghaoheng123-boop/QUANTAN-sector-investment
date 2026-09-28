@@ -27,19 +27,28 @@ export interface RegimeSignal {
 
 // ─── Combined signal types ─────────────────────────────────────────────────────
 
+/**
+ * Q-105: `stopLossPct` was removed from this contract. It was echoed into every
+ * result and read by nothing — the engine's stops were retired in D2
+ * (2026-07-11, `core.ts` time-exit block) — so `/api/backtest` shipped
+ * `stopLossPct: 0.1` beside results that no stop had touched. Restoring a stop
+ * is a different strategy and needs its own research package, not a knob.
+ */
 export interface BacktestConfig {
   initialCapital: number
-  stopLossPct: number
+  /**
+   * Minimum confidence for a BUY. Read ONLY by `enhancedCombinedSignal`
+   * (`signals.ts`). The regime-only path — the production default, see
+   * `lib/featureFlags.ts` — ignores it, so varying it there changes nothing.
+   */
   confidenceThreshold: number
+  /** Equity drawdown from peak that forces an exit at the next open (`core.ts`). */
   maxDrawdownCap: number
   halfKelly: boolean
 }
 
 export const DEFAULT_CONFIG: BacktestConfig = {
   initialCapital: 100_000,
-  // stopLossPct is now ATR-adaptive in the engine (1.5x ATR, capped 5-15%).
-  // This config value serves as the floor for the ATR formula.
-  stopLossPct: 0.10,
   confidenceThreshold: 50,  // Lowered from 55 — weighted scoring is inherently more selective
   maxDrawdownCap: 0.25,
   halfKelly: true,
