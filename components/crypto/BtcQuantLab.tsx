@@ -18,6 +18,7 @@ import {
 import { ma200Regime, sma200DeviationPct } from '@/lib/quant/technicals'
 import { apiUrl } from '@/lib/apiBase'
 import { formatFreshness } from '@/lib/format'
+import { liquidationBias, liquidationCards, type LiqData } from '@/lib/liquidationDisplay'
 
 interface Props { candles: BtcCandle[] }
 
@@ -34,16 +35,6 @@ interface MetricsData {
   fetchedAt: string
 }
 
-interface LiqData {
-  totalLiquidations: number
-  buyLiquidations: number
-  sellLiquidations: number
-  buyVolume: number
-  sellVolume: number
-  netDirection: string
-  source: string
-  fetchedAt: string
-}
 
 // ─── Metric card ───────────────────────────────────────────────────────────────
 function MetricCard({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
@@ -302,18 +293,14 @@ export default function BtcQuantLab({ candles }: Props) {
             ? 'text-orange-400'
             : 'text-slate-400',
     },
+    // Q-138: this card was labelled "OI Net Direction" — it is the LIQUIDATION
+    // bias, not open interest — and showed LONG_BIAS (longs force-SOLD) as
+    // "MORE AGG BUY VOLUME", the opposite of the data.
     {
-      label: 'OI Net Direction',
-      value: liq?.netDirection ?? 'N/A',
-      signal:
-        liq?.netDirection === 'LONG_BIAS'
-          ? 'MORE AGG BUY VOLUME'
-          : liq?.netDirection === 'SHORT_BIAS'
-            ? 'MORE AGG SELL VOLUME'
-            : liq?.netDirection === 'NEUTRAL'
-              ? 'BALANCED'
-              : 'N/A',
-      color: liq?.netDirection === 'LONG_BIAS' ? 'text-red-400' : liq?.netDirection === 'SHORT_BIAS' ? 'text-green-400' : 'text-slate-400',
+      label: 'Liquidation Bias',
+      value: liquidationBias(liq?.netDirection).value,
+      signal: liquidationBias(liq?.netDirection).signal,
+      color: liquidationBias(liq?.netDirection).color,
     },
     {
       label: 'Rainbow Band',
@@ -363,7 +350,9 @@ export default function BtcQuantLab({ candles }: Props) {
       </Section>
 
       {/* Metrics tabs */}
-      <Section title="On-Chain & Derivatives Metrics">
+      {/* Q-138: was "On-Chain & Derivatives Metrics" — nothing in this section is
+          read from the chain; funding, OI and liquidations are exchange-reported. */}
+      <Section title="Exchange Derivatives Metrics">
         <div className="flex flex-wrap gap-1 bg-slate-900 rounded-lg p-1 border border-slate-800 mb-4 w-fit">
           {([['funding', 'Funding & OI'], ['liquidations', 'Liquidations'], ['signals', 'Analysis']] as const).map(([tab, label]) => (
             <button key={tab} onClick={() => setActiveMetricTab(tab)}
@@ -410,31 +399,21 @@ export default function BtcQuantLab({ candles }: Props) {
               {liqCached && <DataFreshnessIndicator cached compact />}
             </div>
           )}
+            {/* Q-138: a failed feed now arrives as nulls with `degraded: true`; say so
+                instead of rendering a calm market nobody measured. */}
+            {liq?.degraded && (
+              <div role="status" className="text-[11px] text-amber-400 border border-amber-800/40 bg-amber-950/20 rounded-lg px-3 py-2 mb-3">
+                {liq.userMessage ?? 'Liquidation data is unavailable right now.'}
+              </div>
+            )}
+            {/* Q-138: labels, units and window come from lib/liquidationDisplay.ts.
+                The old cards showed volumes 100× too large, a "24h" window that
+                was ~1.4h, a ">$100k" filter that did not exist, and long/short
+                swapped. */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <MetricCard
-                label="Large Trades (24h)"
-                value={String(liq?.totalLiquidations ?? '—')}
-                sub=">$100k notional"
-                color="text-amber-400"
-              />
-              <MetricCard
-                label="Buy (Long Liq)"
-                value={liq?.buyVolume != null ? `$${(liq.buyVolume / 1e6).toFixed(1)}M` : '—'}
-                sub={`${liq?.buyLiquidations ?? 0} trades`}
-                color="text-red-400"
-              />
-              <MetricCard
-                label="Sell (Short Liq)"
-                value={liq?.sellVolume != null ? `$${(liq.sellVolume / 1e6).toFixed(1)}M` : '—'}
-                sub={`${liq?.sellLiquidations ?? 0} trades`}
-                color="text-green-400"
-              />
-              <MetricCard
-                label="Net Bias"
-                value={liq?.netDirection ?? '—'}
-                sub="24h liquidation direction"
-                color={liq?.netDirection === 'LONG_BIAS' ? 'text-red-400' : liq?.netDirection === 'SHORT_BIAS' ? 'text-green-400' : 'text-slate-400'}
-              />
+              {liquidationCards(liq).map((c) => (
+                <MetricCard key={c.label} label={c.label} value={c.value} sub={c.sub} color={c.color} />
+              ))}
             </div>
           </div>
         )}
@@ -442,7 +421,7 @@ export default function BtcQuantLab({ candles }: Props) {
         {activeMetricTab === 'signals' && (
           <div className="space-y-3">
             <div className="text-xs text-slate-400">
-              BTC analysis combines price-action signals (RSI, MACD, EMAs), on-chain derivatives data (funding rate, open interest, liquidations), and the Rainbow Chart model. Toggle individual indicators on the chart to see their levels.
+              BTC analysis combines price-action signals (RSI, MACD, EMAs), exchange derivatives data (funding rate, open interest, liquidations — reported by Bybit and OKX, not read from the chain), and the Rainbow Chart model. Toggle individual indicators on the chart to see their levels.
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="bg-slate-900/60 rounded-xl p-4 border border-slate-800">

@@ -3091,5 +3091,52 @@
       "npm run test"
     ],
     "notes_2026_09_28": "Out-of-scope finding from the Q-105 round-2 red-team. The landing CTA ('5Y walk-forward backtest across 56 instruments (11 GICS sectors + BTC)') and the /backtest subtitle ('5Y Walk-Forward · 56 Instruments') describe backtestInstrument, which is one no-look-ahead pass with no parameter fitting; the traded window after the 200-bar warm-up is ~4.2 years, and BTC cannot trade at all (Q-136). 'Walk-forward' conventionally means re-fitting on rolling windows; nothing is fitted here."
+  },
+  {
+    "id": "Q-138",
+    "title": "Every number on the BTC liquidations panel was wrong: 100x volumes, a '24h' window of ~1.4h, swapped long/short, an inverted bias, and a failed feed shown as zeros",
+    "domain": "Data/Integrity",
+    "priority": "P1",
+    "status": "done",
+    "files": [
+      "app/api/crypto/btc/liquidations/route.ts",
+      "lib/data/providers/okxLiquidations.ts",
+      "lib/liquidationDisplay.ts",
+      "components/crypto/BtcQuantLab.tsx"
+    ],
+    "acceptance_criteria": [
+      "USD notional uses OKX's contract size (0.01 BTC per BTC-USDT-SWAP contract), cited",
+      "The panel states the window it actually covers, including when OKX's 100-detail cap is hit",
+      "Long liquidations are forced sells; the bias wording matches the data",
+      "Every failure path returns null (unknown) with degraded:true, and the panel says so; a valid empty response stays a measured 0",
+      "Verified after deploy against an independent OKX computation, not against the old display"
+    ],
+    "verify_commands": [
+      "npx vitest run __tests__/api/btcLiquidations.test.ts __tests__/lib/liquidationDisplay.test.ts"
+    ],
+    "notes_2026_09_28": "Found while scoping Q-118: three routes emit degraded:true and no client reads it. Checking the liquidations one against live OKX data found the panel wrong seven ways (see reviews/q138-btc-liquidations-2026-09-28.md). Verified locally against an independent pull: 100/23/77 orders, $166,283/$997,534, identical oldest timestamp.",
+    "resolution_2026_09_28": "SHIPPED (pending merge at time of writing). 12 mutations fail as designed."
+  },
+  {
+    "id": "Q-140",
+    "title": "`degraded: true` is set by /api/crypto/btc/metrics and /api/briefs and read by no client; producers are found only by the flag they already set",
+    "domain": "Data/Integrity",
+    "priority": "P2",
+    "status": "pending",
+    "files": [
+      "app/api/crypto/btc/metrics/route.ts",
+      "app/api/briefs/route.ts",
+      "app/page.tsx",
+      "components/crypto/BtcQuantLab.tsx"
+    ],
+    "acceptance_criteria": [
+      "Each producer's degraded state is visible where its data renders (the landing news list, the Funding & OI tab)",
+      "A STRUCTURAL detector finds routes that answer 2xx on a failure path — not only routes that already set the flag (the cache-flag lesson: a producer set defined by the property under test cannot find a counterexample)",
+      "metrics' wire field takerBuyVolume/takerSellVolume carries Bybit's account buyRatio/sellRatio — rename or document; nothing renders it today"
+    ],
+    "verify_commands": [
+      "npm run test"
+    ],
+    "notes_2026_09_28": "Split from Q-138. /api/briefs sets degraded when more than half of 33 sector calls fail; app/page.tsx reads data.briefs and never the flag, so the landing shows a silently thinned list (the CDN TTL is shortened, the user is not told). metrics degrades mostly visibly (nulls render '—', source reads 'Unavailable') but never shows its userMessage."
   }
 ]
