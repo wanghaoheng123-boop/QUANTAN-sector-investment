@@ -16,8 +16,8 @@ import {
   getRainbowBand,
 } from '@/lib/crypto'
 import { ma200Regime, sma200DeviationPct } from '@/lib/quant/technicals'
-import { apiUrl } from '@/lib/apiBase'
-import { formatFreshness } from '@/lib/format'
+import { fetchJsonSafe } from '@/lib/fetchJsonSafe'
+import { LiquidationsPanel } from '@/components/crypto/LiquidationsPanel'
 
 interface Props { candles: BtcCandle[] }
 
@@ -34,16 +34,6 @@ interface MetricsData {
   fetchedAt: string
 }
 
-interface LiqData {
-  totalLiquidations: number
-  buyLiquidations: number
-  sellLiquidations: number
-  buyVolume: number
-  sellVolume: number
-  netDirection: string
-  source: string
-  fetchedAt: string
-}
 
 // ─── Metric card ───────────────────────────────────────────────────────────────
 function MetricCard({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
@@ -66,43 +56,17 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   )
 }
 
-/** Never throws — derivatives APIs are often geo-blocked; UI degrades gracefully. */
-async function fetchJsonSafe(path: string): Promise<{ ok: true; data: unknown } | { ok: false; message: string }> {
-  try {
-    const r = await fetch(apiUrl(path), { cache: 'no-store', headers: { Accept: 'application/json' } })
-    const text = await r.text()
-    let data: unknown = null
-    try {
-      data = text ? JSON.parse(text) : null
-    } catch {
-      return { ok: false, message: `${path} → invalid JSON (HTTP ${r.status})` }
-    }
-    if (!r.ok) {
-      const err = (data as { userMessage?: string; error?: string; details?: string })?.userMessage
-        ?? (data as { error?: string })?.error
-        ?? (data as { details?: string })?.details
-      return { ok: false, message: typeof err === 'string' ? err : `HTTP ${r.status}` }
-    }
-    return { ok: true, data }
-  } catch (e) {
-    return { ok: false, message: e instanceof Error ? e.message : String(e) }
-  }
-}
 
 export default function BtcQuantLab({ candles }: Props) {
   const [metrics, setMetrics] = useState<MetricsData | null>(null)
-  const [liq, setLiq] = useState<LiqData | null>(null)
   const [activeMetricTab, setActiveMetricTab] = useState<'funding' | 'liquidations' | 'signals'>('funding')
   const [derivativesError, setDerivativesError] = useState<string | null>(null)
   const [metricsLoading, setMetricsLoading] = useState(false)
-  const [liqLoading, setLiqLoading] = useState(false)
   const [metricsFetchedAt, setMetricsFetchedAt] = useState<string | null>(null)
-  const [liqFetchedAt, setLiqFetchedAt] = useState<string | null>(null)
   // I2 — these routes serve a stored copy when the upstream exchange call fails
   // or is rate-limited, and both set `_cached: true`. Nothing read it, so a
   // cached derivatives figure was displayed identically to a live one.
   const [metricsCached, setMetricsCached] = useState(false)
-  const [liqCached, setLiqCached] = useState(false)
 
   // F3 (WS-F): guard against setState-after-unmount. The 30s/60s pollers below
   // clearInterval on cleanup (no NEW fetches after unmount), but an in-flight
@@ -140,33 +104,11 @@ export default function BtcQuantLab({ candles }: Props) {
     }
   }, [])
 
-  const fetchLiq = useCallback(async () => {
-    setLiqLoading(true)
-    try {
-      const lr = await fetchJsonSafe('/api/crypto/btc/liquidations')
-      if (!mountedRef.current) return
-      if (lr.ok) {
-        setLiq(lr.data as LiqData)
-        setLiqCached((lr.data as { _cached?: boolean })?._cached === true)
-        setLiqFetchedAt(new Date().toLocaleTimeString())
-      } else {
-        setDerivativesError((prev) => {
-          const base = prev ? `${prev} · ` : ''
-          return `${base}liquidations: ${lr.message}`
-        })
-      }
-    } catch (e) {
-      console.error('[BtcQuantLab] liq', e)
-    } finally {
-      if (mountedRef.current) setLiqLoading(false)
-    }
-  }, [])
 
   // Initial load
   useEffect(() => {
     void fetchMetrics()
-    void fetchLiq()
-  }, [fetchMetrics, fetchLiq])
+  }, [fetchMetrics])
 
   // Poll metrics every 30 seconds
   useEffect(() => {
@@ -174,11 +116,6 @@ export default function BtcQuantLab({ candles }: Props) {
     return () => clearInterval(id)
   }, [fetchMetrics])
 
-  // Poll liquidations every 60 seconds
-  useEffect(() => {
-    const id = setInterval(() => { void fetchLiq() }, 60_000)
-    return () => clearInterval(id)
-  }, [fetchLiq])
 
   const closes = candles.map(c => c.close)
   const latestClose = closes[closes.length - 1] ?? 0
@@ -302,19 +239,11 @@ export default function BtcQuantLab({ candles }: Props) {
             ? 'text-orange-400'
             : 'text-slate-400',
     },
-    {
-      label: 'OI Net Direction',
-      value: liq?.netDirection ?? 'N/A',
-      signal:
-        liq?.netDirection === 'LONG_BIAS'
-          ? 'MORE AGG BUY VOLUME'
-          : liq?.netDirection === 'SHORT_BIAS'
-            ? 'MORE AGG SELL VOLUME'
-            : liq?.netDirection === 'NEUTRAL'
-              ? 'BALANCED'
-              : 'N/A',
-      color: liq?.netDirection === 'LONG_BIAS' ? 'text-red-400' : liq?.netDirection === 'SHORT_BIAS' ? 'text-green-400' : 'text-slate-400',
-    },
+    // Q-138: a "Liquidation Bias" card (formerly "OI Net Direction") sat here,
+    // coloured and undated beside BULLISH / BUY THE DIP. Its window is the
+    // latest 100 OKX liquidations — ~1.5h, and it flipped within minutes on
+    // 2026-09-28 while the trailing 24h pointed the other way. It is shown,
+    // with its window, only on the Liquidations tab; it is not a signal.
     {
       label: 'Rainbow Band',
       value: rainbowBand.label,
@@ -340,7 +269,7 @@ export default function BtcQuantLab({ candles }: Props) {
   return (
     <div className="space-y-6">
       <p className="text-[11px] text-slate-400 border border-slate-800 rounded-lg px-3 py-2 bg-slate-900/40">
-        <span className="text-emerald-400/90 font-semibold">Live quant</span> — RSI, MACD, EMA, Bollinger, VWAP, ATR(14), Stochastic(14,3,3), 200MA regime recalculated in your browser from the loaded candle series ({candles.length} bars). Derivatives (funding, OI) refresh every 30s; liquidations every 60s. Exchange APIs may be empty when geo-blocked.
+        <span className="text-emerald-400/90 font-semibold">Live quant</span> — RSI, MACD, EMA, Bollinger, VWAP, ATR(14), Stochastic(14,3,3), 200MA regime recalculated in your browser from the loaded candle series ({candles.length} bars). Derivatives (funding, OI) refresh every 30s; liquidations every 60s while their tab is open. Exchange APIs may be empty when geo-blocked.
       </p>
       {derivativesError && (
         <div className="rounded-lg border border-amber-500/30 bg-amber-950/20 px-3 py-2 text-[11px] text-amber-200/90">
@@ -363,7 +292,9 @@ export default function BtcQuantLab({ candles }: Props) {
       </Section>
 
       {/* Metrics tabs */}
-      <Section title="On-Chain & Derivatives Metrics">
+      {/* Q-138: was "On-Chain & Derivatives Metrics" — nothing in this section is
+          read from the chain; funding, OI and liquidations are exchange-reported. */}
+      <Section title="Exchange Derivatives Metrics">
         <div className="flex flex-wrap gap-1 bg-slate-900 rounded-lg p-1 border border-slate-800 mb-4 w-fit">
           {([['funding', 'Funding & OI'], ['liquidations', 'Liquidations'], ['signals', 'Analysis']] as const).map(([tab, label]) => (
             <button key={tab} onClick={() => setActiveMetricTab(tab)}
@@ -373,6 +304,12 @@ export default function BtcQuantLab({ candles }: Props) {
           ))}
         </div>
 
+        {/* I2 (Q-138 round 2): the metrics cache flag was shown only as "(cached)"
+            text, and this file satisfied the cache-flag guard only through an
+            import left over from the liquidations tab. The badge is real now. */}
+        {activeMetricTab === 'funding' && metricsCached && (
+          <div className="mb-2"><DataFreshnessIndicator cached compact /></div>
+        )}
         {activeMetricTab === 'funding' && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <MetricCard
@@ -395,54 +332,20 @@ export default function BtcQuantLab({ candles }: Props) {
             <MetricCard
               label="Data Source"
               value={metricsLoading ? 'Refreshing…' : metrics?.source?.includes('Unavailable') ? 'Unavailable' : (metrics?.source ?? '—')}
-              sub={metricsFetchedAt ? `Updated ${metricsFetchedAt}${metricsCached ? ' (cached)' : ''}` : undefined}
+              sub={metricsFetchedAt ? `Updated ${metricsFetchedAt}` : undefined}
               color="text-slate-400"
             />
           </div>
         )}
 
         {activeMetricTab === 'liquidations' && (
-          <div>
-            {liqLoading && <div className="text-[10px] text-slate-400 mb-2">Refreshing liquidations data…</div>}
-          {liqFetchedAt && (
-            <div className="text-[10px] text-slate-400 mb-2 flex items-center gap-2">
-              <span>Last updated: {formatFreshness(liq?.fetchedAt)}{/* Q-114: OUR fetch time, and crypto trades 24/7 so no us-equity calendar. */}</span>
-              {liqCached && <DataFreshnessIndicator cached compact />}
-            </div>
-          )}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <MetricCard
-                label="Large Trades (24h)"
-                value={String(liq?.totalLiquidations ?? '—')}
-                sub=">$100k notional"
-                color="text-amber-400"
-              />
-              <MetricCard
-                label="Buy (Long Liq)"
-                value={liq?.buyVolume != null ? `$${(liq.buyVolume / 1e6).toFixed(1)}M` : '—'}
-                sub={`${liq?.buyLiquidations ?? 0} trades`}
-                color="text-red-400"
-              />
-              <MetricCard
-                label="Sell (Short Liq)"
-                value={liq?.sellVolume != null ? `$${(liq.sellVolume / 1e6).toFixed(1)}M` : '—'}
-                sub={`${liq?.sellLiquidations ?? 0} trades`}
-                color="text-green-400"
-              />
-              <MetricCard
-                label="Net Bias"
-                value={liq?.netDirection ?? '—'}
-                sub="24h liquidation direction"
-                color={liq?.netDirection === 'LONG_BIAS' ? 'text-red-400' : liq?.netDirection === 'SHORT_BIAS' ? 'text-green-400' : 'text-slate-400'}
-              />
-            </div>
-          </div>
+          <LiquidationsPanel />
         )}
 
         {activeMetricTab === 'signals' && (
           <div className="space-y-3">
             <div className="text-xs text-slate-400">
-              BTC analysis combines price-action signals (RSI, MACD, EMAs), on-chain derivatives data (funding rate, open interest, liquidations), and the Rainbow Chart model. Toggle individual indicators on the chart to see their levels.
+              This analysis reads only the price candles last loaded on the Chart tab (daily unless you changed the timeframe there): EMA trend, RSI and MACD momentum, volatility, the moving-average regime and the band stage. It does not use the funding, open-interest or liquidation data in the other two tabs. Toggle individual indicators on the chart to see their levels.
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="bg-slate-900/60 rounded-xl p-4 border border-slate-800">

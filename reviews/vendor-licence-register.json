@@ -187,7 +187,7 @@
       "recorded_on": "2026-08-27",
       "evidence": [
         "app/api/crypto/btc/metrics/route.ts:7",
-        "app/api/crypto/btc/liquidations/route.ts:7"
+        "app/api/crypto/btc/liquidations/route.ts:14"
       ],
       "exposed_via": [
         "app/api/crypto/btc/liquidations/route.ts",
