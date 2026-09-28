@@ -53,6 +53,7 @@ import {
 import { DEFAULT_TIME_EXIT_CONFIG } from '@/lib/backtest/exitRules'
 import { DEFAULT_CONFIG } from '@/lib/backtest/signals'
 import { getMetric } from '@/lib/metricGlossary'
+import { regimeSignal } from '@/lib/backtest/signals'
 
 const ROOT = join(__dirname, '..', '..')
 
@@ -240,7 +241,7 @@ describe('2. the numbers quoted are the constants the engine trades on', () => {
     const size = `${pct(REGIME_PATH_POSITION_FRACTION.half)}%`
     expect(size).toBe('15%')
     expect(rulesText).toContain(`${size} of the instrument's cash at entry, rounded down to whole shares`)
-    expect(rulesText).toContain('cannot afford one share is skipped')
+    expect(rulesText).toContain('allocation cannot buy one share is skipped')
     const ceiling = (DEFAULT_CONFIG.initialCapital * REGIME_PATH_POSITION_FRACTION.half).toLocaleString('en-US')
     expect(rulesText).toContain(`priced above $${ceiling} cannot open its first position`)
     expect(summaryText).toContain(`${size} of cash, whole shares`)
@@ -260,6 +261,23 @@ describe('2. the numbers quoted are the constants the engine trades on', () => {
     expect(rulesText).toContain(`no more than ${NEAR_SMA200_PCT}% below the SMA`)
     expect(rulesText).toContain(`a dip of up to ${FIRST_DIP_FLOOR_PCT}% that fails`)
     expect(rulesText).toContain(`Dips deeper than ${FIRST_DIP_FLOOR_PCT}% that fail`)
+  })
+
+  it('R2-4: the SELL row\'s unknown-slope clause is what the classifier does', () => {
+    // A 15%-deep dip. With 215 bars the 200SMA slope cannot be measured (it
+    // needs 221), so the classifier must HOLD; with 260 bars of a gently
+    // falling series before the drop, the slope is known and not rising, so it
+    // must label SELL. The copy says exactly this, and must keep saying it.
+    const flat = Array.from({ length: 214 }, () => 100)
+    const unknown = regimeSignal(85, [...flat, 85])
+    expect(unknown.zone).toBe('DEEP_DIP')
+    expect(unknown.slopePositive).toBeNull()
+    expect(unknown.action).toBe('HOLD')
+    const falling = Array.from({ length: 259 }, (_, i) => 120 - i * 0.05)
+    const known = regimeSignal(falling[258] * 0.85, [...falling, falling[258] * 0.85])
+    expect(known.slopePositive).toBe(false)
+    expect(known.action).toBe('SELL')
+    expect(rulesText).toContain('(HOLD while the SMA slope cannot yet be measured)')
   })
 
   it('pct() does not leak float noise into copy', () => {
@@ -290,8 +308,11 @@ describe('2. the numbers quoted are the constants the engine trades on', () => {
     expect(positionSizeLabel('HOLD', 0.1)).toBe('—')
     expect(positionSizeLabel('BUY', REGIME_PATH_POSITION_FRACTION.half)).toBe('15%')
     expect(positionSizeLabel('BUY', null)).toBe('—')
+    // R2-3: a BUY the engine would skip is not shown as a 15% position.
+    expect(positionSizeLabel('BUY', REGIME_PATH_POSITION_FRACTION.half, 25_160)).toBe('skipped')
+    expect(positionSizeLabel('BUY', REGIME_PATH_POSITION_FRACTION.half, 15_000)).toBe('15%')
     const panel = flatCode('components/backtest/LiveSignalsPanel.tsx')
-    expect(panel).toContain('{positionSizeLabel(action, kellyFraction)}')
+    expect(panel).toContain('{positionSizeLabel(action, kellyFraction, price)}')
     expect(panel).not.toMatch(/>\s*Kelly\s*</)
     expect(panel).toContain("'200SMA Dev'")
   })

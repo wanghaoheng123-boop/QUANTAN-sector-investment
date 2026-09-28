@@ -278,7 +278,7 @@ export const METRIC_GLOSSARY: Record<string, MetricMeta> = {
     label: 'Dip Signal State',
     definition: 'How the signal classifies a price against its 200-day SMA: STRONG_DIP (a dip that passes the slope and proximity tests — the only BUY case), WATCH_DIP (a mild dip that fails them, or any dip while the slope cannot yet be measured), FALLING_KNIFE (a deeper dip that fails them, labelled SELL), IN_TREND (at or up to 10% above the SMA), OVERBOUGHT (more than 10% above), INSUFFICIENT_DATA.',
     range: '6 states.',
-    howToUse: 'Only STRONG_DIP opens a position in the backtest. No state closes one: exits are the time exit and the drawdown breaker.',
+    howToUse: 'Only STRONG_DIP opens a position in the backtest. No state closes one: exits are the time exit, the drawdown breaker and the end of the data.',
   },
   ma200Zone: {
     label: '200SMA Zone',

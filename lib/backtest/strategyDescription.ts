@@ -88,12 +88,12 @@ export const ENGINE_RULES: ReadonlyArray<readonly [string, string]> = [
     'Observed at the close, filled at the next open. One position per instrument at a time.'],
   ['HOLD',
     `No new position otherwise: price at or above the 200-day SMA, or a dip of up to ${FIRST_DIP_FLOOR_PCT}% ` +
-    'that fails the slope or proximity test. Confidence is a fixed label per zone (RSI below 35 raises it ' +
-    'on the mildest dips); the production path applies no confidence threshold.'],
+    'that fails the slope or proximity test. Confidence is a fixed label per zone and outcome (RSI below 35 ' +
+    'raises it only on a buyable mild dip); the production path applies no confidence threshold.'],
   ['SELL Signal',
-    `Dips deeper than ${FIRST_DIP_FLOOR_PCT}% that fail the slope or proximity test are labelled SELL. ` +
-    'The label is shown for information only and does not close positions (retired as an exit on ' +
-    '2026-07-11).'],
+    `Dips deeper than ${FIRST_DIP_FLOOR_PCT}% that fail the slope or proximity test are labelled SELL ` +
+    '(HOLD while the SMA slope cannot yet be measured). The label is shown for information only and does ' +
+    'not close positions (retired as an exit on 2026-07-11).'],
   ['Exit',
     `Time exit only: once ${ENGINE_MAX_HOLD_DAYS} daily bars have passed since a position's fill, it closes at the next open. ` +
     'There is no stop-loss, no trailing stop and no profit target (all retired on 2026-07-11). ' +
@@ -102,8 +102,8 @@ export const ENGINE_RULES: ReadonlyArray<readonly [string, string]> = [
     `If this instrument's equity falls ${pct(DEFAULT_CONFIG.maxDrawdownCap)}% or more from its peak, ` +
     'the open position closes at the next open.'],
   ['Position Sizing',
-    `${pct(POSITION_FRACTION)}% of the instrument's cash at entry, rounded down to whole shares. A BUY that ` +
-    'cannot afford one share is skipped, so an instrument priced above ' +
+    `${pct(POSITION_FRACTION)}% of the instrument's cash at entry, rounded down to whole shares. A BUY whose ` +
+    'allocation cannot buy one share is skipped, so an instrument priced above ' +
     `$${FIRST_ALLOCATION.toLocaleString('en-US')} cannot open its first position. This is not a Kelly ` +
     'calculation; only the research-only enhanced path computes one.'],
   ['Transaction Costs', TX_COST_RULE],

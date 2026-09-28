@@ -15,6 +15,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { DataFreshnessIndicator } from '@/components/DataFreshnessIndicator'
 import { apiUrl } from '@/lib/apiBase'
+import { DEFAULT_CONFIG } from '@/lib/backtest/signalTypes'
 
 type SortKey = 'ticker' | 'sector' | 'price' | 'changePct' | 'zone' | 'action' | 'confidence' | 'rsi14' | 'atrPct' | 'deviationPct' | 'slopePct'
 
@@ -24,8 +25,13 @@ type SortKey = 'ticker' | 'sector' | 'price' | 'changePct' | 'zone' | 'action' |
  * and rendering those under a "Kelly" header told users SELL meant "100%" on a
  * page whose rules say SELL closes nothing and sizing is not a Kelly calculation.
  */
-export function positionSizeLabel(action: unknown, fraction: number | null): string {
+export function positionSizeLabel(action: unknown, fraction: number | null, price?: number | null): string {
   if (action !== 'BUY' || fraction == null || !Number.isFinite(fraction)) return '—'
+  // Round 2 (R2-3): the engine rounds DOWN to whole shares and skips a BUY that
+  // cannot buy one, so on the starting capital a BUY priced above the first
+  // allocation is not a position at all. Showing "15%" there repeated the
+  // "fixed 15% per BUY" error on a second surface.
+  if (price != null && Number.isFinite(price) && price > DEFAULT_CONFIG.initialCapital * fraction) return 'skipped'
   return `${Math.round(fraction * 100)}%`
 }
 
@@ -376,7 +382,7 @@ export function LiveSignalsPanel() {
                     {slopePct != null ? `${slopePct >= 0 ? '+' : ''}${(slopePct * 100).toFixed(4)}%` : '—'}
                   </td>
                   <td className="px-3 py-2 font-mono text-slate-400">
-                    {positionSizeLabel(action, kellyFraction)}
+                    {positionSizeLabel(action, kellyFraction, price)}
                   </td>
                   <td className="px-3 py-2 font-mono text-slate-400 text-[10px]">{lastDate ?? '—'}</td>
                 </tr>

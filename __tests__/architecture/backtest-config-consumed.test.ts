@@ -44,6 +44,19 @@ import { join } from 'node:path'
  *     `components/`.
  *   - Wrapped and assigned echoes (`field: Number(cfg.field)`,
  *     `out.field = cfg.field`) counted as reads. Both forms are now echoes.
+ *
+ * RED-TEAM ROUND 2 showed both round-1 fixes were narrower than claimed:
+ *   - The echo rule stopped at the first comma, so `field: Math.max(0,
+ *     cfg.field)`, a property split across lines, `out['field'] = cfg.field`,
+ *     a trailing `// was cfg.field` comment and a string mentioning
+ *     `config.field` all still counted as reads. Echo spans are now found by a
+ *     balanced-bracket scan, and comments and string literals are blanked by a
+ *     tokenizer before anything is matched.
+ *   - DISPLAY_MODULES was a hand-picked list of two files, so the NEXT copy
+ *     module to print a config value would re-arm R4. It is now DERIVED: any
+ *     module a UI file (components/, or app/ outside app/api) value-imports is
+ *     a display module. A module that is BOTH a UI import and a real engine
+ *     reader would have its reads ignored — the LOUD direction, which fails CI.
  */
 
 interface Decl { file: string; iface: string; defaults: string }
@@ -54,12 +67,96 @@ const DECLS: readonly Decl[] = [
 ]
 /** Engine roots only: a render is not a read (red-team R4). */
 const ROOTS = ['lib', 'scripts']
-/** Modules under ROOTS that describe the engine to users rather than run it. */
-const DISPLAY_MODULES = new Set(['lib/backtest/strategyDescription.ts', 'lib/metricGlossary.ts'])
+/** Where UI files live; `app/api` is server code that CALLS the engine. */
+const UI_ROOTS = ['components', 'app']
 const SKIP = new Set(['node_modules', '.next', '__tests__', 'backtestData', 'claude'])
 
 function stripComments(src: string): string {
   return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/.*$/gm, '')
+}
+
+/**
+ * Blank every comment and string literal (template literals included) to
+ * spaces, preserving length and newlines. A tokenizer rather than regexes: a
+ * regex that strips `//` also cuts `'https://…'`, and one that strips quotes
+ * trips over an apostrophe inside a comment (red-team round 2).
+ */
+export function blankNonCode(src: string): string {
+  let out = ''
+  let i = 0
+  const blank = (s: string) => s.replace(/[^\n]/g, ' ')
+  while (i < src.length) {
+    const c = src[i], n = src[i + 1]
+    if (c === '/' && n === '/') {
+      const j = src.indexOf('\n', i); const end = j < 0 ? src.length : j
+      out += blank(src.slice(i, end)); i = end
+    } else if (c === '/' && n === '*') {
+      const j = src.indexOf('*/', i + 2); const end = j < 0 ? src.length : j + 2
+      out += blank(src.slice(i, end)); i = end
+    } else if (c === '`') {
+      // Template: blank the text, KEEP each `${…}` interpolation — it is code.
+      out += ' '
+      let j = i + 1
+      while (j < src.length && src[j] !== '`') {
+        if (src[j] === '\\') { out += blank(src.slice(j, j + 2)); j += 2; continue }
+        if (src[j] === '$' && src[j + 1] === '{') {
+          let depth = 0, k = j + 1
+          for (; k < src.length; k++) {
+            if (src[k] === '{') depth++
+            else if (src[k] === '}' && --depth === 0) break
+          }
+          out += src.slice(j, k + 1); j = k + 1; continue
+        }
+        out += blank(src[j]); j += 1
+      }
+      out += ' '; i = j + 1
+    } else if (c === "'" || c === '"') {
+      let j = i + 1
+      while (j < src.length && src[j] !== c) j += src[j] === '\\' ? 2 : 1
+      const body = src.slice(i + 1, j)
+      // An identifier-only string is kept, unquoted, so a bracket key
+      // `out['field']` reads as `out[ field ]` — never as a `.field` read.
+      out += ' ' + (/^\w+$/.test(body) ? body : blank(body)) + ' '; i = j + 1
+    } else { out += c; i += 1 }
+  }
+  return out
+}
+
+/**
+ * From `start`, the end of the expression that ends at a depth-0 `,` `;` or an
+ * unmatched closer — i.e. one property value or one assignment right-hand side,
+ * however many lines or nested commas it spans.
+ */
+function exprEnd(code: string, start: number): number {
+  let depth = 0
+  for (let k = start; k < code.length; k++) {
+    const ch = code[k]
+    if (ch === '(' || ch === '[' || ch === '{') depth++
+    else if (ch === ')' || ch === ']' || ch === '}') { if (depth === 0) return k; depth-- }
+    else if (depth === 0 && (ch === ',' || ch === ';')) return k
+  }
+  return code.length
+}
+
+/**
+ * Blank the value of every same-named echo: a property `field: <expr>` or an
+ * assignment `x.field = <expr>` / `x['field'] = <expr>` whose value mentions
+ * `.field`. A key preceded by `.` (a ternary branch `cfg.field : x`) is a read,
+ * not a key.
+ */
+export function stripEchoes(code: string, field: string): string {
+  const read = new RegExp(`\\.${field}\\b`)
+  const heads = new RegExp(
+    `(?<![.\\w$])${field}\\s*:(?!:)|(?:\\.${field}|\\[\\s*${field}\\s*\\])\\s*=(?![=>])`, 'g')
+  let out = code
+  for (const m of code.matchAll(heads)) {
+    const from = m.index! + m[0].length
+    const to = exprEnd(code, from)
+    if (read.test(code.slice(from, to))) {
+      out = out.slice(0, m.index!) + ' '.repeat(to - m.index!) + out.slice(to)
+    }
+  }
+  return out
 }
 
 function interfaceBody(src: string, iface: string): string | null {
@@ -87,14 +184,11 @@ export function extendsOf(src: string, iface: string): string[] {
  * value into an output object; nothing branches on it.
  */
 export function isConsumed(field: string, sources: readonly string[]): boolean {
-  // An object property whose value mentions `.field` anywhere before the next
-  // `,` `}` or line end: `field: cfg.field`, `field: Number(cfg.field)`,
-  // `field: (cfg.field)`.
-  const propertyEcho = new RegExp(`\\b${field}\\s*:[^,}\\n]*\\.${field}\\b`, 'g')
-  // An assignment copying it across: `out.field = cfg.field`.
-  const assignEcho = new RegExp(`\\.${field}\\s*=(?!=)[^;\\n]*\\.${field}\\b`, 'g')
   const read = new RegExp(`\\.${field}\\b`)
-  return sources.some((src) => read.test(stripComments(src).replace(propertyEcho, '').replace(assignEcho, '')))
+  // Blank comments and strings first; an identifier-only string survives
+  // unquoted, so `out['field'] = …` reads as `out[ field ] = …`, which
+  // stripEchoes recognises as an assignment echo.
+  return sources.some((src) => read.test(stripEchoes(blankNonCode(src), field)))
 }
 
 function walk(dir: string, out: string[] = []): string[] {
@@ -108,6 +202,24 @@ function walk(dir: string, out: string[] = []): string[] {
 }
 
 const files = ROOTS.flatMap((r) => walk(r))
+
+/** `@/lib/...` modules value-imported (not `import type`) by the given sources. */
+export function uiValueImports(uiSources: readonly string[]): Set<string> {
+  const out = new Set<string>()
+  const re = /^import\s+(?!type\b)((?:(?!\nimport\b)[\s\S])*?)\s+from\s+['"]@\/(lib\/[^'"]+)['"]/gm
+  for (const src of uiSources) {
+    for (const m of src.matchAll(re)) {
+      for (const cand of [`${m[2]}.ts`, `${m[2]}.tsx`, `${m[2]}/index.ts`]) {
+        if (files.includes(cand)) out.add(cand)
+      }
+    }
+  }
+  return out
+}
+
+const uiFiles = UI_ROOTS.flatMap((r) => walk(r)).filter((f) => !f.startsWith('app/api/'))
+/** Modules that describe the engine to users rather than run it — derived, not listed. */
+const DISPLAY_MODULES = uiValueImports(uiFiles.map((f) => readFileSync(f, 'utf8')))
 const engineFiles = files.filter((f) => !DISPLAY_MODULES.has(f))
 const sources = engineFiles.map((f) => readFileSync(f, 'utf8'))
 const fieldsByDecl = DECLS.map((d) => ({ d, fields: declaredFields(readFileSync(d.file, 'utf8'), d.iface) }))
@@ -132,7 +244,15 @@ describe('Q-127 — every declared backtest config field has a consumer', () => 
     // DISPLAY_MODULES itself, so EMPTYING the set made the loop vacuous and the
     // test green — caught by mutation R4b.
     expect([...DISPLAY_MODULES]).toContain('lib/backtest/strategyDescription.ts')
+    expect([...DISPLAY_MODULES]).toContain('lib/metricGlossary.ts')
     expect(engineFiles).not.toContain('lib/backtest/strategyDescription.ts')
+    // The derivation sees UI files, and never a server route.
+    expect(uiFiles.length).toBeGreaterThan(50)
+    expect(uiFiles.some((f) => f.startsWith('app/api/'))).toBe(false)
+    // No module that DECIDES on a config field is classified as display.
+    for (const engine of ['lib/backtest/core.ts', 'lib/backtest/signals.ts', 'lib/backtest/portfolioBacktest.ts']) {
+      expect(DISPLAY_MODULES.has(engine), engine).toBe(false)
+    }
     for (const m of DISPLAY_MODULES) {
       expect(files, `${m} is not walked, so its exclusion proves nothing`).toContain(m)
       expect(engineFiles).not.toContain(m)
@@ -196,6 +316,31 @@ describe('Q-127 — every declared backtest config field has a consumer', () => 
     expect(isConsumed('stopLossPct', [optionalEcho])).toBe(false)
     // An object-literal KEY is not a read either — the old rule counted this.
     expect(isConsumed('stopLossPct', ['const DEFAULTS = { stopLossPct: 0.10 }'])).toBe(false)
+  })
+
+  it('POSITIVE CONTROL: the round-2 escapes are echoes or non-code, not reads', () => {
+    const inert = (src: string) => expect(isConsumed('stopLossPct', [src]), src).toBe(false)
+    inert('return { stopLossPct: Math.max(0, cfg.stopLossPct), days }')   // comma inside the value
+    inert('return {\n  stopLossPct:\n    cfg.stopLossPct,\n}')           // split across lines
+    inert("out['stopLossPct'] = cfg.stopLossPct")                          // bracket assignment
+    inert('const days = 5 // was cfg.stopLossPct')                         // trailing comment
+    inert("const note = 'config.stopLossPct is retired'")                  // string literal
+    inert('const note = `retired: ${"x"} cfg.stopLossPct`')               // template text
+    // ...but an interpolation is code: a read inside `${…}` still counts.
+    expect(isConsumed('maxDrawdownCap', ['log(`cap ${cfg.maxDrawdownCap}`)'])).toBe(true)
+    // ...while a real decision in the same shapes still counts.
+    expect(isConsumed('maxDrawdownCap', ['const cap = dd >= cfg.maxDrawdownCap ? 1 : 0'])).toBe(true)
+    expect(isConsumed('maxDrawdownCap', ['const x = on ? cfg.maxDrawdownCap : 0.25; use(x)'])).toBe(true)
+    expect(isConsumed('maxDrawdownCap', ["fetch('https://x.test/a'); if (dd > cfg.maxDrawdownCap) stop()"])).toBe(true)
+  })
+
+  it('POSITIVE CONTROL: display modules are derived from UI imports, type imports excluded', () => {
+    const got = uiValueImports([
+      "import { ENGINE_RULES } from '@/lib/backtest/strategyDescription'",
+      "import type { BacktestResult } from '@/lib/backtest/engine'",
+      "import {\n  getMetric,\n  type MetricMeta,\n} from '@/lib/metricGlossary'",
+    ])
+    expect([...got].sort()).toEqual(['lib/backtest/strategyDescription.ts', 'lib/metricGlossary.ts'])
   })
 
   it('POSITIVE CONTROL: a member read that drives a decision IS a read', () => {

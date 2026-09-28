@@ -1,6 +1,6 @@
 # Q-105 — the /backtest page described a strategy the engine had stopped running
 
-**Date:** 2026-09-27 · **Ticket:** Q-105 · **Ledger:** Q085-1, Q105-C1 (resolved), Q105-1, Q105-2, Q105-R1…R8 (new)
+**Date:** 2026-09-27 · **Ticket:** Q-105 · **Ledger:** Q085-1, Q105-C1 (resolved), Q105-1, Q105-2, Q105-R1…R8, Q105-R2-1…R2-7 (new)
 **Kind:** contract change (wire field removed) plus user-visible copy correction. **No calculation changed**,
 and the A/B below proves it.
 
@@ -145,3 +145,36 @@ the Signals tab showed BUY 15%, HOLD —, SELL —.
 left the guard green, because the test proving "the exclusion is live" looped over that same set, and a loop
 over an empty set asserts nothing. That is the vacuous-pass shape again, inside the test written to prevent
 it. It now names the module explicitly.
+
+## Red-team round 2 — nothing blocking; two guard claims were narrower than stated
+
+Round 2 was scoped to the text I rewrote in round 1. It found **no false sentence reaching a user on the
+production path**. It re-hashed the engine output again and got identical results in both modes. It could not
+break:
+- the Exit wording or the "61 bars open-to-open" doc;
+- `ENGINE_SUMMARY` or `ENGINE_ONE_LINE`;
+- any `regime` or `dipSignal` state or boundary;
+- the `confidence` figures (75, 90 when RSI is below 35, 78–88);
+- the Reason tooltip;
+- the reach of the copy scan (all 8 `metricKey`s on `/backtest`, with no other route into the glossary).
+
+| Id | Severity | Finding | Resolution |
+|---|---|---|---|
+| R2-1 | MEDIUM | My R4 fix was narrower than claimed. `field: Math.max(0, cfg.field)` (a comma inside the value), a property split across lines, `out['field'] = cfg.field`, a trailing `// was cfg.field` comment and a string mentioning `config.field` all still counted as reads. `DISPLAY_MODULES` was a two-file hand-picked list, so the next copy module would re-arm R4 | **Fixed.** A tokenizer now blanks comments and string text while keeping `${…}` interpolations as code, and echo spans are found by a balanced-bracket scan. Display modules are **derived** as whatever UI files value-import; a module that is both would err loud. Mutation: a new UI-imported copy module standing in for every deleted engine read now fails |
+| R2-2 | MEDIUM | "15% of cash at entry" was unpinned. Sizing every trade off `initialCapital` passed both new tests, because the first trade cannot tell the two apart | **Fixed.** A later trade must exceed the first allocation, which only compounding can produce. The fixed-dollar mutation fails |
+| R2-3 | LOW-MEDIUM | The Signals tab's Size column showed "15%" on a BUY the engine would skip (BTC), repeating R1 on another surface | **Fixed.** `positionSizeLabel` takes the price and returns "skipped" above the first allocation |
+| R2-4 | LOW | The SELL row was wrong while the slope is unmeasurable. 482 deep-dip bar-instances were HOLD, not SELL. The page's own tooltip already said so | **Fixed**, and pinned to classifier behaviour, not just to the copy |
+| R2-5 | LOW | "A BUY that cannot afford one share" misstated the cause; the binding limit is the 15% allocation, not the cash | **Fixed** ("a BUY whose allocation cannot buy one share") |
+| R2-6 | LOW | "Fixed per zone" is really fixed per zone and outcome, and RSI raises confidence only on a buyable mild dip | **Fixed** |
+| R2-7 | LOW | The `confidence` glossary has a latent second render site (`SectorCard`, non-session branch), which is dead only because Q-135's producer gap leaves it unreachable | Recorded. The new wording is accurate there too; Q-135 owns the dead branch |
+
+The reviewer's 8 fresh paraphrases still pass the copy guard. That falls within the asserted CANNOT-DO: it is a
+blacklist, and incomplete by construction.
+
+**Mutations: 27, all fail as designed.** Two survived their first run and were fixed:
+- **R2-4:** nothing asserted the new unknown-slope clause.
+- **M12:** its target text had moved. The harness's target-count assertion stopped the run instead of counting a
+  no-op mutation as a kill.
+
+Out of scope, filed as **Q-139**: "5Y walk-forward" describes a single pass over roughly 4.2 traded years with
+no fitted parameters.

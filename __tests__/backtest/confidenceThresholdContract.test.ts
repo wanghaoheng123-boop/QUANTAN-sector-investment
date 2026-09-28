@@ -109,6 +109,18 @@ describe('the regime-only path — the production default — does NOT read it',
     expect(first.reason).toContain('regime-only path')
   }, 120_000)
 
+  it('R2-2: later positions are sized on CURRENT cash, not the starting capital', () => {
+    // Round 2: sizing every trade off `initialCapital` passed the test above,
+    // because on the FIRST trade the two are equal by construction. After a
+    // profitable trade, cash exceeds the start — and only compounding sizing
+    // can then open a position worth more than the first allocation.
+    const r = backtestInstrument(TICKER, SECTOR, rows)
+    const allocation = DEFAULT_CONFIG.initialCapital * REGIME_PATH_POSITION_FRACTION.half
+    const later = r.closedTrades.slice(1)
+    expect(later.length).toBeGreaterThan(0)
+    expect(later.some((t) => t.value > allocation), 'no later trade exceeds the first allocation').toBe(true)
+  }, 120_000)
+
   it('R1: a BUY that cannot afford one whole share is skipped — BTC never trades at this capital', () => {
     // The disclosure in the Rules grid ("an instrument priced above $15,000
     // cannot open its first position") is pinned to what the engine does.
