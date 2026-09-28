@@ -37,6 +37,14 @@ export const LIQ_DETAIL_LIMIT = 100
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000
 
+/**
+ * Q-138 round 2: a feed whose NEWEST liquidation is older than this is treated
+ * as frozen. Measured null, 2026-09-28: the largest gap between consecutive
+ * BTC-USDT-SWAP liquidations over a full 24h (1,734 records) was 132 minutes.
+ * 6h is ~2.7× that. One day of data — revisit if it ever fires on a live feed.
+ */
+export const LIQ_FROZEN_AFTER_MS = 6 * 60 * 60 * 1000
+
 type OkxLiqDetail = {
   bkPx?: string
   sz?: string
@@ -56,8 +64,10 @@ export type LiquidationSummary = {
   /** Long positions liquidated — forced SELLS (`posSide: long`, `side: sell`). */
   sellLiquidations: number
   /**
-   * Counted but neither pairing — e.g. `posSide: net` (one-way mode), which
-   * OKX documents; 0 of ~1,640 on 2026-09-28. In the total, in neither side.
+   * Counted but CONTRADICTORY — a long closed by a buy, a short by a sell, or
+   * an unknown `posSide`. Never observed; `liquidationFeedProblem` degrades on
+   * any. (`posSide: net`, one-way mode, is NOT contradictory: it is classified
+   * by `side` — red-team round 2 HIGH-1.)
    */
   unclassifiedLiquidations: number
   /** USDT notional of short liquidations: Σ bkPx × sz × ctVal, at OKX's reported liquidation price. */
@@ -70,9 +80,12 @@ export type LiquidationSummary = {
   windowStart: string | null
   /** True when OKX returned its maximum, so older liquidations exist that were not seen. */
   truncated: boolean
-  /** Rows OKX returned at all, and rows for this instrument — for the feed-problem check. */
+  /** Newest liquidation counted (ms), or null — for the frozen-feed check. */
+  newestAt: number | null
+  /** Rows OKX returned at all, rows and details for this instrument — for the feed-problem check. */
   rowsReturned: number
   instrumentRows: number
+  detailsReturned: number
   /** Details for this instrument whose price, size or time could not be read. */
   unreadable: number
 }
@@ -81,8 +94,11 @@ export type LiquidationSummary = {
  * Pure summary of OKX `liquidation-orders` rows. Exported for tests.
  *
  * Side mapping (OKX public liquidation orders): a liquidated LONG is closed by
- * a forced SELL (`posSide: long`, `side: sell`); a liquidated SHORT by a forced
- * BUY. Any other pairing is counted as unclassified.
+ * a forced SELL, a liquidated SHORT by a forced BUY. `posSide` is `long` or
+ * `short` in long/short mode and `net` in one-way mode (OKX field docs); in
+ * one-way mode `side` alone says which way the position was, so `net` is
+ * classified by `side`. A `long` with `side: buy` (or a `short` with `sell`,
+ * or any other `posSide`) is contradictory and counted as unclassified.
  */
 export function summariseLiquidations(rows: readonly OkxLiqRow[], now: number): LiquidationSummary {
   const mine = rows.filter((r) => r.instId === LIQ_INST_ID)
@@ -105,11 +121,12 @@ export function summariseLiquidations(rows: readonly OkxLiqRow[], now: number): 
       time,
     })
   }
-  const longLiq = flat.filter((x) => x.posSide === 'long' && x.side === 'sell')
-  const shortLiq = flat.filter((x) => x.posSide === 'short' && x.side === 'buy')
+  const longLiq = flat.filter((x) => x.side === 'sell' && (x.posSide === 'long' || x.posSide === 'net'))
+  const shortLiq = flat.filter((x) => x.side === 'buy' && (x.posSide === 'short' || x.posSide === 'net'))
   const buyVolume = shortLiq.reduce((s, x) => s + x.usd, 0)
   const sellVolume = longLiq.reduce((s, x) => s + x.usd, 0)
   const oldest = flat.reduce((m, x) => Math.min(m, x.time), Infinity)
+  const newest = flat.reduce((m, x) => Math.max(m, x.time), -Infinity)
   return {
     totalLiquidations: flat.length,
     buyLiquidations: shortLiq.length,
@@ -121,8 +138,10 @@ export function summariseLiquidations(rows: readonly OkxLiqRow[], now: number): 
     windowStart: Number.isFinite(oldest) ? new Date(oldest).toISOString() : null,
     // Judged on what OKX RETURNED, not on what survived the 24h filter.
     truncated: details.length >= LIQ_DETAIL_LIMIT,
+    newestAt: Number.isFinite(newest) ? newest : null,
     rowsReturned: rows.length,
     instrumentRows: mine.length,
+    detailsReturned: details.length,
     unreadable,
   }
 }
@@ -136,15 +155,27 @@ export function summariseLiquidations(rows: readonly OkxLiqRow[], now: number): 
  * so zero counted is not a plausible reading either. Each case returns the
  * reason to show the user; null means the summary can be displayed.
  */
-export function liquidationFeedProblem(s: LiquidationSummary): string | null {
+export function liquidationFeedProblem(s: LiquidationSummary, now: number): string | null {
+  const plural = (n: number) => (n === 1 ? '' : 's')
   if (s.rowsReturned > 0 && s.instrumentRows === 0) {
     return `OKX returned liquidation rows, but none for ${LIQ_INST_ID}.`
   }
   if (s.unreadable > 0) {
-    return `OKX returned ${s.unreadable} liquidation record${s.unreadable === 1 ? '' : 's'} this panel could not read.`
+    return `OKX returned ${s.unreadable} liquidation record${plural(s.unreadable)} this panel could not read.`
+  }
+  if (s.unclassifiedLiquidations > 0) {
+    return `OKX returned ${s.unclassifiedLiquidations} liquidation record${plural(s.unclassifiedLiquidations)} whose side contradicts the position.`
   }
   if (s.totalLiquidations === 0) {
-    return 'OKX returned no liquidations in the last 24h; a quiet market cannot be told apart from a feed problem here.'
+    // Round 2: say what actually happened. Records dated outside the window
+    // (e.g. timestamps in seconds) are not "no liquidations".
+    return s.detailsReturned > 0
+      ? `OKX returned ${s.detailsReturned} liquidation record${plural(s.detailsReturned)}, none dated within the last 24h.`
+      : 'OKX returned no liquidations; a quiet market cannot be told apart from a feed problem here.'
+  }
+  if (s.newestAt != null && now - s.newestAt > LIQ_FROZEN_AFTER_MS) {
+    const h = ((now - s.newestAt) / 3_600_000).toFixed(1)
+    return `The newest liquidation OKX returned is ${h}h old; the feed may be frozen.`
   }
   return null
 }

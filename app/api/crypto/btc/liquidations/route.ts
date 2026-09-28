@@ -33,7 +33,6 @@ function unavailable(source: string, userMessage: string, error?: unknown) {
       totalLiquidations: null,
       buyLiquidations: null,
       sellLiquidations: null,
-      unclassifiedLiquidations: null,
       buyVolume: null,
       sellVolume: null,
       netDirection: null,
@@ -85,14 +84,13 @@ export async function GET(request: Request) {
     const s = summariseLiquidations(json.data, now)
     // Red-team HIGH-1: a well-formed response can still be unusable (schema
     // drift, no row for the instrument, nothing counted). Fail closed.
-    const problem = liquidationFeedProblem(s)
+    const problem = liquidationFeedProblem(s, now)
     if (problem) return unavailable('OKX (unusable response)', problem)
 
     const result = {
       totalLiquidations: s.totalLiquidations,
       buyLiquidations: s.buyLiquidations,
       sellLiquidations: s.sellLiquidations,
-      unclassifiedLiquidations: s.unclassifiedLiquidations,
       buyVolume: s.buyVolume,
       sellVolume: s.sellVolume,
       netDirection: s.netDirection,

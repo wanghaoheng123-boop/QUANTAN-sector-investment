@@ -1,6 +1,6 @@
 # Q-138 — every number on the BTC liquidations panel was wrong, each in a different way
 
-**Date:** 2026-09-28 · **Ticket:** Q-138 · **Ledger:** Q138-1 … Q138-6, Q138-R1 … Q138-R7
+**Date:** 2026-09-28 · **Ticket:** Q-138 · **Ledger:** Q138-1 … Q138-6, Q138-R1 … R7, Q138-R2-1 … R2-6
 **Kind:** migration note. A displayed calculation changes: USD volumes fall by exactly 100×. The wire
 semantics on failure change too, from `0` to `null`.
 
@@ -23,7 +23,7 @@ semantics on failure change too, from `0` to `null`.
 
 - **`lib/data/providers/okxLiquidations.ts`** (new, pure):
   - `summariseLiquidations` filters to `BTC-USDT-SWAP` and prices at the cited `BTC_USDT_SWAP_CT_VAL`.
-  - It counts **unreadable** records and **unclassified** ones, i.e. neither pairing (for example `posSide: net`).
+  - It classifies by `side` (one-way `posSide: net` included) and counts **unreadable** and **contradictory** records; either degrades the response (round 2).
   - It reports `windowStart`, and `truncated` judged on what OKX *returned*.
   - `liquidationFeedProblem` decides whether a well-formed response is a measurement at all (below).
   - It lives outside the route because an App Router route may export only handlers and config. `tsc` over
@@ -68,8 +68,8 @@ figures. What it broke was two display paths and five sentences this package wro
 | R6 | MEDIUM | The rewritten Analysis intro still claimed derivatives inputs, but the Analysis tab reads only the candles | Rewritten to list what it reads and say what it does not |
 | R7 | MEDIUM/LOW | Records and details: the backlog marked Q-138 done before any production check. The code comment said "documented maximum" when the cap is empirical. `bkPx` was called the bankruptcy price with "USD" notional. "Last updated: just now" appeared beside a failure. `$1000.0K` at unit boundaries. Nav still said "on-chain". Two ledger citations used the wrong tree's lines. The display fixture reused live figures without a derivation | All fixed. The backlog stays `partial` until the post-deploy check. The display fixture is now hand-made round numbers |
 
-The net-mode side (`posSide: net`, 0 of 1,640 seen) is now counted as **unclassified** and disclosed on the
-card, instead of silently shrinking both sides.
+*(Round 2 revised the net-mode handling below: counting `posSide: net` as "unclassified" was itself the
+next defect.)*
 
 ## Tests and mutations
 
@@ -98,3 +98,30 @@ all failing as designed, including every one the red team showed surviving:
   needs a structural detector. → **Q-140**
 - A sticky client banner (`derivativesError` is never cleared on success) and a CDN that serves success
   bodies up to ≈ 30s old both predate this package. → Q-140 notes.
+
+## Red-team round 2 — the "unclassified" disclosure was the next defect
+
+Round 2 could not break the round-1 degrade rules on real data. They are not too eager: 0 unreadable
+records in 1,734 BTC-USDT-SWAP details over 24h, and none in 2,987 across 150 other underlyings. The
+largest gap between liquidations was 132 minutes. It also could not break the `nextLiqState` transitions,
+the render tests, the comment stripper on the current tree, the config guard after the helper move, the
+scope note, the nav hint, or re-verification (2). It broke these:
+
+| Id | Severity | Finding | Resolution |
+|---|---|---|---|
+| R2-1 | HIGH | A response made entirely of `posSide: net`, a value OKX documents for one-way mode, rendered "Balanced" with no flag. The round-1 fix degraded on an *unobserved* unreadable record but left the *documented* case open. The note's "disclosed on the card" was overstated: the bias card beside it contradicted it | `net` is **classified by `side`**, since a forced sell closes a long in either mode. A genuinely contradictory pairing (a long closed by a buy) now **degrades**. "Unclassified" is gone from the card and the wire |
+| R2-2 | MEDIUM | The I2 cache-flag guard for this panel passed only because of an import left over from the liquidations tab. Deleting the dead import turned CI red, while `cached={false}` stayed green | The panel now **owns its fetch, state and polling**, so the file that reads `_cached` renders the badge. The lab renders a real badge for its *own* metrics cache flag instead of the text "(cached)" |
+| R2-3 | MEDIUM | "Tested through a real render" was overstated. The lab-to-panel wiring was checked by substring: an early `return` before the transition, `fetched={false}` and `cached={false}` all survived | No wiring is left in the lab (it holds no liquidation state). The container is tested in **jsdom** with a mocked `fetch`: a good answer, a 429 after a good answer, a degraded answer after a good one, and a network error with nothing to keep. A Refresh button makes the second fetch drivable |
+| R2-4 | MEDIUM | "This analysis reads only the daily candles" is false when the chart was last loaded at another timeframe. A reverted sentence could also hide behind a JSX comment placed after an apostrophe, because the tokenizer was not JSX-aware | The sentence now names the dependency: "last loaded on the Chart tab (daily unless you changed the timeframe there)". `stripComments` now uses the **TypeScript emitter** (`removeComments`, JSX preserved) instead of a hand tokenizer. The pre-existing "200-Day" and "20-week" labels on that tab are Q-141 |
+| R2-5 | LOW | A frozen feed (newest record 20h old) rendered unflagged. Timestamps in seconds degraded with the wrong reason. "Last attempt: —" appeared straight after an attempt. An empty 200 left a blank panel with no reason. Raw codes and an internal path reached users. A card under a new label could re-read the payload | A frozen-feed check (newest record more than 6h old, about 2.7× the measured 132-minute maximum gap). A precise "none dated within the last 24h" message. Every unknown carries its attempt time. `isLiqPayload` validates `ok` bodies. `friendlyFailure` produces user-facing wording. The lab may not reference the liquidation payload at all |
+| R2-6 | LOW | "$" beside a note saying USDT, and one wrong ledger citation | Values now read "1.68M USDT". The citation is fixed |
+
+**The "jsdom hangs locally" claim was false.** It was in CLAUDE.md, in memory, and in comments I wrote in
+this package, and it is why I first built node-side render tests to work around it. The check I used to confirm
+it ran `timeout 120 npx vitest …`, and macOS has no `timeout` command. It exited 127 instantly with no output,
+which I read as a hang. All 15 component and hook test files (11 in jsdom) run locally in 3 seconds.
+
+**Mutations, round 2: 19, all fail as designed.** They cover the reviewer's survivors (early return, badge,
+`fetched`, Refresh, the S1 comment trick, X1) and every new check. Re-verified against a third independent
+pull: 100/93/7, 1,676,725 / 6,548 USDT, identical oldest timestamp. The panel read
+"latest 100 only · last 27m · 1.68M USDT · Longs liquidated more".

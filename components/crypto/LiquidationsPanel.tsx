@@ -1,40 +1,62 @@
 'use client'
 
 /**
- * Q-138 — the Liquidations tab of the BTC Quant Lab, extracted as a props-only
- * component so its RENDERED output can be tested in node with
- * react-dom/server (jsdom tests are CI-only on this machine). All wording and
- * state transitions live in lib/liquidationDisplay.ts.
+ * Q-138 — the Liquidations tab of the BTC Quant Lab.
+ *
+ * `LiquidationsPanel` owns its fetch, polling and state; the lab renders it
+ * with no props. Round 2 of the red team broke the earlier split, where the
+ * lab held the state and passed it down: an early `return` before the state
+ * transition, or `cached={false}`, went untested — and the I2 cache-flag
+ * guard for this panel was passing only because of a dead import. Nothing in
+ * the lab reads liquidation data any more, so there is no wiring left to break
+ * there, and the file that reads `_cached` is the file that renders the badge.
+ *
+ * `LiquidationsView` is props-only and render-tested with react-dom/server;
+ * the container's fetch wiring is tested in jsdom
+ * (__tests__/components/crypto/LiquidationsPanel.test.tsx). All wording and
+ * transitions live in lib/liquidationDisplay.ts.
  */
 
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { DataFreshnessIndicator } from '@/components/DataFreshnessIndicator'
+import { fetchJsonSafe } from '@/lib/fetchJsonSafe'
 import { formatFreshness } from '@/lib/format'
 import {
   LIQ_SCOPE_NOTE,
   liquidationCards,
   liquidationFreshnessPrefix,
+  nextLiqState,
   type LiqData,
 } from '@/lib/liquidationDisplay'
 
-interface Props {
+/** Poll interval while the tab is open. */
+export const LIQ_POLL_MS = 60_000
+
+interface ViewProps {
   liq: LiqData | null
   loading: boolean
-  /** Our local fetch has happened at least once. */
+  /** A fetch has completed at least once. */
   fetched: boolean
   cached: boolean
+  onRefresh?: () => void
 }
 
-export function LiquidationsPanel({ liq, loading, fetched, cached }: Props) {
+export function LiquidationsView({ liq, loading, fetched, cached, onRefresh }: ViewProps) {
   return (
     <div>
-      {loading && <div className="text-[10px] text-slate-400 mb-2">Refreshing liquidations data…</div>}
-      {fetched && (
-        <div className="text-[10px] text-slate-400 mb-2 flex items-center gap-2">
-          {/* Q-114: OUR fetch time; crypto trades 24/7, so no us-equity calendar. */}
-          <span>{liquidationFreshnessPrefix(liq)}: {formatFreshness(liq?.fetchedAt)}</span>
-          {cached && <DataFreshnessIndicator cached compact />}
-        </div>
-      )}
+      <div className="text-[10px] text-slate-400 mb-2 flex items-center gap-2 min-h-[1rem]">
+        {loading && <span>Refreshing liquidations data…</span>}
+        {!loading && fetched && (
+          // Q-114: OUR fetch time; crypto trades 24/7, so no us-equity calendar.
+          <span data-testid="liq-freshness">{liquidationFreshnessPrefix(liq)}: {formatFreshness(liq?.fetchedAt)}</span>
+        )}
+        {cached && <DataFreshnessIndicator cached compact />}
+        {onRefresh && (
+          <button type="button" onClick={onRefresh} disabled={loading} className="ml-auto text-slate-400 hover:text-slate-200 underline disabled:opacity-50">
+            Refresh
+          </button>
+        )}
+      </div>
       {liq?.degraded && (
         <div
           role="status"
@@ -56,4 +78,33 @@ export function LiquidationsPanel({ liq, loading, fetched, cached }: Props) {
       <p className="text-[10px] text-slate-400 mt-2">{LIQ_SCOPE_NOTE}</p>
     </div>
   )
+}
+
+export function LiquidationsPanel() {
+  const [liq, setLiq] = useState<LiqData | null>(null)
+  const [cached, setCached] = useState(false)
+  const [fetched, setFetched] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const mounted = useRef(true)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    const result = await fetchJsonSafe('/api/crypto/btc/liquidations')
+    if (!mounted.current) return
+    // Every outcome goes through the one transition; see nextLiqState.
+    setLiq((prev) => nextLiqState(prev, result, new Date().toISOString()))
+    // I2: a served-from-cache answer is badged; any other outcome clears it.
+    setCached(result.ok && (result.data as { _cached?: boolean } | null)?._cached === true)
+    setFetched(true)
+    setLoading(false)
+  }, [])
+
+  useEffect(() => {
+    mounted.current = true
+    void load()
+    const id = setInterval(() => { void load() }, LIQ_POLL_MS)
+    return () => { mounted.current = false; clearInterval(id) }
+  }, [load])
+
+  return <LiquidationsView liq={liq} loading={loading} fetched={fetched} cached={cached} onRefresh={() => { void load() }} />
 }

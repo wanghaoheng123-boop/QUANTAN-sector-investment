@@ -71,19 +71,24 @@ describe('summariseLiquidations — units, sides, window', () => {
     expect(s.unreadable).toBe(2)
   })
 
-  it('red-team A2: a liquidation matching neither pairing is in the total and disclosed', () => {
+  it('round 2 HIGH-1: one-way mode (`posSide: net`, documented by OKX) is classified by side', () => {
+    // A forced SELL closes a long whether the account is long/short or net.
     const net = summariseLiquidations([{ instId: LIQ_INST_ID, details: [
       { bkPx: '80000', sz: '10', posSide: 'net', side: 'sell', ts: String(NOW - MIN) },
+      { bkPx: '80000', sz: '10', posSide: 'net', side: 'buy', ts: String(NOW - MIN) },
       { bkPx: '80000', sz: '10', posSide: 'long', side: 'sell', ts: String(NOW - MIN) },
     ] }], NOW)
-    expect(net).toMatchObject({ totalLiquidations: 2, sellLiquidations: 1, buyLiquidations: 0, unclassifiedLiquidations: 1 })
+    expect(net).toMatchObject({ totalLiquidations: 3, sellLiquidations: 2, buyLiquidations: 1, unclassifiedLiquidations: 0 })
+    expect(liquidationFeedProblem(net, NOW)).toBeNull()
   })
 
-  it('red-team A3: side matters — a long with side "buy" is not a long liquidation', () => {
+  it('red-team A2/A3: a contradictory pairing is counted as unclassified — and degrades', () => {
     const odd = summariseLiquidations([{ instId: LIQ_INST_ID, details: [
       { bkPx: '80000', sz: '10', posSide: 'long', side: 'buy', ts: String(NOW - MIN) },
+      { bkPx: '80000', sz: '10', posSide: 'short', side: 'buy', ts: String(NOW - MIN) },
     ] }], NOW)
-    expect(odd).toMatchObject({ sellLiquidations: 0, buyLiquidations: 0, unclassifiedLiquidations: 1 })
+    expect(odd).toMatchObject({ totalLiquidations: 2, sellLiquidations: 0, buyLiquidations: 1, unclassifiedLiquidations: 1 })
+    expect(liquidationFeedProblem(odd, NOW)).toMatch(/1 liquidation record whose side contradicts the position/)
   })
 
   it('reports the window it actually covers', () => {
@@ -114,23 +119,39 @@ describe('liquidationFeedProblem — a well-formed response is not automatically
   // that match nothing with the same `code: '0', data: []`. A zero here is a
   // feed problem until shown otherwise.
   it('nothing counted → unknown, not zero', () => {
-    expect(liquidationFeedProblem(summariseLiquidations([], NOW))).toMatch(/no liquidations/)
+    expect(liquidationFeedProblem(summariseLiquidations([], NOW), NOW)).toMatch(/returned no liquidations/)
+  })
+
+  it('round 2: records returned but none recent says exactly that (e.g. timestamps in seconds)', () => {
+    const seconds = [{ instId: LIQ_INST_ID, details: [
+      { bkPx: '80000', sz: '10', posSide: 'long', side: 'sell', ts: String(Math.floor((NOW - MIN) / 1000)) },
+    ] }]
+    expect(liquidationFeedProblem(summariseLiquidations(seconds, NOW), NOW)).toBe(
+      'OKX returned 1 liquidation record, none dated within the last 24h.')
+  })
+
+  it('round 2: a frozen feed — newest record hours old — degrades', () => {
+    const frozen = [{ instId: LIQ_INST_ID, details: Array.from({ length: 100 }, (_, i) => (
+      { bkPx: '80000', sz: '10', posSide: 'long', side: 'sell', ts: String(NOW - 20 * 60 * MIN - i * MIN) })) }]
+    expect(liquidationFeedProblem(summariseLiquidations(frozen, NOW), NOW)).toMatch(/newest liquidation OKX returned is 20\.0h old/)
+    const justInside = [{ instId: LIQ_INST_ID, details: [{ bkPx: '80000', sz: '10', posSide: 'long', side: 'sell', ts: String(NOW - 5 * 60 * MIN) }] }]
+    expect(liquidationFeedProblem(summariseLiquidations(justInside, NOW), NOW)).toBeNull()
   })
 
   it('rows, but none for the instrument (e.g. `instId` renamed) → unknown', () => {
     const rows = [{ details: __SYNTHETIC__OKX.rows[0].details }] as OkxLiqRow[]
-    expect(liquidationFeedProblem(summariseLiquidations(rows, NOW))).toMatch(/none for BTC-USDT-SWAP/)
+    expect(liquidationFeedProblem(summariseLiquidations(rows, NOW), NOW)).toMatch(/none for BTC-USDT-SWAP/)
   })
 
   it('records it cannot read (e.g. `sz` renamed) → unknown, even with others counted', () => {
-    expect(liquidationFeedProblem(summariseLiquidations(__SYNTHETIC__OKX.rows, NOW))).toMatch(/2 liquidation records this panel could not read/)
+    expect(liquidationFeedProblem(summariseLiquidations(__SYNTHETIC__OKX.rows, NOW), NOW)).toMatch(/2 liquidation records this panel could not read/)
     const renamed = [{ instId: LIQ_INST_ID, details: [{ bkPx: '80000', size: '5', posSide: 'long', side: 'sell', ts: String(NOW - MIN) }] }] as unknown as OkxLiqRow[]
-    expect(liquidationFeedProblem(summariseLiquidations(renamed, NOW))).toMatch(/could not read/)
+    expect(liquidationFeedProblem(summariseLiquidations(renamed, NOW), NOW)).toMatch(/could not read/)
   })
 
   it('a clean response has no problem', () => {
     const clean = [{ instId: LIQ_INST_ID, details: __SYNTHETIC__OKX.rows[0].details.slice(0, 3) }]
-    expect(liquidationFeedProblem(summariseLiquidations(clean, NOW))).toBeNull()
+    expect(liquidationFeedProblem(summariseLiquidations(clean, NOW), NOW)).toBeNull()
   })
 })
 
@@ -191,6 +212,17 @@ describe('GET /api/crypto/btc/liquidations — a failed feed is unknown, not zer
     expect(body.userMessage).toMatch(/could not read/)
   })
 
+  it('round 2 HIGH-1: an all-net-mode response is a measurement, not "Balanced"', async () => {
+    const allNet = [{ instId: LIQ_INST_ID, details: Array.from({ length: 4 }, (_, i) => (
+      { bkPx: '80000', sz: '10', posSide: 'net', side: i < 3 ? 'sell' : 'buy', ts: String(NOW - (i + 1) * MIN) })) }]
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ code: '0', data: allNet }), { status: 200 }))
+    const { body } = await call()
+    expect(body.degraded).toBeUndefined()
+    // 3 net sells (longs) × 80,000 × 10 × 0.01 = $24,000; 1 net buy (short) = $8,000
+    expect(body).toMatchObject({ sellLiquidations: 3, buyLiquidations: 1, netDirection: 'LONG_BIAS' })
+    expect(body.sellVolume as number).toBeCloseTo(24_000, 6)
+  })
+
   it('an empty `code: 0` response → nulls + degraded, never "0 · Balanced"', async () => {
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ code: '0', data: [] }), { status: 200 }))
     expect((await call()).body).toMatchObject(UNKNOWN)
@@ -205,7 +237,7 @@ describe('GET /api/crypto/btc/liquidations — a failed feed is unknown, not zer
     expect(body.buyLiquidations).toBe(2)
     expect(body.netDirection).toBe('LONG_BIAS')
     expect(body.largeTradeCount).toBeUndefined() // removed: nothing was filtered by size
-    expect(body.unclassifiedLiquidations).toBe(0)
+    expect(body.unclassifiedLiquidations).toBeUndefined() // any contradiction degrades instead
     expect(body.unreadable).toBeUndefined() // diagnostics stay off the wire
     expect(body.windowStart).toBe(new Date(NOW - 90 * MIN).toISOString())
     expect(body.truncated).toBe(false)

@@ -3099,11 +3099,13 @@
     "priority": "P1",
     "status": "partial",
     "files": [
+      "__tests__/components/crypto/LiquidationsPanel.test.tsx",
       "app/api/crypto/btc/liquidations/route.ts",
       "components/SiteNav.tsx",
       "components/crypto/BtcQuantLab.tsx",
       "components/crypto/LiquidationsPanel.tsx",
       "lib/data/providers/okxLiquidations.ts",
+      "lib/fetchJsonSafe.ts",
       "lib/liquidationDisplay.ts"
     ],
     "acceptance_criteria": [
@@ -3117,7 +3119,8 @@
       "npx vitest run __tests__/api/btcLiquidations.test.ts __tests__/lib/liquidationDisplay.test.ts"
     ],
     "notes_2026_09_28": "Found while scoping Q-118: three routes emit degraded:true and no client reads it. Checking the liquidations one against live OKX data found the panel wrong seven ways (see reviews/q138-btc-liquidations-2026-09-28.md). Verified locally against an independent pull: 100/23/77 orders, $166,283/$997,534, identical oldest timestamp.",
-    "resolution_2026_09_28": "Fix complete in PR #229; status stays PARTIAL until verified against an independent OKX pull on production (its own acceptance criterion — red-team R7 caught it marked done early). Red-team round 1 broke two display paths (schema drift rendered '0 · Balanced'; an undated coloured bias card in the signals grid) and five self-describing sentences; all fixed. 20 mutations all fail as designed."
+    "resolution_2026_09_28": "Fix complete in PR #229; status stays PARTIAL until verified against an independent OKX pull on production (its own acceptance criterion — red-team R7 caught it marked done early). Red-team round 1 broke two display paths (schema drift rendered '0 · Balanced'; an undated coloured bias card in the signals grid) and five self-describing sentences; all fixed. 20 mutations all fail as designed.",
+    "resolution_2026_09_28_r2": "Red-team round 2: one HIGH (net-mode records rendered 'Balanced') and three MEDIUM (cache-flag guard green via a dead import; lab-to-panel wiring untested; 'daily candles' false off 1D). All fixed; the panel now owns its fetch. 19 round-2 mutations all fail as designed. Still PARTIAL until production is checked against an independent pull."
   },
   {
     "id": "Q-140",
@@ -3141,5 +3144,24 @@
     ],
     "notes_2026_09_28": "Split from Q-138. /api/briefs sets degraded when more than half of 33 sector calls fail; app/page.tsx reads data.briefs and never the flag, so the landing shows a silently thinned list (the CDN TTL is shortened, the user is not told). metrics degrades mostly visibly (nulls render '—', source reads 'Unavailable') but never shows its userMessage.",
     "notes_2026_09_28_b": "Also from the Q-138 red-team: BtcQuantLab's derivativesError banner is never cleared on a later success (sticky), and the Vercel CDN serves liquidation success bodies up to ~30s old carrying _cached:false (x-vercel-cache STALE)."
+  },
+  {
+    "id": "Q-141",
+    "title": "BTC Quant Lab Analysis labels assume daily candles ('200-Day MA Regime', '20-week' band) but follow whatever timeframe the Chart tab last loaded",
+    "domain": "Frontend/UX",
+    "priority": "P3",
+    "status": "pending",
+    "files": [
+      "components/crypto/BtcQuantLab.tsx",
+      "app/crypto/btc/page.tsx"
+    ],
+    "acceptance_criteria": [
+      "Labels derive from the candles' actual interval, or the Analysis tab always computes on daily candles",
+      "A test pins the label to the interval"
+    ],
+    "verify_commands": [
+      "npm run test"
+    ],
+    "notes_2026_09_28": "Found by the Q-138 round-2 red team. app/crypto/btc/page.tsx passes <BtcQuantLab candles={candles} /> whatever timeframe was last loaded (1m-1M via BtcTabBar); the Analysis tab labels a 200-bar average '200-Day MA Regime' and a 20-bar range position '20-week' band. Q-138 corrected only its own intro sentence."
   }
 ]

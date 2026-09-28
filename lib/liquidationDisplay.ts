@@ -1,7 +1,6 @@
 /**
  * Q-138 — what the BTC liquidations panel says, as pure functions so the
- * wording and the client's state transitions are testable in node (jsdom
- * component tests are CI-only on this machine).
+ * wording and the client's state transitions are testable on their own.
  *
  * Every number the panel showed was wrong in a different way:
  *   - volumes were 100× too large (contracts summed as coins — see
@@ -23,7 +22,6 @@ export interface LiqData {
   totalLiquidations: number | null
   buyLiquidations: number | null
   sellLiquidations: number | null
-  unclassifiedLiquidations?: number | null
   buyVolume: number | null
   sellVolume: number | null
   netDirection: 'LONG_BIAS' | 'SHORT_BIAS' | 'NEUTRAL' | null
@@ -53,16 +51,18 @@ export const LIQ_SCOPE_NOTE =
   'Notional is in USDT at the liquidation price OKX reports.'
 
 /**
- * Money with a unit that fits the magnitude; null is unknown, never $0.
- * Units are chosen AFTER rounding, so 999,960 reads "$1.00M", not "$1000.0K".
+ * Notional with a unit that fits the magnitude, in the contract's settlement
+ * currency (USDT — round 2: a "$" sat beside a note saying USDT); null is
+ * unknown, never zero. Units are chosen AFTER rounding, so 999,960 reads
+ * "1.00M USDT", not "1000.0K USDT".
  */
-export function formatUsdCompact(v: number | null | undefined): string {
+export function formatNotional(v: number | null | undefined): string {
   if (v == null || !Number.isFinite(v)) return '—'
   const a = Math.abs(v)
-  if (a >= 999_995_000) return `$${(v / 1e9).toFixed(2)}B`
-  if (a >= 999_950) return `$${(v / 1e6).toFixed(2)}M`
-  if (a >= 999.5) return `$${(v / 1e3).toFixed(1)}K`
-  return `$${v.toFixed(0)}`
+  if (a >= 999_995_000) return `${(v / 1e9).toFixed(2)}B USDT`
+  if (a >= 999_950) return `${(v / 1e6).toFixed(2)}M USDT`
+  if (a >= 999.5) return `${(v / 1e3).toFixed(1)}K USDT`
+  return `${v.toFixed(0)} USDT`
 }
 
 function count(n: number | null | undefined, noun: string): string {
@@ -98,65 +98,84 @@ export function liquidationBias(netDirection: LiqData['netDirection'] | undefine
 /** The four cards on the Liquidations tab. */
 export function liquidationCards(liq: LiqData | null): LiqCard[] {
   const bias = liquidationBias(liq?.netDirection)
-  const unclassified = liq?.unclassifiedLiquidations
   return [
     {
       label: 'Liquidations',
       value: liq?.totalLiquidations == null ? '—' : String(liq.totalLiquidations),
-      sub: liquidationWindowLabel(liq) + (unclassified ? ` · ${unclassified} unclassified` : ''),
+      sub: liquidationWindowLabel(liq),
       color: AMBER,
     },
     {
       label: 'Long liquidations (forced sells)',
-      value: formatUsdCompact(liq?.sellVolume),
+      value: formatNotional(liq?.sellVolume),
       sub: count(liq?.sellLiquidations, 'order'),
       color: RED,
     },
     {
       label: 'Short liquidations (forced buys)',
-      value: formatUsdCompact(liq?.buyVolume),
+      value: formatNotional(liq?.buyVolume),
       sub: count(liq?.buyLiquidations, 'order'),
       color: GREEN,
     },
-    { label: 'Net bias', value: bias.value, sub: 'by USDT notional, same window', color: bias.color },
+    { label: 'Net bias', value: bias.value, sub: 'by notional, same window', color: bias.color },
   ]
 }
 
-/** An unknown, stated — every figure null, with the reason. */
-export function unknownLiq(userMessage: string): LiqData {
+/** An unknown, stated — every figure null, with the reason and the attempt time. */
+export function unknownLiq(userMessage: string, attemptedAt?: string): LiqData {
   return {
-    totalLiquidations: null, buyLiquidations: null, sellLiquidations: null, unclassifiedLiquidations: null,
+    totalLiquidations: null, buyLiquidations: null, sellLiquidations: null,
     buyVolume: null, sellVolume: null, netDirection: null, windowStart: null, truncated: null,
-    degraded: true, userMessage,
+    degraded: true, userMessage, ...(attemptedAt ? { fetchedAt: attemptedAt } : {}),
   }
 }
 
 /**
- * The client's state transition after one fetch. Red-team MEDIUM-1: failures
- * the route never sees — the rate limiter's 429, a platform 5xx, the browser's
- * own network error — used to leave the LAST GOOD numbers on screen with
- * nothing on the panel saying so. They now stay only if marked: same figures,
- * `degraded`, and a message that says they are from the last successful load.
- * A route answer (including a degraded one) always replaces what was there.
+ * A client-side failure in words a user can act on. Round 2: the raw text
+ * leaked an internal path ("/api/crypto/btc/liquidations → invalid JSON
+ * (HTTP 504)") and codes like "rate_limited".
  */
-export function nextLiqState(
-  prev: LiqData | null,
-  result: { ok: true; data: unknown } | { ok: false; message: string },
-): LiqData {
-  if (result.ok) return result.data as LiqData
+export function friendlyFailure(message: string): string {
+  const http = /HTTP (\d{3})/.exec(message)
+  if (/rate.?limit/i.test(message) || http?.[1] === '429') return 'too many requests — try again shortly'
+  if (http) return `server error ${http[1]}`
+  return 'network error'
+}
+
+/** Parse, don't validate: an `ok` body that is not a liquidation payload is a failure. */
+export function isLiqPayload(data: unknown): data is LiqData {
+  if (data == null || typeof data !== 'object') return false
+  const t = (data as Record<string, unknown>).totalLiquidations
+  return t === null || (typeof t === 'number' && Number.isFinite(t))
+}
+
+type FetchResult = { ok: true; data: unknown } | { ok: false; message: string }
+
+/**
+ * The client's transition for the liquidation FIGURES after one fetch.
+ * Red-team round 1 MEDIUM-1: failures the route never sees — the rate
+ * limiter's 429, a platform 5xx, the browser's own network error — used to
+ * leave the LAST GOOD numbers on screen with nothing on the panel saying so.
+ * They now stay only if marked. A route answer (including a degraded one)
+ * always replaces what was there. Round 2: an `ok` body that is not a payload
+ * (an empty 200) is a failure, and every unknown carries its attempt time.
+ */
+export function nextLiqState(prev: LiqData | null, result: FetchResult, attemptedAt: string): LiqData {
+  if (result.ok && isLiqPayload(result.data)) return result.data
+  const reason = result.ok ? 'unreadable response' : friendlyFailure(result.message)
   if (!prev || prev.totalLiquidations == null) {
-    return unknownLiq(`Liquidation data could not be loaded (${result.message}).`)
+    return unknownLiq(`Liquidation data could not be loaded (${reason}).`, attemptedAt)
   }
   return {
     ...prev,
     degraded: true,
-    userMessage: `The latest refresh failed (${result.message}); these figures are from the last successful load.`,
+    userMessage: `The latest refresh failed (${reason}); these figures are from the last successful load.`,
   }
 }
 
 /**
  * "Last updated" only when there are figures to date; a response carrying no
- * figures has only an attempt time. Red-team LOW: the panel read "Last
+ * figures has only an attempt time. Red-team round 1 LOW: the panel read "Last
  * updated: just now" beside "Liquidation feed failed to load."
  */
 export function liquidationFreshnessPrefix(liq: LiqData | null): string {
