@@ -116,12 +116,18 @@ scope note, the nav hint, or re-verification (2). It broke these:
 | R2-5 | LOW | A frozen feed (newest record 20h old) rendered unflagged. Timestamps in seconds degraded with the wrong reason. "Last attempt: —" appeared straight after an attempt. An empty 200 left a blank panel with no reason. Raw codes and an internal path reached users. A card under a new label could re-read the payload | A frozen-feed check (newest record more than 6h old, about 2.7× the measured 132-minute maximum gap). A precise "none dated within the last 24h" message. Every unknown carries its attempt time. `isLiqPayload` validates `ok` bodies. `friendlyFailure` produces user-facing wording. The lab may not reference the liquidation payload at all |
 | R2-6 | LOW | "$" beside a note saying USDT, and one wrong ledger citation | Values now read "1.68M USDT". The citation is fixed |
 
-**The "jsdom hangs locally" claim was false.** It was in CLAUDE.md, in memory, and in comments I wrote in
-this package, and it is why I first built node-side render tests to work around it. The check I used to confirm
-it ran `timeout 120 npx vitest …`, and macOS has no `timeout` command. It exited 127 instantly with no output,
-which I read as a hang. All 15 component and hook test files (11 in jsdom) run locally in 3 seconds.
+**"jsdom tests are CI-only on this machine" is false as of 2026-09-28.** The claim was in CLAUDE.md, in
+memory, and in comments I wrote in this package, and it is why I first built node-side render tests to work
+around it. All 15 component and hook test files (11 in jsdom) run locally in 3 seconds. My own contrary check
+this session was invalid: it ran `timeout 120 npx vitest …`, macOS has no `timeout` command, and the exit 127
+with no output looked like a hang. Why the earlier note said CI-only is not established.
 
 **Mutations, round 2: 19, all fail as designed.** They cover the reviewer's survivors (early return, badge,
 `fetched`, Refresh, the S1 comment trick, X1) and every new check. Re-verified against a third independent
 pull: 100/93/7, 1,676,725 / 6,548 USDT, identical oldest timestamp. The panel read
 "latest 100 only · last 27m · 1.68M USDT · Longs liquidated more".
+
+**Not yet adversarially reviewed.** The code round 2 produced has had no red-team pass of its own. That
+covers the self-fetching container, the TypeScript-emitter comment stripper, and the 6h frozen-feed threshold,
+which was set from one day of data. It is pinned by the 19 mutations above, but a mutation pins what I thought
+of, not what a reviewer would.
