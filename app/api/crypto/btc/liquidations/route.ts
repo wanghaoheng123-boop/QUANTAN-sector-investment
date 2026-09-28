@@ -1,7 +1,13 @@
 import { NextResponse } from 'next/server'
 import { applyRateLimit } from '@/lib/api/rateLimit'
 import { sanitizeError } from '@/lib/api/sanitize'
-import { LIQ_DETAIL_LIMIT, LIQ_INST_ID, summariseLiquidations, type OkxLiqRow } from '@/lib/data/providers/okxLiquidations'
+import {
+  LIQ_DETAIL_LIMIT,
+  LIQ_INST_ID,
+  liquidationFeedProblem,
+  summariseLiquidations,
+  type OkxLiqRow,
+} from '@/lib/data/providers/okxLiquidations'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,8 +21,10 @@ const CACHE_TTL_MS = 10_000
  * `totalLiquidations: 0 … netDirection: 'NEUTRAL'` beside `degraded: true`, and
  * no client read `degraded`, so an OKX outage rendered as "0 liquidations,
  * $0.0M, NEUTRAL" — a calm market that nobody measured. Every figure is null
- * now; HTTP stays 200 so the client replaces the last good numbers instead of
- * leaving them on screen.
+ * now. HTTP stays 200 so the client replaces the last good numbers with this
+ * explicit unknown; failures this route never sees (the rate limiter's 429, a
+ * platform 5xx, the client's own network error) are handled client-side by
+ * `nextLiqState` in lib/liquidationDisplay.ts, which marks the numbers stale.
  */
 function unavailable(source: string, userMessage: string, error?: unknown) {
   const detail = error === undefined ? undefined : sanitizeError(error)
@@ -25,6 +33,7 @@ function unavailable(source: string, userMessage: string, error?: unknown) {
       totalLiquidations: null,
       buyLiquidations: null,
       sellLiquidations: null,
+      unclassifiedLiquidations: null,
       buyVolume: null,
       sellVolume: null,
       netDirection: null,
@@ -73,8 +82,22 @@ export async function GET(request: Request) {
       return unavailable('OKX (no rows)', 'No liquidation data returned from OKX.')
     }
 
+    const s = summariseLiquidations(json.data, now)
+    // Red-team HIGH-1: a well-formed response can still be unusable (schema
+    // drift, no row for the instrument, nothing counted). Fail closed.
+    const problem = liquidationFeedProblem(s)
+    if (problem) return unavailable('OKX (unusable response)', problem)
+
     const result = {
-      ...summariseLiquidations(json.data, now),
+      totalLiquidations: s.totalLiquidations,
+      buyLiquidations: s.buyLiquidations,
+      sellLiquidations: s.sellLiquidations,
+      unclassifiedLiquidations: s.unclassifiedLiquidations,
+      buyVolume: s.buyVolume,
+      sellVolume: s.sellVolume,
+      netDirection: s.netDirection,
+      windowStart: s.windowStart,
+      truncated: s.truncated,
       source: `OKX public liquidation orders (${LIQ_INST_ID})`,
       fetchedAt: new Date().toISOString(),
     }

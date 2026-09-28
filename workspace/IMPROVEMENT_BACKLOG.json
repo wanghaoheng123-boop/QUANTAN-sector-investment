@@ -3097,12 +3097,14 @@
     "title": "Every number on the BTC liquidations panel was wrong: 100x volumes, a '24h' window of ~1.4h, swapped long/short, an inverted bias, and a failed feed shown as zeros",
     "domain": "Data/Integrity",
     "priority": "P1",
-    "status": "done",
+    "status": "partial",
     "files": [
       "app/api/crypto/btc/liquidations/route.ts",
+      "components/SiteNav.tsx",
+      "components/crypto/BtcQuantLab.tsx",
+      "components/crypto/LiquidationsPanel.tsx",
       "lib/data/providers/okxLiquidations.ts",
-      "lib/liquidationDisplay.ts",
-      "components/crypto/BtcQuantLab.tsx"
+      "lib/liquidationDisplay.ts"
     ],
     "acceptance_criteria": [
       "USD notional uses OKX's contract size (0.01 BTC per BTC-USDT-SWAP contract), cited",
@@ -3115,7 +3117,7 @@
       "npx vitest run __tests__/api/btcLiquidations.test.ts __tests__/lib/liquidationDisplay.test.ts"
     ],
     "notes_2026_09_28": "Found while scoping Q-118: three routes emit degraded:true and no client reads it. Checking the liquidations one against live OKX data found the panel wrong seven ways (see reviews/q138-btc-liquidations-2026-09-28.md). Verified locally against an independent pull: 100/23/77 orders, $166,283/$997,534, identical oldest timestamp.",
-    "resolution_2026_09_28": "SHIPPED (pending merge at time of writing). 12 mutations fail as designed."
+    "resolution_2026_09_28": "Fix complete in PR #229; status stays PARTIAL until verified against an independent OKX pull on production (its own acceptance criterion — red-team R7 caught it marked done early). Red-team round 1 broke two display paths (schema drift rendered '0 · Balanced'; an undated coloured bias card in the signals grid) and five self-describing sentences; all fixed. 20 mutations all fail as designed."
   },
   {
     "id": "Q-140",
@@ -3137,6 +3139,7 @@
     "verify_commands": [
       "npm run test"
     ],
-    "notes_2026_09_28": "Split from Q-138. /api/briefs sets degraded when more than half of 33 sector calls fail; app/page.tsx reads data.briefs and never the flag, so the landing shows a silently thinned list (the CDN TTL is shortened, the user is not told). metrics degrades mostly visibly (nulls render '—', source reads 'Unavailable') but never shows its userMessage."
+    "notes_2026_09_28": "Split from Q-138. /api/briefs sets degraded when more than half of 33 sector calls fail; app/page.tsx reads data.briefs and never the flag, so the landing shows a silently thinned list (the CDN TTL is shortened, the user is not told). metrics degrades mostly visibly (nulls render '—', source reads 'Unavailable') but never shows its userMessage.",
+    "notes_2026_09_28_b": "Also from the Q-138 red-team: BtcQuantLab's derivativesError banner is never cleared on a later success (sticky), and the Vercel CDN serves liquidation success bodies up to ~30s old carrying _cached:false (x-vercel-cache STALE)."
   }
 ]

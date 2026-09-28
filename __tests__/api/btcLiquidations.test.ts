@@ -11,6 +11,7 @@ import {
   BTC_USDT_SWAP_CT_VAL,
   LIQ_DETAIL_LIMIT,
   LIQ_INST_ID,
+  liquidationFeedProblem,
   summariseLiquidations,
   type OkxLiqRow,
 } from '@/lib/data/providers/okxLiquidations'
@@ -20,7 +21,7 @@ vi.mock('@/lib/api/rateLimit', () => ({ applyRateLimit: vi.fn(() => null) }))
 const NOW = Date.parse('2026-09-28T12:00:00Z')
 const MIN = 60_000
 
-/** Three countable liquidations plus four that must be ignored. */
+/** Three countable liquidations, one stale, two unreadable, one other instrument. */
 const __SYNTHETIC__OKX = {
   __SYNTHETIC__: true as const,
   rows: [
@@ -35,9 +36,9 @@ const __SYNTHETIC__OKX = {
         { bkPx: '82000', sz: '10', posSide: 'short', side: 'buy', ts: String(NOW - 90 * MIN) },
         // ignored: older than 24h
         { bkPx: '70000', sz: '999', posSide: 'long', side: 'sell', ts: String(NOW - 25 * 60 * MIN) },
-        // ignored: zero size
+        // unreadable: zero size (counted in `unreadable`, which degrades the route)
         { bkPx: '80000', sz: '0', posSide: 'long', side: 'sell', ts: String(NOW - MIN) },
-        // ignored: unparseable price
+        // unreadable: unparseable price
         { bkPx: '', sz: '5', posSide: 'long', side: 'sell', ts: String(NOW - MIN) },
       ],
     },
@@ -66,6 +67,23 @@ describe('summariseLiquidations — units, sides, window', () => {
 
   it('drops other instruments, stale rows, zero sizes and unparseable prices', () => {
     expect(s.totalLiquidations).toBe(3)
+    // …and COUNTS what it could not read, so drift is visible (red-team HIGH-1).
+    expect(s.unreadable).toBe(2)
+  })
+
+  it('red-team A2: a liquidation matching neither pairing is in the total and disclosed', () => {
+    const net = summariseLiquidations([{ instId: LIQ_INST_ID, details: [
+      { bkPx: '80000', sz: '10', posSide: 'net', side: 'sell', ts: String(NOW - MIN) },
+      { bkPx: '80000', sz: '10', posSide: 'long', side: 'sell', ts: String(NOW - MIN) },
+    ] }], NOW)
+    expect(net).toMatchObject({ totalLiquidations: 2, sellLiquidations: 1, buyLiquidations: 0, unclassifiedLiquidations: 1 })
+  })
+
+  it('red-team A3: side matters — a long with side "buy" is not a long liquidation', () => {
+    const odd = summariseLiquidations([{ instId: LIQ_INST_ID, details: [
+      { bkPx: '80000', sz: '10', posSide: 'long', side: 'buy', ts: String(NOW - MIN) },
+    ] }], NOW)
+    expect(odd).toMatchObject({ sellLiquidations: 0, buyLiquidations: 0, unclassifiedLiquidations: 1 })
   })
 
   it('reports the window it actually covers', () => {
@@ -80,9 +98,39 @@ describe('summariseLiquidations — units, sides, window', () => {
     expect(at(LIQ_DETAIL_LIMIT - 1).truncated).toBe(false)
   })
 
-  it('an empty but valid response is a measured zero, not unknown', () => {
-    const e = summariseLiquidations([], NOW)
-    expect(e).toMatchObject({ totalLiquidations: 0, buyVolume: 0, sellVolume: 0, netDirection: 'NEUTRAL', windowStart: null, truncated: false })
+  it('red-team A1: truncation is judged on what OKX RETURNED, not on what was counted', () => {
+    const fresh = { bkPx: '80000', sz: '1', posSide: 'long', side: 'sell', ts: String(NOW - MIN) }
+    const stale = { ...fresh, ts: String(NOW - 25 * 60 * MIN) }
+    const r = summariseLiquidations([{ instId: LIQ_INST_ID, details: [...Array(50).fill(fresh), ...Array(50).fill(stale)] }], NOW)
+    expect(r.totalLiquidations).toBe(50)
+    expect(r.truncated).toBe(true)
+  })
+})
+
+describe('liquidationFeedProblem — a well-formed response is not automatically a measurement', () => {
+  // CORRECTION (red-team HIGH-1). The first version asserted "an empty but
+  // valid response is a measured zero". OKX logged ~1,640 BTC-USDT-SWAP
+  // liquidations in the trailing 24h on 2026-09-28, and it answers requests
+  // that match nothing with the same `code: '0', data: []`. A zero here is a
+  // feed problem until shown otherwise.
+  it('nothing counted → unknown, not zero', () => {
+    expect(liquidationFeedProblem(summariseLiquidations([], NOW))).toMatch(/no liquidations/)
+  })
+
+  it('rows, but none for the instrument (e.g. `instId` renamed) → unknown', () => {
+    const rows = [{ details: __SYNTHETIC__OKX.rows[0].details }] as OkxLiqRow[]
+    expect(liquidationFeedProblem(summariseLiquidations(rows, NOW))).toMatch(/none for BTC-USDT-SWAP/)
+  })
+
+  it('records it cannot read (e.g. `sz` renamed) → unknown, even with others counted', () => {
+    expect(liquidationFeedProblem(summariseLiquidations(__SYNTHETIC__OKX.rows, NOW))).toMatch(/2 liquidation records this panel could not read/)
+    const renamed = [{ instId: LIQ_INST_ID, details: [{ bkPx: '80000', size: '5', posSide: 'long', side: 'sell', ts: String(NOW - MIN) }] }] as unknown as OkxLiqRow[]
+    expect(liquidationFeedProblem(summariseLiquidations(renamed, NOW))).toMatch(/could not read/)
+  })
+
+  it('a clean response has no problem', () => {
+    const clean = [{ instId: LIQ_INST_ID, details: __SYNTHETIC__OKX.rows[0].details.slice(0, 3) }]
+    expect(liquidationFeedProblem(summariseLiquidations(clean, NOW))).toBeNull()
   })
 })
 
@@ -136,14 +184,29 @@ describe('GET /api/crypto/btc/liquidations — a failed feed is unknown, not zer
     expect(body.netDirection).not.toBe('NEUTRAL')
   })
 
-  it('success → the scaled summary, not degraded', async () => {
+  it('a well-formed but unreadable response → nulls + degraded (red-team HIGH-1)', async () => {
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ code: '0', data: __SYNTHETIC__OKX.rows }), { status: 200 }))
+    const { body } = await call()
+    expect(body).toMatchObject(UNKNOWN)
+    expect(body.userMessage).toMatch(/could not read/)
+  })
+
+  it('an empty `code: 0` response → nulls + degraded, never "0 · Balanced"', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ code: '0', data: [] }), { status: 200 }))
+    expect((await call()).body).toMatchObject(UNKNOWN)
+  })
+
+  it('success → the scaled summary, not degraded', async () => {
+    const clean = [{ instId: LIQ_INST_ID, details: __SYNTHETIC__OKX.rows[0].details.slice(0, 3) }]
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ code: '0', data: clean }), { status: 200 }))
     const { body } = await call()
     expect(body.degraded).toBeUndefined()
     expect(body.sellLiquidations).toBe(1)
     expect(body.buyLiquidations).toBe(2)
     expect(body.netDirection).toBe('LONG_BIAS')
     expect(body.largeTradeCount).toBeUndefined() // removed: nothing was filtered by size
+    expect(body.unclassifiedLiquidations).toBe(0)
+    expect(body.unreadable).toBeUndefined() // diagnostics stay off the wire
     expect(body.windowStart).toBe(new Date(NOW - 90 * MIN).toISOString())
     expect(body.truncated).toBe(false)
   })

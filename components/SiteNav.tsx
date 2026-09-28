@@ -73,7 +73,8 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: '/heatmap', label: 'Heatmap', hint: 'Sector performance grid' },
       { href: '/ma-deviation', label: '200MA Deviation', hint: 'Distance from the 200-day mean' },
       { href: '/commodities', label: 'Commodities', hint: 'Energy, metals, agriculture' },
-      { href: '/crypto/btc', label: 'Crypto', hint: 'BTC desk and on-chain metrics' },
+      // Q-138: was 'BTC desk and on-chain metrics' — no on-chain metric renders anywhere.
+      { href: '/crypto/btc', label: 'Crypto', hint: 'BTC desk and exchange derivatives' },
     ],
   },
   {

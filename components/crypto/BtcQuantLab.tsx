@@ -18,7 +18,8 @@ import {
 import { ma200Regime, sma200DeviationPct } from '@/lib/quant/technicals'
 import { apiUrl } from '@/lib/apiBase'
 import { formatFreshness } from '@/lib/format'
-import { liquidationBias, liquidationCards, type LiqData } from '@/lib/liquidationDisplay'
+import { nextLiqState, type LiqData } from '@/lib/liquidationDisplay'
+import { LiquidationsPanel } from '@/components/crypto/LiquidationsPanel'
 
 interface Props { candles: BtcCandle[] }
 
@@ -136,8 +137,11 @@ export default function BtcQuantLab({ candles }: Props) {
     try {
       const lr = await fetchJsonSafe('/api/crypto/btc/liquidations')
       if (!mountedRef.current) return
+      // Q-138: every outcome goes through one transition. A route answer
+      // (degraded or not) replaces the figures; a failure the route never saw
+      // (429, platform 5xx, network) keeps them only MARKED as stale.
+      setLiq((prev) => nextLiqState(prev, lr))
       if (lr.ok) {
-        setLiq(lr.data as LiqData)
         setLiqCached((lr.data as { _cached?: boolean })?._cached === true)
         setLiqFetchedAt(new Date().toLocaleTimeString())
       } else {
@@ -293,15 +297,11 @@ export default function BtcQuantLab({ candles }: Props) {
             ? 'text-orange-400'
             : 'text-slate-400',
     },
-    // Q-138: this card was labelled "OI Net Direction" — it is the LIQUIDATION
-    // bias, not open interest — and showed LONG_BIAS (longs force-SOLD) as
-    // "MORE AGG BUY VOLUME", the opposite of the data.
-    {
-      label: 'Liquidation Bias',
-      value: liquidationBias(liq?.netDirection).value,
-      signal: liquidationBias(liq?.netDirection).signal,
-      color: liquidationBias(liq?.netDirection).color,
-    },
+    // Q-138: a "Liquidation Bias" card (formerly "OI Net Direction") sat here,
+    // coloured and undated beside BULLISH / BUY THE DIP. Its window is the
+    // latest 100 OKX liquidations — ~1.5h, and it flipped within minutes on
+    // 2026-09-28 while the trailing 24h pointed the other way. It is shown,
+    // with its window, only on the Liquidations tab; it is not a signal.
     {
       label: 'Rainbow Band',
       value: rainbowBand.label,
@@ -391,37 +391,13 @@ export default function BtcQuantLab({ candles }: Props) {
         )}
 
         {activeMetricTab === 'liquidations' && (
-          <div>
-            {liqLoading && <div className="text-[10px] text-slate-400 mb-2">Refreshing liquidations data…</div>}
-          {liqFetchedAt && (
-            <div className="text-[10px] text-slate-400 mb-2 flex items-center gap-2">
-              <span>Last updated: {formatFreshness(liq?.fetchedAt)}{/* Q-114: OUR fetch time, and crypto trades 24/7 so no us-equity calendar. */}</span>
-              {liqCached && <DataFreshnessIndicator cached compact />}
-            </div>
-          )}
-            {/* Q-138: a failed feed now arrives as nulls with `degraded: true`; say so
-                instead of rendering a calm market nobody measured. */}
-            {liq?.degraded && (
-              <div role="status" className="text-[11px] text-amber-400 border border-amber-800/40 bg-amber-950/20 rounded-lg px-3 py-2 mb-3">
-                {liq.userMessage ?? 'Liquidation data is unavailable right now.'}
-              </div>
-            )}
-            {/* Q-138: labels, units and window come from lib/liquidationDisplay.ts.
-                The old cards showed volumes 100× too large, a "24h" window that
-                was ~1.4h, a ">$100k" filter that did not exist, and long/short
-                swapped. */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {liquidationCards(liq).map((c) => (
-                <MetricCard key={c.label} label={c.label} value={c.value} sub={c.sub} color={c.color} />
-              ))}
-            </div>
-          </div>
+          <LiquidationsPanel liq={liq} loading={liqLoading} fetched={liqFetchedAt != null} cached={liqCached} />
         )}
 
         {activeMetricTab === 'signals' && (
           <div className="space-y-3">
             <div className="text-xs text-slate-400">
-              BTC analysis combines price-action signals (RSI, MACD, EMAs), exchange derivatives data (funding rate, open interest, liquidations — reported by Bybit and OKX, not read from the chain), and the Rainbow Chart model. Toggle individual indicators on the chart to see their levels.
+              This analysis reads only the daily candles: EMA trend, RSI and MACD momentum, volatility, the 200-day moving-average regime and the Rainbow Chart stage. It does not use the funding, open-interest or liquidation data in the other two tabs. Toggle individual indicators on the chart to see their levels.
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="bg-slate-900/60 rounded-xl p-4 border border-slate-800">
