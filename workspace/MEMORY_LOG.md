@@ -2524,3 +2524,30 @@ Four mutations survived a first run. The one worth remembering: a test proving
 "the exclusion is live" looped over the exclusion set, so emptying the set made
 it vacuous. **A loop over the thing you are proving non-empty proves nothing —
 name a member.**
+
+## 2026-09-28 — Every number on the BTC liquidations panel was wrong (Q-138)
+
+Merged #229. I went looking for why three routes set `degraded: true` and no
+client read it, and the liquidations one turned out to be wrong seven ways at
+once. Volumes were 100× too large, because OKX quotes swaps in contracts of
+0.01 BTC and the route treated them as coins. "24h" was really the latest 100
+liquidations, about an hour and a half. A ">$100k" filter did not exist. Long
+and short were swapped. A signals card called the liquidation bias "open
+interest" and read it backwards. A dead feed showed as a calm market. And an
+"on-chain" label sat over data that never touched the chain.
+
+**The fix was verified against OKX itself, not against the old display.** Four
+times I pulled OKX at the same moment as the route and computed the figures
+by hand; they matched exactly, the last time on production.
+
+**Both review rounds broke code I wrote in response to the previous one.**
+Round 1: schema drift rendered "0 · Balanced", and my own claim that "an empty
+response is a measured zero" was wrong at 1,640 liquidations a day. Round 2:
+I had degraded on a record shape nobody had ever seen, while leaving the one
+OKX *documents* — one-way `net` mode — rendering "Balanced". **Fail closed on
+the documented cases first; the imaginary ones are cheaper to reason about and
+therefore get fixed first, which is backwards.**
+
+The jsdom note in CLAUDE.md said component tests were CI-only here. They run
+in three seconds. The check I used to "confirm" otherwise called `timeout`,
+which does not exist on macOS, and I read its instant exit as a hang.
