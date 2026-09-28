@@ -2491,3 +2491,36 @@ live in the real register has zero reachable instances on the day the register
 is clean — which is now. Deleting the rule body makes the synthetic controls
 fail while a mutated real row sails through. `files` is a required parameter so
 the compiler, not a reviewer, notices a call site that forgot it.
+
+## 2026-09-28 — The /backtest page described a strategy the engine had stopped running (Q-105)
+
+Merged #227. The ticket said "dead config": `stopLossPct` was echoed into every
+result and read by nothing. True, and the small part. The landing CTA, the
+`/backtest` info bar, the Strategy Rules grid, the trade-log tooltips and the
+Signals tab all described ATR and trailing stops, SELL exits, confirm counts,
+tiered Kelly and a 55% confidence floor — none of which the engine had run
+since 2026-07-11 — and not one mentioned the 60-bar time exit, the only way a
+position closes. Every number on the page came from a different rulebook than
+the one printed beside it. The copy is now built from the constants the engine
+trades on.
+
+**The red team found my own copy false, twice, on the page I was correcting.**
+"A fixed 15% of capital per BUY" — but shares are floored, so BTC's 167 BUY bars
+all round to zero and it never trades while still counting in the aggregate.
+And the glossary text behind the trade-log tooltips still said "<55% triggers
+HOLD" and "act with full size"; my copy scan never followed a `metricKey` into
+the glossary. The test titled "sizes every BUY" checked one signal's field and
+never looked at a position the engine opened. **Correcting false copy is itself
+copy, and gets the same scrutiny.**
+
+**The guard built to catch an inert knob was green on this one, three layers
+deep.** It parsed only the child interface (the field lived on the one it
+extends); it counted the echo that carried the value to the user as a read; and
+then it counted the copy module — which prints the value — as a reader. Each
+fix was narrower than I claimed until the red team broke it. Display modules
+are now derived from what the UI imports, not listed by hand.
+
+Four mutations survived a first run. The one worth remembering: a test proving
+"the exclusion is live" looped over the exclusion set, so emptying the set made
+it vacuous. **A loop over the thing you are proving non-empty proves nothing —
+name a member.**
