@@ -111,7 +111,3 @@ export const COMMODITY_INSTRUMENTS: CommodityInstrument[] = [
 ]
 
 export const COMMODITY_TICKERS = COMMODITY_INSTRUMENTS.map((c) => c.ticker)
-
-export function getCommodityByTicker(ticker: string): CommodityInstrument | undefined {
-  return COMMODITY_INSTRUMENTS.find((c) => c.ticker === ticker.toUpperCase())
-}

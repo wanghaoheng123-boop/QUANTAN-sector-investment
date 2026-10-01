@@ -29,7 +29,7 @@ const SHORTCUTS: Shortcut[] = [
  * in the header and opens the overlay through a window event, so the two
  * components stay decoupled (no context provider needed for one boolean).
  */
-export const SHORTCUTS_OPEN_EVENT = 'quantan:open-shortcuts'
+const SHORTCUTS_OPEN_EVENT = 'quantan:open-shortcuts'
 
 export function ShortcutsButton() {
   return (

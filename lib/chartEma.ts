@@ -62,16 +62,22 @@ export const CHART_EMA_COLORS: Record<ChartEmaPeriod, string> = {
   250: '#fb923c',   // orange-400 (1-year round number)
 }
 
-/** Default enabled EMAs when user selects EMA preset (TradingView-style: 9 / 20 / 50 / 200). */
-export const DEFAULT_ACTIVE_EMAS: ChartEmaKey[] = ['ema9', 'ema20', 'ema50', 'ema200']
+/**
+ * Default enabled EMAs (TradingView-style: 9 / 20 / 50 / 200), used by the
+ * `ema` preset via `tradingDefaultEmaFlags`.
+ *
+ * Q-118: five exports of this module had no importer anywhere in the repo's
+ * history. Two are removed: `DEFAULT_ACTIVE_EMAS` duplicated this list exactly,
+ * and `ALWAYS_ON_EMAS` (always `[]`, documented as "EMAs that are always shown
+ * regardless of preset") was a setting nothing read. The other three — this
+ * list, `chartEmaKey`, `allEmaOn` — are used inside the module and are no
+ * longer exported. NOTE: `components/KLineChart.tsx` still hardcodes the same
+ * four periods (`DEFAULT_INDICATORS`, `isEmaLineVisible`); export this list
+ * again if that is ever consolidated onto one source.
+ */
+const TRADING_DEFAULT_EMA_KEYS: ChartEmaKey[] = ['ema9', 'ema20', 'ema50', 'ema200']
 
-/** Same set for stock/sector charts that omit per-line toggles. */
-export const TRADING_DEFAULT_EMA_KEYS: ChartEmaKey[] = ['ema9', 'ema20', 'ema50', 'ema200']
-
-/** EMAs that are always shown regardless of preset (key reference lines). */
-export const ALWAYS_ON_EMAS: ChartEmaKey[] = []
-
-export function chartEmaKey(period: ChartEmaPeriod): ChartEmaKey {
+function chartEmaKey(period: ChartEmaPeriod): ChartEmaKey {
   return `ema${period}` as ChartEmaKey
 }
 
@@ -83,7 +89,7 @@ export function allEmaOff(): Record<ChartEmaKey, boolean> {
 }
 
 /** Build a Record<ChartEmaKey, boolean> with all true. */
-export function allEmaOn(): Record<ChartEmaKey, boolean> {
+function allEmaOn(): Record<ChartEmaKey, boolean> {
   const out: Partial<Record<ChartEmaKey, boolean>> = {}
   for (const p of CHART_EMA_PERIODS) out[chartEmaKey(p)] = true
   return out as Record<ChartEmaKey, boolean>

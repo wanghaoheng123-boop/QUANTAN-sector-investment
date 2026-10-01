@@ -2,11 +2,21 @@ import { NextRequest, NextResponse } from 'next/server'
 import YahooFinance from 'yahoo-finance2'
 import { yahooSymbolFromParam } from '@/lib/quant/yahooSymbol'
 import { applyRateLimit } from '@/lib/api/rateLimit'
+import { degradedResponse } from '@/lib/api/reliability'
 
 // Prevent Next.js from attempting static rendering — this route needs request.url at runtime.
 export const dynamic = 'force-dynamic'
 
 const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] })
+
+/**
+ * I2 (Q-118 red-team, the review's Q110-P3): when Yahoo's `search()` failed,
+ * this route answered `{"quotes":[]}` with HTTP 200 — so an outage read as "no
+ * securities match your query". A failure is now said: `degraded: true` with a
+ * message, HTTP 200 so the client reads the body. `degradedResponse` is the
+ * helper the 2026-09-05 architecture review named for exactly this route.
+ */
+const SEARCH_UNAVAILABLE = 'Search is temporarily unavailable — try again shortly.'
 
 /** Skip non-tradeable clutter; everything else from Yahoo stays (types vary by region). */
 const EXCLUDED_QUOTE_TYPES = new Set(['OPTION'])
@@ -98,7 +108,7 @@ export async function GET(request: NextRequest) {
     return await handleSearchGet(request)
   } catch (error) {
     console.error('[Search API] Unhandled error:', error)
-    return NextResponse.json({ quotes: [], error: 'search_unavailable' })
+    return degradedResponse('search_unavailable', SEARCH_UNAVAILABLE)
   }
 }
 
@@ -114,6 +124,7 @@ async function handleSearchGet(request: NextRequest) {
 
   const seen = new Set<string>()
   const out: ReturnType<typeof mapQuoteRow>[] = []
+  let searchFailed = false
 
   const pushUnique = (row: ReturnType<typeof mapQuoteRow>) => {
     const k = row.symbol.toUpperCase()
@@ -149,6 +160,7 @@ async function handleSearchGet(request: NextRequest) {
     }
   } catch (error) {
     console.error('[Search API] Yahoo search failed:', error)
+    searchFailed = true
   }
 
   const hintTicker = COMPANY_NAME_HINTS[q.toLowerCase()]
@@ -167,5 +179,17 @@ async function handleSearchGet(request: NextRequest) {
     }
   }
 
+  if (searchFailed && out.length === 0) {
+    return degradedResponse('search_unavailable', SEARCH_UNAVAILABLE)
+  }
+  if (searchFailed) {
+    // The direct-quote fallback found a match, but the full search did not
+    // run: say the list is partial rather than present it as complete.
+    return NextResponse.json({
+      quotes: out.slice(0, limit),
+      degraded: true,
+      error: { code: 'search_partial', message: 'Search is partially unavailable — showing a direct ticker match only.' },
+    })
+  }
   return NextResponse.json({ quotes: out.slice(0, limit) })
 }

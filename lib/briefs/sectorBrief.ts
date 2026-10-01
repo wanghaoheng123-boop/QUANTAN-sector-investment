@@ -133,7 +133,7 @@ function yahoo(): InstanceType<typeof YahooFinance> {
   return _yf
 }
 
-export function defaultBriefFetchers(): BriefFetchers {
+function defaultBriefFetchers(): BriefFetchers {
   // Bound to a local named `yf` on purpose: the repo's schema-drift class guard
   // scans for `yf.search(` / `yahooFinance.search(` call sites, and a call
   // spelled `yahoo().search(` would be invisible to it.

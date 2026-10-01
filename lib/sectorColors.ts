@@ -37,9 +37,3 @@ export const SECTOR_COLORS_BY_SLUG: Record<string, string> = (() => {
 
 /** Default fallback for an unknown sector (slate-500). */
 export const DEFAULT_SECTOR_COLOR = '#64748b'
-
-/** Convenience helper: look up a sector color by display name, with fallback. */
-export function sectorColorByName(name: string | undefined | null): string {
-  if (!name) return DEFAULT_SECTOR_COLOR
-  return SECTOR_COLORS_BY_NAME[name] ?? DEFAULT_SECTOR_COLOR
-}
