@@ -4,23 +4,8 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { SECTORS } from '@/lib/sectors'
 import type { SectorBrief } from '@/lib/briefs/sectorBrief'
-import { formatCurrency, formatSignedNumber } from '@/lib/format'
+import { formatCurrency, formatEtDateTime, formatSignedNumber } from '@/lib/format'
 import { safeHref } from '@/lib/security/urlValidation'
-
-interface NewsItem {
-  title: string
-  publisher: string
-  publishedAt: string | null
-  snippet: string | null
-  link: string
-  tickers: string[]
-}
-
-interface BriefSignal {
-  key: string
-  value: string
-  impact: 'positive' | 'negative' | 'neutral'
-}
 
 // Q-140: was a hand-copied duplicate of the builder's type, which is how a
 // price that can be null went unnoticed here. One definition now.
@@ -100,12 +85,8 @@ export default function LiveBriefClient({ slug, initialBrief }: { slug: string; 
                 {sector?.icon} {sector?.name}
               </span>
               <span className="text-xs text-slate-400">
-                {brief.lastUpdated
-                  ? new Date(brief.lastUpdated).toLocaleString('en-US', {
-                      weekday: 'short', month: 'short', day: 'numeric',
-                      hour: '2-digit', minute: '2-digit', timeZone: 'UTC',
-                    }) + ' UTC'
-                  : 'Live — Yahoo Finance'}
+                {/* Q-142: one zone on every page; ET is the exchange's clock. */}
+                {brief.lastUpdated ? formatEtDateTime(brief.lastUpdated, { weekday: true }) : 'Quote time not reported'}
               </span>
               <span className="text-xs text-slate-400">·</span>
               <span
@@ -256,9 +237,7 @@ export default function LiveBriefClient({ slug, initialBrief }: { slug: string; 
                           <span className="text-[10px] text-slate-400">{item.publisher}</span>
                           {item.publishedAt && (
                             <span className="text-[10px] text-slate-400">
-                              {new Date(item.publishedAt).toLocaleString('en-US', {
-                                month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-                              })}
+                              {formatEtDateTime(item.publishedAt)}
                             </span>
                           )}
                           {item.tickers.length > 0 && (
@@ -275,8 +254,8 @@ export default function LiveBriefClient({ slug, initialBrief }: { slug: string; 
           )}
 
           <div className="text-[10px] text-slate-400 leading-relaxed pt-4 border-t border-slate-800">
-            Data sourced from Yahoo Finance · {/* K2: neither branch may guess the market phase. */}{brief.lastUpdated ? `Quote time: ${new Date(brief.lastUpdated).toLocaleString()}` : 'Quote time not reported'} ·
-            Fetched: {new Date(brief.fetchedAt).toLocaleString()}.
+            Data sourced from Yahoo Finance · Quote time: {formatEtDateTime(brief.lastUpdated)} ·
+            Fetched: {formatEtDateTime(brief.fetchedAt)}.
             Prices delayed 15 minutes during regular market hours.
           </div>
         </>

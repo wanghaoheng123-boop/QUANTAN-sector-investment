@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { SECTORS } from '@/lib/sectors'
 import type { SectorBrief } from '@/lib/briefs/sectorBrief'
-import { formatCurrency, formatSignedNumber } from '@/lib/format'
+import { formatCurrency, formatEtDateTime, formatSignedNumber } from '@/lib/format'
 
 // Q-140: was a hand-copied duplicate of the builder's type, which is how a
 // price that can be null went unnoticed here. One definition now.
@@ -39,12 +39,8 @@ export default function BriefCard({ brief }: { brief: SectorBrief }) {
                 </span>
               )}
               <span className="text-xs text-slate-400">
-                {brief.lastUpdated
-                  ? new Date(brief.lastUpdated).toLocaleString('en-US', {
-                      weekday: 'short', month: 'short', day: 'numeric',
-                      hour: '2-digit', minute: '2-digit',
-                    })
-                  : '—'}
+                {/* Q-142: fixed zone, so SSR and hydration render the same text. */}
+                {formatEtDateTime(brief.lastUpdated, { weekday: true })}
               </span>
             </div>
 
