@@ -127,6 +127,12 @@ async function fetchNewsForTicker(ticker: string): Promise<NewsBrief[]> {
     // Phase 13 S2: previously silent. Per-ticker failures don't block other
     // results, but operators need a trail when news fetch is degraded.
     console.warn('[briefs] news fetch failed for', ticker, err)
+    // Q-140 (I2): this used to RESOLVE with [] — so the caller's
+    // Promise.allSettled counted every failure as a success, `failedCalls`
+    // stayed 0, and the `degraded` threshold below could never fire. A full
+    // outage returned {briefs: []} as a quiet news day. Rejecting lets the
+    // existing counter see it.
+    throw err
   }
   return results
 }
@@ -137,6 +143,7 @@ export async function GET(request: Request): Promise<NextResponse<{
   sectorCount: number
   source: string
   degraded?: boolean
+  error?: { code: string; message: string }
 } | { error: string }>> {
   // Phase 13 S2: rate-limit. This route fans out to ~33 yahoo search() calls
   // per request (11 sectors × 3 tickers each). Tighter limit to prevent
@@ -223,7 +230,9 @@ export async function GET(request: Request): Promise<NextResponse<{
         fetchedAt: new Date().toISOString(),
         sectorCount: sectorEntries.length,
         source: 'Yahoo Finance',
-        ...(degraded ? { degraded: true } : {}),
+        ...(degraded
+          ? { degraded: true, error: { code: 'news_unavailable', message: `The news feed failed for ${failedCalls} of ${totalCalls} lookups; this list may be incomplete.` } }
+          : {}),
       },
       {
         headers: {

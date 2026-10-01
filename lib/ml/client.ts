@@ -9,6 +9,16 @@
 const ML_SIDECAR_URL = process.env.ML_SIDECAR_URL ?? 'http://localhost:8001'
 const ML_TIMEOUT_MS = 5_000
 
+/**
+ * Q-140: whether a sidecar is configured at all. In production an unset
+ * `ML_SIDECAR_URL` used to fall back to localhost:8001 and probe it on every
+ * request, so "not deployed" and "deployed but down" were the same answer.
+ * Development keeps the localhost default (ml/server.py runs there).
+ */
+export function isMlSidecarConfigured(): boolean {
+  return Boolean(process.env.ML_SIDECAR_URL) || process.env.NODE_ENV !== 'production'
+}
+
 export interface MlPrediction {
   ticker: string
   /** Probability of a +1% move in the next 5 days (0–1). Null if model unavailable. */

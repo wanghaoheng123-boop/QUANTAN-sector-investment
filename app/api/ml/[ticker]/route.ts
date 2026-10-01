@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { fetchMlPrediction, isMlSidecarAvailable } from '@/lib/ml/client'
+import { fetchMlPrediction, isMlSidecarAvailable, isMlSidecarConfigured } from '@/lib/ml/client'
 import { normalizeTicker, sanitizeError } from '@/lib/api/sanitize'
 import { applyRateLimit } from '@/lib/api/rateLimit'
 
@@ -36,15 +36,26 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     )
   }
 
+  // Q-140 (I2): "not deployed" and "deployed but failing" were the same
+  // `{available: false}`. Not configured is a state, said plainly; a configured
+  // sidecar that does not answer is a failure, said as one.
+  if (!isMlSidecarConfigured()) {
+    return NextResponse.json({ available: false, reason: 'not_configured', symbol })
+  }
+  const unreachable = (code: string, message: string) => NextResponse.json(
+    { available: false, symbol, degraded: true, error: { code, message } },
+    { headers: { 'Cache-Control': 'no-store' } },
+  )
+
   try {
     const available = await isMlSidecarAvailable()
     if (!available) {
-      return NextResponse.json({ available: false, symbol })
+      return unreachable('ml_unreachable', 'The ML service is configured but did not answer its health check.')
     }
 
     const prediction = await fetchMlPrediction(symbol)
     if (!prediction) {
-      return NextResponse.json({ available: false, symbol })
+      return unreachable('ml_prediction_failed', 'The ML service did not return a prediction.')
     }
 
     return NextResponse.json({ available: true, ...prediction })

@@ -17,6 +17,8 @@ export default function HeatmapPage() {
   const [quotes, setQuotes] = useState<Record<string, Quote>>({})
   const [loading, setLoading] = useState(true)
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
+  /** Q-140 (I2): a failed poll is said; the last good prices are marked as such. */
+  const [fetchFailed, setFetchFailed] = useState(false)
 
   // Phase 14 wave 20: AbortSignal-aware poll. Each tick aborts any in-flight
   // previous fetch so a slow response from a prior tick cannot overwrite
@@ -27,8 +29,10 @@ export default function HeatmapPage() {
       try {
         const res = await fetch('/api/prices', { signal })
         if (signal.aborted) return
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const data = await res.json()
         if (signal.aborted) return
+        setFetchFailed(false)
         if (data.quotes) {
           const map: Record<string, Quote> = {}
           data.quotes.forEach((q: Quote) => { map[q.ticker] = q })
@@ -38,6 +42,7 @@ export default function HeatmapPage() {
       } catch (e) {
         if (signal.aborted || (e instanceof DOMException && e.name === 'AbortError')) return
         console.warn('[heatmap] fetch failed', e)
+        setFetchFailed(true)
       } finally {
         if (!signal.aborted) setLoading(false)
       }
@@ -84,7 +89,10 @@ export default function HeatmapPage() {
             </p>
           </div>
           <div className="text-sm text-slate-400 font-mono">
-            {lastUpdate ? `Poll · ${lastUpdate.toLocaleTimeString()}` : 'Connecting...'}
+            {lastUpdate ? `Poll · ${lastUpdate.toLocaleTimeString()}` : fetchFailed ? 'Prices failed to load' : 'Connecting...'}
+            {fetchFailed && lastUpdate && (
+              <div role="status" className="text-xs text-amber-400 mt-1">Latest poll failed — showing the last successful update.</div>
+            )}
           </div>
         </div>
 
