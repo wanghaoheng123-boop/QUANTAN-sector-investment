@@ -66,14 +66,14 @@ export const CHART_EMA_COLORS: Record<ChartEmaPeriod, string> = {
  * Default enabled EMAs (TradingView-style: 9 / 20 / 50 / 200), used by the
  * `ema` preset via `tradingDefaultEmaFlags`.
  *
- * Q-118: this module's consumers moved to the preset builders below
- * (`buildVisFromIndicatorPreset`, `tradingDefaultEmaFlags`, `buildIndicatorConfig`),
- * leaving five exports nobody imported. Two were pure leftovers and are gone:
- * `DEFAULT_ACTIVE_EMAS` duplicated this list exactly, and `ALWAYS_ON_EMAS = []`
- * was documented as "EMAs that are always shown regardless of preset" while
- * nothing read it — a declared behaviour with no implementation. The other
- * three (this list, `chartEmaKey`, `allEmaOn`) are used inside this module and
- * are simply no longer exported.
+ * Q-118: five exports of this module had no importer anywhere in the repo's
+ * history. Two are removed: `DEFAULT_ACTIVE_EMAS` duplicated this list exactly,
+ * and `ALWAYS_ON_EMAS` (always `[]`, documented as "EMAs that are always shown
+ * regardless of preset") was a setting nothing read. The other three — this
+ * list, `chartEmaKey`, `allEmaOn` — are used inside the module and are no
+ * longer exported. NOTE: `components/KLineChart.tsx` still hardcodes the same
+ * four periods (`DEFAULT_INDICATORS`, `isEmaLineVisible`); export this list
+ * again if that is ever consolidated onto one source.
  */
 const TRADING_DEFAULT_EMA_KEYS: ChartEmaKey[] = ['ema9', 'ema20', 'ema50', 'ema200']
 

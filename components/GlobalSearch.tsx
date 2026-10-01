@@ -112,13 +112,16 @@ export default function GlobalSearch() {
         const data = await res.json()
         if (abortController.signal.aborted) return
         if (!res.ok) {
-          setFetchError(typeof data.error === 'string' ? data.error : 'Search request failed')
+          // Q-118: this rendered the raw code ("rate_limited") as the message.
+          setFetchError(res.status === 429 ? 'Too many searches — try again in a moment.' : 'Search request failed — try again.')
           setResults([])
           return
         }
-        setResults(data.quotes || [])
-        if ((data.quotes || []).length === 0 && data.error) {
-          setFetchError(String(data.error))
+        setResults(Array.isArray(data.quotes) ? data.quotes : [])
+        // I2: a degraded answer is said, not shown as "no results". The route
+        // sets `degraded: true` with `error.message` when Yahoo's search fails.
+        if (data.degraded) {
+          setFetchError(typeof data.error?.message === 'string' ? data.error.message : 'Search is temporarily unavailable — try again shortly.')
         }
       } catch (err: unknown) {
         if (err instanceof DOMException && err.name === 'AbortError') return

@@ -89,9 +89,8 @@ export async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Pr
  * when the message itself is generic. Per Phase 14 §S2.10, the correct
  * behaviour is to omit the key entirely when no details are available.
  *
- * `buildErrorBody` is the SSOT for `errorResponse`. (Q-118: its sibling
- * `degradedResponse` had no caller — the routes that degrade build their
- * payloads inline — and was removed; see Q-140 for the unread flag itself.) Production callers should pass `sanitizeError(e)` from
+ * `buildErrorBody` is the SSOT used by both `degradedResponse` and
+ * `errorResponse`. Production callers should pass `sanitizeError(e)` from
  * `@/lib/api/sanitize` (NOT raw `error.message`) so stack traces and file
  * paths never reach the wire.
  */
@@ -106,6 +105,18 @@ function buildErrorBody(degraded: boolean, code: string, message: string, detail
     },
     timestamp: new Date().toISOString(),
   }
+}
+
+export function degradedResponse(
+  code: string,
+  message: string,
+  details?: string,
+  status = 200
+): NextResponse {
+  return NextResponse.json(
+    buildErrorBody(true, code, message, details),
+    { status, headers: { 'Cache-Control': 'no-store' } }
+  )
 }
 
 export function errorResponse(code: string, message: string, details?: string, status = 502): NextResponse {

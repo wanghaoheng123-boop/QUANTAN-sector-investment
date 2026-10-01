@@ -109,16 +109,43 @@ describe('GET /api/search — Yahoo schema-drift tolerance (DQ-8)', () => {
     ])
   })
 
-  it('still degrades to an empty list (not a 500) when search throws', async () => {
-    searchMock.mockRejectedValue(new Error('result did not validate with schema: #/definitions/SearchResult'))
+  // CORRECTION (Q-118 red-team). This test used to be "still degrades to an
+  // empty list (not a 500) when search throws" and asserted `quotes: []` — the
+  // very property this file's header calls the defect ("a dead upstream is
+  // indistinguishable from no securities match"). A passing test that pins
+  // the bug. A failure is now said.
+  it('when search throws and nothing else matches, the answer is DEGRADED, not "no results"', async () => {
+    searchMock.mockRejectedValue(new Error('ECONNRESET'))
     const err = vi.spyOn(console, 'error').mockImplementation(() => {})
     try {
       const res = await GET(request('http://localhost:3000/api/search?q=bank%20of'))
       expect(res.status).toBe(200)
-      expect((await res.json()).quotes).toEqual([])
+      const body = await res.json()
+      expect(body.degraded).toBe(true)
+      expect(body.error).toMatchObject({ code: 'search_unavailable' })
+      expect(typeof body.error.message).toBe('string')
     } finally {
       err.mockRestore()
     }
+  })
+
+  it('when search throws but the direct-quote fallback matches, the list is marked PARTIAL', async () => {
+    searchMock.mockRejectedValue(new Error('timeout'))
+    quoteMock.mockResolvedValue({ symbol: 'AAPL', shortName: 'Apple Inc.', quoteType: 'EQUITY', fullExchangeName: 'NasdaqGS' })
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const body = await (await GET(request('http://localhost:3000/api/search?q=AAPL'))).json()
+      expect(body.quotes.map((q: { symbol: string }) => q.symbol)).toEqual(['AAPL'])
+      expect(body.degraded).toBe(true)
+      expect(body.error).toMatchObject({ code: 'search_partial' })
+    } finally {
+      err.mockRestore()
+    }
+  })
+
+  it('a genuine no-match is NOT degraded', async () => {
+    const body = await (await GET(request('http://localhost:3000/api/search?q=zzzz%20nothing'))).json()
+    expect(body).toEqual({ quotes: [] })
   })
 })
 
