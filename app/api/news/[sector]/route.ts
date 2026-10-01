@@ -45,12 +45,20 @@ export interface NewsItem {
   sector: string
   tickers: string[]
 }
-async function fetchNewsForTickers(tickers: string[], sector: string): Promise<NewsItem[]> {
+/**
+ * Q-140 (I2): per-ticker failures used to be logged and `continue`d, so a full
+ * Yahoo outage returned `{news: []}` with HTTP 200 — indistinguishable from a
+ * quiet news day. Failures are now counted and reported to the caller.
+ */
+async function fetchNewsForTickers(tickers: string[], sector: string): Promise<{ items: NewsItem[]; attempted: number; failed: number }> {
   const seen = new Set<string>()
   const results: NewsItem[] = []
+  let attempted = 0
+  let failed = 0
 
   for (const ticker of tickers.slice(0, 5)) {
     if (results.length >= 10) break
+    attempted += 1
     try {
       // validateResult:false — tolerate Yahoo's drifted SearchResult schema
       // (see /api/briefs/[sector]); news is display-only + null-guarded below.
@@ -87,17 +95,18 @@ async function fetchNewsForTickers(tickers: string[], sector: string): Promise<N
         ticker,
         message: (err as Error)?.message,
       }))
+      failed += 1
       continue
     }
   }
 
-  return results
+  return { items: results, attempted, failed }
 }
 
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ sector: string }> }
-): Promise<NextResponse<{ news: NewsItem[]; sector: string; fetchedAt: string; source: string } | { error: string }>> {
+): Promise<NextResponse<{ news: NewsItem[]; sector: string; fetchedAt: string; source: string; degraded?: true; error?: { code: string; message: string } } | { error: string }>> {
   // Phase 14 wave 25: rate limit (30 req/min/IP). News fans out to 5 Yahoo
   // search calls per request — unprotected polling could saturate the upstream
   // and inflate Vercel function bills.
@@ -122,7 +131,10 @@ export async function GET(
     const queryConfig = SECTOR_QUERY_MAP[sector]
     const tickers = queryConfig?.tickers ?? []
 
-    const news = await fetchNewsForTickers(tickers, sector)
+    const { items: news, attempted, failed } = await fetchNewsForTickers(tickers, sector)
+    // Degraded when the feed failed badly enough that the list cannot be read
+    // as "this is the news": nothing came back, or most lookups failed.
+    const degraded = failed > 0 && (news.length === 0 || failed * 2 > attempted)
 
     return NextResponse.json(
       {
@@ -130,10 +142,14 @@ export async function GET(
         sector,
         fetchedAt: new Date().toISOString(),
         source: 'Yahoo Finance',
+        ...(degraded
+          ? { degraded: true as const, error: { code: 'news_unavailable', message: `The news feed failed for ${failed} of ${attempted} lookups; this list may be incomplete.` } }
+          : {}),
       },
       {
         headers: {
-          'Cache-Control': 's-maxage=300, stale-while-revalidate=600',
+          // A degraded list must not be pinned at the CDN for five minutes.
+          'Cache-Control': degraded ? 'no-store' : 's-maxage=300, stale-while-revalidate=600',
         },
       }
     )

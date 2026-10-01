@@ -24,6 +24,8 @@ interface DarkPoolPanelProps {
   apiData?: DarkPoolAnalysis | null
   /** True while fetching apiData */
   apiLoading?: boolean
+  /** Q-140: the request itself failed (non-2xx or network); said, not hidden. */
+  apiError?: string | null
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
@@ -49,6 +51,7 @@ export default function DarkPoolPanel({
   color,
   apiData,
   apiLoading = false,
+  apiError = null,
 }: DarkPoolPanelProps) {
   // Runtime half of the I3 guard. This INSPECTS THE VALUE rather than taking a
   // caller-supplied boolean: if real data is ever rewired into this prop the
@@ -100,12 +103,24 @@ export default function DarkPoolPanel({
         </div>
       )}
 
+      {apiError && !apiLoading && !apiData && (
+        <div role="status" className="rounded-xl border border-amber-800/40 bg-amber-950/20 p-3 text-xs text-amber-300">
+          {apiError}
+        </div>
+      )}
+
       {apiData && !apiLoading && (
         <>
-          {/* Status note when no real data */}
+          {/* Status note when no real data. Q-140: a FAILED fetch (`degraded`) is
+              styled as a failure, not as an informational note about coverage. */}
           {statusNote && (
-            <div className="rounded-xl border border-slate-700 bg-slate-900/40 p-3 text-xs text-slate-400 leading-relaxed">
-              <span className="text-amber-300/80 font-semibold">Note: </span>
+            <div
+              role={apiData.degraded ? 'status' : undefined}
+              className={apiData.degraded
+                ? 'rounded-xl border border-amber-800/40 bg-amber-950/20 p-3 text-xs text-amber-300 leading-relaxed'
+                : 'rounded-xl border border-slate-700 bg-slate-900/40 p-3 text-xs text-slate-400 leading-relaxed'}
+            >
+              <span className="text-amber-300/80 font-semibold">{apiData.degraded ? 'Unavailable: ' : 'Note: '}</span>
               {statusNote}
             </div>
           )}
@@ -176,7 +191,7 @@ export default function DarkPoolPanel({
           )}
 
           {/* Price */}
-          {apiData.quote.price > 0 && (
+          {apiData.quote.price != null && apiData.quote.price > 0 && (
             <div className="flex items-center gap-3 text-xs text-slate-400">
               <span>
                 Last:{' '}
@@ -189,7 +204,7 @@ export default function DarkPoolPanel({
                   changePct branch dereferenced an unvalidated number and could
                   crash the whole panel with "Cannot read properties of null
                   (reading 'toFixed')" when Yahoo returned a halt quote. */}
-              {Number.isFinite(apiData.quote.changePct) && (
+              {apiData.quote.changePct != null && Number.isFinite(apiData.quote.changePct) && (
                 <span
                   className={
                     apiData.quote.changePct >= 0 ? 'text-green-400' : 'text-red-400'

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { safeHref } from '@/lib/security/urlValidation'
+import { parseNewsPayload, type NewsItem } from '@/lib/news/newsPayload'
 
 /**
  * Live news only (Q-088, design invariant I3).
@@ -18,14 +19,6 @@ import { safeHref } from '@/lib/security/urlValidation'
  * `news` prop there is no way to hand this component fabricated content, and
  * every item it renders came from an API route on this deployment.
  */
-interface NewsItem {
-  title: string
-  publisher?: string
-  link?: string
-  snippet?: string
-  publishedAt?: string | null
-  tickers?: string[]
-}
 
 interface NewsFeedProps {
   /** Sector slug — fetches live sector news. Mutually exclusive with `ticker`. */
@@ -50,7 +43,7 @@ function getLink(item: NewsItem): string {
   return safeHref(item.link)
 }
 function getSnippet(item: NewsItem): string | undefined {
-  return item.snippet
+  return item.snippet ?? undefined
 }
 
 export default function NewsFeed({ sector, ticker, color }: NewsFeedProps) {
@@ -58,6 +51,8 @@ export default function NewsFeed({ sector, ticker, color }: NewsFeedProps) {
   const [loading, setLoading] = useState(!!ticker || !!sector)
   const [fetchedAt, setFetchedAt] = useState<string | null>(null)
   const [apiError, setApiError] = useState(false)
+  /** Q-140: the route said the feed failed or is incomplete. */
+  const [degradedMessage, setDegradedMessage] = useState<string | null>(null)
 
   useEffect(() => {
     // `ticker` wins when both are supplied — per-issuer news is the more
@@ -83,16 +78,22 @@ export default function NewsFeed({ sector, ticker, color }: NewsFeedProps) {
     setFetchedAt(null)
     setLoading(true)
     setApiError(false)
+    setDegradedMessage(null)
 
     fetch(endpoint)
       .then(r => {
         if (!r.ok) throw new Error(String(r.status))
         return r.json()
       })
-      .then(data => {
+      .then((data: unknown) => {
         if (cancelled) return
-        setNews(data.news ?? [])
-        setFetchedAt(data.fetchedAt ?? null)
+        // Q-094: parsed, not spread — a malformed item is dropped, a body that
+        // is not a news envelope at all takes the error path below.
+        const parsed = parseNewsPayload(data)
+        if (parsed.dropped > 0) console.warn('[NewsFeed] dropped malformed items', parsed.dropped)
+        setNews(parsed.items)
+        setFetchedAt(parsed.fetchedAt)
+        setDegradedMessage(parsed.degradedMessage)
         setLoading(false)
       })
       .catch((err) => {
@@ -136,8 +137,15 @@ export default function NewsFeed({ sector, ticker, color }: NewsFeedProps) {
     )
   }
 
+  const degradedNotice = degradedMessage && (
+    <div role="status" className="rounded-xl border border-amber-800/40 bg-amber-950/20 p-3 text-xs text-amber-300">
+      {degradedMessage}
+    </div>
+  )
+
   if (news.length === 0) {
-    return (
+    // Q-140: an empty list from a FAILED feed is not "no recent news".
+    return degradedNotice || (
       <div className="rounded-xl border border-slate-800 p-6 text-center text-xs text-slate-400">
         No recent news found for this {ticker ? 'ticker' : sector ? 'sector' : 'topic'} on Yahoo Finance.
       </div>
@@ -146,11 +154,15 @@ export default function NewsFeed({ sector, ticker, color }: NewsFeedProps) {
 
   return (
     <div className="space-y-3">
+      {degradedNotice}
       {/* Source / timestamp bar */}
       {fetchedAt && (
         <div className="flex items-center gap-2 text-[10px] text-slate-400 pb-1">
-          <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse inline-block" />
-          Live · Yahoo Finance
+          {/* Q-140: not "Live" with a green pulse when the route said the feed is degraded. */}
+          {degradedMessage
+            ? <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />
+            : <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse inline-block" />}
+          {degradedMessage ? 'Partial' : 'Live'} · Yahoo Finance
           <span>· Fetched {new Date(fetchedAt).toLocaleTimeString()}</span>
         </div>
       )}

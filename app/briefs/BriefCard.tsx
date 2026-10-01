@@ -2,28 +2,11 @@
 
 import Link from 'next/link'
 import { SECTORS } from '@/lib/sectors'
+import type { SectorBrief } from '@/lib/briefs/sectorBrief'
+import { formatCurrency, formatSignedNumber } from '@/lib/format'
 
-interface SectorBrief {
-  id: string
-  sector: string
-  sectorName: string
-  fetchedAt: string
-  lastUpdated: string | null
-  quoteTime: string | null
-  price: number
-  change: number
-  changePct: number
-  high52w: number | null
-  low52w: number | null
-  analystRating: string | null
-  analystCount: number | null
-  holdingsAvgChange: number
-  dataQuality: 'live' | 'partial' | 'unavailable'
-  dataQualityNote: string | null
-  news: { title: string }[]
-  signals: { key: string; value: string; impact: string }[]
-  summary: string
-}
+// Q-140: was a hand-copied duplicate of the builder's type, which is how a
+// price that can be null went unnoticed here. One definition now.
 
 export default function BriefCard({ brief }: { brief: SectorBrief }) {
   const sector = SECTORS.find(s => s.slug === brief.sector)
@@ -80,18 +63,18 @@ export default function BriefCard({ brief }: { brief: SectorBrief }) {
 
             {/* Price line */}
             <div className="flex items-center gap-3 mb-2">
-              <span className="text-lg font-bold text-white font-mono">${brief.price.toFixed(2)}</span>
+              <span className="text-lg font-bold text-white font-mono">{formatCurrency(brief.price)}</span>
               <span
                 className="text-sm font-mono font-semibold"
-                style={{ color: brief.changePct >= 0 ? '#00d084' : '#ff6b7a' }}
+                style={{ color: brief.changePct == null ? '#94a3b8' : brief.changePct >= 0 ? '#00d084' : '#ff6b7a' }}
               >
-                {brief.changePct >= 0 ? '+' : ''}{brief.changePct.toFixed(2)}%
+                {brief.changePct == null ? '—' : `${formatSignedNumber(brief.changePct)}%`}
               </span>
               <span className="text-sm text-slate-400 font-mono">
-                {brief.change >= 0 ? '+' : ''}{brief.change.toFixed(2)}
+                {formatSignedNumber(brief.change)}
               </span>
               <span className="ml-auto text-xs text-slate-400 font-mono">
-                H: ${(brief.high52w ?? 0).toFixed(2)}
+                H: {formatCurrency(brief.high52w)}
               </span>
             </div>
 

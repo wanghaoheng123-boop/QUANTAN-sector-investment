@@ -22,52 +22,15 @@ import YahooFinance from 'yahoo-finance2'
 import { parseQuoteTime } from '@/lib/format'
 import { applyRateLimit } from '@/lib/api/rateLimit'
 import { normalizeTicker, sanitizeError } from '@/lib/api/sanitize'
+import type { DarkPoolAnalysis, PricePoint } from '@/lib/darkpool'
 
 const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] })
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-export interface DarkPoolMetric {
-  /** % of float traded off-exchange (Finra BATS/OTCQX/OTCBB) */
-  offExchangePct: number | null
-  /** % of float traded on-exchange */
-  onExchangePct: number | null
-  /** Raw off-exchange share count */
-  offExchangeShares: number | null
-  /** Total outstanding shares used for ratio */
-  totalShares: number | null
-  /** Short interest — shares sold short */
-  sharesShorted: number | null
-  /** Short interest as % of float */
-  shortFloatPct: number | null
-  /** Shares short / avg daily volume ratio (days to cover) */
-  daysToCover: number | null
-  /** Avg daily volume (shares) */
-  avgDailyVolume: number | null
-  /** Total shares outstanding (raw) */
-  sharesOutstanding: number | null
-  /** Total float (free float) */
-  sharesFloat: number | null
-}
 
-export interface PricePoint {
-  price: number
-  change: number
-  changePct: number
-  quoteTime: string | null
-}
 
-export interface DarkPoolAnalysis {
-  ticker: string
-  fetchedAt: string
-  quote: PricePoint
-  metrics: DarkPoolMetric
-  /** Whether Yahoo had meaningful dark-pool data for this ticker */
-  hasRealData: boolean
-  /** Human-readable diagnostic when no real data */
-  statusNote: string | null
-}
 
 function safeNum(v: unknown): number | null {
   if (typeof v === 'number' && Number.isFinite(v)) return v
@@ -92,7 +55,7 @@ function buildAnalysis(
   // ratios across the user base without detection. Emit a single
   // structured warn so log aggregation can alert on drift. Behavior is
   // unchanged: downstream still treats null as "unknown" and proceeds.
-  const quoteHasPrice = quote && quote.price > 0
+  const quoteHasPrice = quote.price != null && quote.price > 0
   if (quoteHasPrice && sharesFloat === null) {
     console.warn(JSON.stringify({
       event: 'darkpool.shares_float_missing',
@@ -219,32 +182,29 @@ export async function GET(
       (q as Record<string, unknown>).regularMarketChangePercent
     )
 
-    // Phase 14 wave 24 (Pattern C — defensive clamps): every numeric field
-    // emitted to the UI must be finite. Prior code used `?? 0` which only
-    // catches null/undefined, NOT NaN/Infinity. Yahoo halt rows occasionally
-    // surface NaN in change / changePct fields, which then JSON-serialised
-    // to `null` and crashed `.toFixed` on the consumer side. Now we guard
-    // with Number.isFinite at the API boundary so the UI gets a real number
-    // OR an explicit 0 (never NaN/Infinity).
-    const finiteOrZero = (v: unknown): number =>
-      typeof v === 'number' && Number.isFinite(v) ? v : 0
+    // Phase 14 wave 24 (Pattern C): every numeric field emitted to the UI must
+    // be finite. Q-140: a missing value is null, not 0 — the old "explicit 0"
+    // fallback put a measured-looking zero on the wire. Consumers guard with
+    // Number.isFinite / != null.
+    const finiteOrNull = (v: unknown): number | null =>
+      typeof v === 'number' && Number.isFinite(v) ? v : null
 
     const price: PricePoint =
       rawPrice != null && Number.isFinite(rawPrice) && rawPrice > 0
         ? {
             price: rawPrice,
-            change: finiteOrZero(rawChange),
+            change: finiteOrNull(rawChange),
             changePct: Number.isFinite(rawChangePct)
               ? (rawChangePct as number)
               : Number.isFinite(rawChange) && rawPrice > 0
                 ? (100 * (rawChange as number)) / rawPrice
-                : 0,
+                : null,
             quoteTime: parseQuoteTime(q.regularMarketTime),
           }
         : {
-            price: 0,
-            change: 0,
-            changePct: 0,
+            price: null,
+            change: null,
+            changePct: null,
             quoteTime: null,
           }
 
@@ -269,9 +229,23 @@ export async function GET(
       safeNum((q as Record<string, unknown>).averageDailyVolume as number)
     const analysis = buildAnalysis(ticker, price, keyStats, financialData, avgDailyVolumeFromQuote)
 
+    // Q-140 (I2): a FAILED fetch is not "no data for this security type". With
+    // Yahoo down this used to say "Dark pool metrics are not available for this
+    // security type (ETF, ADR, or OTC)" — a wrong explanation for an outage.
+    const quoteFailed = quoteResult.status === 'rejected'
+    const summaryFailed = summaryResult.status === 'rejected'
+    if (quoteFailed || summaryFailed) {
+      analysis.degraded = true
+      analysis.statusNote = quoteFailed && summaryFailed
+        ? 'The market-data feed failed for this ticker; try again shortly.'
+        : quoteFailed
+          ? 'The price quote failed to load; the off-exchange statistics below are shown without it.'
+          : 'The off-exchange statistics failed to load; try again shortly.'
+    }
+
     return NextResponse.json(analysis, {
       headers: {
-        'Cache-Control': 's-maxage=60, stale-while-revalidate=300',
+        'Cache-Control': analysis.degraded ? 'no-store' : 's-maxage=60, stale-while-revalidate=300',
       },
     })
   } catch (err) {

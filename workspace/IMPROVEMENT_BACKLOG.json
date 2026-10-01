@@ -2005,7 +2005,7 @@
     "title": "Zero news items degrades sector brief dataQuality to PARTIAL with a wrong explanation",
     "domain": "Data/Infrastructure",
     "priority": "P2",
-    "status": "pending",
+    "status": "done",
     "files": [
       "lib/briefs/sectorBrief.ts",
       "app/briefs/BriefCard.tsx",
@@ -2019,7 +2019,8 @@
     "verify_commands": [
       "npm run test"
     ],
-    "notes_2026_08_16": "Filed by the disinformation-analyst review of Q-088. PRE-EXISTING, not introduced by that diff. lib/briefs/sectorBrief.ts:399 counts `news.length === 0` among the missing-data conditions, so a sector with no Yahoo news items for the day is labeled dataQuality \"partial\" with the note \"Some data points unavailable (N field(s) missing). Market may be in pre/post-market phase.\" aggregateDataQuality/briefsHealth take the WORST case across all 11 sectors (:539-546, :564-570), so one quiet sector degrades the whole /briefs header pill from LIVE to PARTIAL. User-visible in app/briefs/BriefCard.tsx:63-68 and LiveBriefClient.tsx:148-157. This is an I2 framing defect: a routine \"no news today\" is reported as a specific and wrong explanation about market phase. No returns claim is involved, so no event study is needed."
+    "notes_2026_08_16": "Filed by the disinformation-analyst review of Q-088. PRE-EXISTING, not introduced by that diff. lib/briefs/sectorBrief.ts:399 counts `news.length === 0` among the missing-data conditions, so a sector with no Yahoo news items for the day is labeled dataQuality \"partial\" with the note \"Some data points unavailable (N field(s) missing). Market may be in pre/post-market phase.\" aggregateDataQuality/briefsHealth take the WORST case across all 11 sectors (:539-546, :564-570), so one quiet sector degrades the whole /briefs header pill from LIVE to PARTIAL. User-visible in app/briefs/BriefCard.tsx:63-68 and LiveBriefClient.tsx:148-157. This is an I2 framing defect: a routine \"no news today\" is reported as a specific and wrong explanation about market phase. No returns claim is involved, so no event study is needed.",
+    "resolution_2026_10_01": "SHIPPED with Q-140: empty news no longer counts as a missing field; notes name the failed fetch or the unreported field and never guess at the market phase; tests replaced the ones that pinned the defect."
   },
   {
     "id": "Q-092",
@@ -2063,7 +2064,7 @@
     "title": "No runtime validation at the news fetch boundary (house style requires zod)",
     "domain": "Frontend/UX",
     "priority": "P3",
-    "status": "pending",
+    "status": "done",
     "files": [
       "components/NewsFeed.tsx",
       "app/api/news/ticker/[ticker]/route.ts",
@@ -2078,7 +2079,8 @@
       "npm run typecheck",
       "npm run test"
     ],
-    "notes_2026_08_16": "Found by the red-team review of Q-088 (finding Q088-7). components/NewsFeed.tsx does `setNews(data.news ?? [])` with no parse, against the CLAUDE.md house rule \"Runtime validation at every I/O boundary (zod). Parse, don't validate.\" A 200 carrying {news:[{}]} renders a card with an empty headline, publisher \"Unknown\" and href=\"#\" beneath the Live badge. NOT a security hole — safeHref prevents scheme injection and React escapes the text — this is display fail-open. Low priority because the shape comes from our own route, which now fails closed on schema drift (Q088-5, fixed in PR #147); this is the remaining defence-in-depth layer."
+    "notes_2026_08_16": "Found by the red-team review of Q-088 (finding Q088-7). components/NewsFeed.tsx does `setNews(data.news ?? [])` with no parse, against the CLAUDE.md house rule \"Runtime validation at every I/O boundary (zod). Parse, don't validate.\" A 200 carrying {news:[{}]} renders a card with an empty headline, publisher \"Unknown\" and href=\"#\" beneath the Live badge. NOT a security hole — safeHref prevents scheme injection and React escapes the text — this is display fail-open. Low priority because the shape comes from our own route, which now fails closed on schema drift (Q088-5, fixed in PR #147); this is the remaining defence-in-depth layer.",
+    "resolution_2026_10_01": "SHIPPED with Q-140: lib/news/newsPayload.ts parses the news payload with zod item by item at the NewsFeed boundary; malformed items dropped and counted; non-envelope bodies take the error path; zod declared (+ register row)."
   },
   {
     "id": "Q-095",
@@ -3132,7 +3134,7 @@
     "title": "`degraded: true` is set by /api/crypto/btc/metrics and /api/briefs and read by no client; producers are found only by the flag they already set",
     "domain": "Data/Integrity",
     "priority": "P2",
-    "status": "pending",
+    "status": "done",
     "files": [
       "app/api/crypto/btc/metrics/route.ts",
       "app/api/briefs/route.ts",
@@ -3148,7 +3150,8 @@
       "npm run test"
     ],
     "notes_2026_09_28": "Split from Q-138. /api/briefs sets degraded when more than half of 33 sector calls fail; app/page.tsx reads data.briefs and never the flag, so the landing shows a silently thinned list (the CDN TTL is shortened, the user is not told). metrics degrades mostly visibly (nulls render '—', source reads 'Unavailable') but never shows its userMessage.",
-    "notes_2026_09_28_b": "Also from the Q-138 red-team: BtcQuantLab's derivativesError banner is never cleared on a later success (sticky), and the Vercel CDN serves liquidation success bodies up to ~30s old carrying _cached:false (x-vercel-cache STALE)."
+    "notes_2026_09_28_b": "Also from the Q-138 red-team: BtcQuantLab's derivativesError banner is never cleared on a later success (sticky), and the Vercel CDN serves liquidation success bodies up to ~30s old carrying _cached:false (x-vercel-cache STALE).",
+    "resolution_2026_10_01": "SHIPPED: behavioural fail-closed detector over EVERY route (every upstream down → non-2xx or an explicit degraded signal) found 8 silent routes; a derived consumer guard found 4 blind consumers. All fixed; 16 mutations. reviews/q140-fail-closed-routes-2026-10-01.md"
   },
   {
     "id": "Q-141",
@@ -3168,5 +3171,25 @@
       "npm run test"
     ],
     "notes_2026_09_28": "Found by the Q-138 round-2 red team. app/crypto/btc/page.tsx passes <BtcQuantLab candles={candles} /> whatever timeframe was last loaded (1m-1M via BtcTabBar); the Analysis tab labels a 200-bar average '200-Day MA Regime' and a 20-bar range position '20-week' band. Q-138 corrected only its own intro sentence."
+  },
+  {
+    "id": "Q-142",
+    "title": "React hydration error #418 on production pages (server/client text mismatch)",
+    "domain": "Frontend/UX",
+    "priority": "P2",
+    "status": "pending",
+    "files": [
+      "app/briefs/sector/[sector]/LiveBriefClient.tsx"
+    ],
+    "acceptance_criteria": [
+      "Every page renders with zero console errors on a production build, checked by a script over all routes",
+      "Time-dependent text (relative ages, toLocaleTimeString) renders only after mount or from a stable server value",
+      "A test or CI check fails on a hydration error"
+    ],
+    "verify_commands": [
+      "npm run build",
+      "npm run test"
+    ],
+    "notes_2026_10_01": "Seen during Q-140 verification on PRODUCTION at /briefs/sector/technology (Minified React error #418 — server-rendered text did not match the client). Pre-existing: production did not yet contain Q-140. Likely cause: relative ages / locale time strings rendered on the server in UTC and again on the client in local time."
   }
 ]

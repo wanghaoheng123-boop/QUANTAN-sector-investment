@@ -91,6 +91,7 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
   const [darkPoolPrints, setDarkPoolPrints] = useState<Synthetic<DarkPoolPrint[]>>(() => markSynthetic([]))
   const [darkPoolApiData, setDarkPoolApiData] = useState<DarkPoolAnalysis | null>(null)
   const [darkPoolApiLoading, setDarkPoolApiLoading] = useState(false)
+  const [darkPoolApiError, setDarkPoolApiError] = useState<string | null>(null)
   const [optionsChain, setOptionsChain] = useState<EnrichedChain | null>(null)
   const [optionsGex, setOptionsGex] = useState<GexResult | null>(null)
   const [optionsFlow, setOptionsFlow] = useState<UnusualFlowItem[]>([])
@@ -271,8 +272,11 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
     let cancelled = false
     setDarkPoolApiLoading(true)
     setDarkPoolApiData(null)
+    setDarkPoolApiError(null)
     fetch(`/api/darkpool/${encodeURIComponent(ticker)}`)
-      .then(r => r.json())
+      // Q-140: a non-2xx body ({error}) used to be stored as the analysis, and
+      // the panel then read `apiData.quote.price` on undefined.
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
       .then(data => {
         if (cancelled) return
         setDarkPoolApiData(data)
@@ -281,6 +285,7 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
       .catch((err: unknown) => {
         if (cancelled) return
         console.warn('[stock/darkpool] fetch failed', ticker, err)
+        setDarkPoolApiError('Dark-pool data failed to load; try again shortly.')
         setDarkPoolApiLoading(false)
       })
     return () => { cancelled = true }
@@ -672,7 +677,7 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
               {activeTab === 'darkpool' && (
                 <div role="tabpanel" id="panel-darkpool" aria-labelledby="tab-darkpool">
                   <DarkPoolPanel prints={darkPoolPrints} ticker={ticker} color={color}
-                    apiData={darkPoolApiData} apiLoading={darkPoolApiLoading} />
+                    apiData={darkPoolApiData} apiLoading={darkPoolApiLoading} apiError={darkPoolApiError} />
                 </div>
               )}
 

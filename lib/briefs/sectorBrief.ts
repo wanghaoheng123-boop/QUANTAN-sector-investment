@@ -52,10 +52,10 @@ export interface SectorBrief {
   fetchedAt: string
   lastUpdated: string | null
 
-  // Live price data
-  price: number
-  change: number
-  changePct: number
+  // Live price data. Q-140: null when the quote is unavailable — never 0.
+  price: number | null
+  change: number | null
+  changePct: number | null
   quoteTime: string | null
 
   // 52-week context
@@ -83,8 +83,9 @@ export interface SectorBrief {
   beta: number | null
 
   // Holdings-derived data
-  holdings: { ticker: string; weight: string; price: number; change: number; changePct: number }[]
-  holdingsAvgChange: number
+  holdings: { ticker: string; weight: string; price: number; change: number | null; changePct: number | null }[]
+  /** Mean daily change of the holdings that reported one; null when none did. */
+  holdingsAvgChange: number | null
 
   // Live news
   news: {
@@ -171,7 +172,7 @@ function formatLargeNum(n: number): string {
  * silently swallowed everything — a chronically failing fetch looked
  * indistinguishable from a healthy "no data on this ticker" response.
  */
-function fetchWithFallback<T>(p: Promise<T>, fallback: T, label?: string): Promise<T> {
+function fetchWithFallback<T>(p: Promise<T>, fallback: T, label?: string, failures?: string[]): Promise<T> {
   return p.catch((err: unknown) => {
     if (label) {
       console.warn(JSON.stringify({
@@ -180,6 +181,9 @@ function fetchWithFallback<T>(p: Promise<T>, fallback: T, label?: string): Promi
         message: (err as Error)?.message,
       }))
     }
+    // Q-140: record that this component FAILED, so the brief can say "the
+    // feed failed" rather than guess at why a field is empty.
+    if (failures && label) failures.push(label)
     return fallback
   })
 }
@@ -208,29 +212,35 @@ export async function buildSectorBrief(
 
   // Parallel fetch: ETF quote, ETF summary stats, holdings quotes, news.
   // Phase 14 wave 8: labels added so any fallback usage is observable.
+  const failures: string[] = []
   const [etfQuote, etfSummary, newsResult] = await Promise.allSettled([
-    fetchWithFallback(fetchers.quote(etf), null, `quote:${etf}`),
+    fetchWithFallback(fetchers.quote(etf), null, 'quote', failures),
     fetchWithFallback(
       fetchers.quoteSummary(etf, {
         modules: ['defaultKeyStatistics', 'financialData', 'recommendationTrend', 'earningsTrend'],
       }),
       null,
-      `summary:${etf}`,
+      'summary',
+      failures,
     ),
     fetchWithFallback(
       fetchers.search(etf, { newsCount: 8 }),
       null,
-      `news:${etf}`,
+      'news',
+      failures,
     ),
   ])
 
   // ── ETF Quote ──────────────────────────────────────────────────────────────
   const q = (etfQuote.status === 'fulfilled' ? etfQuote.value : null) as Record<string, unknown> | null
 
-  const price = safeNum(q?.regularMarketPrice ?? q?.currentPrice) ?? 0
-  const change = safeNum(q?.regularMarketChange) ?? 0
+  // Q-140 (I2): these defaulted to 0, so a failed quote rendered "$0.00" and
+  // "flat 0.00% today" as if measured. Unknown is null.
+  const rawPrice = safeNum(q?.regularMarketPrice ?? q?.currentPrice)
+  const price = rawPrice != null && rawPrice > 0 ? rawPrice : null
+  const change = price != null ? safeNum(q?.regularMarketChange) : null
   const rawChangePct = safeNum((q as Record<string, unknown>)?.regularMarketChangePercent as number)
-  const changePct = rawChangePct ?? (price > 0 && change !== 0 ? (100 * change) / price : 0)
+  const changePct = rawChangePct ?? (price != null && change != null ? (100 * change) / price : null)
   const quoteTime = parseQuoteTime(q?.regularMarketTime)
   // A4-1: yahoo-finance2 Quote exposes regularMarketVolume (quote.d.ts:234) and
   // averageDailyVolume3Month (:275) — the prior `regularVolume`/`averageDailyVolume`
@@ -241,8 +251,8 @@ export async function buildSectorBrief(
   const marketCap = marketCapRaw ? formatLargeNum(marketCapRaw) : null
   const high52w = safeNum(q?.fiftyTwoWeekHigh)
   const low52w = safeNum(q?.fiftyTwoWeekLow)
-  const priceVsHighPct = high52w && high52w > 0 ? -((high52w - price) / high52w) * 100 : null
-  const priceVsLowPct = low52w && low52w > 0 ? ((price - low52w) / low52w) * 100 : null
+  const priceVsHighPct = price != null && high52w && high52w > 0 ? -((high52w - price) / high52w) * 100 : null
+  const priceVsLowPct = price != null && low52w && low52w > 0 ? ((price - low52w) / low52w) * 100 : null
 
   // ── ETF Summary ────────────────────────────────────────────────────────────
   const etfSummaryData = (etfSummary.status === 'fulfilled' ? etfSummary.value : null) as Record<string, unknown> | null
@@ -288,7 +298,7 @@ export async function buildSectorBrief(
   }
 
   const targetRaw = safeNum(finData?.targetPrice as number)
-  if (targetRaw && price > 0) {
+  if (targetRaw && price != null) {
     targetPrice = targetRaw
     currentVsTargetPct = ((price - targetRaw) / targetRaw) * 100
   }
@@ -306,14 +316,16 @@ export async function buildSectorBrief(
       ticker,
       weight: '—',
       price: safeNum(qh?.regularMarketPrice ?? qh?.currentPrice) ?? 0,
-      change: safeNum(qh?.regularMarketChange) ?? 0,
-      changePct: safeNum((qh as Record<string, unknown>)?.regularMarketChangePercent as number) ?? 0,
+      // Q-140: a missing change is unknown, not "unchanged".
+      change: safeNum(qh?.regularMarketChange),
+      changePct: safeNum((qh as Record<string, unknown>)?.regularMarketChangePercent as number),
     }
-  }).filter(h => h.price > 0)
+  }).filter(h => h.price > 0) // a holding with no price is dropped, not shown at $0
 
-  const holdingsAvgChange = holdings.length > 0
-    ? holdings.reduce((s, h) => s + h.changePct, 0) / holdings.length
-    : 0
+  const reportedChanges = holdings.map(h => h.changePct).filter((v): v is number => v != null)
+  const holdingsAvgChange = reportedChanges.length > 0
+    ? reportedChanges.reduce((s, v) => s + v, 0) / reportedChanges.length
+    : null
 
   // ── News ──────────────────────────────────────────────────────────────────
   // Phase 13 S2 — XSS supply-chain defense via @/lib/security/urlValidation
@@ -366,7 +378,8 @@ export async function buildSectorBrief(
   if (peRatio !== null) {
     signals.push({
       key: 'Trailing P/E',
-      value: peRatio > 0 ? `$${peRatio.toFixed(1)}` : '—',
+      // A ratio, not a price: this rendered "$31.2".
+      value: peRatio > 0 ? `${peRatio.toFixed(1)}×` : '—',
       impact: peRatio > 40 ? 'negative' : peRatio < 15 ? 'positive' : 'neutral',
     })
   }
@@ -389,25 +402,45 @@ export async function buildSectorBrief(
 
   signals.push({
     key: 'Sector ETF',
-    value: `${etf} · $${price.toFixed(2)}`,
+    value: price != null ? `${etf} · $${price.toFixed(2)}` : `${etf} · —`,
     impact: 'neutral',
   })
 
-  // ── Summary text ──────────────────────────────────────────────────────────
+  // ── Data quality ──────────────────────────────────────────────────────────
+  // Q-091 / Q-140: the note used to GUESS at a cause ("Market may be closed or
+  // ticker not supported", "Market may be in pre/post-market phase") — wrong
+  // for an outage, and Yahoo returns quotes when the market is closed anyway.
+  // And an empty news list counted as a missing data point, so a quiet news
+  // day downgraded the brief. Now: a FAILED fetch is said to have failed; a
+  // missing field is named; no news is not a fault.
   let dataQuality: 'live' | 'partial' | 'unavailable' = 'live'
   let dataQualityNote: string | null = null
-  const missingCount = [price === 0, !high52w, !peRatio, news.length === 0].filter(Boolean).length
+  const missing = [
+    price == null ? 'price' : null,
+    high52w == null ? '52-week range' : null,
+    peRatio == null ? 'P/E' : null,
+  ].filter((x): x is string => x != null)
 
-  if (missingCount >= 3) {
+  if (failures.includes('quote')) {
     dataQuality = 'unavailable'
-    dataQualityNote = 'Insufficient data from Yahoo Finance for this sector ETF. Market may be closed or ticker not supported.'
-  } else if (missingCount >= 1) {
+    dataQualityNote = `The price feed failed for ${etf}; try again shortly.`
+  } else if (price == null) {
+    dataQuality = 'unavailable'
+    dataQualityNote = `Yahoo Finance returned no price for ${etf}.`
+  } else if (failures.length > 0 || missing.length > 0) {
     dataQuality = 'partial'
-    dataQualityNote = `Some data points unavailable (${missingCount} field(s) missing). Market may be in pre/post-market phase.`
+    const failed = failures.map((f) => (f === 'summary' ? 'valuation statistics' : f === 'news' ? 'headlines' : f))
+    dataQualityNote = [
+      failed.length ? `Failed to load: ${failed.join(', ')}.` : null,
+      missing.length ? `Not reported by Yahoo Finance: ${missing.join(', ')}.` : null,
+    ].filter(Boolean).join(' ')
   }
 
-  const sessionDir = changePct > 0.1 ? 'up' : changePct < -0.1 ? 'down' : 'flat'
-  const briefSummaryText = `${sectorMeta.name} sector (${etf}) is ${sessionDir} ${Math.abs(changePct).toFixed(2)}% today at $${price.toFixed(2)}. ` +
+  // ── Summary text ──────────────────────────────────────────────────────────
+  const sessionDir = changePct == null ? null : changePct > 0.1 ? 'up' : changePct < -0.1 ? 'down' : 'flat'
+  const briefSummaryText = (price != null && changePct != null && sessionDir
+    ? `${sectorMeta.name} sector (${etf}) is ${sessionDir} ${Math.abs(changePct).toFixed(2)}% today at $${price.toFixed(2)}. `
+    : `${sectorMeta.name} sector (${etf}): price unavailable. `) +
     (analystRating
       ? `Analyst consensus is ${analystRating}${targetPrice ? ` with $${targetPrice.toFixed(0)} target` : ''}. `
       : '') +
@@ -524,7 +557,8 @@ export async function getAllSectorBriefs(
     else failedSlugs.push(SECTORS[i].slug)
   })
 
-  briefs.sort((a, b) => b.holdingsAvgChange - a.holdingsAvgChange)
+  // Unknown averages sort last rather than as if flat.
+  briefs.sort((a, b) => (b.holdingsAvgChange ?? -Infinity) - (a.holdingsAvgChange ?? -Infinity))
   return { briefs, failedSlugs }
 }
 

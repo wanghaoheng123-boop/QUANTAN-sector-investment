@@ -86,14 +86,32 @@ export async function GET(request: Request) {
 
     const scores = sectorScores(etfData)
 
+    // Q-140 (I2): a ranking with sectors missing because their FETCH failed
+    // ranks the survivors among themselves and presents that as the sector
+    // ranking — and this answer was CDN-cached for an hour. Thin history
+    // ('insufficient_data') is a legitimate exclusion; a failed fetch is not.
+    const fetchFailures = excludedSectors.filter((e) => e.reason === 'fetch_failed' || e.reason === 'promise_rejected')
+    const degraded = fetchFailures.length > 0 || scores.length === 0
+
     return NextResponse.json(
       {
         scores,
         excludedSectors,
         fetchedAt: new Date().toISOString(),
         note: 'Sector rotation ranks based on 3/6/12-month momentum and RSI mean-reversion boost.',
+        ...(degraded
+          ? {
+              degraded: true as const,
+              error: {
+                code: 'sector_rotation_partial',
+                message: fetchFailures.length > 0
+                  ? `Price data failed for ${fetchFailures.length} of ${etfList.length} sectors; ranks are among the remaining sectors only.`
+                  : 'No sector had enough history to rank.',
+              },
+            }
+          : {}),
       },
-      { headers: { 'Cache-Control': 's-maxage=3600, stale-while-revalidate=7200' } },
+      { headers: { 'Cache-Control': degraded ? 'no-store' : 's-maxage=3600, stale-while-revalidate=7200' } },
     )
   } catch (e) {
     console.error('[Sector Rotation API]', e)

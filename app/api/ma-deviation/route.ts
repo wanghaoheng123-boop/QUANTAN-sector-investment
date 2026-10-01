@@ -129,6 +129,23 @@ export async function GET(request: Request) {
       }
     })
 
+    // Q-140 (I2): with every chart fetch failing this answered 200 with eleven
+    // `error: 'fetch_failed'` rows and nothing at the top level saying the board
+    // was down — and then CACHED that board for five minutes, in this module and
+    // at the CDN. A board that is mostly failures is degraded, and is not cached.
+    const failedRows = rows.filter((r) => 'error' in r && r.error).length
+    const degraded = failedRows * 2 > rows.length
+    if (degraded) {
+      return NextResponse.json({
+        rows,
+        computedAt: new Date().toISOString(),
+        degraded: true,
+        error: { code: 'ma_deviation_unavailable', message: `Price data failed for ${failedRows} of ${rows.length} sectors; the board is incomplete.` },
+        _cached: false,
+        _cachedAt: now,
+      }, { headers: { 'Cache-Control': 'no-store' } })
+    }
+
     const payload = {
       rows,
       computedAt: new Date().toISOString(),

@@ -1814,6 +1814,24 @@
         "scripts/ci/workflow-heartbeat.mjs:127"
       ],
       "routes_to": []
+    },
+    {
+      "kind": "npm-package",
+      "id": "zod",
+      "lifecycle": "active",
+      "classification": "runtime-framework",
+      "vendor": "n/a",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Not a data vendor: MIT-licensed schema validation library, no network egress. Declared by Q-094 to parse the news payload at the client boundary (house style requires zod). It was already installed as a hoisted transitive dependency (3.22.4); declaring it changes no installed code.",
+      "recorded_by": "Q-094 (agent, lead engineer) — factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-10-01",
+      "evidence": [
+        "package.json",
+        "lib/news/newsPayload.ts"
+      ],
+      "routes_to": []
     }
   ],
   "field_definitions": {

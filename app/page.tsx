@@ -62,6 +62,8 @@ export default function HomePage() {
   // countdown to track because SSE is push-based.
   const [newsBriefs, setNewsBriefs] = useState<NewsBrief[]>([])
   const [newsLoading, setNewsLoading] = useState(true)
+  /** Q-140: /api/briefs said the feed failed or is incomplete. */
+  const [newsDegraded, setNewsDegraded] = useState<string | null>(null)
   const [activeFilter, setActiveFilter] = useState<string>('ALL')
 
   // Phase 14 wave 10: signal-aware fetch.
@@ -176,6 +178,9 @@ export default function HomePage() {
           if (controller.signal.aborted) return
           if (data.briefs) {
             setNewsBriefs(data.briefs)
+          }
+          if (data.degraded) {
+            setNewsDegraded(typeof data.error?.message === 'string' ? data.error.message : 'The news feed is degraded; this list may be incomplete.')
           }
         }
       } catch (e: unknown) {
@@ -498,8 +503,12 @@ export default function HomePage() {
             <div>
               <h2 id="section-latest-news" className="text-lg font-bold text-white">Latest Financial News</h2>
               <p className="text-xs text-slate-400 mt-0.5">
-                {newsLoading ? 'Loading latest news...' : `Live from Yahoo Finance · ${newsBriefs.length} articles`}
+                {newsLoading ? 'Loading latest news...' : `${newsDegraded ? 'Partial' : 'Live'} from Yahoo Finance · ${newsBriefs.length} articles`}
               </p>
+              {/* Q-140 (I2): a failed or thinned feed is said, not shown as a quiet news day. */}
+              {!newsLoading && newsDegraded && (
+                <p role="status" className="text-xs text-amber-400 mt-1">{newsDegraded}</p>
+              )}
             </div>
             <Link href="/briefs" className="text-sm text-amber-400 hover:text-amber-300 transition-colors">
               View all →

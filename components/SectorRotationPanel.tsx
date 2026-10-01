@@ -8,6 +8,9 @@ interface ApiResponse {
   scores: SectorScore[]
   fetchedAt: string
   excludedSectors?: Array<{ etf: string; reason: string; closes?: number }>
+  /** Q-140: set when sector fetches failed; the ranking is partial. */
+  degraded?: boolean
+  error?: { code: string; message: string }
 }
 
 function SignalBadge({ signal }: { signal: SectorSignal }) {
@@ -95,6 +98,12 @@ export default function SectorRotationPanel() {
 
   return (
     <div className="space-y-4">
+      {/* Q-140 (I2): ranks among a partial set are said to be partial. */}
+      {data.degraded && (
+        <p role="status" className="text-xs text-amber-400 border border-amber-800/40 bg-amber-950/20 rounded-lg px-3 py-2">
+          {data.error?.message ?? 'Some sectors failed to load; ranks are among the remaining sectors only.'}
+        </p>
+      )}
       {/* Grid of sector cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
         {data.scores.map((s) => {

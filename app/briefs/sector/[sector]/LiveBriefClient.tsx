@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { SECTORS } from '@/lib/sectors'
+import type { SectorBrief } from '@/lib/briefs/sectorBrief'
+import { formatCurrency, formatSignedNumber } from '@/lib/format'
 import { safeHref } from '@/lib/security/urlValidation'
 
 interface NewsItem {
@@ -20,43 +22,8 @@ interface BriefSignal {
   impact: 'positive' | 'negative' | 'neutral'
 }
 
-interface SectorBrief {
-  id: string
-  sector: string
-  sectorName: string
-  fetchedAt: string
-  lastUpdated: string | null
-  price: number
-  change: number
-  changePct: number
-  quoteTime: string | null
-  high52w: number | null
-  low52w: number | null
-  priceVsHighPct: number | null
-  priceVsLowPct: number | null
-  analystRating: string | null
-  analystCount: number | null
-  targetPrice: number | null
-  currentVsTargetPct: number | null
-  volume: number | null
-  avgVolume: number | null
-  avgVolume10d: number | null
-  marketCap: string | null
-  peRatio: number | null
-  forwardPe: number | null
-  pegRatio: number | null
-  priceToBook: number | null
-  dividendYield: number | null
-  beta: number | null
-  holdings: { ticker: string; weight: string; price: number; change: number; changePct: number }[]
-  holdingsAvgChange: number
-  news: NewsItem[]
-  signals: BriefSignal[]
-  summary: string
-  source: string
-  dataQuality: 'live' | 'partial' | 'unavailable'
-  dataQualityNote: string | null
-}
+// Q-140: was a hand-copied duplicate of the builder's type, which is how a
+// price that can be null went unnoticed here. One definition now.
 
 function impactColor(impact: string): string {
   return impact === 'positive' ? '#00d084' : impact === 'negative' ? '#ff6b7a' : '#94a3b8'
@@ -165,21 +132,21 @@ export default function LiveBriefClient({ slug, initialBrief }: { slug: string; 
             <div className="flex items-center gap-4 p-4 rounded-xl border border-slate-800 bg-slate-900/40 mb-4">
               <div>
                 <div className="text-xs text-slate-400 mb-0.5">Price</div>
-                <div className="text-2xl font-bold text-white font-mono">${brief.price.toFixed(2)}</div>
+                <div className="text-2xl font-bold text-white font-mono">{formatCurrency(brief.price)}</div>
               </div>
               <div
                 className="text-lg font-mono font-semibold"
-                style={{ color: brief.changePct >= 0 ? '#00d084' : '#ff6b7a' }}
+                style={{ color: brief.changePct == null ? '#94a3b8' : brief.changePct >= 0 ? '#00d084' : '#ff6b7a' }}
               >
-                {brief.changePct >= 0 ? '+' : ''}{brief.changePct.toFixed(2)}%
+                {brief.changePct == null ? '—' : `${formatSignedNumber(brief.changePct)}%`}
               </div>
               <div className="text-sm text-slate-400 font-mono">
-                {brief.change >= 0 ? '+' : ''}{brief.change.toFixed(2)}
+                {formatSignedNumber(brief.change)}
               </div>
               <div className="ml-auto text-right">
                 <div className="text-xs text-slate-400">52W Range</div>
                 <div className="text-xs text-slate-400 font-mono">
-                  ${(brief.low52w ?? 0).toFixed(2)} → ${(brief.high52w ?? 0).toFixed(2)}
+                  {formatCurrency(brief.low52w)} → {formatCurrency(brief.high52w)}
                 </div>
               </div>
             </div>
@@ -260,7 +227,7 @@ export default function LiveBriefClient({ slug, initialBrief }: { slug: string; 
           {brief.holdings.length > 0 && (
             <div className="rounded-xl border border-slate-800 p-5 mb-6 bg-slate-900/40">
               <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-4">
-                Top Holdings · Avg {brief.holdingsAvgChange >= 0 ? '+' : ''}{brief.holdingsAvgChange.toFixed(2)}%
+                Top Holdings · Avg {brief.holdingsAvgChange == null ? '—' : `${formatSignedNumber(brief.holdingsAvgChange)}%`}
               </h3>
               <div className="space-y-2">
                 {brief.holdings.map(h => (
@@ -274,8 +241,8 @@ export default function LiveBriefClient({ slug, initialBrief }: { slug: string; 
                       </Link>
                       <span className="text-xs text-slate-400 font-mono">${h.price.toFixed(2)}</span>
                     </div>
-                    <span className="text-sm font-mono font-semibold" style={{ color: h.changePct >= 0 ? '#00d084' : '#ff6b7a' }}>
-                      {h.changePct >= 0 ? '+' : ''}{h.changePct.toFixed(2)}%
+                    <span className="text-sm font-mono font-semibold" style={{ color: h.changePct == null ? '#94a3b8' : h.changePct >= 0 ? '#00d084' : '#ff6b7a' }}>
+                      {h.changePct == null ? '—' : `${formatSignedNumber(h.changePct)}%`}
                     </span>
                   </div>
                 ))}
