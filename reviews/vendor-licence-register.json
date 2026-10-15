@@ -427,7 +427,7 @@
     {
       "kind": "env-host",
       "id": "NEXT_PUBLIC_APP_URL",
-      "lifecycle": "active",
+      "lifecycle": "withdrawn",
       "classification": "first-party",
       "vendor": "QUANTAN (self)",
       "end_user_exposed": false,
@@ -439,12 +439,14 @@
       "evidence": [
         "lib/appUrl.ts:3"
       ],
-      "routes_to": []
+      "routes_to": [],
+      "withdrawn_on": "2026-10-16",
+      "withdrawn_reason": "Withdrawn 2026-10-16 (dead-code sweep): lib/appUrl.ts had no runtime importer after the briefs pages stopped fetching their own API (they call the builder directly, guarded by __tests__/briefs/noSelfFetch.test.ts); only its unit test read it. File and test deleted."
     },
     {
       "kind": "env-host",
       "id": "VERCEL_URL",
-      "lifecycle": "active",
+      "lifecycle": "withdrawn",
       "classification": "first-party",
       "vendor": "QUANTAN (self)",
       "end_user_exposed": false,
@@ -456,7 +458,9 @@
       "evidence": [
         "lib/appUrl.ts:5"
       ],
-      "routes_to": []
+      "routes_to": [],
+      "withdrawn_on": "2026-10-16",
+      "withdrawn_reason": "Withdrawn 2026-10-16 (dead-code sweep): lib/appUrl.ts had no runtime importer after the briefs pages stopped fetching their own API (they call the builder directly, guarded by __tests__/briefs/noSelfFetch.test.ts); only its unit test read it. File and test deleted."
     },
     {
       "kind": "env-host",
@@ -556,7 +560,7 @@
     {
       "kind": "dynamic-host",
       "id": "lib/appUrl.ts",
-      "lifecycle": "active",
+      "lifecycle": "withdrawn",
       "classification": "first-party",
       "vendor": "QUANTAN (self)",
       "end_user_exposed": false,
@@ -569,7 +573,9 @@
         "lib/appUrl.ts:6"
       ],
       "routes_to": [],
-      "dynamic_sites": 1
+      "dynamic_sites": 1,
+      "withdrawn_on": "2026-10-16",
+      "withdrawn_reason": "Withdrawn 2026-10-16 (dead-code sweep): lib/appUrl.ts had no runtime importer after the briefs pages stopped fetching their own API (they call the builder directly, guarded by __tests__/briefs/noSelfFetch.test.ts); only its unit test read it. File and test deleted."
     },
     {
       "kind": "dynamic-host",
@@ -677,7 +683,6 @@
       "recorded_by": "Q-100 (agent, lead engineer) — factual position recorded from the repository; no legal conclusion drawn",
       "recorded_on": "2026-08-27",
       "evidence": [
-        "lib/appUrl.ts:11",
         "scripts/smoke-production.mjs:2"
       ],
       "routes_to": []
@@ -915,7 +920,7 @@
     {
       "kind": "npm-package",
       "id": "@testing-library/user-event",
-      "lifecycle": "active",
+      "lifecycle": "withdrawn",
       "classification": "test-tooling",
       "vendor": "n/a",
       "end_user_exposed": false,
@@ -927,7 +932,9 @@
       "evidence": [
         "package.json"
       ],
-      "routes_to": []
+      "routes_to": [],
+      "withdrawn_on": "2026-10-16",
+      "withdrawn_reason": "Withdrawn 2026-10-16 (dead-code sweep): declared in package.json devDependencies and imported by no tracked file. Removed from the manifest."
     },
     {
       "kind": "npm-package",
@@ -1170,7 +1177,7 @@
     {
       "kind": "npm-package",
       "id": "pathe",
-      "lifecycle": "active",
+      "lifecycle": "withdrawn",
       "classification": "build-tooling",
       "vendor": "n/a",
       "end_user_exposed": false,
@@ -1182,7 +1189,9 @@
       "evidence": [
         "package.json"
       ],
-      "routes_to": []
+      "routes_to": [],
+      "withdrawn_on": "2026-10-16",
+      "withdrawn_reason": "Withdrawn 2026-10-16 (dead-code sweep): declared in package.json devDependencies and imported by no tracked file. Removed from the manifest."
     },
     {
       "kind": "npm-package",
