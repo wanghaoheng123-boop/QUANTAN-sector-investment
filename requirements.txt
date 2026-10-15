@@ -4,9 +4,10 @@
 # REQUIRES PYTHON >= 3.12  (see .python-version, pinned to 3.13)
 #
 # Q110-T7b (2026-09-06) — this line exists because the constraint was previously
-# invisible. `tradingagents` (below) publishes only wheels with
-# `Requires-Python: >=3.12`, so on 3.11 pip reports "from versions: none" and
-# the manifest looks BROKEN rather than mis-targeted. Nothing in this repo
+# invisible. `tradingagents` published only wheels with `Requires-Python: >=3.12`,
+# so on 3.11 pip reported "from versions: none" and the manifest looked BROKEN
+# rather than mis-targeted. (That package is no longer in this manifest — see
+# below — but the floor stays: 3.13 is the interpreter the suite is verified on.) Nothing in this repo
 # declared a minimum interpreter — no pyproject.toml, no setup.py, no
 # .python-version — so the requirement lived transitively inside a dependency
 # and was discoverable only by failing. The CI pytest job pinned 3.11 and did
@@ -21,8 +22,16 @@ numpy>=1.26.0
 pandas>=2.1.0
 scipy>=1.12.0
 
-# TradingAgents (LLM multi-agent analysis)
-tradingagents>=0.2.0
+# TradingAgents (LLM multi-agent analysis) — REMOVED FROM THIS MANIFEST 2026-10-16.
+# The `tradingagents` package was DELETED from PyPI: https://pypi.org/pypi/tradingagents/json
+# returns 404, and `pip install -r requirements.txt` failed with "from versions: none"
+# on every branch (CI pytest, from the 2026-10-15 runs). A deleted PyPI name can be
+# re-registered by anyone, so leaving `tradingagents>=0.2.0` here would install
+# whatever a stranger publishes under it — in CI on every pull request, and in any
+# sidecar build. `server_trading_agents.py` still imports it, so the LLM sidecar
+# cannot be built until the owner pins a VERIFIED source (for example a git URL at
+# a reviewed commit hash) in a separate manifest. Nothing else here needs it: the
+# pytest suite tests the sidecar's helpers without importing the package.
 
 # Data Sources
 yfinance>=0.2.40
@@ -40,7 +49,7 @@ arch>=6.0.0
 matplotlib>=3.8.0
 
 # Multi-Agent Factor Mining
-# langgraph>=0.2.0  # Optional; comes via tradingagents dependency
+# langgraph>=0.2.0  # Optional; came via the (removed) tradingagents dependency
 
 # API Clients
 requests>=2.31.0
