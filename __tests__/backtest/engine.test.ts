@@ -2,13 +2,12 @@ import { describe, it, expect } from 'vitest'
 import {
   backtestInstrument,
   aggregatePortfolio,
-  walkForwardAnalysis,
-  walkForwardSummary,
   TX_COST_BPS_PER_SIDE,
   TX_COST_PCT_PER_SIDE,
   BACKTEST_WARMUP_BARS,
 } from '@/lib/backtest/engine'
 import type { OhlcvRow } from '@/lib/backtest/engine'
+import { walkForwardAnalysis, walkForwardSummary } from '@/lib/backtest/walkForward'
 
 // Deterministic LCG (same constants as engine.equity.invariant.test.ts). Fixtures
 // MUST NOT use Math.random(): a non-seeded fixture makes stryker-weekly mutation

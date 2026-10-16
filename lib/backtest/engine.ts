@@ -258,10 +258,3 @@ export function aggregatePortfolio(results: BacktestResult[], initialCapital: nu
     untradeableTickers,
   }
 }
-
-export {
-  computeOosRatio,
-  walkForwardAnalysis,
-  walkForwardSummary,
-} from './walkForward'
-export type { WFWWindow, WalkForwardSummary } from './walkForward'

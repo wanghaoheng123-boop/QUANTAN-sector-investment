@@ -11,14 +11,27 @@
  * reaches nothing at runtime. This one answers "what is used", and a module
  * whose types a live file relies on is used even though no byte of it ships.
  *
- * Entry points enumerate nothing (the Q-098 lesson): everything under `app/`
- * is one (`PUBLIC_SURFACE`), as are root config files the toolchain loads
- * (`next.config.js` requires `lib/pwa/precache.js`) and any file a
- * package.json script or a workflow names by path — the caller supplies those.
+ * Entry points are what a RUNTIME loads by convention, not a directory: the
+ * files Next.js itself routes (`NEXT_ENTRY` — page, layout, route, …), root
+ * config files the toolchain loads (`next.config.js` requires
+ * `lib/pwa/precache.js`), and scripts a package.json script or a workflow
+ * names by path — the caller supplies those.
+ *
+ * Red-team D1 (2026-10-17): the first version used `PUBLIC_SURFACE`, which
+ * matches EVERY file under `app/`, so `app/briefs/BriefCard.tsx` could lose its
+ * last importer and stay green. Only Next's special files are entry points;
+ * every other `app/` file is governed like `components/`.
  */
-import { extractSpecifiers, resolveSpecifier, type VirtualFile } from './syntheticContainment'
-import { PUBLIC_SURFACE } from './importGraph'
+import { extractSpecifiers, resolveSpecifier, stripComments, type VirtualFile } from './syntheticContainment'
 import type { SourceFile } from './vendorEgress'
+
+/**
+ * The files Next.js loads by name (App Router file conventions, plus the two
+ * root-level ones). Anything else under `app/` is an ordinary module that must
+ * be imported to run.
+ */
+export const NEXT_ENTRY =
+  /^app\/(?:.+\/)?(?:page|layout|template|loading|error|global-error|not-found|forbidden|unauthorized|route|default|opengraph-image|twitter-image|icon|apple-icon|sitemap|robots|manifest)\.(?:tsx?|jsx?)$|^(?:middleware|instrumentation)\.(?:tsx?|jsx?)$/
 
 /** The directories this guard governs: product source, not scripts or tests. */
 export const GOVERNED = /^(?:app|components|hooks|lib)\//
@@ -35,7 +48,9 @@ export function buildUsageGraph(files: readonly SourceFile[]): Map<string, Set<s
   const edges = new Map<string, Set<string>>()
   for (const file of files) {
     const targets = new Set<string>()
-    for (const spec of extractSpecifiers(file.source)) {
+    // Red-team D4: comments masked first, so a commented-out import does not
+    // keep a dead module alive.
+    for (const spec of extractSpecifiers(stripComments(file.source))) {
       if (spec.raw === null) continue
       const target = resolveSpecifier(file.path, spec.raw, byPath)
       if (target !== null) targets.add(target)
@@ -69,10 +84,15 @@ export interface OrphanReport {
 export function findOrphans(files: readonly SourceFile[], scriptEntries: readonly string[]): OrphanReport {
   const edges = buildUsageGraph(files)
   const paths = files.map((f) => f.path)
-  const entries = paths.filter((p) => PUBLIC_SURFACE.test(p) || ROOT_CONFIG.test(p) || scriptEntries.includes(p))
+  // Red-team D2: a governed module a workflow merely NAMES is not thereby run.
+  // stryker-weekly.yml names four lib/quant files as mutation targets, which
+  // exempted them; being mutated is not being executed. Only scripts and root
+  // files can be entry points by being named.
+  const named = new Set(scriptEntries.filter((p) => !GOVERNED.test(p)))
+  const entries = paths.filter((p) => NEXT_ENTRY.test(p) || ROOT_CONFIG.test(p) || named.has(p))
   const live = reach(edges, entries)
   const withTests = reach(edges, [...entries, ...paths.filter(isTestFile)])
-  const governed = paths.filter((p) => GOVERNED.test(p) && !isTestFile(p) && !PUBLIC_SURFACE.test(p))
+  const governed = paths.filter((p) => GOVERNED.test(p) && !isTestFile(p) && !NEXT_ENTRY.test(p))
   return {
     unreachable: governed.filter((p) => !withTests.has(p)).sort(),
     testOnly: governed.filter((p) => withTests.has(p) && !live.has(p)).sort(),
