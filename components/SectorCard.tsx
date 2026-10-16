@@ -3,9 +3,8 @@
 import { memo } from 'react'
 import Link from 'next/link'
 import { Sector } from '@/lib/sectors'
-import { PriceSignal } from '@/lib/sectors'
+import type { SessionMove } from '@/lib/sessionMoves'
 import Sparkline from '@/components/Sparkline'
-import { MetricTooltip } from '@/components/MetricTooltip'
 import { safeFixed } from '@/lib/format'
 
 interface SectorCardProps {
@@ -15,27 +14,26 @@ interface SectorCardProps {
     change: number
     changePct: number
   }
-  signal?: PriceSignal
+  /** Q-135: today's measured move; absent when Yahoo gave no usable quote. */
+  move?: SessionMove | null
 }
 
-const SIGNAL_CONFIG = {
-  BUY:   { bg: 'bg-green-900/30',  border: 'border-green-500/40',  text: 'text-green-400' },
-  SELL:  { bg: 'bg-red-900/30',    border: 'border-red-500/40',    text: 'text-red-400' },
-  HOLD:  { bg: 'bg-yellow-900/20', border: 'border-yellow-500/30', text: 'text-yellow-400' },
-  WATCH: { bg: 'bg-blue-900/20',   border: 'border-blue-500/30',   text: 'text-blue-400' },
-}
+const MOVE_CONFIG = {
+  UP:   { bg: 'bg-green-900/30', text: 'text-green-400', icon: '▲' },
+  DOWN: { bg: 'bg-red-900/30',   text: 'text-red-400',   icon: '▼' },
+  FLAT: { bg: 'bg-slate-800/60', text: 'text-slate-300', icon: '●' },
+} as const
 
 // R5-H-2 (Phase 14 S1): wrap with React.memo so SectorCard only re-renders when its props
 // change. The dashboard grid renders one card per sector — without memo, a parent state
 // update (e.g. a live-quote tick for a single sector) re-renders all N cards.
-function SectorCard({ sector, quote, signal }: SectorCardProps) {
+function SectorCard({ sector, quote, move }: SectorCardProps) {
   const isUp = (quote?.changePct ?? 0) >= 0
   const sparkData =
     quote && quote.price > 0 && Number.isFinite(quote.change)
       ? [quote.price - quote.change, quote.price]
       : []
-  const sigCfg = signal ? SIGNAL_CONFIG[signal.direction] : null
-  const session = signal?.source === 'yahoo-session'
+  const moveCfg = move ? MOVE_CONFIG[move.direction] : null
 
   const priorPrice = sparkData.length >= 2 ? sparkData[0] : null
   const lastPrice = sparkData.length >= 2 ? sparkData[1] : null
@@ -70,15 +68,13 @@ function SectorCard({ sector, quote, signal }: SectorCardProps) {
             </div>
             <div className="text-sm font-bold text-white">{sector.name}</div>
           </div>
-          {signal && sigCfg && (
-            <span className={`text-[10px] font-bold tracking-widest px-1.5 py-0.5 rounded ${sigCfg.bg} ${sigCfg.text}`}>
-              {              session
-                ? signal.direction === 'BUY'
-                  ? 'UP'
-                  : signal.direction === 'SELL'
-                    ? 'DOWN'
-                    : 'NEUTRAL'
-                : signal.direction}
+          {move && moveCfg && (
+            <span
+              className={`text-[10px] font-bold tracking-widest px-1.5 py-0.5 rounded inline-flex items-center gap-1 ${moveCfg.bg} ${moveCfg.text}`}
+              aria-label={`session ${move.direction.toLowerCase()} versus the prior close`}
+            >
+              <span aria-hidden="true">{moveCfg.icon}</span>
+              {move.direction}
             </span>
           )}
         </div>
@@ -136,53 +132,6 @@ function SectorCard({ sector, quote, signal }: SectorCardProps) {
             <span className="text-[9px] text-slate-400 self-end">—</span>
           )}
         </div>
-
-        {/* Signal confidence bar */}
-        {signal && (
-          <div className="relative mb-2.5">
-            {/* 2026-08-14 copy pass. "Move scale" named a unit, not a meaning.
-                For session rows the bar is NOT a confidence: it is
-                |session change %| rescaled onto a 0-100 bar
-                (42 + 14×|Δ%|, saturating at 82 near ±2.9% — see
-                lib/sessionSignalsFromQuotes.ts). "Session move size" says what
-                it encodes; the tooltip carries the caveat. The rendered number
-                is unchanged — only its label and accessible name. */}
-            <div className="flex justify-between text-[10px] mb-1 text-slate-400">
-              <span className="inline-flex items-center">
-                {session ? 'Session move size' : 'Confidence'}
-                {session ? (
-                  <MetricTooltip
-                    label="Session move size"
-                    content="How big today's move is versus the prior close, rescaled onto a 0-100 bar (it saturates near ±3%). It is a size indicator only — not a confidence, probability, or forecast."
-                    compact
-                  />
-                ) : (
-                  <MetricTooltip metricKey="confidence" compact />
-                )}
-              </span>
-              {/* Bare "62%" has no accessible name of its own — the visible
-                  label sits in a sibling span, so a screen reader announcing
-                  this chip alone would read a naked number. */}
-              <span
-                style={{ color: sector.color }}
-                className="font-mono"
-                aria-label={
-                  session
-                    ? `Session move size ${signal.confidence} out of 100`
-                    : `Confidence ${signal.confidence} percent`
-                }
-              >
-                {signal.confidence}%
-              </span>
-            </div>
-            <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden">
-              <div
-                className="h-full rounded-full transition-all duration-700 ease-out"
-                style={{ width: `${signal.confidence}%`, backgroundColor: sector.color }}
-              />
-            </div>
-          </div>
-        )}
 
         {/* Top holdings chips */}
         <div className="flex gap-1 flex-wrap relative">

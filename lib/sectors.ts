@@ -163,29 +163,8 @@ export function getSectorBySlug(slug: string): Sector | undefined {
 }
 
 // Signal types
-export type SignalDirection = 'BUY' | 'SELL' | 'HOLD' | 'WATCH'
-export type Timeframe = '1D' | '1W' | '1M' | '3M'
-
-export type PriceSignalSource = 'yahoo-session' | 'demo'
-
-export interface PriceSignal {
-  sector: string
-  etf: string
-  direction: SignalDirection
-  confidence: number // 0-100
-  entry: number
-  stopLoss: number
-  target: number
-  timeframe: Timeframe
-  rationale: string
-  timestamp: string
-  /** When set, card explains that direction is session up/down/flat, not a trade call. */
-  source?: PriceSignalSource
-  /** Yahoo regularMarketTime when available. */
-  quoteTime?: string | null
-  /** Raw session change % used for stats (Yahoo-normalized). */
-  sessionChangePct?: number
-}
+// Q-135: PriceSignal / SignalDirection / PriceSignalSource removed — the only
+// producer was a session move typed as a trade signal (see lib/sessionMoves.ts).
 
 // Dark pool print type
 export interface DarkPoolPrint {

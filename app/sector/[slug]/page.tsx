@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import { PanelSpinner } from '@/components/PanelSpinner'
-import SignalCard from '@/components/SignalCard'
+import SessionMoveCard from '@/components/SessionMoveCard'
 const DarkPoolPanel = dynamic(() => import('@/components/DarkPoolPanel'), {
   ssr: false,
   loading: () => <PanelSpinner label="dark pool" />,
@@ -20,7 +20,7 @@ import { generateDarkPoolPrints } from '@/lib/mockData'
 import { markSynthetic, unwrapSynthetic, assertNotSynthetic, type Synthetic } from '@/lib/synthetic'
 import { DarkPoolPrint } from '@/lib/sectors'
 import type { DarkPoolAnalysis } from '@/lib/darkpool'
-import { buildSingleSessionSignal } from '@/lib/sessionSignalsFromQuotes'
+import { sessionMoveFor } from '@/lib/sessionMoves'
 import { tradingDefaultEmaFlags } from '@/lib/chartEma'
 import { STOCK_CHART_RANGES, isStockIntradayPollRange, chartBarKindLabel } from '@/lib/chartYahoo'
 import { formatCompactNumber, formatCurrency, formatFreshness, formatSignedNumber } from '@/lib/format'
@@ -237,10 +237,7 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
     return () => controller.abort()
   }, [sector.etf, activeTab])
 
-  const signal = useMemo(
-    () => (quote ? buildSingleSessionSignal(sector.etf, quote) : null),
-    [quote, sector.etf]
-  )
+  const move = useMemo(() => sessionMoveFor(sector.etf, quote), [quote, sector.etf])
 
   const sectorIndicators = useMemo(
     () => ({
@@ -383,7 +380,7 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
         <DashboardGuide
           pageKey={`sector-${sector.slug}`}
           title={`${sector.name} (${sector.etf})`}
-          summary={`${sector.description}. Use the chart for trend, dark pool for institutional flow, and the right column for quant signals.`}
+          summary={`${sector.description}. Use the chart for trend and the right column for today\u2019s session move.`}
           sections={[
             {
               title: 'Chart tab — what to look at',
@@ -404,11 +401,13 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
               ),
             },
             {
-              title: 'Right column — Quant signals',
+              // Q-135: this described a composite BUY/SELL/HOLD signal with a
+              // "Confidence %" that nothing on this page computes or renders.
+              title: 'Right column — session move',
               body: (
                 <p>
-                  Composite signal (BUY/SELL/HOLD) blends: trend (price vs EMA200), momentum (RSI/MACD), volatility regime, and multi-timeframe alignment.
-                  <strong>Confidence %</strong> = how aligned all sub-signals are. Hover any metric’s ⓘ for the formula and how to act on it.
+                  How far the sector ETF has moved today versus the prior close, from the latest Yahoo quote, with the quote&apos;s age.
+                  It is a measurement of the move, not a forecast or a buy/sell signal.
                 </p>
               ),
             },
@@ -575,13 +574,13 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
 
           {/* Right: Signal + Dark Pool Summary */}
           <div className="space-y-6">
-            {/* Signal Card */}
-            {signal && (
+            {/* Session move (Q-135: a measurement, not a signal) */}
+            {move && (
               <div>
                 <h3 className="text-xs font-medium text-slate-400 uppercase tracking-widest mb-3">
                   Session vs prior close (Yahoo)
                 </h3>
-                <SignalCard signal={signal} color={sector.color} />
+                <SessionMoveCard move={move} />
               </div>
             )}
 
