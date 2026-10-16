@@ -50,8 +50,8 @@ These are **outward-facing** endpoints, and their traffic is not visible from th
 |---|---|
 | `/api/sector-rotation` | Its only consumer was `SectorRotationPanel` (deleted above). It is an unauthenticated Yahoo proxy that serves sector OW/UW-style ranks, which is relevant to Q-083. |
 | `/api/ml/[ticker]` | No UI consumer (Q-140 records it in `NO_UI_CONSUMER`). |
-| `/api/conditional-vol/[ticker]` | No UI consumer. It carries the open Q25-1 defect: √252 annualisation applied to BTC. |
-| `/api/regime/[ticker]` | No UI consumer. |
+| `/api/conditional-vol/[ticker]` | No UI consumer. Until Q-140's red-team fix (PR #232) its fallback labelled an EWMA estimate "GARCH(1,1)" and hid a failed GARCH service. (Q25-1, the √252 annualisation of BTC, was fixed on 2026-07-06; an earlier draft of this note said it was open.) |
+| `/api/regime/[ticker]` | No UI consumer. Its fallback returned constant "posterior probabilities" (0.65 / 0.175 / 0.175) until PR #232. |
 
 Each is a public surface with no product purpose today. Unused unauthenticated proxies are attack surface and I8 exposure. **The recommendation is to delete all four**; the call belongs to the owner.
 
