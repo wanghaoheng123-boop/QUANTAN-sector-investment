@@ -44,18 +44,26 @@ const QUOTE = {
   marketCap: 75_000_000_000,
   fiftyTwoWeekHigh: 260,
   fiftyTwoWeekLow: 180,
+  // For a sector ETF, Yahoo puts P/E and 10-day volume on the QUOTE (measured
+  // on all 11 sector ETFs, 2026-10-16). Values here are synthetic.
+  trailingPE: 31.2,
+  averageDailyVolume10Day: 3_800_000,
 }
 
+/**
+ * The SHAPE Yahoo returns for a sector ETF's quoteSummary — fund statistics
+ * only, and no financialData or recommendationTrend at all (all 11 sector
+ * ETFs, 2026-10-16). Q-140 red-team B1: the previous fixture carried a
+ * `trailingPE` and an analyst trend Yahoo never sends for an ETF, so the
+ * healthy-path tests passed on data that cannot occur. Values are synthetic.
+ */
 const SUMMARY = {
   defaultKeyStatistics: {
-    trailingPE: 31.2,
-    forwardPE: 27.4,
-    beta: 1.15,
-    dividendYield: 0.0062,
-    averageDailyVolume10Day: 3_800_000,
+    beta3Year: 1.15,
+    yield: 0.0062,
+    totalAssets: 70_000_000_000,
+    category: 'Technology',
   },
-  financialData: { targetPrice: 280 },
-  recommendationTrend: { trend: [{ strongBuy: 8, buy: 6, hold: 3, sell: 1, strongSell: 0 }] },
 }
 
 const NEWS = {
@@ -118,17 +126,23 @@ describe('buildSectorBrief — happy path', () => {
     expect(brief.changePct).toBeCloseTo(1.01, 5)
     expect(brief.high52w).toBe(260)
     expect(brief.peRatio).toBe(31.2)
+    expect(brief.dividendYield).toBe(0.0062)
     expect(brief.dataQuality).toBe('live')
     expect(brief.dataQualityNote).toBeNull()
     expect(brief.source).toBe('Yahoo Finance')
   })
 
-  it('resolves the analyst consensus from the recommendation trend', async () => {
+  it('asks Yahoo only for the summary module it answers for an ETF', async () => {
+    const fetchers = healthyFetchers()
+    await buildSectorBrief('technology', fetchers)
+    expect(fetchers.quoteSummary).toHaveBeenCalledWith('XLK', { modules: ['defaultKeyStatistics'] })
+  })
+
+  it('B1: a healthy day reads LIVE — P/E comes from the quote, where Yahoo puts it for an ETF', async () => {
     const brief = await buildSectorBrief('technology', healthyFetchers()) as SectorBrief
-    // 14 of 18 bullish → ≥60% → BUY.
-    expect(brief.analystRating).toBe('BUY')
-    expect(brief.analystCount).toBe(18)
-    expect(brief.targetPrice).toBe(280)
+    expect(brief.dataQuality).toBe('live')
+    expect(brief.dataQualityNote).toBeNull()
+    expect(brief.signals.find(s => s.key === 'Trailing P/E')?.impact).toBe('neutral')
   })
 
   it('loads the sector ETF quote and every top holding', async () => {
@@ -161,23 +175,58 @@ describe('buildSectorBrief — unknown sector vs dead upstream', () => {
     expect(brief?.sector).toBe('technology')
   })
 
-  it('returns a brief — NOT null — when every upstream call fails', async () => {
+  // CORRECTION (Q-140 / Q-091). This test asserted `price === 0` and a note
+  // blaming "Market may be closed or ticker not supported" — a measured-looking
+  // zero and a wrong explanation for an outage, both pinned as correct.
+  it('returns a brief — NOT null — when every upstream call fails, saying the FEED failed', async () => {
     const brief = await buildSectorBrief('technology', deadFetchers())
     expect(brief).not.toBeNull()
     expect(brief!.dataQuality).toBe('unavailable')
-    expect(brief!.dataQualityNote).toMatch(/Insufficient data from Yahoo Finance/)
-    expect(brief!.price).toBe(0)
+    expect(brief!.dataQualityNote).toBe('The price feed failed for XLK; try again shortly.')
+    expect(brief!.dataQualityNote).not.toMatch(/market may|pre\/post/i)
+    expect(brief!.price).toBeNull()
+    expect(brief!.change).toBeNull()
+    expect(brief!.changePct).toBeNull()
+    expect(brief!.summary).toMatch(/price unavailable/)
+    expect(brief!.summary).not.toMatch(/\$0\.00/)
     expect(brief!.holdings).toEqual([])
+    expect(brief!.holdingsAvgChange).toBeNull()
     expect(brief!.news).toEqual([])
   })
 
-  it('reports partial quality when only some fields are missing', async () => {
+  // CORRECTION (Q-091). This test was "reports partial quality when only some
+  // fields are missing" and used an EMPTY NEWS LIST as the missing field — so a
+  // quiet news day downgraded the brief, with a note blaming "pre/post-market".
+  it('Q-091: no news is not a fault — a quiet news day keeps the brief live', async () => {
     const fetchers = healthyFetchers()
-    // Quote + summary fine, no news → exactly one missing field.
     fetchers.search = async () => ({ news: [] })
     const brief = await buildSectorBrief('technology', fetchers) as SectorBrief
+    expect(brief.news).toEqual([])
+    expect(brief.dataQuality).toBe('live')
+    expect(brief.dataQualityNote).toBeNull()
+  })
+
+  it('a FAILED news fetch is partial, and the note names what failed', async () => {
+    const fetchers = healthyFetchers()
+    fetchers.search = async () => { throw new Error('yahoo 429') }
+    const brief = await buildSectorBrief('technology', fetchers) as SectorBrief
     expect(brief.dataQuality).toBe('partial')
-    expect(brief.dataQualityNote).toMatch(/1 field\(s\) missing/)
+    expect(brief.dataQualityNote).toBe('Failed to load: headlines.')
+  })
+
+  it('a field Yahoo did not report is named, not blamed on the market phase', async () => {
+    const fetchers = healthyFetchers()
+    const { trailingPE: _pe, ...quoteWithoutPe } = QUOTE
+    fetchers.quote = vi.fn(async () => quoteWithoutPe)
+    const brief = await buildSectorBrief('technology', fetchers) as SectorBrief
+    expect(brief.dataQuality).toBe('partial')
+    expect(brief.dataQualityNote).toBe('Not reported by Yahoo Finance: P/E.')
+  })
+
+  it('trailing P/E reads as a ratio, not a price', async () => {
+    const brief = await buildSectorBrief('technology', healthyFetchers()) as SectorBrief
+    const pe = brief.signals.find(s => s.key === 'Trailing P/E')
+    expect(pe?.value).toBe('31.2×')
   })
 })
 
@@ -209,7 +258,7 @@ describe('getAllSectorBriefs', () => {
     const { briefs, failedSlugs } = await getAllSectorBriefs(healthyFetchers())
     expect(briefs).toHaveLength(SECTORS.length)
     expect(failedSlugs).toEqual([])
-    const changes = briefs.map(b => b.holdingsAvgChange)
+    const changes = briefs.map(b => b.holdingsAvgChange ?? -Infinity)
     expect([...changes].sort((a, b) => b - a)).toEqual(changes)
   })
 

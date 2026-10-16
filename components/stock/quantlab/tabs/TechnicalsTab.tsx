@@ -9,6 +9,7 @@ export function TechnicalsTab({
   data,
   adv,
   advLoading,
+  advError,
   kellyP,
   setKellyP,
   kellyWin,
@@ -19,6 +20,8 @@ export function TechnicalsTab({
   data: QuantLabPayload
   adv: QuantLabAdvMetrics | null
   advLoading: boolean
+  /** Q-140: why the extended analytics are missing, when they are. */
+  advError?: string | null
   kellyP: number
   setKellyP: (v: number) => void
   kellyWin: number
@@ -219,6 +222,9 @@ export function TechnicalsTab({
             <div className="rounded-xl border border-slate-700 p-4 space-y-3">
               <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-widest">Extended analytics (5y history)</h3>
               {advLoading && <p className="text-xs text-slate-400">Loading win rate & beta proxy…</p>}
+              {!advLoading && advError && (
+                <p role="status" data-testid="adv-error" className="text-xs text-amber-400">Extended analytics failed to load ({advError}).</p>
+              )}
               {adv && (
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs font-mono text-slate-300">
                   <div>Win rate (~252d): {adv.winRate252d != null ? fmtPct(adv.winRate252d) : '—'}</div>

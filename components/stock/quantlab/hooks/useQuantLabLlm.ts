@@ -31,6 +31,17 @@ export function useQuantLabLlm(ticker: string, sub: QuantLabSubTab) {
     setLlmHealthLoading(true)
     try {
       const r = await fetch('/api/trading-agents/health', { cache: 'no-store' })
+      // Q-140: a 429/5xx from OUR route is not "the backend is unreachable".
+      if (!r.ok) {
+        setLlmBackendHealth({
+          checked: true,
+          status: 'check_failed',
+          message: r.status === 429
+            ? 'Too many status checks — try again in a moment.'
+            : `The status check itself failed (server error ${r.status}); backend state unknown.`,
+        })
+        return
+      }
       const j = (await r.json()) as Record<string, unknown>
       const status = String(j.status || 'unknown')
       if (status === 'ready') {

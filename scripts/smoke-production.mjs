@@ -127,7 +127,7 @@ async function main() {
       fj &&
       (fj.fundingRate != null ||
         fj.openInterest != null ||
-        fj.takerBuyVolume != null ||
+        fj.accountBuyRatio != null ||
         fj.longShortRatio != null)
     passed &= ok(hasData, 'BTC metrics has at least one numeric field')
   }

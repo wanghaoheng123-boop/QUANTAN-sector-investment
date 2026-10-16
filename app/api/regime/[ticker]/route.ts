@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { DEGRADED_CACHE_CONTROL } from '@/lib/api/reliability'
 import { normalizeTicker, sanitizeError } from '@/lib/api/sanitize'
 import { applyRateLimit } from '@/lib/api/rateLimit'
 import { loadStockHistory } from '@/lib/backtest/dataLoader'
@@ -39,8 +40,9 @@ export async function GET(
     }
     const closes = rows.map((r) => r.close)
     const result = await fetchHmmRegime(ticker, closes)
+    // A degraded answer is not CDN-cached for the healthy TTL (Q-140 red-team H2).
     return NextResponse.json(result, {
-      headers: { 'Cache-Control': 's-maxage=3600, stale-while-revalidate=7200' },
+      headers: { 'Cache-Control': result.degraded ? DEGRADED_CACHE_CONTROL : 's-maxage=3600, stale-while-revalidate=7200' },
     })
   } catch (error) {
     console.error('[regime]', ticker, error)

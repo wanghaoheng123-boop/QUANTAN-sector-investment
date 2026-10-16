@@ -40,7 +40,11 @@ interface SectorRow {
 interface ApiResponse {
   rows: SectorRow[]
   computedAt: string
-  disclaimer: string
+  /** Absent on a degraded answer, which carries no forward-return context. */
+  disclaimer?: string
+  /** Q-140: set when most sector fetches failed; the board is incomplete. */
+  degraded?: boolean
+  error?: { code: string; message: string }
   /**
    * I2 (Q110-P2) — this route holds a 5-minute module-level cache and served
    * stored rows with nothing saying so, so a value up to five minutes old was
@@ -326,6 +330,13 @@ export default function MADeviationPage() {
               </table>
             </div>
           </section>
+        )}
+
+        {/* Q-140 (I2): a board that is mostly fetch failures says so. */}
+        {data?.degraded && (
+          <div role="status" className="rounded-xl border border-amber-500/30 bg-amber-950/20 p-4 text-amber-300 text-sm">
+            {data.error?.message ?? 'Price data is unavailable for most sectors right now; the board is incomplete.'}
+          </div>
         )}
 
         {/* Error state */}

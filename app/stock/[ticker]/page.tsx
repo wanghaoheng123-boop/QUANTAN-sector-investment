@@ -91,11 +91,14 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
   const [darkPoolPrints, setDarkPoolPrints] = useState<Synthetic<DarkPoolPrint[]>>(() => markSynthetic([]))
   const [darkPoolApiData, setDarkPoolApiData] = useState<DarkPoolAnalysis | null>(null)
   const [darkPoolApiLoading, setDarkPoolApiLoading] = useState(false)
+  const [darkPoolApiError, setDarkPoolApiError] = useState<string | null>(null)
   const [optionsChain, setOptionsChain] = useState<EnrichedChain | null>(null)
   const [optionsGex, setOptionsGex] = useState<GexResult | null>(null)
   const [optionsFlow, setOptionsFlow] = useState<UnusualFlowItem[]>([])
   const [optionsSentiment, setOptionsSentiment] = useState<{ flowLabel: FlowSentimentLabel; maxPain: number | null; putCallVolumeRatio: number | null; putCallOiRatio: number | null } | null>(null)
   const [optionsLoading, setOptionsLoading] = useState(false)
+  /** Q-140 red-team B2: an outage is not "no options data". */
+  const [optionsError, setOptionsError] = useState<string | null>(null)
   // I1/I2 (Q-101): the options route has declared a 15-minute vendor delay
   // since Phase 13 and no component read it. This is that read.
   const [optionsDelayedMinutes, setOptionsDelayedMinutes] = useState<number | null>(null)
@@ -271,8 +274,11 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
     let cancelled = false
     setDarkPoolApiLoading(true)
     setDarkPoolApiData(null)
+    setDarkPoolApiError(null)
     fetch(`/api/darkpool/${encodeURIComponent(ticker)}`)
-      .then(r => r.json())
+      // Q-140: a non-2xx body ({error}) used to be stored as the analysis, and
+      // the panel then read `apiData.quote.price` on undefined.
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
       .then(data => {
         if (cancelled) return
         setDarkPoolApiData(data)
@@ -281,6 +287,7 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
       .catch((err: unknown) => {
         if (cancelled) return
         console.warn('[stock/darkpool] fetch failed', ticker, err)
+        setDarkPoolApiError('Dark-pool data failed to load; try again shortly.')
         setDarkPoolApiLoading(false)
       })
     return () => { cancelled = true }
@@ -294,8 +301,12 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
     if (optionsChain) return  // already loaded
     let cancelled = false
     setOptionsLoading(true)
+    setOptionsError(null)
     fetch(`/api/options/${encodeURIComponent(ticker)}`)
-      .then(r => r.json())
+      .then(r => {
+        if (!r.ok) throw new Error(r.status === 429 ? 'too many requests — try again shortly' : `server error ${r.status}`)
+        return r.json()
+      })
       .then(data => {
         if (cancelled) return
         if (data.calls) {
@@ -317,6 +328,7 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
       .catch((err: unknown) => {
         if (cancelled) return
         console.warn('[stock/options] fetch failed', ticker, err)
+        setOptionsError(err instanceof Error ? err.message : 'network error')
         setOptionsLoading(false)
       })
     return () => { cancelled = true }
@@ -553,7 +565,12 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
                       Loading options chain…
                     </div>
                   )}
-                  {!optionsLoading && !optionsChain && (
+                  {!optionsLoading && !optionsChain && optionsError && (
+                    <div className="text-center py-12 text-amber-400 text-sm" role="status" data-testid="options-error">
+                      Options data failed to load ({optionsError}).
+                    </div>
+                  )}
+                  {!optionsLoading && !optionsChain && !optionsError && (
                     <div className="text-center py-12 text-gray-500 text-sm" role="status">
                       No options data available for {ticker}.
                     </div>
@@ -672,7 +689,7 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
               {activeTab === 'darkpool' && (
                 <div role="tabpanel" id="panel-darkpool" aria-labelledby="tab-darkpool">
                   <DarkPoolPanel prints={darkPoolPrints} ticker={ticker} color={color}
-                    apiData={darkPoolApiData} apiLoading={darkPoolApiLoading} />
+                    apiData={darkPoolApiData} apiLoading={darkPoolApiLoading} apiError={darkPoolApiError} />
                 </div>
               )}
 

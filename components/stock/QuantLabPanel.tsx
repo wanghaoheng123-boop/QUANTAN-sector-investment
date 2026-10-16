@@ -38,6 +38,7 @@ export default function QuantLabPanel({ ticker }: { ticker: string }) {
     setGBull,
     adv,
     advLoading,
+    advError,
     kellyP,
     setKellyP,
     kellyWin,
@@ -114,6 +115,7 @@ export default function QuantLabPanel({ ticker }: { ticker: string }) {
             data={data}
             adv={adv}
             advLoading={advLoading}
+            advError={advError}
             kellyP={kellyP}
             setKellyP={setKellyP}
             kellyWin={kellyWin}

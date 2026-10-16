@@ -8,12 +8,13 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { ruleBasedRegime, fetchHmmRegime } from '@/lib/quant/regimeHmmClient'
 
 describe('ruleBasedRegime', () => {
-  it('returns Normal with uniform-ish probs when input < 60 bars', () => {
+  // Q-140 red-team H2: these tests used to assert the fallback's CONSTANT
+  // "probabilities" (0.33/0.34/0.33, 0.65/0.175/0.175) — pinning a fabricated
+  // posterior as correct. A rule has no posterior: it reports null.
+  it('returns Normal and no probabilities when input < 60 bars', () => {
     const r = ruleBasedRegime(Array(30).fill(100))
     expect(r.currentState).toBe('Normal')
-    expect(r.probabilities.Bull).toBeCloseTo(0.33, 6)
-    expect(r.probabilities.Normal).toBeCloseTo(0.34, 6)
-    expect(r.probabilities.Bear).toBeCloseTo(0.33, 6)
+    expect(r.probabilities).toBeNull()
     expect(r.source).toBe('rule-fallback')
   })
 
@@ -23,9 +24,7 @@ describe('ruleBasedRegime', () => {
     for (let i = 0; i < 100; i++) closes.push(100 * (1 + 0.001 * i))
     const r = ruleBasedRegime(closes)
     expect(r.currentState).toBe('Bull')
-    expect(r.probabilities.Bull).toBe(0.65)
-    expect(r.probabilities.Normal).toBeCloseTo(0.175, 6)
-    expect(r.probabilities.Bear).toBeCloseTo(0.175, 6)
+    expect(r.probabilities).toBeNull()
   })
 
   it('emits Bear when 63-bar return < -5%', () => {
@@ -33,7 +32,6 @@ describe('ruleBasedRegime', () => {
     for (let i = 0; i < 100; i++) closes.push(100 * (1 - 0.002 * i))
     const r = ruleBasedRegime(closes)
     expect(r.currentState).toBe('Bear')
-    expect(r.probabilities.Bear).toBe(0.65)
   })
 
   it('emits Bear on vol spike (volRatio > 1.4)', () => {
@@ -51,14 +49,12 @@ describe('ruleBasedRegime', () => {
     const closes = Array.from({ length: 100 }, (_, i) => 100 + Math.sin(i / 20) * 0.1)
     const r = ruleBasedRegime(closes)
     expect(r.currentState).toBe('Normal')
-    expect(r.probabilities.Normal).toBe(0.65)
   })
 
-  it('probabilities always sum to 1', () => {
-    const closes = Array.from({ length: 100 }, (_, i) => 100 * (1 + 0.0005 * i))
-    const r = ruleBasedRegime(closes)
-    const sum = r.probabilities.Bull + r.probabilities.Normal + r.probabilities.Bear
-    expect(sum).toBeCloseTo(1, 6)
+  it('never reports a probability it did not estimate', () => {
+    for (const closes of [Array(30).fill(100), Array.from({ length: 100 }, (_, i) => 100 * (1 + 0.0005 * i))]) {
+      expect(ruleBasedRegime(closes).probabilities).toBeNull()
+    }
   })
 })
 
@@ -81,6 +77,8 @@ describe('fetchHmmRegime', () => {
     const r = await fetchHmmRegime('AAPL', Array(30).fill(100))
     expect(r.source).toBe('rule-fallback')
     expect(r.ticker).toBe('AAPL')
+    // Not configured is the documented default, not a failure.
+    expect(r.degraded).toBeUndefined()
   })
 
   it('returns sidecar response with python source when sidecar OK', async () => {
@@ -105,6 +103,8 @@ describe('fetchHmmRegime', () => {
     const r = await fetchHmmRegime('AAPL', Array(30).fill(100))
     expect(r.source).toBe('rule-fallback')
     expect(r.ticker).toBe('AAPL')
+    expect(r.degraded).toBe(true)
+    expect(r.error?.message).toMatch(/HTTP 502/)
   })
 
   it('falls back to rule when sidecar fetch throws', async () => {
@@ -112,5 +112,6 @@ describe('fetchHmmRegime', () => {
     globalThis.fetch = (async () => { throw new Error('timeout') }) as unknown as typeof fetch
     const r = await fetchHmmRegime('AAPL', Array(30).fill(100))
     expect(r.source).toBe('rule-fallback')
+    expect(r.degraded).toBe(true)
   })
 })

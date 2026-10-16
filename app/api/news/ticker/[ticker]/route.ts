@@ -19,6 +19,7 @@ import YahooFinance from 'yahoo-finance2'
 import { applyRateLimit } from '@/lib/api/rateLimit'
 import { normalizeTicker, sanitizeError } from '@/lib/api/sanitize'
 import { isSafeHttpUrl } from '@/lib/security/urlValidation'
+import { newsPublishTime } from '@/lib/news/publishTime'
 
 const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] })
 
@@ -88,9 +89,7 @@ export async function GET(
           // 'Live' badge over undated headlines and the only timestamp on screen
           // was our own fetch time — a three-year-old article looked identical to
           // one ten minutes old (Q088-4).
-          publishedAt: item.providerPublishTime
-            ? new Date(item.providerPublishTime as string | number | Date).toISOString()
-            : null,
+          publishedAt: newsPublishTime(item as Record<string, unknown>),
           snippet: item.summary ? String(item.summary).slice(0, 300) : null,
           ticker,
         }

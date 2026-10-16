@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { DEGRADED_CACHE_CONTROL } from '@/lib/api/reliability'
 import { normalizeTicker, sanitizeError } from '@/lib/api/sanitize'
 import { applyRateLimit } from '@/lib/api/rateLimit'
 import { loadStockHistory } from '@/lib/backtest/dataLoader'
@@ -38,8 +39,9 @@ export async function GET(
     }
     const closes = rows.map((r) => r.close)
     const result = await fetchGarchForecast(ticker, closes)
+    // A degraded answer is not CDN-cached for the healthy TTL (Q-140 red-team H2).
     return NextResponse.json(result, {
-      headers: { 'Cache-Control': 's-maxage=86400, stale-while-revalidate=172800' },
+      headers: { 'Cache-Control': result.degraded ? DEGRADED_CACHE_CONTROL : 's-maxage=86400, stale-while-revalidate=172800' },
     })
   } catch (error) {
     console.error('[conditional-vol]', ticker, error)

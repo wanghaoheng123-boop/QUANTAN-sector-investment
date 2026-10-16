@@ -27,6 +27,8 @@ export function useQuantLabFundamentals(ticker: string, sub: QuantLabSubTab) {
 
   const [adv, setAdv] = useState<QuantLabAdvMetrics | null>(null)
   const [advLoading, setAdvLoading] = useState(false)
+  /** Q-140 red-team B2: why the extended analytics did not load; null when they did. */
+  const [advError, setAdvError] = useState<string | null>(null)
   const [advFetched, setAdvFetched] = useState(false)
 
   const [kellyP, setKellyP] = useState(0.55)
@@ -64,6 +66,7 @@ export function useQuantLabFundamentals(ticker: string, sub: QuantLabSubTab) {
     setGBase(0.05)
     setGBull(0.09)
     setAdv(null)
+    setAdvError(null)
     setAdvFetched(false)
     fetchPayload(QUANT_LAB_DEFAULT_QUERY)
   }, [ticker, fetchPayload])
@@ -72,10 +75,16 @@ export function useQuantLabFundamentals(ticker: string, sub: QuantLabSubTab) {
     if (sub !== 'technicals' || advFetched) return
     setAdvFetched(true)
     setAdvLoading(true)
+    setAdvError(null)
     fetch(`/api/analytics/${encodeURIComponent(ticker)}`)
-      .then((r) => r.json())
+      .then((r) => {
+        // A 502 used to set nothing, leaving an empty box with no reason.
+        if (!r.ok) throw new Error(r.status === 429 ? 'too many requests — try again shortly' : `server error ${r.status}`)
+        return r.json()
+      })
       .then((j) => {
-        if (!j.error)
+        if (j.error) setAdvError(typeof j.error === 'string' ? j.error : 'the analytics service reported an error')
+        else
           setAdv({
             winRate252d: j.winRate252d ?? null,
             betaVsSpyLogReturns: j.betaVsSpyLogReturns ?? null,
@@ -87,6 +96,7 @@ export function useQuantLabFundamentals(ticker: string, sub: QuantLabSubTab) {
       })
       .catch((fetchErr) => {
         console.warn('[QuantLabPanel] advanced metrics fetch failed for', ticker, fetchErr)
+        setAdvError(fetchErr instanceof Error ? fetchErr.message : 'network error')
       })
       .finally(() => setAdvLoading(false))
   }, [sub, ticker, advFetched])
@@ -109,6 +119,7 @@ export function useQuantLabFundamentals(ticker: string, sub: QuantLabSubTab) {
     setGBull,
     adv,
     advLoading,
+    advError,
     kellyP,
     setKellyP,
     kellyWin,

@@ -107,6 +107,18 @@ function buildErrorBody(degraded: boolean, code: string, message: string, detail
   }
 }
 
+/**
+ * Cache policy for a 2xx answer that says it is degraded.
+ *
+ * Q-140 red-team M4: `no-store` removed all damping exactly when Yahoo is most
+ * likely throttling (the usual cause of "most fetches failed"): each request
+ * re-ran the full fan-out — about 27 chart calls per MA-board request, at up to
+ * 10 requests a minute per IP. Thirty seconds at the CDN bounds that, and every
+ * cached copy still carries `degraded: true`, so the flag cannot be lost. Same
+ * window as the briefs route's existing degraded policy (Phase 14 R4-H-2).
+ */
+export const DEGRADED_CACHE_CONTROL = 's-maxage=30, stale-while-revalidate=60'
+
 export function degradedResponse(
   code: string,
   message: string,

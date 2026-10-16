@@ -58,7 +58,9 @@ describe('fetchGarchForecast', () => {
     const result = await fetchGarchForecast('AAPL', closes)
     expect(result.source).toBe('ewma-fallback')
     expect(result.ticker).toBe('AAPL')
-    expect(result.model).toBe('GARCH(1,1)')
+    // Q-140 red-team H2: this asserted 'GARCH(1,1)' for an EWMA estimate.
+    expect(result.model).toBe('EWMA(0.94)')
+    expect(result.degraded).toBeUndefined()
   })
 
   it('returns sidecar response when QUANT_FRAMEWORK_URL is set + OK', async () => {
@@ -73,6 +75,7 @@ describe('fetchGarchForecast', () => {
     ) as unknown as typeof fetch
     const result = await fetchGarchForecast('AAPL', [])
     expect(result.source).toBe('python')
+    expect(result.model).toBe('GARCH(1,1)')
     expect(result.forecast[0]).toEqual({ date: '2026-05-25', conditionalVol: 0.2 })
   })
 
@@ -82,6 +85,9 @@ describe('fetchGarchForecast', () => {
     const closes = Array.from({ length: 50 }, () => 100)
     const result = await fetchGarchForecast('AAPL', closes)
     expect(result.source).toBe('ewma-fallback')
+    expect(result.model).toBe('EWMA(0.94)')
+    expect(result.degraded).toBe(true)
+    expect(result.error?.message).toMatch(/HTTP 500/)
   })
 
   it('falls back to EWMA when sidecar fetch throws', async () => {
@@ -90,6 +96,7 @@ describe('fetchGarchForecast', () => {
     const closes = Array.from({ length: 50 }, () => 100)
     const result = await fetchGarchForecast('AAPL', closes)
     expect(result.source).toBe('ewma-fallback')
+    expect(result.degraded).toBe(true)
   })
 })
 

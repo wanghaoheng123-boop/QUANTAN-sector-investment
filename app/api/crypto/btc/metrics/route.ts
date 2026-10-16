@@ -116,8 +116,11 @@ export async function GET(request: Request) {
   /** USD notional OI — matches prior UI scaling (÷1e9 → $B) */
   const openInterest = t?.openInterestValue != null ? parseFloat(t.openInterestValue) : null
 
-  const takerBuyVolume = ar?.buyRatio != null ? parseFloat(ar.buyRatio) : null
-  const takerSellVolume = ar?.sellRatio != null ? parseFloat(ar.sellRatio) : null
+  // Q-140 AC3: these are Bybit's ACCOUNT buy/sell ratios (share of accounts
+  // net long / net short, /v5/market/account-ratio) — not taker VOLUME, which
+  // is what the old names `takerBuyVolume`/`takerSellVolume` claimed.
+  const accountBuyRatio = ar?.buyRatio != null ? parseFloat(ar.buyRatio) : null
+  const accountSellRatio = ar?.sellRatio != null ? parseFloat(ar.sellRatio) : null
 
   const errors = [tickRes.error, ratioRes.error, lsrRes.error]
     .filter(Boolean)
@@ -127,8 +130,8 @@ export async function GET(request: Request) {
     fundingRate,
     nextFundingTime,
     openInterest,
-    takerBuyVolume,
-    takerSellVolume,
+    accountBuyRatio,
+    accountSellRatio,
     longShortRatio,
     longAccountPct,
     shortAccountPct,
@@ -152,8 +155,8 @@ export async function GET(request: Request) {
         fundingRate: null,
         nextFundingTime: null,
         openInterest: null,
-        takerBuyVolume: ar ? result.takerBuyVolume : null,
-        takerSellVolume: ar ? result.takerSellVolume : null,
+        accountBuyRatio: ar ? result.accountBuyRatio : null,
+        accountSellRatio: ar ? result.accountSellRatio : null,
         degraded: true as const,
         userMessage: partial,
         source:
