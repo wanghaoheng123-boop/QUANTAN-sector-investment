@@ -62,6 +62,8 @@ export default function HomePage() {
   // countdown to track because SSE is push-based.
   const [newsBriefs, setNewsBriefs] = useState<NewsBrief[]>([])
   const [newsLoading, setNewsLoading] = useState(true)
+  /** Q-140: /api/briefs said the feed failed or is incomplete. */
+  const [newsDegraded, setNewsDegraded] = useState<string | null>(null)
   const [activeFilter, setActiveFilter] = useState<string>('ALL')
 
   // Phase 14 wave 10: signal-aware fetch.
@@ -72,6 +74,9 @@ export default function HomePage() {
   const fetchPrices = useCallback(async (signal?: AbortSignal) => {
     try {
       const res = await fetch('/api/prices', { signal })
+      // Q-140 red-team B2: a 500 body parses fine, so without this the failure
+      // threw nothing and the old prices stayed up with no notice.
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
       if (signal?.aborted) return
       if (data.quotes) {
@@ -177,6 +182,14 @@ export default function HomePage() {
           if (data.briefs) {
             setNewsBriefs(data.briefs)
           }
+          if (data.degraded) {
+            setNewsDegraded(typeof data.error?.message === 'string' ? data.error.message : 'The news feed is degraded; this list may be incomplete.')
+          }
+        } else {
+          // Q-140 red-team B2: a 429 or 502 rendered "Live … 0 articles".
+          setNewsDegraded(res.status === 429
+            ? 'Too many requests — the news feed will load on the next visit.'
+            : `The news feed failed to load (server error ${res.status}).`)
         }
       } catch (e: unknown) {
         if (controller.signal.aborted || (e instanceof DOMException && e.name === 'AbortError')) return
@@ -498,8 +511,17 @@ export default function HomePage() {
             <div>
               <h2 id="section-latest-news" className="text-lg font-bold text-white">Latest Financial News</h2>
               <p className="text-xs text-slate-400 mt-0.5">
-                {newsLoading ? 'Loading latest news...' : `Live from Yahoo Finance · ${newsBriefs.length} articles`}
+                {newsLoading
+                  ? 'Loading latest news...'
+                  // L6: "Partial" understated a total outage.
+                  : newsDegraded
+                    ? (newsBriefs.length === 0 ? 'Unavailable · Yahoo Finance' : `Partial from Yahoo Finance · ${newsBriefs.length} articles`)
+                    : `Live from Yahoo Finance · ${newsBriefs.length} articles`}
               </p>
+              {/* Q-140 (I2): a failed or thinned feed is said, not shown as a quiet news day. */}
+              {!newsLoading && newsDegraded && (
+                <p role="status" className="text-xs text-amber-400 mt-1">{newsDegraded}</p>
+              )}
             </div>
             <Link href="/briefs" className="text-sm text-amber-400 hover:text-amber-300 transition-colors">
               View all →
@@ -580,7 +602,8 @@ export default function HomePage() {
                 </a>
               ))}
             </div>
-          ) : (
+          ) : newsDegraded ? null : (
+            // A failed feed is announced above; "no news" is only for a feed that answered.
             <div className="rounded-xl border border-slate-800 p-8 text-center">
               <p className="text-slate-400">No news available at the moment. Check back shortly.</p>
             </div>

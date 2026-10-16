@@ -83,6 +83,14 @@ describe('Bloomberg health disclosure boundary', () => {
     expect(applyRateLimit).toHaveBeenCalledTimes(1)
   })
 
+  it('Q-140: an operator probe of an UNREACHABLE bridge says degraded, not ok', async () => {
+    vi.stubEnv('BLOOMBERG_BRIDGE_SECRET', 'bridge-test-secret')
+    vi.mocked(fetch).mockRejectedValue(new TypeError('connect ECONNREFUSED'))
+    const body = await (await GET(request('operator-test-key'))).json()
+    expect(body.status).toBe('degraded')
+    expect(body.reachable).toBe(false)
+  })
+
   it('rate-limits authenticated diagnostics before probing', async () => {
     vi.mocked(applyRateLimit).mockResolvedValue(new Response('limited', { status: 429 }))
     const response = await GET(request('operator-test-key'))

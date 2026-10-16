@@ -15,6 +15,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { buildSectorBrief } from '@/lib/briefs/sectorBrief'
 import { applyRateLimit } from '@/lib/api/rateLimit'
+import { DEGRADED_CACHE_CONTROL } from '@/lib/api/reliability'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -49,7 +50,9 @@ export async function GET(
 
   return NextResponse.json(brief, {
     headers: {
-      'Cache-Control': 's-maxage=60, stale-while-revalidate=300',
+      // Red-team L8: an `unavailable` brief says "try again shortly" — it must
+      // not sit at the CDN for the healthy window.
+      'Cache-Control': brief.dataQuality === 'live' ? 's-maxage=60, stale-while-revalidate=300' : DEGRADED_CACHE_CONTROL,
     },
   })
 }

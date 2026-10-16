@@ -11,9 +11,16 @@ export interface GarchForecastPoint {
 
 export interface GarchForecastResult {
   ticker: string
-  model: 'GARCH(1,1)'
+  /**
+   * The model that PRODUCED `forecast`. Q-140 red-team H2: the fallback said
+   * 'GARCH(1,1)' while returning an EWMA estimate.
+   */
+  model: 'GARCH(1,1)' | 'EWMA(0.94)'
   forecast: GarchForecastPoint[]
   source: 'python' | 'ewma-fallback'
+  /** Set when the GARCH service is configured but did not answer (I2). */
+  degraded?: boolean
+  error?: { code: 'quant_framework_unreachable'; message: string }
 }
 
 /**
@@ -80,15 +87,19 @@ export function ewmaVolForecast(
 
 export async function fetchGarchForecast(ticker: string, closes: number[]): Promise<GarchForecastResult> {
   const sidecar = process.env.QUANT_FRAMEWORK_URL
+  let failure: string | null = null
   if (sidecar) {
     try {
       const res = await fetch(`${sidecar}/garch/${encodeURIComponent(ticker)}`, { signal: AbortSignal.timeout(8000) })
       if (res.ok) {
         const data = (await res.json()) as GarchForecastResult
-        return { ...data, source: 'python' }
+        return { ...data, model: 'GARCH(1,1)', source: 'python' }
       }
-    } catch {
-      /* fallback */
+      failure = `HTTP ${res.status}`
+    } catch (e) {
+      // Q-140 red-team H2: this was a literal `catch { /* fallback */ }` — the
+      // configured model failed and the answer said nothing.
+      failure = e instanceof Error ? e.name : 'network error'
     }
   }
   // Q25-1: crypto (BTC/ETH/SOL — tradingDaysPerYear SSOT) annualizes with 365
@@ -96,11 +107,20 @@ export async function fetchGarchForecast(ticker: string, closes: number[]): Prom
   const periodsPerYear = tradingDaysPerYear(ticker, '')
   return {
     ticker,
-    model: 'GARCH(1,1)',
+    model: 'EWMA(0.94)',
     forecast: ewmaVolForecast(closes, 20, 0.94, {
       periodsPerYear,
       includeWeekends: periodsPerYear === 365,
     }),
     source: 'ewma-fallback',
+    ...(failure != null
+      ? {
+          degraded: true,
+          error: {
+            code: 'quant_framework_unreachable' as const,
+            message: `The GARCH service did not answer (${failure}); this is an EWMA(0.94) estimate instead.`,
+          },
+        }
+      : {}),
   }
 }

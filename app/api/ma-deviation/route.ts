@@ -4,7 +4,7 @@ import { SECTORS } from '@/lib/sectors'
 import { sma, rsi, ma200Regime } from '@/lib/quant/technicals'
 import { applyRateLimit } from '@/lib/api/rateLimit'
 import { sanitizeError } from '@/lib/api/sanitize'
-import { withRetry } from '@/lib/api/reliability'
+import { withRetry, DEGRADED_CACHE_CONTROL } from '@/lib/api/reliability'
 
 const yahooFinance = new YahooFinance()
 
@@ -128,6 +128,26 @@ export async function GET(request: Request) {
         regime,
       }
     })
+
+    // Q-140 (I2): with every chart fetch failing this answered 200 with
+    // thirteen `error: 'fetch_failed'` rows (11 sectors + SPY + QQQ) and nothing
+    // at the top level saying the board was down — and then CACHED that board
+    // for five minutes, in this module and at the CDN. A board that is mostly
+    // FETCH failures is degraded: not module-cached, and CDN-cached for 30 s
+    // only. `insufficient_data` is a short series, not a failed fetch, so it
+    // does not count (red-team L1).
+    const failedRows = rows.filter((r) => 'error' in r && r.error === 'fetch_failed').length
+    const degraded = failedRows * 2 > rows.length
+    if (degraded) {
+      return NextResponse.json({
+        rows,
+        computedAt: new Date().toISOString(),
+        degraded: true,
+        error: { code: 'ma_deviation_unavailable', message: `Price data failed for ${failedRows} of ${rows.length} instruments; the board is incomplete.` },
+        _cached: false,
+        _cachedAt: now,
+      }, { headers: { 'Cache-Control': DEGRADED_CACHE_CONTROL } })
+    }
 
     const payload = {
       rows,

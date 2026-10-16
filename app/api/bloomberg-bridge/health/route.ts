@@ -29,8 +29,12 @@ export async function GET(request: Request) {
   }
 
   const h = await bridgeHealthCheck()
+  // Q-140: this said `status: 'ok'` beside `reachable: false` — a health probe
+  // reporting healthy while the thing it probes is down. (The unauthenticated
+  // answer above stays a constant `ok` on purpose: it must not disclose
+  // infrastructure state to anyone who asks.)
   return NextResponse.json({
-    status: 'ok',
+    status: h.ok ? 'ok' : 'degraded',
     state,
     reachable: h.ok,
     latencyMs: h.latencyMs,

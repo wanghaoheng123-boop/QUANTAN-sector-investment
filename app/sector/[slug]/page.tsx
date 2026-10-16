@@ -70,6 +70,7 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
   const darkPoolPrintRows = unwrapSynthetic(darkPoolPrints, 'SectorPage.darkPoolAggregateTiles')
   const [darkPoolApiData, setDarkPoolApiData] = useState<DarkPoolAnalysis | null>(null)
   const [darkPoolApiLoading, setDarkPoolApiLoading] = useState(false)
+  const [darkPoolApiError, setDarkPoolApiError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState('chart')
   const [activeRange, setActiveRange] = useState('6M')
   const [quoteError, setQuoteError] = useState<string | null>(null)
@@ -216,8 +217,11 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
     const controller = new AbortController()
     setDarkPoolApiLoading(true)
     setDarkPoolApiData(null)
+    setDarkPoolApiError(null)
     fetch(`/api/darkpool/${encodeURIComponent(sector.etf)}`, { signal: controller.signal })
-      .then((r) => r.json())
+      // Q-140: a non-2xx body ({error}) used to be stored as the analysis, and
+      // the panel then read `apiData.quote.price` on undefined.
+      .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
       .then((data) => {
         if (controller.signal.aborted) return
         setDarkPoolApiData(data)
@@ -227,6 +231,7 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
         if (controller.signal.aborted || (err instanceof DOMException && err.name === 'AbortError')) return
         // Phase 13 S2 fix (F5.4): dark-pool fetch failure now diagnosable.
         console.warn('[sector] dark-pool fetch failed for', sector.etf, err)
+        setDarkPoolApiError('Dark-pool data failed to load; try again shortly.')
         setDarkPoolApiLoading(false)
       })
     return () => controller.abort()
@@ -552,6 +557,7 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
                   color={sector.color}
                   apiData={darkPoolApiData}
                   apiLoading={darkPoolApiLoading}
+                  apiError={darkPoolApiError}
                 />
               </div>
             )}

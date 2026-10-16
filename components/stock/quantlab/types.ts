@@ -115,7 +115,8 @@ export type LlmBackendHealth =
   | { checked: false; status: 'unknown'; message: string }
   | {
       checked: true
-      status: 'ready' | 'config_error' | 'unreachable'
+      /** `check_failed`: our own status route answered non-2xx; the backend's state is unknown (Q-140). */
+      status: 'ready' | 'config_error' | 'unreachable' | 'check_failed'
       message: string
       source?: string
       base?: string

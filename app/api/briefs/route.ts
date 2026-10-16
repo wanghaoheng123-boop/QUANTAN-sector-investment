@@ -9,10 +9,12 @@
  */
 
 import { NextResponse } from 'next/server'
+import { DEGRADED_CACHE_CONTROL } from '@/lib/api/reliability'
 import YahooFinance from 'yahoo-finance2'
 import { applyRateLimit } from '@/lib/api/rateLimit'
 import { sanitizeError } from '@/lib/api/sanitize'
 import { isSafeHttpUrl } from '@/lib/security/urlValidation'
+import { newsPublishTime } from '@/lib/news/publishTime'
 import { newsBriefId } from '@/lib/api/briefId'
 import { SECTOR_COLORS_BY_SLUG, DEFAULT_SECTOR_COLOR } from '@/lib/sectorColors'
 
@@ -93,7 +95,8 @@ async function fetchNewsForTicker(ticker: string): Promise<NewsBrief[]> {
       NEWS_FETCH_TIMEOUT_MS,
       `briefs.search(${ticker})`,
     ) as { news?: unknown[] }  // untyped result (validateResult:false); news is guarded below
-    if (!searchResult?.news || !Array.isArray(searchResult.news)) return results
+    // Red-team M1: no news array is schema drift, a failure — not a quiet day.
+    if (!searchResult?.news || !Array.isArray(searchResult.news)) throw new Error(`news_schema_drift (${ticker})`)
 
     for (const item of searchResult.news as Record<string, unknown>[]) {
       const link = String(item.link ?? '')
@@ -102,7 +105,7 @@ async function fetchNewsForTicker(ticker: string): Promise<NewsBrief[]> {
 
       const title = String(item.title ?? '')
       const snippet = item.summary ? String(item.summary).slice(0, 300) : title
-      const publishedAt = item.publishedAt ? String(item.publishedAt) : null
+      const publishedAt = newsPublishTime(item)
       const relatedTickers: string[] = Array.isArray(item.relatedTickers)
         ? (item.relatedTickers as string[]).slice(0, 5)
         : []
@@ -127,6 +130,12 @@ async function fetchNewsForTicker(ticker: string): Promise<NewsBrief[]> {
     // Phase 13 S2: previously silent. Per-ticker failures don't block other
     // results, but operators need a trail when news fetch is degraded.
     console.warn('[briefs] news fetch failed for', ticker, err)
+    // Q-140 (I2): this used to RESOLVE with [] — so the caller's
+    // Promise.allSettled counted every failure as a success, `failedCalls`
+    // stayed 0, and the `degraded` threshold below could never fire. A full
+    // outage returned {briefs: []} as a quiet news day. Rejecting lets the
+    // existing counter see it.
+    throw err
   }
   return results
 }
@@ -137,6 +146,7 @@ export async function GET(request: Request): Promise<NextResponse<{
   sectorCount: number
   source: string
   degraded?: boolean
+  error?: { code: string; message: string }
 } | { error: string }>> {
   // Phase 13 S2: rate-limit. This route fans out to ~33 yahoo search() calls
   // per request (11 sectors × 3 tickers each). Tighter limit to prevent
@@ -223,15 +233,17 @@ export async function GET(request: Request): Promise<NextResponse<{
         fetchedAt: new Date().toISOString(),
         sectorCount: sectorEntries.length,
         source: 'Yahoo Finance',
-        ...(degraded ? { degraded: true } : {}),
+        ...(degraded
+          ? { degraded: true, error: { code: 'news_unavailable', message: allBriefs.length === 0
+            ? `The news feed failed for ${failedCalls} of ${totalCalls} lookups; no headlines could be loaded.`
+            : `The news feed failed for ${failedCalls} of ${totalCalls} lookups; this list may be incomplete.` } }
+          : {}),
       },
       {
         headers: {
           // Phase 14 (R4-H-2): shorter CDN cache on degraded payloads so a
           // bad minute doesn't pin a poor result for the full window.
-          'Cache-Control': degraded
-            ? 's-maxage=30, stale-while-revalidate=60'
-            : 's-maxage=300, stale-while-revalidate=600',
+          'Cache-Control': degraded ? DEGRADED_CACHE_CONTROL : 's-maxage=300, stale-while-revalidate=600',
         },
       }
     )

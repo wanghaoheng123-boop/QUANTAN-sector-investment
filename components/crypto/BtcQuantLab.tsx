@@ -25,13 +25,17 @@ interface MetricsData {
   fundingRate: number | null
   nextFundingTime: string | null
   openInterest: number | null
-  takerBuyVolume: number | null
-  takerSellVolume: number | null
+  /** Bybit account buy/sell ratios (not taker volume) — Q-140 AC3. */
+  accountBuyRatio: number | null
+  accountSellRatio: number | null
   longShortRatio: number | null
   longAccountPct: number | null
   shortAccountPct: number | null
   source: string
   fetchedAt: string
+  /** Q-140: set by the route when Bybit and/or OKX failed. */
+  degraded?: boolean
+  userMessage?: string
 }
 
 
@@ -309,6 +313,14 @@ export default function BtcQuantLab({ candles }: Props) {
             import left over from the liquidations tab. The badge is real now. */}
         {activeMetricTab === 'funding' && metricsCached && (
           <div className="mb-2"><DataFreshnessIndicator cached compact /></div>
+        )}
+        {/* Q-140 (I2): the metrics route has always answered `degraded: true` with
+            a `userMessage` when Bybit/OKX failed, and nothing here read it — the
+            nulls rendered as dashes with no reason. Said now. */}
+        {activeMetricTab === 'funding' && metrics?.degraded && (
+          <div role="status" className="text-[11px] text-amber-400 border border-amber-800/40 bg-amber-950/20 rounded-lg px-3 py-2 mb-3">
+            {metrics.userMessage ?? 'Derivatives metrics are partially unavailable.'}
+          </div>
         )}
         {activeMetricTab === 'funding' && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

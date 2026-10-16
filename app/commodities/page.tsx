@@ -19,6 +19,8 @@ export default function CommoditiesPage() {
   const [quotes, setQuotes] = useState<Record<string, Quote>>({})
   const [filter, setFilter] = useState<CommodityCategory | 'ALL'>('ALL')
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
+  /** Q-140 (I2): a failed poll is said; the last good prices are marked as such. */
+  const [fetchFailed, setFetchFailed] = useState(false)
 
   const tickers = useMemo(() => COMMODITY_INSTRUMENTS.map((c) => c.ticker), [])
 
@@ -29,8 +31,10 @@ export default function CommoditiesPage() {
       const q = tickers.map(encodeURIComponent).join(',')
       const res = await fetch(`/api/prices?tickers=${q}`, { signal })
       if (signal?.aborted) return
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
       if (signal?.aborted) return
+      setFetchFailed(false)
       if (data.quotes) {
         const map: Record<string, Quote> = {}
         data.quotes.forEach((row: Quote) => {
@@ -42,6 +46,7 @@ export default function CommoditiesPage() {
     } catch (err) {
       if (signal?.aborted || (err instanceof DOMException && err.name === 'AbortError')) return
       console.warn('[commodities] fetch failed', err)
+      setFetchFailed(true)
     }
   }, [tickers])
 
@@ -80,7 +85,10 @@ export default function CommoditiesPage() {
           </p>
         </div>
         <div className="text-xs text-slate-400 font-mono">
-          {lastUpdate ? `Last update ${lastUpdate.toLocaleTimeString()}` : 'Loading…'}
+          {lastUpdate ? `Last update ${lastUpdate.toLocaleTimeString()}` : fetchFailed ? 'Prices failed to load' : 'Loading…'}
+          {fetchFailed && lastUpdate && (
+            <div role="status" className="text-amber-400 mt-1">Latest poll failed — showing the last successful update.</div>
+          )}
         </div>
       </div>
 
