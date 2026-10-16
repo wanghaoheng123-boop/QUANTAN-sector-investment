@@ -1,14 +1,22 @@
 /** Q-135 — session moves are measurements; a missing quote is absent, not 0%. */
 import { describe, expect, it } from 'vitest'
-import { FLAT_BAND_PCT, moveDirection, sessionMoveFor, sessionMovesFromQuotes } from '@/lib/sessionMoves'
+import { formatMovePct, moveDirection, sessionMoveFor, sessionMovesFromQuotes } from '@/lib/sessionMoves'
 import { SECTORS } from '@/lib/sectors'
 
 describe('sessionMoves', () => {
   it('classifies by the flat band', () => {
-    expect(moveDirection(FLAT_BAND_PCT * 2)).toBe('UP')
-    expect(moveDirection(-FLAT_BAND_PCT * 2)).toBe('DOWN')
+    expect(moveDirection(0.02)).toBe('UP')
+    expect(moveDirection(-0.02)).toBe('DOWN')
     expect(moveDirection(0)).toBe('FLAT')
-    expect(moveDirection(FLAT_BAND_PCT)).toBe('FLAT')
+    // Red-team S5: the label is decided on the displayed value, so it can never
+    // disagree with the number beside it.
+    for (const v of [0.01, 0.0149, 0.0051, -0.0051, 0.0049, -0.0049, -0.001]) {
+      const shown = formatMovePct(v)
+      const want = shown.startsWith('+') ? 'UP' : shown.startsWith('-') ? 'DOWN' : 'FLAT'
+      expect(moveDirection(v), `${v} shows ${shown}`).toBe(want)
+    }
+    expect(formatMovePct(-0.001)).toBe('0.00%')
+    expect(formatMovePct(1.234)).toBe('+1.23%')
   })
 
   it('a missing or unusable quote produces NO move (it used to be a 0% HOLD at $0)', () => {

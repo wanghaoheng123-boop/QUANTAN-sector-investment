@@ -392,11 +392,13 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
               ),
             },
             {
-              title: 'Dark Pool tab — institutional flow',
+              // Red-team S2 (2026-10-17): this called the simulated prints
+              // "institutional flow" and read accumulation into them.
+              title: 'Dark Pool tab — what is measured and what is not',
               body: (
                 <p>
-                  Off-exchange block trades. <strong>Bullish prints near ask</strong> = accumulation; <strong>bearish prints near bid</strong> = distribution.
-                  Cluster of large prints often precedes a directional move — but is rarely a same-day signal.
+                  <strong>Measured:</strong> average daily volume, and short interest, days to cover and float where Yahoo publishes them. For sector ETFs it usually does not, so those fields show &mdash;.
+                  {' '}<strong>Not measured:</strong> the block-print table and the flow gauge are simulated for illustration and say nothing about this ETF.
                 </p>
               ),
             },
@@ -412,18 +414,21 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
               ),
             },
             {
-              title: 'How to act',
+              // Red-team S1 (2026-10-17): this was "How to act" — trade setups
+              // and a position-sizing rule, on a page whose signals Q-135
+              // removed, and the kind of personal recommendation Q-083 gates.
+              title: 'What this page is not',
               body: (
                 <p>
-                  Strong BUY + price above EMA200 + RSI 50–70 = <strong>quality long setup</strong>. Strong SELL + RSI &gt; 80 + dark pool selling = <strong>top warning</strong>.
-                  Always size position so a 1.5×ATR stop costs ≤1% of account.
+                  Nothing here is a recommendation to buy or sell. The chart and indicators describe past prices and the session move describes today; none of it forecasts a return.
+                  Research tooling, not investment advice.
                 </p>
               ),
             },
           ]}
           legend={[
-            { color: '#00d084', label: 'Bullish bar / signal', meaning: 'price up vs prior close, or BUY signal' },
-            { color: '#ff6b7a', label: 'Bearish bar / signal', meaning: 'price down vs prior close, or SELL signal' },
+            { color: '#00d084', label: 'Green', meaning: 'candle closed above its open; session up vs prior close' },
+            { color: '#ff6b7a', label: 'Red', meaning: 'candle closed below its open; session down vs prior close' },
             { color: '#fbbf24', label: 'Indicator overlay', meaning: 'EMA, MACD, ATR overlays on chart' },
           ]}
         />
@@ -572,7 +577,7 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
             )}
           </div>
 
-          {/* Right: Signal + Dark Pool Summary */}
+          {/* Right: session move + illustrative dark-pool summary */}
           <div className="space-y-6">
             {/* Session move (Q-135: a measurement, not a signal) */}
             {move && (
@@ -584,10 +589,14 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
               </div>
             )}
 
-            {/* Dark Pool Summary (always visible) */}
+            {/* Dark Pool Summary — aggregates of the SIMULATED prints. Red-team S2:
+                these tiles carried no label while the table they summarise did.
+                Q-089 (owner) decides whether the surface stays; either way it
+                may not appear unlabelled. */}
             {darkPoolPrintRows.length > 0 && (
               <div>
-                <h3 className="text-xs font-medium text-slate-400 uppercase tracking-widest mb-3">Dark Pool Summary</h3>
+                <h3 className="text-xs font-medium text-slate-400 uppercase tracking-widest mb-1">Dark Pool Summary</h3>
+                <p className="text-[11px] text-amber-300/80 mb-3">Illustrative: simulated prints, not market data.</p>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="bg-slate-900/60 rounded-xl p-3.5 border border-slate-800">
                     <div className="text-xs text-slate-400 mb-1">Total Block Vol</div>

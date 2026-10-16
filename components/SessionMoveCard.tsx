@@ -7,7 +7,7 @@
  * Everything shown here is measured: the move, the price, the quote time.
  */
 import { memo } from 'react'
-import type { SessionMove } from '@/lib/sessionMoves'
+import { formatMovePct, type SessionMove } from '@/lib/sessionMoves'
 import { safeFixed, formatFreshness } from '@/lib/format'
 
 // Colour-blind-safe: an icon and a word as well as a hue (WCAG 1.4.1).
@@ -17,7 +17,7 @@ const DIRECTION = {
   FLAT: { icon: '●', label: 'FLAT', bg: 'bg-slate-900/40',  border: 'border-slate-600/40',  text: 'text-slate-300' },
 } as const
 
-const pct = (v: number) => `${v >= 0 ? '+' : ''}${safeFixed(v, 2)}%`
+const pct = formatMovePct
 
 function SessionMoveCard({ move, compact = false }: { move: SessionMove; compact?: boolean }) {
   const d = DIRECTION[move.direction]

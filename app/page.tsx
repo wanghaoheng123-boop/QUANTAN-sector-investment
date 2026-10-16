@@ -7,7 +7,7 @@ import SectorCard from '@/components/SectorCard'
 import SessionMoveCard from '@/components/SessionMoveCard'
 import PriceTicker from '@/components/PriceTicker'
 import { SECTORS } from '@/lib/sectors'
-import { sessionMovesFromQuotes, type SessionMove } from '@/lib/sessionMoves'
+import { formatMovePct, sessionMovesFromQuotes, type SessionMove } from '@/lib/sessionMoves'
 import { useErrorToast } from '@/hooks/useErrorToast'
 import { ErrorToastList } from '@/components/ErrorToastList'
 import { useLiveQuotes } from '@/hooks/useLiveQuotes'
@@ -295,7 +295,7 @@ export default function HomePage() {
             <span className="gradient-text">Sector Intelligence</span>
           </h1>
           <p className="text-slate-400 text-base max-w-xl mx-auto leading-relaxed">
-            Market data across all {SECTORS.length} GICS sectors — Yahoo Finance quotes, K-line charts, off-exchange volume, and sector briefs. Research tooling, not investment advice.
+            Market data across all {SECTORS.length} GICS sectors — Yahoo Finance quotes, K-line charts with RSI, MACD and ATR, and sector briefs. Research tooling, not investment advice.
           </p>
         </div>
 
@@ -358,7 +358,7 @@ export default function HomePage() {
             // "Avg Confidence" averaged a fabricated 42 + 14×|Δ%| score.
             { label: 'Sectors up today', value: upMoves.length, of: SECTORS.length, color: '#00d084' },
             { label: 'Sectors down today', value: downMoves.length, of: SECTORS.length, color: '#ff6b7a' },
-            { label: 'Flat (±0.01%)', value: flatMoves.length, of: SECTORS.length, color: '#94a3b8' },
+            { label: 'Flat (0.00%)', value: flatMoves.length, of: SECTORS.length, color: '#94a3b8' },
             { label: 'No quote', value: noQuote, of: SECTORS.length, color: noQuote > 0 ? '#f59e0b' : '#64748b' },
           ].map((stat, i) => (
             <div key={i} className="rounded-xl border border-slate-800 p-4 bg-slate-900/60 hover:border-slate-700/80 transition-colors">
@@ -442,7 +442,7 @@ export default function HomePage() {
                     <span className="text-xs">{sector?.icon}</span>
                     <span className="text-[10px] font-mono text-slate-400">{move.etf}</span>
                     <span className="text-[10px] font-mono font-medium" style={{ color }}>
-                      {`${move.changePct >= 0 ? '+' : ''}${move.changePct.toFixed(2)}%`}
+                      {formatMovePct(move.changePct)}
                     </span>
                   </div>
                 )
@@ -455,7 +455,7 @@ export default function HomePage() {
           <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
             <div>
               <h2 id="section-all-sectors" className="text-lg font-bold text-white">All Sectors</h2>
-              <p className="text-xs text-slate-400 mt-0.5">Click any sector for its K-line chart, off-exchange volume and news</p>
+              <p className="text-xs text-slate-400 mt-0.5">Click any sector for its K-line chart and news</p>
             </div>
             <div className="flex gap-2 flex-wrap">
               {/* Q-135: these filtered on BUY / SELL / HOLD — trade words for session moves. */}
@@ -601,7 +601,7 @@ export default function HomePage() {
               // risk/reward that no producer supplies; the first promised dark-pool
               // markers and news pins Q-096 removed from the chart.
               { icon: '📊', title: 'K-Line Chart', desc: 'Candlestick charts with EMA overlays, volume, and RSI, MACD and ATR panels.' },
-              { icon: '🔵', title: 'Off-Exchange Volume', desc: 'Off-exchange volume share from Yahoo Finance. The block-print table is illustrative and labelled as such.' },
+              { icon: '🔵', title: 'Dark-Pool Tab', desc: 'Volume and short-interest fields from Yahoo Finance where it publishes them. For sector ETFs it mostly does not, and the tab shows — rather than a number. Its block-print table is illustrative, and labelled so.' },
               { icon: '⚡', title: 'Session Moves', desc: 'Each sector ETF\u2019s move versus the prior close, with its quote time — a measurement, not a trade signal.' },
             ].map((item, i) => (
               <div key={i} className="text-center space-y-2 p-4 rounded-xl border border-slate-800 hover:border-amber-800/40 hover:bg-amber-500/5 transition-all">
