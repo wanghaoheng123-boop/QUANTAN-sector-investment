@@ -12,9 +12,10 @@
  * that were supposed to be watching, and it survived several passes before being
  * spotted by column-count audit rather than by reading.
  *
- * KNOWN DEBT, asserted rather than hidden: 7 rows are malformed on `main` and
- * predate this guard. They are pinned below so the count cannot grow. Repairing
- * them is Q-095; letting new ones appear is what this test prevents.
+ * The seven rows that predated this guard (missing `line` fields, an unquoted
+ * comma, backslash "escapes" CSV does not have) were repaired under Q-095, so
+ * no malformed row is tolerated now. Append through `npm run ledger:append`
+ * (scripts/ledger-append.mjs), which validates, locks and newline-terminates.
  */
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'fs'
@@ -48,21 +49,6 @@ const rows = parseCsv(readFileSync(LEDGER, 'utf8'))
 const header = rows[0]
 const dataRows = rows.slice(1)
 
-/**
- * Rows malformed on `main` before this guard existed. Pinned by ID so the debt
- * is visible and cannot silently grow. Do not add to this list to make a new
- * failure pass — fix the row.
- */
-const KNOWN_MALFORMED_IDS = new Set([
-  'F4.5',   // 11 cols — status cell blank
-  'F5.4',   // 11 cols — status cell blank
-  'F5.9',   // 13 cols — unescaped comma
-  'F6.2',   // 15 cols — unescaped commas
-  'F6.3',   // 14 cols — unescaped commas
-  'F6.4',   // 16 cols — unescaped commas
-  'WSA-FG', // 11 cols — status cell blank
-])
-
 describe('findings-ledger.csv — the risk register stays parseable', () => {
   it('has the expected header', () => {
     expect(header[0]).toBe('id')
@@ -77,18 +63,11 @@ describe('findings-ledger.csv — the risk register stays parseable', () => {
     expect(dataRows.length).toBeGreaterThan(100)
   })
 
-  it('has no NEW rows whose column count differs from the header', () => {
+  it('every row has exactly the header\'s column count', () => {
     const offenders = dataRows
       .filter((r) => r.length !== header.length)
       .map((r) => `${r[0]} (${r.length} cols, expected ${header.length})`)
-      .filter((desc) => !KNOWN_MALFORMED_IDS.has(desc.split(' ')[0]))
-
     expect(offenders).toEqual([])
-  })
-
-  it('the known-malformed debt has not grown', () => {
-    const malformed = dataRows.filter((r) => r.length !== header.length)
-    expect(malformed.length).toBeLessThanOrEqual(KNOWN_MALFORMED_IDS.size)
   })
 
   it('every row has a non-empty id, and ids are unique', () => {
