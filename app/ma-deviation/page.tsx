@@ -1,5 +1,6 @@
 'use client'
 
+import { formatLocalTime } from '@/lib/format'
 import { useState, useEffect } from 'react'
 import { DataFreshnessIndicator } from '@/components/DataFreshnessIndicator'
 import Link from 'next/link'
@@ -252,7 +253,7 @@ export default function MADeviationPage() {
                     label="Data"
                   />
                   <div className="text-xs text-slate-400 font-mono">
-                    Computed: {new Date(data.computedAt).toLocaleTimeString()}
+                    Computed: {formatLocalTime(data.computedAt)}
                   </div>
                 </div>
               )}

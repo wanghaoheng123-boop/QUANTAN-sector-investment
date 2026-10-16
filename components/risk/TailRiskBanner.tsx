@@ -1,5 +1,6 @@
 'use client'
 
+import { UI_LOCALE } from '@/lib/format'
 import { evaluateTailRisk, type TailRiskInput } from '@/lib/portfolio/tailRiskAlerts'
 
 /**
@@ -41,7 +42,7 @@ export function TailRiskBanner() {
         Demo portfolio — wire live positions in Phase 16. The alerts below are computed from
         fixed example inputs (skew {DEMO_INPUTS.realizedSkew.toFixed(2)}, realized vol{' '}
         {(DEMO_INPUTS.realizedVol * 100).toFixed(0)}% vs {(DEMO_INPUTS.volMean * 100).toFixed(0)}%
-        mean, vega {DEMO_INPUTS.portfolioVegaUsd.toLocaleString()} USD), not from your positions.
+        mean, vega {DEMO_INPUTS.portfolioVegaUsd.toLocaleString(UI_LOCALE)} USD), not from your positions.
         Nothing here is a recommendation.
       </div>
       {alerts.map((a) => (

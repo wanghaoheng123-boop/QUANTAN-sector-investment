@@ -3,7 +3,7 @@
 import { DarkPoolPrint } from '@/lib/sectors'
 import type { DarkPoolAnalysis } from '@/lib/darkpool'
 import { unwrapSynthetic, type Synthetic } from '@/lib/synthetic'
-import { formatFreshness } from '@/lib/format'
+import { formatFreshness, formatLocalDateTime } from '@/lib/format'
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -230,7 +230,7 @@ export default function DarkPoolPanel({
           <div className="text-[10px] text-slate-400 leading-relaxed">
             Source for the metrics above: Yahoo Finance aggregate off-exchange trading data.{' '}
             {apiData.fetchedAt && (
-              <>Fetched: {new Date(apiData.fetchedAt).toLocaleString()}. </>
+              <>Fetched: {formatLocalDateTime(apiData.fetchedAt)}. </>
             )}
             Off-exchange % = Finra BATS/OTCQX/OTCBB volume ÷ total volume. This source does not
             cover the flow gauge or the block prints below.

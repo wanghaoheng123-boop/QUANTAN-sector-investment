@@ -193,6 +193,11 @@ export function toIsoDate(value: unknown, fallback = ''): string {
  * `format()`, because ICU versions disagree on the separator before AM/PM
  * (U+202F in newer ICU, a space in older), and Node and the browser need not
  * ship the same ICU.
+ *
+ * The zone is printed as EDT or EST, not "ET" (red-team H2, 2026-10-17): on
+ * the November fall-back morning 1:30 AM happens twice, and "1:30 AM ET" named
+ * two different instants. Both abbreviations are fixed by the zone, so the
+ * text is still the same on the server and in every browser.
  */
 const ET_FORMAT = new Intl.DateTimeFormat('en-US', {
   timeZone: 'America/New_York',
@@ -202,6 +207,7 @@ const ET_FORMAT = new Intl.DateTimeFormat('en-US', {
   hour: 'numeric',
   minute: '2-digit',
   hour12: true,
+  timeZoneName: 'short',
 })
 
 export function formatEtDateTime(
@@ -214,5 +220,38 @@ export function formatEtDateTime(
   const p: Partial<Record<Intl.DateTimeFormatPartTypes, string>> = {}
   for (const part of ET_FORMAT.formatToParts(new Date(t))) p[part.type] = part.value
   const date = `${opts.weekday ? `${p.weekday}, ` : ''}${p.month} ${p.day}`
-  return `${date}, ${p.hour}:${p.minute} ${p.dayPeriod} ET`
+  return `${date}, ${p.hour}:${p.minute} ${p.dayPeriod} ${p.timeZoneName}`
+}
+
+/**
+ * The locale every number and date in the UI is formatted in.
+ *
+ * The UI is English. A bare `toLocaleString()` formats in the locale of
+ * whatever process runs it, so on a server-rendered page the server's en-US
+ * text met a German browser's "-600.000" and React threw #418 (red-team H1,
+ * `/portfolio`, 2026-10-17). Outside SSR it still printed one number three
+ * ways depending on the viewer. `__tests__/architecture/locale-fixed.test.ts`
+ * forbids the bare form.
+ */
+export const UI_LOCALE = 'en-US'
+
+function toDate(v: Date | string | number | null | undefined): Date | null {
+  if (v === null || v === undefined || v === '') return null
+  const d = v instanceof Date ? v : new Date(v)
+  return Number.isFinite(d.getTime()) ? d : null
+}
+
+/**
+ * A clock time in the VIEWER's zone, with the zone named ("3:04:05 PM GMT+8").
+ * For client-side "fetched at" stamps; market times use formatEtDateTime.
+ */
+export function formatLocalTime(v: Date | string | number | null | undefined): string {
+  const d = toDate(v)
+  return d ? d.toLocaleTimeString(UI_LOCALE, { timeZoneName: 'short' }) : '—'
+}
+
+/** A date and clock time in the viewer's zone, with the zone named. */
+export function formatLocalDateTime(v: Date | string | number | null | undefined): string {
+  const d = toDate(v)
+  return d ? d.toLocaleString(UI_LOCALE, { timeZoneName: 'short' }) : '—'
 }

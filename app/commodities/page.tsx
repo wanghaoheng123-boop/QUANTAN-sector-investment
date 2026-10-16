@@ -1,5 +1,6 @@
 'use client'
 
+import { formatLocalTime } from '@/lib/format'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { COMMODITY_INSTRUMENTS, CommodityCategory } from '@/lib/commodities'
@@ -85,7 +86,7 @@ export default function CommoditiesPage() {
           </p>
         </div>
         <div className="text-xs text-slate-400 font-mono">
-          {lastUpdate ? `Last update ${lastUpdate.toLocaleTimeString()}` : fetchFailed ? 'Prices failed to load' : 'Loading…'}
+          {lastUpdate ? `Last update ${formatLocalTime(lastUpdate)}` : fetchFailed ? 'Prices failed to load' : 'Loading…'}
           {fetchFailed && lastUpdate && (
             <div role="status" className="text-amber-400 mt-1">Latest poll failed — showing the last successful update.</div>
           )}

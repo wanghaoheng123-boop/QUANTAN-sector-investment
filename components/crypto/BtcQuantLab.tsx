@@ -1,5 +1,6 @@
 'use client'
 
+import { formatLocalTime } from '@/lib/format'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { DataFreshnessIndicator } from '@/components/DataFreshnessIndicator'
 import {
@@ -99,7 +100,7 @@ export default function BtcQuantLab({ candles, interval = '1d' }: Props) {
       if (mr.ok) {
         setMetrics(mr.data as MetricsData)
         setMetricsCached((mr.data as { _cached?: boolean })?._cached === true)
-        setMetricsFetchedAt(new Date().toLocaleTimeString())
+        setMetricsFetchedAt(formatLocalTime(new Date()))
       } else {
         setDerivativesError((prev) => {
           const base = prev ? `${prev} · ` : ''
@@ -333,7 +334,7 @@ export default function BtcQuantLab({ candles, interval = '1d' }: Props) {
             <MetricCard
               label="Funding Rate (8h)"
               value={metrics?.fundingRate != null ? `${(metrics.fundingRate * 100).toFixed(4)}%` : '—'}
-              sub={metrics?.nextFundingTime ? `Next: ${new Date(metrics.nextFundingTime).toLocaleTimeString()}` : undefined}
+              sub={metrics?.nextFundingTime ? `Next: ${formatLocalTime(metrics.nextFundingTime)}` : undefined}
               color={fundingInfo?.color ?? 'text-slate-400'}
             />
             <MetricCard

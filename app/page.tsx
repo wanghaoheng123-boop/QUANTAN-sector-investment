@@ -1,5 +1,6 @@
 'use client'
 
+import { formatLocalTime } from '@/lib/format'
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import { BACKTEST_SCOPE_LINE } from '@/lib/backtest/strategyDescription'
@@ -289,7 +290,7 @@ export default function HomePage() {
                 ? 'MARKET CLOSED'
                 : 'CONNECTING'}
             <span className="text-slate-400">·</span>
-            {lastUpdate ? `Updated ${lastUpdate.toLocaleTimeString()}` : 'Awaiting first tick…'}
+            {lastUpdate ? `Updated ${formatLocalTime(lastUpdate)}` : 'Awaiting first tick…'}
           </div>
           <h1 className="text-4xl sm:text-5xl font-bold tracking-tight">
             <span className="gradient-text">Sector Intelligence</span>
