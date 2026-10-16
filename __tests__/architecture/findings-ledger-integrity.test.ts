@@ -20,36 +20,24 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'fs'
 import { join } from 'path'
+// ONE reader for the guard and the append script. This file used to carry its
+// own lenient copy, which read a quote left open at end of file as a valid
+// 12-column row — so a swallowed CRITICAL finding passed (red-team L1).
+import { ledgerProblems } from '../../scripts/lib/ledger.mjs'
 
 const LEDGER = join(__dirname, '../../reviews/findings-ledger.csv')
-
-/** Minimal RFC4180-ish parser: handles quoted fields containing commas/newlines. */
-function parseCsv(text: string): string[][] {
-  const rows: string[][] = []
-  let row: string[] = []
-  let field = ''
-  let inQuotes = false
-
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i]
-    if (inQuotes) {
-      if (c === '"') {
-        if (text[i + 1] === '"') { field += '"'; i++ } else { inQuotes = false }
-      } else field += c
-    } else if (c === '"') inQuotes = true
-    else if (c === ',') { row.push(field); field = '' }
-    else if (c === '\n') { row.push(field); rows.push(row); row = []; field = '' }
-    else if (c !== '\r') field += c
-  }
-  if (field !== '' || row.length) { row.push(field); rows.push(row) }
-  return rows.filter((r) => r.some((c) => c.trim() !== ''))
-}
-
-const rows = parseCsv(readFileSync(LEDGER, 'utf8'))
-const header = rows[0]
-const dataRows = rows.slice(1)
+const TEXT = readFileSync(LEDGER, 'utf8')
+const { header: parsedHeader, rows: dataRows, problems } = ledgerProblems(TEXT)
+// null only when the file does not parse, which the first test reports by name.
+const header: string[] = parsedHeader ?? []
 
 describe('findings-ledger.csv — the risk register stays parseable', () => {
+  it('parses as strict RFC 4180 with every row at the header width', () => {
+    // An open quote, a quote mid-field, or text after a closing quote each
+    // swallow or split rows; ledgerProblems reports all three and short rows.
+    expect(problems).toEqual([])
+  })
+
   it('has the expected header', () => {
     expect(header[0]).toBe('id')
     expect(header).toContain('severity')
@@ -65,13 +53,13 @@ describe('findings-ledger.csv — the risk register stays parseable', () => {
 
   it('every row has exactly the header\'s column count', () => {
     const offenders = dataRows
-      .filter((r) => r.length !== header.length)
-      .map((r) => `${r[0]} (${r.length} cols, expected ${header.length})`)
+      .filter((r: string[]) => r.length !== header.length)
+      .map((r: string[]) => `${r[0]} (${r.length} cols, expected ${header.length})`)
     expect(offenders).toEqual([])
   })
 
   it('every row has a non-empty id, and ids are unique', () => {
-    const ids = dataRows.map((r) => r[0]?.trim()).filter(Boolean)
+    const ids = dataRows.map((r: string[]) => r[0]?.trim()).filter(Boolean)
     expect(ids.length).toBe(dataRows.length)
     expect(new Set(ids).size).toBe(ids.length)
   })
@@ -79,21 +67,21 @@ describe('findings-ledger.csv — the risk register stays parseable', () => {
   it('no row is a glued concatenation of two rows', () => {
     // The corruption signature: roughly double the header width in one row.
     const glued = dataRows
-      .filter((r) => r.length >= 2 * header.length - 1)
-      .map((r) => r[0])
+      .filter((r: string[]) => r.length >= 2 * header.length - 1)
+      .map((r: string[]) => r[0])
 
     expect(glued).toEqual([])
   })
 
   it('the file ends with a newline so the next append cannot glue onto it', () => {
     // This is the actual root cause of the swallowed CRITICAL finding.
-    expect(readFileSync(LEDGER, 'utf8').endsWith('\n')).toBe(true)
+    expect(TEXT.endsWith('\n')).toBe(true)
   })
 
   it('retains the CRITICAL Q-088 brand-inversion finding as its own row', () => {
     // The specific row that was lost. Named explicitly: a register that can
     // drop its most severe entry is not a register.
-    const ids = dataRows.map((r) => r[0])
+    const ids = dataRows.map((r: string[]) => r[0])
     expect(ids).toContain('Q088-1')
   })
 })
