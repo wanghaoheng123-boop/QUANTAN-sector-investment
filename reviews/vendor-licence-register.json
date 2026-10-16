@@ -1399,7 +1399,7 @@
     {
       "kind": "pip-package",
       "id": "tradingagents",
-      "lifecycle": "active",
+      "lifecycle": "withdrawn",
       "classification": "llm-vendor",
       "vendor": "TradingAgents (LLM multi-agent framework)",
       "end_user_exposed": true,
@@ -1415,7 +1415,9 @@
         "Q-082",
         "Q-083"
       ],
-      "redistribution_position": "UNRESOLVED — the substantive redistribution question is routed to Q-082 (licence) and Q-083 (MAS/FAA). Counsel only. Recording this finding does NOT assert that the consumption or the redistribution is permitted."
+      "redistribution_position": "UNRESOLVED — the substantive redistribution question is routed to Q-082 (licence) and Q-083 (MAS/FAA). Counsel only. Recording this finding does NOT assert that the consumption or the redistribution is permitted.",
+      "withdrawn_on": "2026-10-16",
+      "withdrawn_reason": "Removed from requirements.txt because the package was DELETED from PyPI (pypi.org JSON API returns 404, verified 2026-10-16) and an unclaimed name can be re-registered by anyone. server_trading_agents.py still imports it, so the exposure this row described cannot be built from this repository until the owner pins a verified source; that source needs its own row when it is added."
     },
     {
       "kind": "pip-package",
