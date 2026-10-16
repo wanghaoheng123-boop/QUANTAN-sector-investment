@@ -37,6 +37,7 @@ import YahooFinance from 'yahoo-finance2'
 import { SECTORS } from '@/lib/sectors'
 import { parseQuoteTime } from '@/lib/format'
 import { isSafeHttpUrl } from '@/lib/security/urlValidation'
+import { newsPublishTime } from '@/lib/news/publishTime'
 
 export interface BriefSignal {
   key: string
@@ -298,7 +299,10 @@ export async function buildSectorBrief(
     .map((item: Record<string, unknown>) => ({
       title: String(item.title ?? ''),
       publisher: String(item.publisher ?? 'Unknown'),
-      publishedAt: item.publishedAt ? String(item.publishedAt) : null,
+      // Yahoo sends providerPublishTime, never publishedAt: every brief headline
+      // was undated on production (2026-10-17, 0 of 6 dated) — the third copy of
+      // the bug Q-140 L12 fixed in the two news routes.
+      publishedAt: newsPublishTime(item),
       snippet: item.summary ? String(item.summary).slice(0, 200) : null,
       link: String(item.link ?? ''),
       tickers: Array.isArray(item.relatedTickers) ? (item.relatedTickers as string[]).slice(0, 5) : [],

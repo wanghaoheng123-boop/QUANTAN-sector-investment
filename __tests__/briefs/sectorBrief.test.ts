@@ -71,7 +71,8 @@ const NEWS = {
     {
       title: 'Chipmakers rally',
       publisher: 'Reuters',
-      publishedAt: '2026-08-14T18:00:00Z',
+      // Yahoo's real field (a Date via yahoo-finance2); it never sends publishedAt.
+      providerPublishTime: new Date('2026-08-14T18:00:00Z'),
       summary: 'Semis led the tape.',
       link: 'https://example.test/a',
       relatedTickers: ['NVDA', 'AMD'],
@@ -221,6 +222,11 @@ describe('buildSectorBrief — unknown sector vs dead upstream', () => {
     const brief = await buildSectorBrief('technology', fetchers) as SectorBrief
     expect(brief.dataQuality).toBe('partial')
     expect(brief.dataQualityNote).toBe('Not reported by Yahoo Finance: P/E.')
+  })
+
+  it('dates each headline from providerPublishTime', async () => {
+    const brief = await buildSectorBrief('technology', healthyFetchers()) as SectorBrief
+    expect(brief.news[0].publishedAt).toBe('2026-08-14T18:00:00.000Z')
   })
 
   it('trailing P/E reads as a ratio, not a price', async () => {

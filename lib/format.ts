@@ -177,3 +177,42 @@ export function toIsoDate(value: unknown, fallback = ''): string {
   if (iso == null) return fallback
   return iso.slice(0, 10)
 }
+
+/**
+ * Q-142 — a wall-clock time that renders the SAME text on the server and in
+ * the browser.
+ *
+ * `toLocaleString()` without a `timeZone` formats in the zone of whatever
+ * process runs it: UTC on the server during SSR, the viewer's zone during
+ * hydration. On a server-rendered page the two strings differ and React throws
+ * error #418 (measured on production /briefs, 2026-10-01: SSR "03:15 PM",
+ * hydration in Asia/Singapore "11:15 PM"). US market data is quoted in exchange
+ * time, so the zone is fixed to America/New_York and the text says "ET".
+ *
+ * Assembled from `formatToParts` with plain spaces rather than taken from
+ * `format()`, because ICU versions disagree on the separator before AM/PM
+ * (U+202F in newer ICU, a space in older), and Node and the browser need not
+ * ship the same ICU.
+ */
+const ET_FORMAT = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'America/New_York',
+  weekday: 'short',
+  month: 'short',
+  day: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+  hour12: true,
+})
+
+export function formatEtDateTime(
+  iso: string | null | undefined,
+  opts: { weekday?: boolean } = {},
+): string {
+  if (!iso) return '—'
+  const t = Date.parse(iso)
+  if (!Number.isFinite(t)) return '—'
+  const p: Partial<Record<Intl.DateTimeFormatPartTypes, string>> = {}
+  for (const part of ET_FORMAT.formatToParts(new Date(t))) p[part.type] = part.value
+  const date = `${opts.weekday ? `${p.weekday}, ` : ''}${p.month} ${p.day}`
+  return `${date}, ${p.hour}:${p.minute} ${p.dayPeriod} ET`
+}
