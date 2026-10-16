@@ -116,7 +116,7 @@ export default function BtcPage() {
           </CryptoChartBoundary>
         ) : (
           <CryptoChartBoundary title="BTC Quant Lab crashed">
-            <BtcQuantLab candles={candles} />
+            <BtcQuantLab candles={candles} interval={activeRange} />
           </CryptoChartBoundary>
         )}
 

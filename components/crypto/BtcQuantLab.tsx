@@ -12,14 +12,17 @@ import {
   calcATR,
   calcStochastic,
   interpretFundingRate,
-  RAINBOW_BANDS,
-  getRainbowBand,
 } from '@/lib/crypto'
+import { barLabel, isDailyInterval } from '@/lib/barInterval'
 import { ma200Regime, sma200DeviationPct } from '@/lib/quant/technicals'
 import { fetchJsonSafe } from '@/lib/fetchJsonSafe'
 import { LiquidationsPanel } from '@/components/crypto/LiquidationsPanel'
 
-interface Props { candles: BtcCandle[] }
+interface Props {
+  candles: BtcCandle[]
+  /** Q-141: the interval of `candles` (the Chart tab's timeframe), so labels name the bars. */
+  interval?: string
+}
 
 interface MetricsData {
   fundingRate: number | null
@@ -61,7 +64,9 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 
-export default function BtcQuantLab({ candles }: Props) {
+export default function BtcQuantLab({ candles, interval = '1d' }: Props) {
+  const bars = barLabel(interval)
+  const daily = isDailyInterval(interval)
   const [metrics, setMetrics] = useState<MetricsData | null>(null)
   const [activeMetricTab, setActiveMetricTab] = useState<'funding' | 'liquidations' | 'signals'>('funding')
   const [derivativesError, setDerivativesError] = useState<string | null>(null)
@@ -157,10 +162,12 @@ export default function BtcQuantLab({ candles }: Props) {
   const stochOk = Number.isFinite(latestStK) && Number.isFinite(latestStD)
   const atrOk = Number.isFinite(latestATR)
 
-  // Rainbow model — approximate BTC rainbow from halving cycles
-  const rainbowHigh = high20 * 1.5
-  const rainbowLow = low20 * 0.6
-  const rainbowBand = getRainbowBand(latestClose, rainbowHigh, rainbowLow)
+  // Q-141: a "Rainbow model" sat here. It was not the BTC rainbow chart (a log
+  // regression over BTC's whole history): it placed price inside an arbitrary
+  // [0.6 × 20-bar low, 1.5 × 20-bar high] and named the result "Sell Peak",
+  // "FOMO", "Accumulate", "Deep Value". What it actually measured, honestly:
+  // where the close sits in the last 20 bars' close range.
+  const rangePosition = high20 > low20 ? (latestClose - low20) / (high20 - low20) : null
 
   // 200-day MA deviation regime — buy-the-dip / falling-knife classifier
   const regime = ma200Regime(latestClose, closes, latestRSI)
@@ -249,10 +256,10 @@ export default function BtcQuantLab({ candles }: Props) {
     // 2026-09-28 while the trailing 24h pointed the other way. It is shown,
     // with its window, only on the Liquidations tab; it is not a signal.
     {
-      label: 'Rainbow Band',
-      value: rainbowBand.label,
-      signal: 'STRATEGY',
-      color: 'text-amber-400',
+      label: 'Range position (20 bars)',
+      value: rangePosition != null ? `${(rangePosition * 100).toFixed(0)}%` : '—',
+      signal: 'RANGE',
+      color: 'text-slate-300',
     },
     {
       label: '200MA Deviation',
@@ -385,11 +392,13 @@ export default function BtcQuantLab({ candles }: Props) {
                 </div>
               </div>
               <div className="bg-slate-900/60 rounded-xl p-4 border border-slate-800">
-                <div className="text-xs text-slate-400 uppercase tracking-wide mb-2">Rainbow Stage</div>
-                <div className={`text-lg font-bold`} style={{ color: rainbowBand.color === '#f59e0b' ? '#f59e0b' : undefined }}>
-                  {rainbowBand.label}
+                <div className="text-xs text-slate-400 uppercase tracking-wide mb-2">Range position</div>
+                <div className="text-lg font-bold text-slate-200">
+                  {rangePosition != null ? `${(rangePosition * 100).toFixed(0)}%` : '—'}
                 </div>
-                <div className="text-[10px] text-slate-400 mt-1">Based on 20-week high/low range</div>
+                <div className="text-[10px] text-slate-400 mt-1">
+                  Of the last 20 {bars} closes&apos; low–high range (${low20.toLocaleString('en-US', { maximumFractionDigits: 0 })}–${high20.toLocaleString('en-US', { maximumFractionDigits: 0 })})
+                </div>
               </div>
               <div className="bg-slate-900/60 rounded-xl p-4 border border-slate-800">
                 <div className="text-xs text-slate-400 uppercase tracking-wide mb-2">Volatility</div>
@@ -405,14 +414,16 @@ export default function BtcQuantLab({ candles }: Props) {
               <div className="rounded-xl border p-4 mt-2" style={{ borderColor: regime.color + '55', backgroundColor: regime.color + '0d' }}>
                 <div className="flex items-start justify-between gap-3 flex-wrap">
                   <div>
-                    <div className="text-[10px] uppercase tracking-widest mb-1" style={{ color: regime.color }}>200-Day MA Regime</div>
+                    <div className="text-[10px] uppercase tracking-widest mb-1" style={{ color: regime.color }}>
+                      {daily ? '200-Day MA Regime' : `200-bar MA regime (${bars} bars)`}
+                    </div>
                     <div className="text-xl font-bold" style={{ color: regime.color }}>{regime.label}</div>
                     <div className="text-xs text-slate-400 mt-0.5">
-                      {ma200 != null ? `200DMA: $${ma200.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : ''}
+                      {ma200 != null ? `${daily ? '200DMA' : '200-bar MA'}: $${ma200.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : ''}
                       {regime.deviationPct != null ? ` · Deviation: ${regime.deviationPct > 0 ? '+' : ''}${regime.deviationPct.toFixed(1)}%` : ''}
                       {regime.slopePositive !== null && (
                         <span className="ml-2">
-                          {regime.slopePositive ? '↗' : '↘'} 200DMA {regime.slopePositive ? 'rising' : 'falling'}
+                          {regime.slopePositive ? '↗' : '↘'} {daily ? '200DMA' : '200-bar MA'} {regime.slopePositive ? 'rising' : 'falling'}
                           {regime.slopePct != null
                             ? ` (${regime.slopePct > 0 ? '+' : ''}${(regime.slopePct * 100).toFixed(4)}%/bar)`
                             : ''}
@@ -425,6 +436,12 @@ export default function BtcQuantLab({ candles }: Props) {
                   </div>
                 </div>
                 <p className="text-xs text-slate-400 mt-2 leading-relaxed">{regime.dipSignalExplained}</p>
+                {!daily && (
+                  <p role="note" data-testid="regime-interval-caution" className="text-[11px] text-amber-300/90 mt-2">
+                    These thresholds are calibrated on daily candles. On {bars} candles this is a 200-bar average, not the
+                    200-day moving average, so treat the classification as indicative only.
+                  </p>
+                )}
                 <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-2 text-[10px] text-slate-400">
                   <div>
                     <span className="uppercase tracking-wide">Risk: </span>
@@ -439,7 +456,7 @@ export default function BtcQuantLab({ candles }: Props) {
             )}
             {ma200 == null && (
               <div className="rounded-xl border border-slate-800 p-4 mt-2 bg-slate-900/40">
-                <div className="text-sm text-slate-400">200-day MA Regime requires at least 200 daily candles to compute — not enough history loaded yet.</div>
+                <div className="text-sm text-slate-400">The 200-bar MA regime needs at least 200 {bars} candles — only {candles.length} are loaded.</div>
               </div>
             )}
           </div>

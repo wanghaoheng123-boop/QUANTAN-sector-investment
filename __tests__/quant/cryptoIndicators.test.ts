@@ -10,7 +10,6 @@ import {
   calcBollingerBands,
   interpretFundingRate,
   interpretFearGreed,
-  getRainbowBand,
   type BtcCandle,
 } from '@/lib/crypto'
 import {
@@ -208,25 +207,6 @@ describe('interpretFearGreed', () => {
   })
 })
 
-describe('getRainbowBand', () => {
-  it('top of range returns Bubble Peak', () => {
-    expect(getRainbowBand(95, 100, 0).label).toBe('Bubble Peak')
-  })
-
-  it('bottom of range returns Deep Value', () => {
-    expect(getRainbowBand(5, 100, 0).label).toBe('Deep Value')
-  })
-
-  it('neutral mid returns mid band', () => {
-    const b = getRainbowBand(50, 100, 0)
-    expect(['FOMO', 'Neutral']).toContain(b.label)
-  })
-
-  it('zero-range edge case falls back to mid (Neutral)', () => {
-    const b = getRainbowBand(50, 100, 100)
-    expect(b.label).toBe('FOMO')
-  })
-})
 
 // ─── generateSignals end-to-end smoke ───────────────────────────────────────
 
