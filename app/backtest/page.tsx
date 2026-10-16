@@ -9,7 +9,7 @@ import type { BacktestResult } from '@/lib/backtest/engine'
 import { formatFreshness } from '@/lib/format'
 import { SECTOR_COLORS_BY_NAME } from '@/lib/sectorColors'
 // Q-054-NEW (Phase 16 S2): god-component decomposition. Previously
-// AnalysisTab / WalkForwardPanel / LiveSignalsPanel / MetricCard +
+// AnalysisTab / PeriodSplitPanel / LiveSignalsPanel / MetricCard +
 // the key-metrics strip + overview-tab content lived inline (887 LOC).
 // Each is now its own module under components/backtest/; this page is
 // the orchestration shell.
@@ -17,13 +17,16 @@ import { AnalysisTab } from '@/components/backtest/AnalysisTab'
 import { LiveSignalsPanel } from '@/components/backtest/LiveSignalsPanel'
 import { OverviewTab } from '@/components/backtest/OverviewTab'
 import { KeyMetricsStrip } from '@/components/backtest/KeyMetricsStrip'
-import { ENGINE_SUMMARY } from '@/lib/backtest/strategyDescription'
+import { ENGINE_SUMMARY, UNIVERSE_STOCK_COUNT, rulesForPath, rulesMismatchNote, type SignalPath } from '@/lib/backtest/strategyDescription'
+import { BACKTEST_WARMUP_BARS } from '@/lib/backtest/strategyConstants'
 
 interface BacktestData {
   runId: string
   computedAt: string
   instruments: { ticker: string; sector: string; candles: number }[]
   results: BacktestResult[]
+  /** Q-134: optional — a cached response from before the field existed lacks it. */
+  signalPath?: SignalPath
   portfolio: {
     avgReturn: number
     avgAnnReturn: number
@@ -41,6 +44,9 @@ interface BacktestData {
     // F-1/F-1a: instruments dropped from the summary for insufficient history.
     // Optional for backward-compat with cached responses from before the fix.
     excludedTickers?: string[]
+    // Q-136: never opened a position (one unit > allocation); optional for
+    // cached responses from before the field existed.
+    untradeableTickers?: string[]
   }
   /**
    * I2 (Q110-P2, 2026-09-05) — /api/backtest holds a ONE-HOUR module-level
@@ -113,7 +119,7 @@ export default function BacktestPage() {
         <div className="text-center">
           <div className="w-8 h-8 border-2 border-slate-500 border-t-cyan-400 rounded-full animate-spin mx-auto mb-4" />
           <p className="text-slate-400 text-sm">Loading backtest data…</p>
-          <p className="text-slate-400 text-xs mt-1">Fetching 5Y history for 56 instruments (may take ~20s)</p>
+          <p className="text-slate-400 text-xs mt-1">Running the backtest over {UNIVERSE_STOCK_COUNT} stocks and BTC (may take ~20s)</p>
         </div>
       </div>
     )
@@ -135,6 +141,12 @@ export default function BacktestPage() {
 
   const { results, portfolio, computedAt } = data
   const sectorSummary = portfolio.sectorSummary
+  // Q-139: the traded window, from the data rather than a "5Y" label — the
+  // history start is pinned (Q-102), so its length grows every week.
+  const stockCandles = data.instruments.filter(i => i.ticker !== 'BTC' && i.candles > BACKTEST_WARMUP_BARS).map(i => i.candles).sort((a, b) => a - b)
+  const tradedYears = stockCandles.length > 0
+    ? (stockCandles[Math.floor(stockCandles.length / 2)] - BACKTEST_WARMUP_BARS) / 252
+    : null
   const INITIAL_CAPITAL = 100_000
 
   // Phase 14 (R5-M-2): sector colors now sourced from the lib/sectorColors
@@ -157,14 +169,15 @@ export default function BacktestPage() {
                 <div>
                   {/* This h1 is the page's only level-1 heading. The panel headings
                       under it (OverviewTab, AnalysisTab, SectorHeatmap,
-                      WalkForwardPanel) are h2 and must STAY h2 — they read as small
+                      PeriodSplitPanel) are h2 and must STAY h2 — they read as small
                       uppercase labels, so the temptation is to demote them to h3 for
                       "visual hierarchy", but that reintroduces an h1 -> h3 skip and
                       axe fails heading-order (observed 2026-08-14, right after this
                       h1 was added to clear page-has-heading-one). Heading level is
                       structure; the size comes from the classes. */}
                   <h1 className="text-xl font-bold text-white">Institutional Backtest</h1>
-                  <p className="text-xs text-slate-400">5Y Walk-Forward · 56 Instruments · Long Only · Regime SSOT (200SMA zones)</p>
+                  {/* Q-139: was "5Y Walk-Forward · 56 Instruments" — nothing is re-fitted, and both numbers were hand-written. */}
+                  <p className="text-xs text-slate-400">Single pass, no look-ahead · {results.length} instrument{results.length === 1 ? '' : 's'} · Long only · Regime SSOT (200SMA zones)</p>
                 </div>
               </div>
             </div>
@@ -236,7 +249,7 @@ export default function BacktestPage() {
               </button>
             )}
             {selectedTickers.length === 0 && (
-              <span className="text-[10px] text-slate-400">Showing all 56 instruments. Type a ticker to filter.</span>
+              <span className="text-[10px] text-slate-400">Showing all {results.length} instruments. Type a ticker to filter.</span>
             )}
           </div>
 
@@ -244,11 +257,17 @@ export default function BacktestPage() {
               trailing stop, Half-Kelly sizing and a 55% confidence threshold —
               none of which the engine had run since 2026-07-11 — and omitted the
               time exit, the only position exit it has. Derived now. */}
-          <div className="flex flex-wrap gap-4 text-[11px] text-slate-400 border border-slate-800 rounded-lg px-4 py-2 bg-slate-900/40">
+          {rulesForPath(data.signalPath) ? (
+              <div className="flex flex-wrap gap-4 text-[11px] text-slate-400 border border-slate-800 rounded-lg px-4 py-2 bg-slate-900/40">
             {ENGINE_SUMMARY.map(([label, value]) => (
               <span key={label}><span className="text-slate-400">{label}:</span> {value}</span>
             ))}
           </div>
+            ) : (
+              <p role="status" className="text-[11px] text-amber-300 border border-amber-500/40 rounded-lg px-4 py-2 bg-amber-500/10">
+                {rulesMismatchNote(data.signalPath)}
+              </p>
+            )}
         </div>
       </div>
 
@@ -268,9 +287,14 @@ export default function BacktestPage() {
           ≈22&nbsp;bps (11&nbsp;bps/side). <span className="text-slate-400">Win&nbsp;Rate</span>{' '}
           is the share of closed trades that ended net-profitable after those costs.{' '}
           <span className="font-medium text-slate-400">Universe note:</span>{' '}
-          results are computed over 56 currently-listed S&amp;P large-caps plus BTC — a
+          results are computed over {UNIVERSE_STOCK_COUNT} currently-listed S&amp;P large-caps, plus BTC when it can trade at this capital — a
           survivor set with no delisted names, which flatters absolute win-rate and
-          return levels versus a point-in-time universe.
+          return levels versus a point-in-time universe.{' '}
+          <span className="font-medium text-slate-400">Window:</span>{' '}
+          one pass over each instrument&apos;s daily history; the first {BACKTEST_WARMUP_BARS} bars
+          only warm up the 200-day average, so trading starts after them
+          {tradedYears != null ? <> (about {tradedYears.toFixed(1)} years traded here)</> : null}.
+          Nothing is fitted, so there is no in-sample or out-of-sample split.
         </p>
 
         {/* F-1/F-1a: disclose any instrument dropped from the portfolio summary
@@ -287,6 +311,22 @@ export default function BacktestPage() {
             (&lt;&nbsp;252&nbsp;sessions) to backtest. These instruments are omitted from
             the portfolio return, Sharpe, and drawdown figures above; their raw candle
             counts still appear in the Instruments tab.
+          </div>
+        )}
+
+        {/* Q-136: an instrument that never opened a position is not in the
+            portfolio figures; say which, and why, rather than averaging in a
+            flat curve as if the strategy had earned 0% on it. */}
+        {portfolio.untradeableTickers && portfolio.untradeableTickers.length > 0 && (
+          <div
+            role="status"
+            data-testid="untradeable-disclosure"
+            className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-[11px] leading-relaxed text-amber-200"
+          >
+            <span className="font-medium text-amber-300">Not in the portfolio figures:</span>{' '}
+            {portfolio.untradeableTickers.join(', ')} — never opened a position, because one unit costs more
+            than a position&apos;s allocation and positions are whole units. Their rows in the Instruments tab
+            are marked; the portfolio return, Sharpe and drawdown above exclude them.
           </div>
         )}
 
@@ -309,6 +349,7 @@ export default function BacktestPage() {
             sectorSummary={sectorSummary}
             sectorColors={sectorColors}
             initialCapital={INITIAL_CAPITAL}
+            signalPath={data.signalPath}
           />
         )}
 

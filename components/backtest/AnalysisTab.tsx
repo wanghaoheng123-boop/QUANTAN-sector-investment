@@ -1,11 +1,11 @@
 'use client'
 
 /**
- * AnalysisTab — sector attribution + risk-return matrix + walk-forward
+ * AnalysisTab — sector attribution + risk-return matrix + period split
  * for the backtest page Analysis tab.
  *
  * Q-054-NEW (Phase 16 S2): extracted from app/backtest/page.tsx. Pure
- * presentational (no state, no effects); composes WalkForwardPanel.
+ * presentational (no state, no effects); composes PeriodSplitPanel.
  *
  * Pre-extract: the function lived at app/backtest/page.tsx:358. The diff
  * is a pure move — body identical, only imports differ.
@@ -13,7 +13,8 @@
 
 import type { BacktestResult } from '@/lib/backtest/engine'
 import { formatProfitFactor } from '@/lib/backtest/formatMetrics'
-import { WalkForwardPanel } from './WalkForwardPanel'
+import { PeriodSplitPanel } from './PeriodSplitPanel'
+import { isUntradeable } from '@/lib/backtest/resultFlags'
 
 interface SectorRow {
   sector: string
@@ -24,7 +25,14 @@ interface SectorRow {
   tickers: string[]
 }
 
-export function AnalysisTab({ results, sectorColors }: { results: BacktestResult[]; sectorColors: Record<string, string> }) {
+export function AnalysisTab({ results: all, sectorColors }: { results: BacktestResult[]; sectorColors: Record<string, string> }) {
+  // Q-136 red-team F2: this tab re-averaged EVERY result in the browser, so an
+  // instrument that never opened a position (BTC) came back as a "Crypto 0.0%"
+  // sector row, a 0.0% risk/return row beside a -59.5% excess, and a choice in
+  // the period panel — after the server had excluded it. One rule, shared.
+  const results = all.filter((r) => !isUntradeable(r))
+  const omitted = all.filter(isUntradeable).map((r) => r.ticker)
+
   // ── Sector performance table ──────────────────────────────────────────────
   const sectorRows: SectorRow[] = Object.entries(
     results.reduce<Record<string, { ret: number; ann: number; trades: number; winRate: number; sharpe: number | null; tickers: string[]; count: number }>>((acc, r) => {
@@ -48,6 +56,11 @@ export function AnalysisTab({ results, sectorColors }: { results: BacktestResult
 
   return (
     <div className="space-y-6">
+      {omitted.length > 0 && (
+        <p role="status" data-testid="analysis-omitted" className="text-[11px] text-amber-300">
+          Not shown here: {omitted.join(', ')} — never opened a position (one unit costs more than a position&apos;s allocation).
+        </p>
+      )}
       {/* Sector Performance Table */}
       <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-6">
         <h2 className="text-sm font-semibold text-white mb-4 uppercase tracking-wider text-slate-400">
@@ -172,8 +185,8 @@ export function AnalysisTab({ results, sectorColors }: { results: BacktestResult
         </div>
       </div>
 
-      {/* Walk-Forward Windows */}
-      <WalkForwardPanel results={results} />
+      {/* Performance by period */}
+      <PeriodSplitPanel results={results} />
     </div>
   )
 }

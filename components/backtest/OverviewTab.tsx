@@ -18,7 +18,8 @@ import EquityCurveChart from '@/components/backtest/EquityCurveChart'
 import { ChartErrorBoundary } from '@/components/ChartErrorBoundary'
 import SectorHeatmap from '@/components/backtest/SectorHeatmap'
 import type { BacktestResult } from '@/lib/backtest/engine'
-import { ENGINE_RULES, TX_COST_RULE } from '@/lib/backtest/strategyDescription'
+import { isUntradeable } from '@/lib/backtest/resultFlags'
+import { TX_COST_RULE, rulesForPath, rulesMismatchNote, type SignalPath } from '@/lib/backtest/strategyDescription'
 
 /** Re-exported: the cost-copy spec imports it from the component that renders it. */
 export { TX_COST_RULE }
@@ -28,19 +29,12 @@ interface OverviewTabProps {
   sectorSummary: Record<string, { totalReturn: number; annReturn: number; tickers: string[] }>
   sectorColors: Record<string, string>
   initialCapital: number
+  /** Q-134: the path that produced `results`; rules render only when they describe it. */
+  signalPath?: SignalPath
 }
 
-/**
- * Exported so the copy specs assert what actually RENDERS, not a helper.
- *
- * Q-105: this was an inline table describing ATR and trailing stops, SELL
- * exits, confirm counts, tiered Kelly sizing and a 55% confidence minimum —
- * none of which the engine had run since 2026-07-11. It is now the derived
- * table in lib/backtest/strategyDescription.ts.
- */
-export const STRATEGY_RULES = ENGINE_RULES
-
-export function OverviewTab({ results, sectorSummary, sectorColors, initialCapital }: OverviewTabProps) {
+export function OverviewTab({ results, sectorSummary, sectorColors, initialCapital, signalPath }: OverviewTabProps) {
+  const rules = rulesForPath(signalPath)
   return (
     <div className="space-y-6">
       {/* Sector heatmap */}
@@ -51,7 +45,8 @@ export function OverviewTab({ results, sectorSummary, sectorColors, initialCapit
         <h2 className="text-sm font-semibold text-white mb-4 uppercase tracking-wider text-slate-400">Equity Curves — Top 8 by Return</h2>
         <ChartErrorBoundary label="Equity Curves" fallbackHeight={320}>
           <EquityCurveChart
-            instruments={results.slice().sort((a, b) => b.annualizedReturn - a.annualizedReturn).slice(0, 8)}
+            // F2: a flat curve that never traded is not a "top performer".
+            instruments={results.filter((r) => !isUntradeable(r)).sort((a, b) => b.annualizedReturn - a.annualizedReturn).slice(0, 8)}
             initialCapital={initialCapital}
           />
         </ChartErrorBoundary>
@@ -61,12 +56,16 @@ export function OverviewTab({ results, sectorSummary, sectorColors, initialCapit
       <div className="bg-slate-900/40 rounded-xl border border-slate-800 p-6">
         <h2 className="text-sm font-semibold text-white mb-3 uppercase tracking-wider text-slate-400">Strategy Rules</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs text-slate-400">
-          {STRATEGY_RULES.map(([title, desc]) => (
+          {rules ? rules.map(([title, desc]) => (
             <div key={title} className="bg-slate-800/50 rounded-lg p-3 border border-slate-700/50">
               <div className="text-slate-300 font-medium mb-1">{title}</div>
               <div className="text-slate-400 leading-relaxed">{desc}</div>
             </div>
-          ))}
+          )) : (
+            <p role="status" data-testid="rules-mismatch" className="text-amber-300 sm:col-span-2 lg:col-span-3">
+              {rulesMismatchNote(signalPath)}
+            </p>
+          )}
         </div>
       </div>
     </div>

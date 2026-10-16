@@ -7,7 +7,9 @@ import type { OhlcBar } from '@/lib/quant/indicators'
 import { resolveBacktestSignal, DEFAULT_CONFIG, type BacktestConfig } from './signals'
 import { sortinoRatio, atrArray as atr } from '@/lib/quant/indicators'
 import { getRiskFreeRateSync } from '@/lib/quant/riskFreeRate'
-import { DEFAULT_TIME_EXIT_CONFIG } from './exitRules'
+import { DEFAULT_TIME_EXIT_CONFIG, type ExitReason } from './exitRules'
+import { tradingDaysPerYear } from './calendar'
+import { BACKTEST_WARMUP_BARS } from './strategyConstants'
 import { costBpsPerSide, DEFAULT_EXECUTION_COSTS } from './executionModel'
 import { assertNotSynthetic } from '@/lib/synthetic'
 
@@ -23,15 +25,9 @@ export interface OhlcvRow extends OhlcBar {
   dividend?: number
 }
 
-/**
- * Bars of history consumed before the walk-forward loop may emit its first
- * signal. Set by the LONGEST lookback any signal reads: `sma200DeviationPct`,
- * `sma200Slope` and the EMA50>EMA200 golden-cross gate in `./signals`, all of
- * which need 200 prior bars. The strategy is therefore exposed to the market
- * over `rows.length - BACKTEST_WARMUP_BARS` bars, NOT `rows.length` — every
- * quantity compared against `totalReturn` must span that same window (Q110-Q1).
- */
-export const BACKTEST_WARMUP_BARS = 200
+// Lives in ./strategyConstants (a leaf module) so the copy that describes the
+// warm-up can import it without bundling the engine (Q-139).
+export { BACKTEST_WARMUP_BARS }
 
 /**
  * Shares after reinvesting a per-share cash dividend at that bar's close.
@@ -70,6 +66,13 @@ export function computeBuyAndHoldReturn(rows: OhlcvRow[]): number {
   return (finalValue - initial) / initial
 }
 
+/**
+ * Q-133 — why `backtestInstrument` closed a position. A subset of the shared
+ * `ExitReason` vocabulary (exitRules.ts): this engine has exactly these three
+ * exits since the 2026-07-11 stop retirement, so the type admits no other.
+ */
+export type EngineExitReason = Extract<ExitReason, 'time_exit' | 'max_drawdown' | 'end_of_data'>
+
 export interface Trade {
   date: string
   ticker: string
@@ -83,7 +86,22 @@ export interface Trade {
   dipSignal: string
   confidence: number
   pnlPct: number | null
+  /** The ENTRY signal's reason — why the position was opened. */
   reason: string
+  /**
+   * Q-133: why the position closed; null while it is open. Before this field
+   * the trade log could only show the entry reason, under a header that
+   * promised the exit's.
+   */
+  exitReason: EngineExitReason | null
+  /** Q-133: date of the exit FILL bar (YYYY-MM-DD); null while open. */
+  exitDate: string | null
+  /**
+   * Net cash P&L of the round trip after both sides' costs (netCashPnl);
+   * null while open. Recorded so the trade log classifies wins exactly as the
+   * engine's win rate does, instead of on the raw price move.
+   */
+  netPnl: number | null
   atrAtrPctAtEntry?: number
   highestPriceAfterEntry?: number
 }
@@ -158,6 +176,13 @@ export interface BacktestResult {
   confidenceAvg: number
   bnhReturn: number
   excessReturn: number
+  /**
+   * Q-136: BUY signals that could not be filled because the allocation was
+   * worth less than one whole unit at the next open. An instrument with
+   * entries here and no trades never took a position at all — its flat
+   * equity curve is not a strategy result. aggregatePortfolio excludes it.
+   */
+  unaffordableEntries: number
 }
 
 interface PortfolioState {
@@ -176,6 +201,8 @@ interface PortfolioState {
   grossLoss: number
   confidenceSum: number
   confidenceCount: number
+  /** Q-136: see BacktestResult.unaffordableEntries. */
+  unaffordableEntries: number
 }
 
 function newPortfolio(initialCapital: number): PortfolioState {
@@ -189,6 +216,7 @@ function newPortfolio(initialCapital: number): PortfolioState {
     tradeWins: 0, tradeLosses: 0,
     grossProfit: 0, grossLoss: 0,
     confidenceSum: 0, confidenceCount: 0,
+    unaffordableEntries: 0,
   }
 }
 
@@ -268,13 +296,15 @@ function requireFiniteAmount(value: number, context: string): void {
  * @param state      PortfolioState (mutated in place — internal helper only).
  * @param fillPrice  The realised exit fill (already gap-aware from
  *                   `evaluateStopHit` where applicable).
+ * @param exitReason Q-133: which of the engine's exits closed it.
+ * @param fillTime   Unix seconds of the bar whose price filled the exit.
  * @returns true when an exit happened; false if there was no open trade
  *                (defensive — callers gate on state.openTrade before calling).
  * @throws RangeError if an open position's required exit has no valid fill.
  *         Q-122: validate before mutating any accounting; postponing an exit
  *         would invent a different holding policy from incomplete price data.
  */
-function closePosition(state: PortfolioState, fillPrice: number): boolean {
+function closePosition(state: PortfolioState, fillPrice: number, exitReason: EngineExitReason, fillTime: number): boolean {
   const open = state.openTrade
   if (!open) return false
   requirePrice(fillPrice, `exit for ${open.ticker}`)
@@ -310,6 +340,9 @@ function closePosition(state: PortfolioState, fillPrice: number): boolean {
   state.capital += netProceeds
   open.exitPrice = fillPrice
   open.pnlPct = pnlPct
+  open.exitReason = exitReason
+  open.exitDate = new Date(fillTime * 1000).toISOString().split('T')[0]
+  open.netPnl = netCash
   state.closedTrades.push({ ...open })
   state.position = 0
   state.avgCost = 0
@@ -318,17 +351,9 @@ function closePosition(state: PortfolioState, fillPrice: number): boolean {
   return true
 }
 
-// Phase 13 S2 fix (F1.6): tickers that trade 7 days a week need 365-day
-// annualization; equities use 252. The detection is conservative — only
-// known crypto symbols and futures get 365. New crypto tickers default to
-// 252 unless added here or passed explicitly via config.
-const CRYPTO_TICKERS_365 = new Set(['BTC', 'BTC-USD', 'ETH', 'ETH-USD', 'SOL', 'SOL-USD'])
-
-export function tradingDaysPerYear(ticker: string, sector: string): number {
-  if (CRYPTO_TICKERS_365.has(ticker.toUpperCase())) return 365
-  if (sector?.toLowerCase() === 'crypto') return 365
-  return 252
-}
+// Moved to ./calendar so client components can read it without bundling the
+// engine; re-exported here so every existing import keeps working.
+export { tradingDaysPerYear } from './calendar'
 
 /** Walk-forward backtest for a single instrument. */
 export function backtestInstrument(
@@ -361,7 +386,7 @@ export function backtestInstrument(
       totalTrades: 0, closedTrades: [], openTrade: null,
       dailyReturns: [], equityCurve: [initialCapital],
       days: rows.length, confidenceAvg: 0,
-      bnhReturn: 0, excessReturn: 0,
+      bnhReturn: 0, excessReturn: 0, unaffordableEntries: 0,
     }
   }
 
@@ -469,7 +494,7 @@ export function backtestInstrument(
     if (state.openTrade && entryFillBar >= 0 &&
         i - entryFillBar >= DEFAULT_TIME_EXIT_CONFIG.maxHoldDays) {
       // Q-122: all required exits share the fail-closed price contract.
-      closePosition(state, nextOpen)
+      closePosition(state, nextOpen, 'time_exit', rows[i + 1].time)
       entryFillBar = -1
       continue
     }
@@ -484,7 +509,18 @@ export function backtestInstrument(
       // above uses signalPrice), but the exit FILL is at TOMORROW's open
       // (nextOpen) — exactly like BUY entries. A same-bar close fill would be
       // look-ahead: you cannot transact at a close you have only just observed.
-      closePosition(state, nextOpen)
+      closePosition(state, nextOpen, 'max_drawdown', rows[i + 1].time)
+      // Q-137: RE-ARM. The peak used to persist, so after one trip a later
+      // position was typically still ≥25% below it and was closed at its first
+      // check — a slow drain of round-trip costs behind a rule described as a
+      // breaker. The peak now resets to the post-exit equity; later drawdowns
+      // are measured from there or from any new mark-to-market high after it.
+      // No cooldown: the next BUY may fill on the following bar. Chosen over a
+      // one-way halt (which would silence an instrument for the rest of the
+      // window on one bad trade) and over a cooldown (a new parameter with no
+      // measured value); recorded in reviews/q133-…-2026-10-16.md. The breaker
+      // has never fired on the committed fixtures, so no published figure moves.
+      state.peakEquity = currentEquity(state)
       entryFillBar = -1
       continue
     }
@@ -517,6 +553,8 @@ export function backtestInstrument(
       // exit throws.
       const shares = Math.floor(allocation / entryPrice)
       if (!Number.isFinite(shares) || shares <= 0) {
+        // Q-136: count the signal the sizing rule could not fill.
+        if (shares === 0) state.unaffordableEntries++
         state.equityHistory.push(currentEquity(state))
         continue
       }
@@ -536,6 +574,7 @@ export function backtestInstrument(
         shares, value: costBasis,
         regime: signal.regime.label, dipSignal: signal.regime.dipSignal,
         confidence: signal.confidence, pnlPct: null, reason: signal.reason,
+        exitReason: null, exitDate: null, netPnl: null,
         // FIX P12-H3: Use atrVals[i-1] (prior bar) not atrVals[i] — signal bar's own TR not yet closed
         // Q1-H-4: fallback is 1.0 (1% ATR) — consistent with the percent-scale convention.
         atrAtrPctAtEntry: Number.isFinite(atrVals[Math.max(0, i - 1)]) ? (atrVals[Math.max(0, i - 1)] / signalPrice) * 100 : 1.0,
@@ -566,7 +605,7 @@ export function backtestInstrument(
   // ── Close remaining open position at final price ──
   // Phase 14 wave 35: bookkeeping via the shared closePosition primitive.
   if (state.openTrade) {
-    closePosition(state, finalPrice)
+    closePosition(state, finalPrice, 'end_of_data', rows[rows.length - 1].time)
     // Mirror closePosition's equityHistory push so bnhCurve stays index-aligned.
     bnhShares = reinvestDividend(bnhShares, rows[rows.length - 1].dividend ?? 0, finalPrice)
     bnhCurve.push(bnhShares * finalPrice)
@@ -596,7 +635,7 @@ export function backtestInstrument(
   // is earned from bar 200 onward. `excessReturn = totalReturn - bnhReturn` then
   // subtracted 1254 bars of market return from 1054 bars of strategy return, and
   // it is RENDERED in three components (InstrumentTable, AnalysisTab,
-  // WalkForwardPanel). Measured over all 56 fixtures: mean |Δ excess| = 40.36pp,
+  // PeriodSplitPanel). Measured over all 56 fixtures: mean |Δ excess| = 40.36pp,
   // worst NFLX −230.87pp, and 2 instruments (UNH, PEP) had excess of the WRONG
   // SIGN — displayed orange/underperforming when they outperformed.
   //
@@ -668,5 +707,6 @@ export function backtestInstrument(
     bnhCurve,
     days, confidenceAvg: state.confidenceCount > 0 ? state.confidenceSum / state.confidenceCount : 0,
     bnhReturn, excessReturn: totalReturn - bnhReturn,
+    unaffordableEntries: state.unaffordableEntries,
   }
 }

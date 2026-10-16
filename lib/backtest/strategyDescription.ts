@@ -22,6 +22,7 @@
  * Imports only leaf modules: this is rendered by client components.
  */
 
+import { SECTORS } from '@/lib/sectors'
 import { DEFAULT_CONFIG } from './signalTypes'
 import {
   DEFAULT_EXECUTION_COSTS,
@@ -29,6 +30,7 @@ import {
   roundTripCostPct,
 } from './executionModel'
 import {
+  BACKTEST_WARMUP_BARS,
   ENGINE_MAX_HOLD_DAYS,
   FIRST_DIP_FLOOR_PCT,
   MIN_SMA200_SLOPE,
@@ -100,11 +102,15 @@ export const ENGINE_RULES: ReadonlyArray<readonly [string, string]> = [
     'A position still open when the data ends is closed at the final close.'],
   ['Drawdown Breaker',
     `If this instrument's equity falls ${pct(DEFAULT_CONFIG.maxDrawdownCap)}% or more from its peak, ` +
-    'the open position closes at the next open.'],
+    'the open position closes at the next open. The peak then resets to the equity after that exit, so ' +
+    'later drawdowns are measured from there (or from any new high after it), not from the old peak. ' +
+    'There is no cooldown: the next BUY can open on the following bar.'],
   ['Position Sizing',
     `${pct(POSITION_FRACTION)}% of the instrument's cash at entry, rounded down to whole shares. A BUY whose ` +
     'allocation cannot buy one share is skipped, so an instrument priced above ' +
-    `$${FIRST_ALLOCATION.toLocaleString('en-US')} cannot open its first position. This is not a Kelly ` +
+    `$${FIRST_ALLOCATION.toLocaleString('en-US')} cannot open its first position. An instrument whose every BUY ` +
+    'is unaffordable this way is excluded from the portfolio figures and named on the page; one with no BUY ' +
+    'signal at all stays in, because holding cash is a strategy result. This is not a Kelly ' +
     'calculation; only the research-only enhanced path computes one.'],
   ['Transaction Costs', TX_COST_RULE],
 ] as const
@@ -118,8 +124,51 @@ export const ENGINE_SUMMARY: ReadonlyArray<readonly [string, string]> = [
   ['Drawdown breaker', `${pct(DEFAULT_CONFIG.maxDrawdownCap)}% per instrument`],
 ] as const
 
-/** The strategy clause in the landing page's backtest call-to-action. */
-export const ENGINE_ONE_LINE =
-  'Regime dip-buy vs 200SMA (SSOT: resolveBacktestSignal), ' +
-  `a ${ENGINE_MAX_HOLD_DAYS}-bar time exit with no stop-loss, ` +
-  `and ${pct(POSITION_FRACTION)}% of cash per position`
+// ENGINE_ONE_LINE (the landing CTA's rule clause) was removed by the Q-133
+// red-team (F5): the landing page is static and cannot know which signal path
+// ran, so it stated the regime-only sizing unconditionally. The rules now live
+// only on /backtest, gated by the response's signalPath (Q-134).
+
+/**
+ * Q-139 — the backtest universe, COUNTED from the list `/api/backtest`
+ * iterates (every sector's topHoldings, then BTC), never written down. The
+ * copy said "56 instruments" in four places and "56 currently-listed S&P
+ * large-caps plus BTC" in a fifth: 55 stocks plus BTC is 56, so one of the two
+ * phrasings was always wrong.
+ */
+export const UNIVERSE_STOCK_COUNT = SECTORS.reduce((n, s) => n + s.topHoldings.length, 0)
+export const UNIVERSE_SECTOR_COUNT = SECTORS.length
+
+/**
+ * Q-139 — what the backtest is, for the landing page. It was "5Y walk-forward
+ * backtest": walk-forward means re-fitting on rolling windows and this engine
+ * fits nothing; and the history is no longer a fixed five years since the
+ * window start was pinned (Q-102).
+ */
+export const BACKTEST_SCOPE_LINE =
+  `Single-pass backtest with no look-ahead over ${UNIVERSE_STOCK_COUNT} large-cap stocks in ` +
+  `${UNIVERSE_SECTOR_COUNT} GICS sectors plus BTC, on daily history after a ${BACKTEST_WARMUP_BARS}-bar warm-up`
+
+/**
+ * Q-134 — which signal path the rules on this page describe, and which one a
+ * response actually ran. Every rule above describes the regime-only path,
+ * because production runs it by default; but `QUANTAN_USE_ENHANCED_SIGNAL=1`
+ * switches the engine to the enhanced path with every test green, and the BUY,
+ * HOLD and sizing rows would then be false. `/api/backtest` now says which path
+ * produced its numbers, and the page shows these rules only when they match.
+ */
+export type SignalPath = 'regime-only' | 'enhanced'
+export const DESCRIBED_SIGNAL_PATH: SignalPath = 'regime-only'
+
+/** The rules to render for a response, or null when they would not describe it. */
+export function rulesForPath(path: SignalPath | undefined): typeof ENGINE_RULES | null {
+  return path === DESCRIBED_SIGNAL_PATH ? ENGINE_RULES : null
+}
+
+/** What to say instead of rules that do not apply. */
+export function rulesMismatchNote(path: SignalPath | undefined): string {
+  return path === 'enhanced'
+    ? 'These results come from the research-only enhanced signal path, so the regime-only rules this page ' +
+      'documents do not describe them. See lib/backtest/signals.ts (enhancedCombinedSignal) for its rules.'
+    : 'This response does not say which signal path produced it, so no rule set is shown as describing it.'
+}

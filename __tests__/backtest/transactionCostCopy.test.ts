@@ -27,10 +27,12 @@ import {
   costBpsPerSide,
   roundTripCostPct,
 } from '@/lib/backtest/executionModel'
-import { TX_COST_RULE, STRATEGY_RULES } from '@/components/backtest/OverviewTab'
+import { TX_COST_RULE } from '@/components/backtest/OverviewTab'
+import { rulesForPath } from '@/lib/backtest/strategyDescription'
 
 /** The Transaction Costs row exactly as the Strategy Rules grid renders it. */
-const RENDERED_TX_ROW = STRATEGY_RULES.find(([title]) => title === 'Transaction Costs')?.[1] ?? ''
+// Q-134: what the Overview tab renders on the production (regime-only) path.
+const RENDERED_TX_ROW = rulesForPath('regime-only')?.find(([title]) => title === 'Transaction Costs')?.[1] ?? ''
 
 const ROOT = join(__dirname, '..', '..')
 const perSide = costBpsPerSide()

@@ -4,7 +4,7 @@
  *
  * Phase 16 S1.3 precondition for:
  *   1. Q-054-NEW page decomposition (887 → ≤200 LOC shell + presentational
- *      sub-components: AnalysisTab, WalkForwardPanel, LiveSignalsPanel, etc.)
+ *      sub-components: AnalysisTab, PeriodSplitPanel, LiveSignalsPanel, etc.)
  *   2. Q-057-NEW Next.js upgrade verification (App Router cache semantics
  *      changed in 15.x; this page uses `'use client'` + `fetch` + `useEffect`
  *      patterns that need to survive the migration)
@@ -16,6 +16,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import BacktestPage from '@/app/backtest/page'
+import { UNIVERSE_STOCK_COUNT } from '@/lib/backtest/strategyDescription'
 
 describe('BacktestPage (Q-058-NEW snapshot precondition)', () => {
   afterEach(() => {
@@ -33,7 +34,8 @@ describe('BacktestPage (Q-058-NEW snapshot precondition)', () => {
 
     expect(screen.getByText('Loading backtest data…')).toBeInTheDocument()
     expect(
-      screen.getByText(/Fetching 5Y history for 56 instruments/i),
+      // Q-139: the count is derived; this used to pin the hand-written "5Y … 56".
+      screen.getByText(new RegExp(`Running the backtest over ${UNIVERSE_STOCK_COUNT} stocks and BTC`)),
     ).toBeInTheDocument()
     // The loading view is a full-bleed centered card — no header, no tabs,
     // no metrics. Q-054-NEW must preserve this contract.

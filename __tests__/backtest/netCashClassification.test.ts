@@ -20,7 +20,7 @@ const mk = (over: Partial<Trade> = {}): Trade => ({
   date: '2026-01-05', ticker: 'T', sector: 'S', action: 'BUY',
   entryPrice: 100, exitPrice: 100, shares: 10, value: 1000,
   regime: 'FIRST_DIP', dipSignal: 'STRONG_DIP', confidence: 90,
-  pnlPct: 0, reason: '__SYNTHETIC__ Q123 boundary fixture', ...over,
+  pnlPct: 0, reason: '__SYNTHETIC__ Q123 boundary fixture', exitReason: 'time_exit', exitDate: '2026-03-05', netPnl: null, ...over,
 })
 
 describe('Q-123 — the exact break-even, not the 2c approximation', () => {
@@ -65,7 +65,7 @@ describe('Q-124 — profit factor is net dollars, and size matters', () => {
     equityCurve: Array.from({ length: 300 }, (_, i) => 100_000 + i),
     bnhCurve: Array.from({ length: 300 }, (_, i) => 100_000 + i),
     dailyReturns: Array.from({ length: 299 }, () => 0.0001),
-    days: 300, bnhReturn: 0.1, excessReturn: 0, confidenceAvg: 90,
+    days: 300, bnhReturn: 0.1, excessReturn: 0, confidenceAvg: 90, unaffordableEntries: 0,
   })
 
   it('a gross gain that cannot clear costs is a LOSS in both sums, not neither', () => {
