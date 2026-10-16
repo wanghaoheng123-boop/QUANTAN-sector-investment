@@ -53,5 +53,8 @@ jobs:
           ALERT_CONCLUSION: ${{ inputs.conclusion }}
           ALERT_DETAIL: ${{ inputs.detail }}
           ALERT_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          # Q-113 red-team A2: a re-run keeps its run id; the attempt keeps a
+          # re-run that fails a different way from being suppressed as a repeat.
+          ALERT_RUN_ATTEMPT: ${{ github.run_attempt }}
           ALERT_EVENT: ${{ github.event_name }}
         run: node scripts/ci/notify-scheduled-failure.mjs

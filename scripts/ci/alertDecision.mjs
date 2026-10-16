@@ -26,6 +26,10 @@
  *    missed fire's due time), and a key already present in the thread is not
  *    reported again. No throttle period is invented: the "period" is the
  *    workflow's own cadence, because a new failure is a new run.
+ *    Not every state has a key: `unparseable` and `unregistered` have no failing
+ *    run and no due time, so the probe still comments on them on every look.
+ *    That is deliberate — each is a workflow nobody is watching, and the remedy
+ *    is a code change, not patience.
  *
  * 3. **Auto-closing on recovery.** An alert that never clears trains people to
  *    ignore it, and a stale open issue is indistinguishable from a live one. The
@@ -39,6 +43,76 @@
 export const ALERT_MARKER = '<!-- quantan-scheduled-alert -->'
 
 export const alertTitle = (workflow) => `Scheduled workflow failing: ${workflow}`
+
+/**
+ * The dedupe key for a failing run: its URL, plus the attempt when it was re-run.
+ *
+ * Red-team A2 (2026-10-17): a re-run keeps its run id, so a re-run that failed a
+ * DIFFERENT way was suppressed as "already reported" and the thread kept showing
+ * the first cause as live. A first attempt keeps the bare URL, so every comment
+ * written before this change still matches.
+ *
+ * Red-team A4: undefined when the URL carries no run id — an empty id
+ * (`…/actions/runs/`) is a prefix of every run URL and would match them all.
+ */
+export function alertKeyFor(runUrl, attempt) {
+  if (typeof runUrl !== 'string' || !/\/actions\/runs\/\d+$/.test(runUrl)) return undefined
+  const n = Number(attempt)
+  return Number.isInteger(n) && n > 1 ? `${runUrl}#attempt-${n}` : runUrl
+}
+
+/** The marker a comment carries so a later look can find its key exactly. */
+export const keyToken = (key) => `<!-- alert-key: ${key} -->`
+
+/**
+ * Whether a thread already reports `key` — as a DELIMITED token, not a substring
+ * (red-team A4): `…/runs/111` must not match `…/runs/1111`, and the bare first
+ * attempt must not match `…#attempt-2`. Comments written before keys were
+ * embedded carry the run URL in their text, which the delimited match still finds.
+ */
+export function threadHasKey(thread, key) {
+  if (!key) return false
+  const esc = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const bare = new RegExp(`${esc}(?![\\w/#-])`)
+  return (thread ?? []).some((t) => typeof t === 'string' && (t.includes(keyToken(key)) || bare.test(t)))
+}
+
+/** Comments per page when reading a thread, and the most pages read. */
+export const THREAD_PAGE_SIZE = 100
+export const THREAD_MAX_PAGES = 10
+
+/**
+ * An alert issue's body and comments, NEWEST pages first.
+ *
+ * Shared by both runners so the behaviour is tested once (red-team A1: the
+ * dedupe was wired only in untested runner code). Two properties:
+ *
+ * - On ANY error it returns an empty thread with the error, so the caller SPEAKS
+ *   — a possible duplicate — rather than stalling (red-team A3: one failed read
+ *   stopped every later workflow, recovery closes included). For an alerter the
+ *   fail-closed direction is to talk.
+ * - GitHub lists comments oldest first; `issue.comments` gives the count, so the
+ *   newest pages are read and a long thread does not hide its latest keys (A4).
+ */
+export async function readThread(gh, repo, issue) {
+  if (!issue) return { thread: [], error: null }
+  const thread = [issue.body ?? '']
+  const count = Number.isInteger(issue.comments) ? issue.comments : null
+  const last = count === null ? null : Math.max(1, Math.ceil(count / THREAD_PAGE_SIZE))
+  try {
+    for (let i = 0; i < THREAD_MAX_PAGES; i++) {
+      const page = last === null ? i + 1 : last - i
+      if (page < 1) break
+      const batch = await gh(`/repos/${repo}/issues/${issue.number}/comments?per_page=${THREAD_PAGE_SIZE}&page=${page}`)
+      if (!Array.isArray(batch)) throw new Error(`comments page ${page} was not a list`)
+      thread.push(...batch.map((c) => (c && typeof c.body === 'string' ? c.body : '')))
+      if (last === null && batch.length < THREAD_PAGE_SIZE) break
+    }
+    return { thread, error: null }
+  } catch (e) {
+    return { thread: [], error: e instanceof Error ? e.message : String(e) }
+  }
+}
 
 /**
  * Conclusions that mean "healthy". Everything else alerts.
@@ -109,16 +183,13 @@ export function decideAlert({ workflow, conclusion, openIssue, runUrl, detail, e
     '**It will close itself when the workflow next succeeds on schedule.** Repeated failures ' +
     'comment here rather than opening new issues, so if this thread is long, the problem is old.'
 
+  // Every alert carries its key as an exact token, so the next look matches it
+  // exactly rather than by substring (red-team A4).
+  const keyed = dedupeKey ? `${body}\n\n${keyToken(dedupeKey)}` : body
   if (openIssue) {
     // Q-113: this failure is already on the thread — say nothing new.
-    if (dedupeKey && (thread ?? []).some((t) => t.includes(dedupeKey))) {
-      return { action: 'none', reason: 'already reported' }
-    }
-    return { action: 'comment', issue: openIssue.number, body: dedupeKey && !body.includes(dedupeKey) ? `${body}\n\n<!-- alert-key: ${dedupeKey} -->` : body }
+    if (threadHasKey(thread, dedupeKey)) return { action: 'none', reason: 'already reported' }
+    return { action: 'comment', issue: openIssue.number, body: keyed }
   }
-  return {
-    action: 'create',
-    title: alertTitle(workflow),
-    body: dedupeKey && !body.includes(dedupeKey) ? `${body}\n\n<!-- alert-key: ${dedupeKey} -->` : body,
-  }
+  return { action: 'create', title: alertTitle(workflow), body: keyed }
 }

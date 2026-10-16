@@ -1758,11 +1758,11 @@
       "end_user_exposed": false,
       "authenticated": true,
       "licence_status": "NOT_APPLICABLE",
-      "finding": "GitHub's own REST API, called from scripts/ci/notify-scheduled-failure.mjs to open, comment on or close the scheduled-failure alert issue. Authenticated with the workflow's built-in GITHUB_TOKEN; runs only inside Actions, never in the application tier, and returns no vendor market data — it reads and writes this repository's own issues. Added by the Q107-O2 alerting work, and the I8 guard CAUGHT IT: this was the first new outbound call added to the repository since the guard shipped, and the suite went red until the row existed. Exactly the intended behaviour, on real new code rather than a mutation.",
+      "finding": "GitHub's own REST API, called from scripts/ci/notify-scheduled-failure.mjs to open, comment on or close the scheduled-failure alert issue. Authenticated with the workflow's built-in GITHUB_TOKEN; runs only inside Actions, never in the application tier, and returns no vendor market data — it reads and writes this repository's own issues. Added by the Q107-O2 alerting work, and the I8 guard CAUGHT IT: this was the first new outbound call added to the repository since the guard shipped, and the suite went red until the row existed. Exactly the intended behaviour, on real new code rather than a mutation. 2026-10-17 (Q-113 red-team A1): the host literal moved to scripts/ci/githubApi.mjs, the one REST caller both alert runners (notify-scheduled-failure.mjs and workflow-heartbeat.mjs) now import, so the runners can be driven by tests with an injected client. Same host, same token, same scope.",
       "recorded_by": "Q107-O2 (lead) — recorded 2026-08-30",
       "recorded_on": "2026-08-30",
       "evidence": [
-        "scripts/ci/notify-scheduled-failure.mjs:13"
+        "scripts/ci/githubApi.mjs:6"
       ],
       "routes_to": []
     },

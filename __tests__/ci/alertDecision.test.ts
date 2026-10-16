@@ -13,7 +13,7 @@
 import { describe, it, expect } from 'vitest'
 // Plain .mjs so the workflow can run it with no build step, same idiom as
 // scripts/lib/dataVintage.mjs.
-import { decideAlert, alertTitle, ALERT_MARKER } from '../../scripts/ci/alertDecision.mjs'
+import { decideAlert, alertTitle, alertKeyFor, ALERT_MARKER } from '../../scripts/ci/alertDecision.mjs'
 
 const base = { workflow: 'refresh-data.yml', runUrl: 'https://example/run/1' }
 
@@ -121,17 +121,24 @@ describe('decideAlert — one comment per failure, not per look (Q-113)', () => 
     expect(d.action).toBe('close')
   })
 
-  it('replayed against #177: six distinct weekly failures make six comments, not one a day', () => {
-    const weekly = ['34066964667', '34790929873', '35545800543', '36361648320', '37247468640', '38189996112']
-      .map((id) => `https://github.com/o/r/actions/runs/${id}`)
-    const thread: string[] = ['issue body']
-    let comments = 0
-    // 41 daily looks; each day the latest weekly failure is the one assessed.
-    for (let day = 0; day < 41; day++) {
-      const key = weekly[Math.min(weekly.length - 1, Math.floor(day / 7))]
-      const d = decideAlert({ ...base, conclusion: 'failure', openIssue: { number: 177 }, dedupeKey: key, thread })
-      if (d.action === 'comment') { comments++; thread.push(d.body as string) }
-    }
-    expect(comments).toBe(weekly.length)
+  // The #177 replay now runs through BOTH runners in alertRunners.test.ts. The
+  // version that lived here fed six distinct strings to decideAlert, which gives
+  // six whatever the runners pass (red-team A5).
+
+  it('matches a key as a delimited token, never as a substring (red-team A4)', () => {
+    const d = decideAlert({ ...base, conclusion: 'failure', openIssue: { number: 7 }, dedupeKey: failing, thread: [`earlier … ${failing}1`] })
+    expect(d.action).toBe('comment')
+  })
+
+  it('keys a re-run apart from its first attempt (red-team A2)', () => {
+    expect(alertKeyFor(failing, 1)).toBe(failing)
+    expect(alertKeyFor(failing, '2')).toBe(`${failing}#attempt-2`)
+    const d = decideAlert({ ...base, conclusion: 'failure', openIssue: { number: 7 }, dedupeKey: alertKeyFor(failing, 2), thread: [`earlier … ${failing}\n`] })
+    expect(d.action).toBe('comment')
+  })
+
+  it('has no key for a run URL without a run id (red-team A4)', () => {
+    expect(alertKeyFor('https://github.com/o/r/actions/runs/', 1)).toBeUndefined()
+    expect(alertKeyFor(undefined, 1)).toBeUndefined()
   })
 })

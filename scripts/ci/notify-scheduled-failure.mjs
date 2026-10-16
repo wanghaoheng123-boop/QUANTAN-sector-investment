@@ -8,35 +8,10 @@
  * Uses the built-in GITHUB_TOKEN, so there is nothing for an owner to provision —
  * that mattered more than the choice of channel. Requires `issues: write`.
  */
-import { decideAlert, alertTitle, ALERT_MARKER } from './alertDecision.mjs'
+import { pathToFileURL } from 'node:url'
+import { decideAlert, alertTitle, alertKeyFor, readThread, ALERT_MARKER } from './alertDecision.mjs'
+import { makeGh } from './githubApi.mjs'
 
-const API = 'https://api.github.com'
-const token = process.env.GITHUB_TOKEN
-const repo = process.env.GITHUB_REPOSITORY
-const workflow = process.env.ALERT_WORKFLOW
-const conclusion = process.env.ALERT_CONCLUSION
-const runUrl = process.env.ALERT_RUN_URL ?? ''
-const detail = process.env.ALERT_DETAIL ?? ''
-const eventName = process.env.ALERT_EVENT ?? undefined
-
-if (!token || !repo || !workflow || !conclusion) {
-  console.error('notify-scheduled-failure: missing GITHUB_TOKEN / GITHUB_REPOSITORY / ALERT_WORKFLOW / ALERT_CONCLUSION')
-  process.exit(1)
-}
-
-const gh = async (path, init = {}) => {
-  const res = await fetch(`${API}${path}`, {
-    ...init,
-    headers: {
-      authorization: `Bearer ${token}`,
-      accept: 'application/vnd.github+json',
-      'content-type': 'application/json',
-      ...(init.headers ?? {}),
-    },
-  })
-  if (!res.ok) throw new Error(`${init.method ?? 'GET'} ${path} -> ${res.status} ${await res.text()}`)
-  return res.status === 204 ? null : res.json()
-}
 
 /**
  * Find this workflow's open alert issue.
@@ -58,7 +33,7 @@ const gh = async (path, init = {}) => {
  */
 const MAX_PAGES = 10
 
-const findOpen = async () => {
+const findOpen = async (gh, repo, workflow, log) => {
   const want = alertTitle(workflow)
   for (let page = 1; page <= MAX_PAGES; page++) {
     const batch = await gh(`/repos/${repo}/issues?state=open&per_page=100&page=${page}`)
@@ -71,39 +46,85 @@ const findOpen = async () => {
   }
   // Bounded rather than infinite, and LOUD about it: silently giving up here
   // would open a duplicate issue and look like the mechanism working.
-  console.warn(`findOpen: scanned ${MAX_PAGES} pages without finding an existing alert; may create a duplicate`)
+  log.warn(`findOpen: scanned ${MAX_PAGES} pages without finding an existing alert; may create a duplicate`)
   return null
 }
 
-const openIssue = await findOpen()
+/**
+ * The whole runner, with its I/O injected so a test can drive it (red-team A1:
+ * the dedupe was wired only here, and a change that stopped passing the key
+ * left every test green). Returns the decision it acted on.
+ *
+ * @param {{
+ *   env: Record<string, string | undefined>,
+ *   gh: (path: string, init?: { method?: string, body?: string }) => Promise<any>,
+ *   log?: Pick<Console, 'log' | 'warn' | 'error'>,
+ * }} args
+ */
+export async function runNotifier({ env, gh, log = console }) {
+  const repo = env.GITHUB_REPOSITORY
+  const workflow = env.ALERT_WORKFLOW
+  const conclusion = env.ALERT_CONCLUSION
+  const runUrl = env.ALERT_RUN_URL ?? ''
+  const openIssue = await findOpen(gh, repo, workflow, log)
 
-/** Q-113: the open alert's body and comments, so the same failed run is reported once. */
-const thread = []
-if (openIssue && conclusion !== 'success') {
-  thread.push(openIssue.body ?? '')
-  for (let page = 1; page <= MAX_PAGES; page++) {
-    const batch = await gh(`/repos/${repo}/issues/${openIssue.number}/comments?per_page=100&page=${page}`)
-    if (!Array.isArray(batch)) break
-    thread.push(...batch.map((c) => c.body ?? ''))
-    if (batch.length < 100) break
+  // Q-113: the open alert's body and comments, so the same failed run is
+  // reported once. A failed read SPEAKS (thread empty) rather than drops the alert.
+  let thread = []
+  if (openIssue && conclusion !== 'success') {
+    const read = await readThread(gh, repo, openIssue)
+    if (read.error) log.warn(`could not read #${openIssue.number}'s thread (${read.error}); reporting without dedupe`)
+    thread = read.thread
   }
-}
-// This runner reports ITS OWN failing run, so that run's URL is the key — and the
-// daily heartbeat probe keys on the same URL, so the two cannot double-report.
-const d = decideAlert({ workflow, conclusion, openIssue, runUrl, detail, eventName, dedupeKey: runUrl || undefined, thread })
-console.log(`alert decision for ${workflow} (${conclusion}): ${d.action}${d.reason ? ` (${d.reason})` : ''}`)
-
-if (d.action === 'create') {
-  const made = await gh(`/repos/${repo}/issues`, {
-    method: 'POST',
-    body: JSON.stringify({ title: d.title, body: d.body }),
+  // This runner reports ITS OWN failing run, so that run (and attempt) is the
+  // key — and the daily heartbeat probe derives the same key from the API, so
+  // the two cannot double-report.
+  const d = decideAlert({
+    workflow,
+    conclusion,
+    openIssue,
+    runUrl,
+    detail: env.ALERT_DETAIL ?? '',
+    eventName: env.ALERT_EVENT ?? undefined,
+    dedupeKey: alertKeyFor(runUrl, env.ALERT_RUN_ATTEMPT),
+    thread,
   })
-  console.log(`opened #${made.number}`)
-} else if (d.action === 'comment') {
-  await gh(`/repos/${repo}/issues/${d.issue}/comments`, { method: 'POST', body: JSON.stringify({ body: d.body }) })
-  console.log(`commented on #${d.issue}`)
-} else if (d.action === 'close') {
-  await gh(`/repos/${repo}/issues/${d.issue}/comments`, { method: 'POST', body: JSON.stringify({ body: d.body }) })
-  await gh(`/repos/${repo}/issues/${d.issue}`, { method: 'PATCH', body: JSON.stringify({ state: 'closed' }) })
-  console.log(`closed #${d.issue}`)
+  log.log(`alert decision for ${workflow} (${conclusion}): ${d.action}${d.reason ? ` (${d.reason})` : ''}`)
+
+  if (d.action === 'create') {
+    const made = await gh(`/repos/${repo}/issues`, {
+      method: 'POST',
+      body: JSON.stringify({ title: d.title, body: d.body }),
+    })
+    log.log(`opened #${made.number}`)
+  } else if (d.action === 'comment') {
+    await gh(`/repos/${repo}/issues/${d.issue}/comments`, { method: 'POST', body: JSON.stringify({ body: d.body }) })
+    log.log(`commented on #${d.issue}`)
+  } else if (d.action === 'close') {
+    await gh(`/repos/${repo}/issues/${d.issue}/comments`, { method: 'POST', body: JSON.stringify({ body: d.body }) })
+    await gh(`/repos/${repo}/issues/${d.issue}`, { method: 'PATCH', body: JSON.stringify({ state: 'closed' }) })
+    log.log(`closed #${d.issue}`)
+  }
+  return d
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  // Named reads, not `process.env` passed whole: only these reach the runner,
+  // and the vendor-licence register's detector sees the host-bearing
+  // ALERT_RUN_URL where it is read.
+  const env = {
+    GITHUB_TOKEN: process.env.GITHUB_TOKEN,
+    GITHUB_REPOSITORY: process.env.GITHUB_REPOSITORY,
+    ALERT_WORKFLOW: process.env.ALERT_WORKFLOW,
+    ALERT_CONCLUSION: process.env.ALERT_CONCLUSION,
+    ALERT_RUN_URL: process.env.ALERT_RUN_URL,
+    ALERT_RUN_ATTEMPT: process.env.ALERT_RUN_ATTEMPT,
+    ALERT_DETAIL: process.env.ALERT_DETAIL,
+    ALERT_EVENT: process.env.ALERT_EVENT,
+  }
+  if (!env.GITHUB_TOKEN || !env.GITHUB_REPOSITORY || !env.ALERT_WORKFLOW || !env.ALERT_CONCLUSION) {
+    console.error('notify-scheduled-failure: missing GITHUB_TOKEN / GITHUB_REPOSITORY / ALERT_WORKFLOW / ALERT_CONCLUSION')
+    process.exit(1)
+  }
+  await runNotifier({ env, gh: makeGh(env.GITHUB_TOKEN) })
 }
