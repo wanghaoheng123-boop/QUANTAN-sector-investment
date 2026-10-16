@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import type { BacktestResult } from '@/lib/backtest/engine'
+import { isUntradeable } from '@/lib/backtest/resultFlags'
 import { MetricTooltip } from '@/components/MetricTooltip'
 
 interface Props {
@@ -115,19 +116,31 @@ export default function InstrumentTable({ results, sectorColors }: Props) {
           <tbody className="divide-y divide-slate-800/50">
             {filtered.map(r => {
               const sectorColor = sectorColors[r.sector] ?? '#64748b'
+              // Q-136: a sizing-rule refusal, not a 0% strategy result.
+              const untradeable = isUntradeable(r)
               return (
                 <tr key={r.ticker} className="hover:bg-slate-800/30 transition-colors">
-                  <td className="px-3 py-2.5 font-mono font-bold text-white">{r.ticker}</td>
+                  <td className="px-3 py-2.5 font-mono font-bold text-white">
+                    {r.ticker}
+                    {untradeable && (
+                      <span
+                        className="ml-2 text-[9px] font-sans font-normal text-amber-300 border border-amber-500/40 rounded px-1 py-0.5"
+                        title={`Never opened a position: all ${r.unaffordableEntries} BUY signals were worth less than one unit at the per-position allocation. Excluded from the portfolio figures.`}
+                      >
+                        not tradeable at this size
+                      </span>
+                    )}
+                  </td>
                   <td className="px-3 py-2.5">
                     <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ color: sectorColor, backgroundColor: sectorColor + '15' }}>
                       {r.sector}
                     </span>
                   </td>
                   <td className={`px-3 py-2.5 font-mono text-right font-medium ${r.totalReturn >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {fmtPct(r.totalReturn)}
+                    {untradeable ? '—' : fmtPct(r.totalReturn)}
                   </td>
                   <td className={`px-3 py-2.5 font-mono text-right font-medium ${r.annualizedReturn >= 0 ? 'text-emerald-300' : 'text-red-400'}`}>
-                    {fmtPct(r.annualizedReturn)}
+                    {untradeable ? '—' : fmtPct(r.annualizedReturn)}
                   </td>
                   <td className="px-3 py-2.5 font-mono text-right text-slate-300">
                     {fmtRatio(r.sharpeRatio)}
@@ -142,7 +155,7 @@ export default function InstrumentTable({ results, sectorColors }: Props) {
                     {r.totalTrades}
                   </td>
                   <td className={`px-3 py-2.5 font-mono text-right font-medium ${r.excessReturn > 0 ? 'text-cyan-400' : r.excessReturn < 0 ? 'text-orange-400' : 'text-slate-400'}`}>
-                    {fmtPct(r.excessReturn)}
+                    {untradeable ? '—' : fmtPct(r.excessReturn)}
                   </td>
                 </tr>
               )

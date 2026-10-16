@@ -12,6 +12,8 @@ import { SECTORS } from '@/lib/sectors'
 import { canonicalSecurityId } from '@/lib/data/securityId'
 import { loadStockHistory, loadBtcHistory, availableTickers } from '@/lib/backtest/dataLoader'
 import { backtestInstrument, aggregatePortfolio } from '@/lib/backtest/engine'
+import { useEnhancedCombinedSignal } from '@/lib/featureFlags'
+import type { SignalPath } from '@/lib/backtest/strategyDescription'
 import { validateCsrf } from '@/lib/api/csrf'
 import { applyRateLimit } from '@/lib/api/rateLimit'
 import { normalizeTicker, sanitizeError } from '@/lib/api/sanitize'
@@ -70,6 +72,8 @@ async function runBacktest(filterTickers?: string[]): Promise<{
   runId: string
   computedAt: string
   dataSource: 'local'
+  /** Q-134: the signal path that produced these results. */
+  signalPath: SignalPath
   instruments: { ticker: string; sector: string; candles: number }[]
   results: WireResult[]
   portfolio: {
@@ -89,6 +93,7 @@ async function runBacktest(filterTickers?: string[]): Promise<{
     initialCapital: number
     finalCapital: number
     excludedTickers: string[]
+    untradeableTickers: string[]
   }
 }> {
   const instruments: { ticker: string; sector: string; candles: number }[] = []
@@ -131,6 +136,8 @@ async function runBacktest(filterTickers?: string[]): Promise<{
     runId: `run_${Date.now()}`,
     computedAt: new Date().toISOString(),
     dataSource: 'local',
+    // Q-134: read at RUN time, so the label cannot disagree with the engine.
+    signalPath: useEnhancedCombinedSignal() ? 'enhanced' : 'regime-only',
     instruments,
     // Strip AFTER aggregatePortfolio above — it reads bnhCurve.
     results: results.map(toWireResult),
@@ -151,6 +158,7 @@ async function runBacktest(filterTickers?: string[]): Promise<{
       initialCapital: portfolio.initialCapital,
       finalCapital: portfolio.finalCapital,
       excludedTickers: portfolio.excludedTickers,
+      untradeableTickers: portfolio.untradeableTickers,
     },
   }
 }

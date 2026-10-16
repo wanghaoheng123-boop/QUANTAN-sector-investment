@@ -18,6 +18,7 @@ export {
 export type { OhlcvRow, Trade, BacktestResult } from './core'
 
 import type { BacktestResult } from './core'
+import { isUntradeable } from './resultFlags'
 
 // ─── Portfolio aggregator ─────────────────────────────────────────────────────
 
@@ -47,6 +48,14 @@ export interface PortfolioSummary {
    * collapsing to zeros. See aggregatePortfolio.
    */
   excludedTickers: string[]
+  /**
+   * Q-136: tickers that never opened a position because every BUY signal was
+   * worth less than one whole unit at the per-position allocation (BTC at
+   * $100,000 per instrument). Their flat curve is not a strategy result, so
+   * they are excluded from every aggregate and disclosed here — a different
+   * reason from `excludedTickers`, so a different list.
+   */
+  untradeableTickers: string[]
 }
 
 /**
@@ -71,10 +80,18 @@ export function aggregatePortfolio(results: BacktestResult[], initialCapital: nu
   // engine's 252-bar stub threshold agree. For a full-history universe the
   // partition is a no-op (every curve ≫ MIN_COMBINE_LEN) → published WR /
   // benchmark numbers are unchanged.
-  const combinable = results.filter(r => r.equityCurve.length > MIN_COMBINE_LEN)
+  const longEnough = results.filter(r => r.equityCurve.length > MIN_COMBINE_LEN)
   const excludedTickers = results
     .filter(r => r.equityCurve.length <= MIN_COMBINE_LEN)
     .map(r => r.ticker)
+  // Q-136 (MIGRATION NOTE, 2026-10-16). An instrument whose every BUY was
+  // unaffordable contributed a flat $100,000 curve and a 0% return to the
+  // equal-weight combine, as if "the strategy earned nothing on BTC". It also
+  // set the WHOLE portfolio's annualization to 365 days (below), although it
+  // never traded — so 55 equity curves were annualized on a crypto calendar.
+  // Before/after on the committed fixtures: reviews/q133-backtest-engine-honesty-2026-10-16.md.
+  const combinable = longEnough.filter(r => !isUntradeable(r))
+  const untradeableTickers = longEnough.filter(isUntradeable).map(r => r.ticker)
 
   const allTrades = combinable.flatMap(r => r.closedTrades)
   // F-4 (2026-07-06): a "win" clears the round-trip transaction cost
@@ -238,6 +255,7 @@ export function aggregatePortfolio(results: BacktestResult[], initialCapital: nu
     alpha,
     bnhAvg,
     excludedTickers,
+    untradeableTickers,
   }
 }
 

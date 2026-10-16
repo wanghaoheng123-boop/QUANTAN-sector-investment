@@ -24,7 +24,7 @@ function mkTrade(pnlPct: number): Trade {
     date: '2026-01-05', ticker: 'T', sector: 'S', action: 'BUY',
     entryPrice: 100, exitPrice: 100 * (1 + pnlPct), shares: 10,
     value: 1000, regime: 'FIRST_DIP', dipSignal: 'STRONG_DIP',
-    confidence: 90, pnlPct, reason: 'test',
+    confidence: 90, pnlPct, reason: 'test', exitReason: 'time_exit', exitDate: '2026-03-05', netPnl: null,
   }
 }
 
@@ -37,7 +37,7 @@ function mkResult(over: Partial<BacktestResult> & { ticker: string }): BacktestR
     maxDrawdown: 0.05, winRate: 0.5, profitFactor: 1.5, avgTradeReturn: 0.01,
     totalTrades: 0, closedTrades: [], openTrade: null,
     dailyReturns: [], equityCurve: [], bnhCurve: undefined,
-    days: 300, confidenceAvg: 90,
+    days: 300, confidenceAvg: 90, unaffordableEntries: 0,
     bnhReturn: 0.2, excessReturn: -0.1,
     ...over,
   }

@@ -18,7 +18,9 @@ exports[`BacktestPage (Q-058-NEW snapshot precondition) > renders centered loadi
     <p
       class="text-slate-400 text-xs mt-1"
     >
-      Fetching 5Y history for 56 instruments (may take ~20s)
+      Running the backtest over 
+      55
+       stocks and BTC (may take ~20s)
     </p>
   </div>
 </div>

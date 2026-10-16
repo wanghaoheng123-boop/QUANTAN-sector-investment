@@ -402,7 +402,7 @@ describe('F-4: net-of-cost win classification', () => {
   const trade = (pnlPct: number) => ({
     date: '2025-01-02', ticker: 'FAKE', sector: 'Technology', action: 'BUY' as const,
     entryPrice: 100, exitPrice: 100 * (1 + pnlPct), shares: 10, value: 1000,
-    regime: 'FIRST_DIP', dipSignal: 'STRONG_DIP', confidence: 80, pnlPct, reason: 'test',
+    regime: 'FIRST_DIP', dipSignal: 'STRONG_DIP', confidence: 80, pnlPct, reason: 'test', exitReason: 'time_exit' as const, exitDate: '2026-03-05', netPnl: null,
   })
   const fakeResult = (trades: ReturnType<typeof trade>[]) => ({
     ticker: 'FAKE', sector: 'Technology', initialPrice: 100, finalPrice: 100,
@@ -410,7 +410,7 @@ describe('F-4: net-of-cost win classification', () => {
     maxDrawdown: 0, winRate: 0, profitFactor: 0, avgTradeReturn: 0,
     totalTrades: trades.length, closedTrades: trades, openTrade: null,
     dailyReturns: [], equityCurve: new Array(40).fill(100_000),
-    days: 300, confidenceAvg: 80, bnhReturn: 0, excessReturn: 0,
+    days: 300, confidenceAvg: 80, bnhReturn: 0, excessReturn: 0, unaffordableEntries: 0,
   })
 
   it('a positive price move inside the 22 bps round-trip cost is NOT a win', () => {

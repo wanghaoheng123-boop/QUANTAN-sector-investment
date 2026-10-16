@@ -6,7 +6,7 @@
  * loop cannot emit a signal until the 200-bar SMA/EMA lookbacks are satisfied.
  * `bnhReturn` was `computeBuyAndHoldReturn(rows)`: the FULL history from bar 0.
  * Their difference is rendered as "Excess" in `InstrumentTable`, `AnalysisTab`
- * and `WalkForwardPanel`.
+ * and `PeriodSplitPanel`.
  *
  * Measured over all 56 committed fixtures BEFORE the fix:
  *

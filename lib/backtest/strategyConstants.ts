@@ -52,3 +52,13 @@ export const NEAR_SMA200_PCT = 5
  * `BacktestConfig.halfKelly` (Q-105 red-team R4).
  */
 export const REGIME_PATH_POSITION_FRACTION = { half: 0.15, full: 0.30 } as const
+
+/**
+ * Bars of history consumed before the backtest loop may emit its first
+ * signal. Set by the LONGEST lookback any signal reads: `sma200DeviationPct`,
+ * `sma200Slope` and the EMA50>EMA200 golden-cross gate in `./signals`, all of
+ * which need 200 prior bars. The strategy is therefore exposed to the market
+ * over `rows.length - BACKTEST_WARMUP_BARS` bars, NOT `rows.length` — every
+ * quantity compared against `totalReturn` must span that same window (Q110-Q1).
+ */
+export const BACKTEST_WARMUP_BARS = 200

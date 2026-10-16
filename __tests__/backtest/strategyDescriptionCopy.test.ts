@@ -37,10 +37,9 @@ import { join } from 'node:path'
 import {
   ENGINE_RULES,
   ENGINE_SUMMARY,
-  ENGINE_ONE_LINE,
   pct,
+  rulesForPath,
 } from '@/lib/backtest/strategyDescription'
-import { STRATEGY_RULES } from '@/components/backtest/OverviewTab'
 import { HEADER_TOOLTIPS } from '@/components/backtest/TradeLog'
 import { positionSizeLabel } from '@/components/backtest/LiveSignalsPanel'
 import {
@@ -107,7 +106,6 @@ function glossaryText(key: string): string {
 const SURFACES: Array<[string, string]> = [
   ['Strategy Rules grid (built)', rulesText],
   ['/backtest info bar (built)', summaryText],
-  ['landing CTA clause (built)', ENGINE_ONE_LINE],
   ['app/page.tsx backtest CTA (source)', landingBacktestSection()],
   ...BACKTEST_SOURCES.map((rel): [string, string] => [`${rel} (source)`, flatCode(rel)]),
   ...GLOSSARY_KEYS.map((k): [string, string] => [`glossary '${k}' (rendered on /backtest)`, glossaryText(k)]),
@@ -233,7 +231,6 @@ describe('2. the numbers quoted are the constants the engine trades on', () => {
     expect(DEFAULT_TIME_EXIT_CONFIG.maxHoldDays).toBe(ENGINE_MAX_HOLD_DAYS)
     expect(rulesText).toContain(`once ${ENGINE_MAX_HOLD_DAYS} daily bars have passed since a position's fill`)
     expect(summaryText).toContain(`${ENGINE_MAX_HOLD_DAYS}-bar time exit`)
-    expect(ENGINE_ONE_LINE).toContain(`${ENGINE_MAX_HOLD_DAYS}-bar time exit`)
   })
 
   it('the position size is the regime-path fraction of CASH, whole shares, with the skip disclosed', () => {
@@ -245,9 +242,8 @@ describe('2. the numbers quoted are the constants the engine trades on', () => {
     const ceiling = (DEFAULT_CONFIG.initialCapital * REGIME_PATH_POSITION_FRACTION.half).toLocaleString('en-US')
     expect(rulesText).toContain(`priced above $${ceiling} cannot open its first position`)
     expect(summaryText).toContain(`${size} of cash, whole shares`)
-    expect(ENGINE_ONE_LINE).toContain(`${size} of cash per position`)
     // Red-team R1: "fixed 15% of capital" must not come back.
-    expect(`${rulesText} ${summaryText} ${ENGINE_ONE_LINE}`).not.toMatch(/fixed\s+\d+%/i)
+    expect(`${rulesText} ${summaryText}`).not.toMatch(/fixed\s+\d+%/i)
   })
 
   it('the drawdown breaker and capital are the engine defaults', () => {
@@ -290,9 +286,13 @@ describe('2. the numbers quoted are the constants the engine trades on', () => {
   })
 
   it('the rendered surfaces render THESE constants, not a lookalike literal', () => {
-    expect(STRATEGY_RULES).toBe(ENGINE_RULES)
+    // Q-134: the tab renders rulesForPath(signalPath); for the production path that IS ENGINE_RULES.
+    expect(rulesForPath('regime-only')).toBe(ENGINE_RULES)
+    expect(flatCode('components/backtest/OverviewTab.tsx')).toContain('rulesForPath(signalPath)')
     expect(flatCode('app/backtest/page.tsx')).toMatch(/ENGINE_SUMMARY\.map\(/)
-    expect(flatCode('app/page.tsx')).toContain('{ENGINE_ONE_LINE}')
+    // F5: the static landing page cannot know which path ran, so it states no rule.
+    expect(landingBacktestSection()).not.toMatch(/of cash per position|time exit|stop-loss/i)
+    expect(landingBacktestSection()).toContain('{BACKTEST_SCOPE_LINE}')
     // No number the engine trades on is hardcoded in the copy module's strings.
     // (A `${60}` interpolation would dodge this; test 2 above still catches drift.)
     const src = stripComments(readFileSync(join(ROOT, 'lib/backtest/strategyDescription.ts'), 'utf8'))
@@ -342,5 +342,61 @@ describe('3. the "no stops" claim is true of the engine\'s declared exit policy'
     expect(core).toContain('DEFAULT_TIME_EXIT_CONFIG.maxHoldDays')
     expect(core).not.toMatch(/DEFAULT_TIME_EXIT_CONFIG\.(atrStopMultiplier|trailingStopPct|profitTakePct)/)
     expect(core).not.toMatch(/atrAdaptiveStop|checkExitConditions/)
+  })
+})
+
+describe('Q-139: the backtest surfaces describe the window and universe they measure', () => {
+  // Red-team F1: the first version scanned four hand-picked files, while the
+  // global nav (components/SiteNav.tsx) and public/launcher.html still said
+  // "5Y walk-forward". The set is now EVERY user-facing source file, and the
+  // test asserts it visited the two that were missed.
+  const walk = (dir: string, ext: RegExp, out: string[] = []): string[] => {
+    for (const e of readdirSync(join(ROOT, dir), { withFileTypes: true })) {
+      const rel = `${dir}/${e.name}`
+      if (e.isDirectory()) { if (rel !== 'app/api') walk(rel, ext, out) }
+      else if (ext.test(e.name)) out.push(rel)
+    }
+    return out
+  }
+  const SURFACES = [
+    ...walk('app', /\.tsx$/),
+    ...walk('components', /\.tsx$/),
+    ...walk('public', /\.html$/),
+    'lib/metricGlossary.ts',
+    'lib/backtest/strategyDescription.ts',
+  ]
+  const text = (rel: string) => rel.endsWith('.html')
+    ? readFileSync(join(ROOT, rel), 'utf8').replace(/<!--[\s\S]*?-->/g, ' ').replace(/\s+/g, ' ')
+    : flatCode(rel)
+
+  it('visits every user-facing surface, including the two the first version missed', () => {
+    expect(SURFACES).toContain('components/SiteNav.tsx')
+    expect(SURFACES).toContain('public/launcher.html')
+    expect(SURFACES.length).toBeGreaterThan(80)
+  })
+
+  it('no surface calls a single unfitted pass "walk-forward", offers an in-sample figure, or calls it a 5-year backtest', () => {
+    for (const rel of SURFACES) {
+      const t = text(rel)
+      expect(t, rel).not.toMatch(/walk[- ]?forward/i)
+      expect(t, rel).not.toMatch(/In-Sample Ann|in-sample \(train\)|Rolling Quarterly/i)
+      expect(t, rel).not.toMatch(/\b(?:5Y|5-year|~5-year)\b[^.<]{0,30}(?:backtest|walk)/i)
+    }
+  })
+
+  it('no surface hand-writes the instrument count', () => {
+    for (const rel of SURFACES) {
+      expect(text(rel), rel).not.toMatch(/\b5[56] (instruments|currently-listed)/i)
+    }
+  })
+
+  it('the derived count is the list the route iterates', async () => {
+    const { SECTORS } = await import('@/lib/sectors')
+    const { UNIVERSE_STOCK_COUNT, UNIVERSE_SECTOR_COUNT, BACKTEST_SCOPE_LINE } = await import('@/lib/backtest/strategyDescription')
+    expect(UNIVERSE_STOCK_COUNT).toBe(SECTORS.flatMap((s) => s.topHoldings).length)
+    expect(UNIVERSE_SECTOR_COUNT).toBe(SECTORS.length)
+    expect(flatCode('app/api/backtest/route.ts')).toMatch(/for \(const ticker of sector\.topHoldings\)/)
+    expect(BACKTEST_SCOPE_LINE).toContain(`${UNIVERSE_STOCK_COUNT} large-cap stocks`)
+    expect(BACKTEST_SCOPE_LINE).not.toMatch(/walk-forward/i)
   })
 })

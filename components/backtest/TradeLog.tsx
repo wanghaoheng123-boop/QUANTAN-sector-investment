@@ -2,19 +2,29 @@
 
 import { useState, useMemo } from 'react'
 import type { Trade } from '@/lib/backtest/engine'
+import { ENGINE_MAX_HOLD_DAYS } from '@/lib/backtest/strategyConstants'
 import { MetricTooltip } from '@/components/MetricTooltip'
+
+/** Q-133: the engine's three exits, in words. */
+export const EXIT_LABELS: Record<NonNullable<Trade['exitReason']>, string> = {
+  time_exit: `${ENGINE_MAX_HOLD_DAYS}-bar time exit`,
+  max_drawdown: 'Drawdown breaker',
+  end_of_data: 'End of data',
+}
 
 /** Exported so the /backtest copy spec scans the glossary text these keys resolve to. */
 export const HEADER_TOOLTIPS: Record<string, { metricKey?: string; content?: string }> = {
-  'PnL %': { content: 'Profit or loss as % of entry price. Negative = loss. "Open" = position still active.' },
+  // Red-team F12: this is the SIGNAL bar; the position fills at the next open.
+  'Signal date': { content: 'The bar whose close produced the BUY signal. The position fills at the next session\'s open.' },
+  'PnL %': { content: 'Price move from entry to exit, before costs. The win and loss counts above are net of costs, so a small positive move can still be a loss.' },
   'Regime': { metricKey: 'regime' },
   'Signal': { metricKey: 'dipSignal' },
   'Conf%': { metricKey: 'confidence' },
-  // Q-105: these two described exit codes (STOP_LOSS, TRAILING_STOP, PARTIAL…)
-  // the engine has not produced since the 2026-07-11 stop retirement. The
-  // column renders `trade.reason`, which is the ENTRY signal's reason.
-  'Reason': { content: 'Why the position was opened: the regime zone behind the BUY signal. The engine does not record why a trade closed (time exit, drawdown breaker or end of data).' },
-  'Action': { content: 'Every row is a long position opened on a BUY signal. Exit Price is where it closed.' },
+  // Q-105 corrected these to the entry reason; Q-133 made the engine record
+  // the exit, so it now has its own column.
+  'Entry reason': { content: 'Why the position was opened: the regime zone behind the BUY signal.' },
+  'Exit': { content: `Why and when the position closed: the ${ENGINE_MAX_HOLD_DAYS}-bar time exit, the drawdown breaker, or the end of the data (a position still open then is closed at the final close).` },
+  'Action': { content: 'The side of the position. Exit Price is where it closed.' },
 }
 
 interface Props {
@@ -26,6 +36,10 @@ export default function TradeLog({ trades, sectorColors }: Props) {
   const [filterSector, setFilterSector] = useState<string>('All')
   const [filterAction, setFilterAction] = useState<string>('All')
   const [filterTicker, setFilterTicker] = useState<string>('')
+
+  // Q-133: only offer actions the engine actually recorded. Every trade it
+  // opens is a BUY, so a SELL option always rendered an empty table.
+  const actions = useMemo(() => Array.from(new Set(trades.map(t => t.action))).sort(), [trades])
 
   const sectors = useMemo(() => {
     const s = new Set(trades.map(t => t.sector))
@@ -46,15 +60,25 @@ export default function TradeLog({ trades, sectorColors }: Props) {
     return [...rows].sort((a, b) => (a.date < b.date ? 1 : -1))
   }, [trades, filterSector, filterAction, filterTicker])
 
-  const winningTrades = filtered.filter(t => (t.pnlPct ?? 0) > 0)
-  const losingTrades = filtered.filter(t => (t.pnlPct ?? 0) < 0)
+  // Classified on NET cash after costs, as the engine's win rate is (Q-123).
+  // On the raw price move, a +0.1% trade that lost money after 22 bps of
+  // round-trip costs was counted here as a winner.
+  // Red-team F13: a response cached from before netPnl/exitReason existed has
+  // closed trades without them. Those are still CLOSED (pnlPct is set); their
+  // net result is unknown, so the win/loss counts say so rather than read 0.
+  const closedAll = filtered.filter((t) => t.pnlPct != null)
+  const netUnknown = closedAll.some((t) => t.netPnl == null)
+  const closed = closedAll.filter((t): t is Trade & { netPnl: number } => t.netPnl != null)
+  const winningTrades = closed.filter(t => t.netPnl > 0)
+  const losingTrades = closed.filter(t => t.netPnl <= 0)
+  const netReturn = (t: Trade & { netPnl: number }) => t.netPnl / t.value
 
   const avgWinPct = winningTrades.length > 0
-    ? (winningTrades.reduce((s, t) => s + (t.pnlPct ?? 0), 0) / winningTrades.length * 100).toFixed(2)
-    : '0.00'
+    ? (winningTrades.reduce((s, t) => s + netReturn(t), 0) / winningTrades.length * 100).toFixed(2)
+    : null
   const avgLossPct = losingTrades.length > 0
-    ? Math.abs(losingTrades.reduce((s, t) => s + (t.pnlPct ?? 0), 0) / losingTrades.length * 100).toFixed(2)
-    : '0.00'
+    ? Math.abs(losingTrades.reduce((s, t) => s + netReturn(t), 0) / losingTrades.length * 100).toFixed(2)
+    : null
 
   return (
     <div className="space-y-3">
@@ -62,16 +86,16 @@ export default function TradeLog({ trades, sectorColors }: Props) {
       <div className="grid grid-cols-3 gap-3">
         <div className="bg-emerald-950/30 rounded-xl p-4 border border-emerald-800/30">
           <div className="text-xs text-emerald-500 mb-1">Winning Trades</div>
-          <div className="text-xl font-bold font-mono text-emerald-400">{winningTrades.length}</div>
+          <div className="text-xl font-bold font-mono text-emerald-400">{netUnknown ? '—' : winningTrades.length}</div>
           <div className="text-[10px] text-emerald-600 mt-1">
-            avg +{avgWinPct}%
+            {avgWinPct == null ? '—' : `avg net +${avgWinPct}%`}
           </div>
         </div>
         <div className="bg-red-950/30 rounded-xl p-4 border border-red-800/30">
           <div className="text-xs text-red-500 mb-1">Losing Trades</div>
-          <div className="text-xl font-bold font-mono text-red-400">{losingTrades.length}</div>
+          <div className="text-xl font-bold font-mono text-red-400">{netUnknown ? '—' : losingTrades.length}</div>
           <div className="text-[10px] text-red-600 mt-1">
-            avg −{avgLossPct}%
+            {avgLossPct == null ? '—' : `avg net −${avgLossPct}%`}
           </div>
         </div>
         <div className="bg-slate-900/60 rounded-xl p-4 border border-slate-800">
@@ -92,15 +116,17 @@ export default function TradeLog({ trades, sectorColors }: Props) {
         >
           {sectors.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
-        <select
-          value={filterAction}
-          onChange={e => setFilterAction(e.target.value)}
-          className="bg-slate-800 text-slate-300 text-xs rounded-lg px-3 py-1.5 border border-slate-700"
-        >
-          <option value="All">All Actions</option>
-          <option value="BUY">BUY</option>
-          <option value="SELL">SELL</option>
-        </select>
+        {actions.length > 1 && (
+          <select
+            value={filterAction}
+            onChange={e => setFilterAction(e.target.value)}
+            aria-label="Filter by action"
+            className="bg-slate-800 text-slate-300 text-xs rounded-lg px-3 py-1.5 border border-slate-700"
+          >
+            <option value="All">All Actions</option>
+            {actions.map(a => <option key={a} value={a}>{a}</option>)}
+          </select>
+        )}
         <input
           type="text"
           placeholder="Filter ticker…"
@@ -113,10 +139,10 @@ export default function TradeLog({ trades, sectorColors }: Props) {
       <div className="overflow-x-auto rounded-xl border border-slate-800">
         <table className="w-full text-xs">
           {/* F6.4 (Phase 13 S2): caption + scope for screen readers — WCAG 1.3.1. */}
-          <caption className="sr-only">Backtest trade log — chronological list with date, ticker, sector, BUY/SELL action, entry/exit prices, P&L percent, share count, dollar value, regime classification, signal direction, confidence, and reason.</caption>
+          <caption className="sr-only">Backtest trade log — newest first, with signal date, ticker, sector, action, entry and exit prices, price move, share count, dollar value, regime, signal, confidence, entry reason, and why and when the position closed.</caption>
           <thead className="bg-slate-900 border-b border-slate-800">
             <tr>
-              {['Date', 'Ticker', 'Sector', 'Action', 'Entry Price', 'Exit Price', 'PnL %', 'Shares', 'Value', 'Regime', 'Signal', 'Conf%', 'Reason'].map(h => {
+              {['Signal date', 'Ticker', 'Sector', 'Action', 'Entry Price', 'Exit Price', 'PnL %', 'Shares', 'Value', 'Regime', 'Signal', 'Conf%', 'Entry reason', 'Exit'].map(h => {
                 const tip = HEADER_TOOLTIPS[h]
                 return (
                   <th key={h} scope="col" className="px-3 py-2.5 text-left text-slate-400 uppercase tracking-wider font-medium">
@@ -154,6 +180,9 @@ export default function TradeLog({ trades, sectorColors }: Props) {
                   <td className="px-3 py-2.5 text-[10px] text-slate-400">{t.dipSignal}</td>
                   <td className="px-3 py-2.5 font-mono text-slate-400">{t.confidence}</td>
                   <td className="px-3 py-2.5 text-[10px] text-slate-400 max-w-[200px] truncate" title={t.reason}>{t.reason}</td>
+                  <td className="px-3 py-2.5 text-[10px] text-slate-400 whitespace-nowrap" data-testid="trade-exit">
+                    {t.exitReason ? `${EXIT_LABELS[t.exitReason]} · ${t.exitDate ?? '—'}` : t.pnlPct != null ? '—' : 'Open'}
+                  </td>
                 </tr>
               )
             })}

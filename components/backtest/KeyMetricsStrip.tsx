@@ -12,6 +12,8 @@ import { BacktestMetricCard } from './BacktestMetricCard'
 import { formatPercent } from '@/lib/format'
 
 interface PortfolioSummary {
+  /** Instruments inside the aggregate (Q-136: untradeable ones are not). */
+  totalInstruments: number
   avgReturn: number
   avgAnnReturn: number
   bnhAvg: number
@@ -35,6 +37,17 @@ function fmtRatio(v: number | null): string {
 }
 
 export function KeyMetricsStrip({ portfolio, instrumentCount }: KeyMetricsStripProps) {
+  // Q-136 red-team F4 (I2): with every selected instrument excluded, the
+  // aggregator's zeros rendered as "Portfolio Return 0.00% · Excess 0.00%" —
+  // a measurement nobody made (BTC's own buy-and-hold was +59.5%).
+  if (portfolio.totalInstruments === 0) {
+    return (
+      <div role="status" data-testid="no-portfolio" className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-xs text-amber-200">
+        No portfolio figures: none of the {instrumentCount} backtested instrument{instrumentCount === 1 ? '' : 's'} in this selection
+        could be included (each either never opened a position or had too little history; see the notes below).
+      </div>
+    )
+  }
   // annualised return / max drawdown — a MAR (Calmar) ratio, NOT a Sharpe.
   // It was labelled "Sharpe Ratio" in the UI while the comment here admitted it
   // was not one (Q-079, Q-103). The label now matches the arithmetic.
@@ -101,8 +114,10 @@ export function KeyMetricsStrip({ portfolio, instrumentCount }: KeyMetricsStripP
       />
       <BacktestMetricCard
         label="Instruments"
-        value={String(instrumentCount)}
-        sub="Active in backtest"
+        value={String(portfolio.totalInstruments)}
+        sub={portfolio.totalInstruments === instrumentCount
+          ? 'In the portfolio figures'
+          : `In the portfolio figures, of ${instrumentCount} backtested`}
         color="text-slate-300"
       />
     </div>

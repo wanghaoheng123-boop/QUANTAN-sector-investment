@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import Link from 'next/link'
-import { ENGINE_ONE_LINE } from '@/lib/backtest/strategyDescription'
+import { BACKTEST_SCOPE_LINE } from '@/lib/backtest/strategyDescription'
 import SectorCard from '@/components/SectorCard'
 import SignalCard from '@/components/SignalCard'
 import PriceTicker from '@/components/PriceTicker'
@@ -331,7 +331,7 @@ export default function HomePage() {
                   (a different rulebook from the 60-bar engine described
                   beside it), whose net value sat at the always-buy base rate. */}
               <p className="text-sm text-slate-400 max-w-lg">
-                5Y walk-forward backtest across 56 instruments (11 GICS sectors + BTC). {ENGINE_ONE_LINE}. Simulated results, not a live accuracy guarantee.
+                {BACKTEST_SCOPE_LINE}. The rules, for the signal path that ran, are on the backtest page. Simulated results, not a live accuracy guarantee.
               </p>
             </div>
             <Link

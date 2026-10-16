@@ -2979,7 +2979,7 @@
     "title": "The backtest trade log cannot say why a trade closed, and its SELL filter is always empty",
     "domain": "Frontend/UX",
     "priority": "P3",
-    "status": "pending",
+    "status": "done",
     "files": [
       "lib/backtest/core.ts",
       "components/backtest/TradeLog.tsx"
@@ -2993,14 +2993,15 @@
       "npm run test",
       "npm run benchmark"
     ],
-    "notes_2026_09_27": "Found during Q-105. The Reason column renders trade.reason, the ENTRY signal's reason, while its tooltip said 'why the trade exited' (tooltip corrected in Q-105). There is no exit reason to show: core.ts closes positions through three paths and records none of them. Every closed trade has action 'BUY' (224/224 regime, 52/52 enhanced over the committed fixtures), so the SELL option of the Action filter always renders an empty table. Adding a field is a wire change on /api/backtest; keep the time-exit accounting untouched and A/B it."
+    "notes_2026_09_27": "Found during Q-105. The Reason column renders trade.reason, the ENTRY signal's reason, while its tooltip said 'why the trade exited' (tooltip corrected in Q-105). There is no exit reason to show: core.ts closes positions through three paths and records none of them. Every closed trade has action 'BUY' (224/224 regime, 52/52 enhanced over the committed fixtures), so the SELL option of the Action filter always renders an empty table. Adding a field is a wire change on /api/backtest; keep the time-exit accounting untouched and A/B it.",
+    "resolution_2026_10_17": "SHIPPED (PR #233): each closed trade records exitReason, exitDate (the fill bar) and netPnl; the trade log has an Exit column, a 'Signal date' header, net-of-cost win/loss counts, and no always-empty SELL filter."
   },
   {
     "id": "Q-134",
     "title": "Strategy copy asserts the production signal path; nothing ties it to the path that actually ran",
     "domain": "Quant/Research",
     "priority": "P2",
-    "status": "pending",
+    "status": "done",
     "files": [
       "lib/backtest/strategyDescription.ts",
       "app/api/backtest/route.ts",
@@ -3014,7 +3015,9 @@
     "verify_commands": [
       "npm run test"
     ],
-    "notes_2026_09_27": "Named residual of Q-105. The Rules grid, info bar and landing CTA now describe the regime-only path because production runs it by default (observed: every live trade reason reads 'regime-only path'). If QUANTAN_USE_ENHANCED_SIGNAL=1 were set in Vercel, the BUY, HOLD and sizing rows would become false with every test green — the copy would be asserting a default, not a fact. Same shape as a hand-written count in prose: correct today, silently wrong after one environment change."
+    "notes_2026_09_27": "Named residual of Q-105. The Rules grid, info bar and landing CTA now describe the regime-only path because production runs it by default (observed: every live trade reason reads 'regime-only path'). If QUANTAN_USE_ENHANCED_SIGNAL=1 were set in Vercel, the BUY, HOLD and sizing rows would become false with every test green — the copy would be asserting a default, not a fact. Same shape as a hand-written count in prose: correct today, silently wrong after one environment change.",
+    "resolution_2026_10_17": "SHIPPED (PR #233): /api/backtest returns signalPath; the rules render only when it is 'regime-only' (unknown is not the default); the static landing CTA no longer states any rule.",
+    "notes_2026_10_17": "Dev/test run a DIFFERENT signal path from production: useEnhancedCombinedSignal() defaults ON outside NODE_ENV=production, so a local /backtest shows 54 enhanced-path trades where production shows 230 (measured 2026-10-16). Not changed here; a local reproduction of production needs QUANTAN_USE_ENHANCED_SIGNAL=0."
   },
   {
     "id": "Q-135",
@@ -3041,7 +3044,7 @@
     "title": "BTC can never open a position at the backtest's capital, yet counts in the 56-instrument aggregate",
     "domain": "Quant/Research",
     "priority": "P2",
-    "status": "pending",
+    "status": "done",
     "files": [
       "lib/backtest/core.ts",
       "app/api/backtest/route.ts",
@@ -3056,14 +3059,15 @@
       "npm run test",
       "npm run benchmark"
     ],
-    "notes_2026_09_27": "Found by the Q-105 red-team (R1). core.ts:518-521 floors shares = allocation / nextOpen and skips the bar when that is 0. At 15% of $100,000 BTC (lowest next open on a BUY bar $25,160) rounds to zero on all 167 regime BUY bars, so BTC shows 0 trades, 0% return and -59.5% excess, and aggregatePortfolio includes it (alpha -1.1245 with BTC vs -1.1190 without, per red-team). Q-105 disclosed the rule in copy; it did not change the engine, because every option here moves a published figure."
+    "notes_2026_09_27": "Found by the Q-105 red-team (R1). core.ts:518-521 floors shares = allocation / nextOpen and skips the bar when that is 0. At 15% of $100,000 BTC (lowest next open on a BUY bar $25,160) rounds to zero on all 167 regime BUY bars, so BTC shows 0 trades, 0% return and -59.5% excess, and aggregatePortfolio includes it (alpha -1.1245 with BTC vs -1.1190 without, per red-team). Q-105 disclosed the rule in copy; it did not change the engine, because every option here moves a published figure.",
+    "resolution_2026_10_17": "SHIPPED (PR #233): an instrument whose every BUY is unaffordable (BTC: 167 of 167) is excluded from every aggregate — server and the Analysis/Overview tabs — named, and labelled per row; it had also switched the equity book to a 365-day year. Annualized return 1.20% -> 0.84%."
   },
   {
     "id": "Q-137",
     "title": "The backtest drawdown breaker has never fired, and its peak never resets",
     "domain": "Quant/Research",
     "priority": "P3",
-    "status": "pending",
+    "status": "done",
     "files": [
       "lib/backtest/core.ts"
     ],
@@ -3076,14 +3080,15 @@
       "npm run test",
       "npm run benchmark"
     ],
-    "notes_2026_09_27": "Found by the Q-105 red-team (R7). 0 of 224 exits over the 56 fixtures were breaker exits (210 time exits, 14 end-of-data); the worst instrument drawdown was 10.26%. At 15% sizing a single position opened at the equity peak can lose at most 15%, so the 25% breaker needs a prior drawdown or a large in-trade gain first. state.peakEquity is never reset, so once tripped the breaker would close every subsequent position one bar after entry — latent, untested behaviour behind a rule the page describes."
+    "notes_2026_09_27": "Found by the Q-105 red-team (R7). 0 of 224 exits over the 56 fixtures were breaker exits (210 time exits, 14 end-of-data); the worst instrument drawdown was 10.26%. At 15% sizing a single position opened at the equity peak can lose at most 15%, so the 25% breaker needs a prior drawdown or a large in-trade gain first. state.peakEquity is never reset, so once tripped the breaker would close every subsequent position one bar after entry — latent, untested behaviour behind a rule the page describes.",
+    "resolution_2026_10_17": "SHIPPED (PR #233): the breaker re-arms (peak resets to post-exit equity; no cooldown) — decision recorded in reviews/q133-backtest-engine-honesty-2026-10-16.md; pinned by a scripted-signal fixture incl. the exit fill date."
   },
   {
     "id": "Q-139",
     "title": "\"5Y walk-forward\" describes a single pass over ~4.2 traded years of a strategy with no fitted parameters",
     "domain": "Quant/Research",
     "priority": "P3",
-    "status": "pending",
+    "status": "done",
     "files": [
       "app/page.tsx",
       "app/backtest/page.tsx",
@@ -3097,7 +3102,8 @@
     "verify_commands": [
       "npm run test"
     ],
-    "notes_2026_09_28": "Out-of-scope finding from the Q-105 round-2 red-team. The landing CTA ('5Y walk-forward backtest across 56 instruments (11 GICS sectors + BTC)') and the /backtest subtitle ('5Y Walk-Forward · 56 Instruments') describe backtestInstrument, which is one no-look-ahead pass with no parameter fitting; the traded window after the 200-bar warm-up is ~4.2 years, and BTC cannot trade at all (Q-136). 'Walk-forward' conventionally means re-fitting on rolling windows; nothing is fitted here."
+    "notes_2026_09_28": "Out-of-scope finding from the Q-105 round-2 red-team. The landing CTA ('5Y walk-forward backtest across 56 instruments (11 GICS sectors + BTC)') and the /backtest subtitle ('5Y Walk-Forward · 56 Instruments') describe backtestInstrument, which is one no-look-ahead pass with no parameter fitting; the traded window after the 200-bar warm-up is ~4.2 years, and BTC cannot trade at all (Q-136). 'Walk-forward' conventionally means re-fitting on rolling windows; nothing is fitted here.",
+    "resolution_2026_10_17": "SHIPPED (PR #233): 'walk-forward' and '5Y' removed from every surface (nav, launcher.html, glossary, backtest page, landing); counts and the traded window derived; the period panel renamed and its in-sample/quarters/B&H-annualised mislabels fixed; the copy guard now walks every UI file."
   },
   {
     "id": "Q-138",
@@ -3193,5 +3199,48 @@
       "npm run test"
     ],
     "notes_2026_10_01": "Seen during Q-140 verification on PRODUCTION at /briefs/sector/technology (Minified React error #418 — server-rendered text did not match the client). Pre-existing: production did not yet contain Q-140. Likely cause: relative ages / locale time strings rendered on the server in UTC and again on the client in local time."
+  },
+  {
+    "id": "Q-143",
+    "title": "Backtest Sharpe/Sortino are artefacts of idle cash earning 0% against a 4.5% risk-free rate",
+    "domain": "Quant/Backtest",
+    "priority": "P2",
+    "status": "pending",
+    "files": [
+      "lib/backtest/core.ts",
+      "lib/backtest/engine.ts",
+      "components/backtest/PeriodSplitPanel.tsx"
+    ],
+    "acceptance_criteria": [
+      "Idle cash is credited at the risk-free rate (with a migration note), or Sharpe/Sortino are not displayed for a mostly-flat strategy",
+      "The choice is reviewed by quant-validator and every changed published figure is listed before/after"
+    ],
+    "verify_commands": [
+      "npm run test",
+      "npm run benchmark"
+    ],
+    "notes_2026_10_17": "Found in Q-133/Q-136 (PR #233). The portfolio Sharpe reads -7.44: the strategy is flat most of the time, cash earns nothing in the simulation, and the daily risk-free rate is subtracted every bar, so the ratio says little about the trades. The period panel now says so in copy; the number itself is unchanged."
+  },
+  {
+    "id": "Q-144",
+    "title": "refresh-data.yml has failed every week since 2026-09-06: BTC is quarantined for a 0.002% restatement of one August bar, so BTC history is frozen",
+    "domain": "Data/Integrity",
+    "priority": "P1",
+    "status": "pending",
+    "files": [
+      "scripts/fetchBacktestData.mjs",
+      "scripts/lib/dataVintage.mjs",
+      ".github/workflows/refresh-data.yml"
+    ],
+    "acceptance_criteria": [
+      "Decide (data-integrity) how a restated historical bar is handled: refuse the instrument (today), keep the committed value and append only new bars, or accept within a stated tolerance — I4 (point-in-time) governs",
+      "Whatever is chosen, one restated bar must not freeze an instrument's history indefinitely while the run stays red every week",
+      "The weekly run goes green when nothing is wrong, so a red run means something again"
+    ],
+    "verify_commands": [
+      "npm run test",
+      "npm run verify:data"
+    ],
+    "notes_2026_10_17": "Measured from run logs: every scheduled refresh since 2026-09-06 ends 'QUARANTINED: BTC — VENDOR RESTATEMENT: 1 existing bar(s) changed value (1786838400 open 63024.636… -> 63023.421…)'. The other 55 instruments refresh and commit; BTC's fixture has not been updated for ~6 weeks. Alert issue #177 collected 44 comments for it (Q-113 dedupes the noise, not the cause)."
   }
 ]
