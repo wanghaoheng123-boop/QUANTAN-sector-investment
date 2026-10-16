@@ -48,4 +48,19 @@ describe('NewsFeed — degraded and malformed answers', () => {
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('3 unreadable items'))
     expect(screen.queryByText(/No recent news found/)).not.toBeInTheDocument()
   })
+
+  it('Q-090: every item says it came via Yahoo, and a press release says so', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(json({
+      news: [
+        { title: 'Wire story', publisher: 'Reuters', link: 'https://finance.yahoo.com/news/a.html' },
+        { title: 'Issuer announcement', publisher: 'GlobeNewswire', link: 'https://finance.yahoo.com/news/b.html' },
+      ],
+      sector: 'technology', fetchedAt: new Date().toISOString(),
+    }))))
+    render(<NewsFeed sector="technology" color="#3b82f6" />)
+    await waitFor(() => expect(screen.getByText('Wire story')).toBeInTheDocument())
+    expect(screen.getAllByText('via Yahoo Finance')).toHaveLength(2)
+    expect(screen.getByText('Press release')).toBeInTheDocument()
+  })
 })
+

@@ -6,6 +6,7 @@ import { SECTORS } from '@/lib/sectors'
 import type { SectorBrief } from '@/lib/briefs/sectorBrief'
 import { formatCurrency, formatEtDateTime, formatSignedNumber } from '@/lib/format'
 import { safeHref } from '@/lib/security/urlValidation'
+import { NewsSourceBadge } from '@/components/NewsSourceBadge'
 
 // Q-140: was a hand-copied duplicate of the builder's type, which is how a
 // price that can be null went unnoticed here. One definition now.
@@ -234,7 +235,7 @@ export default function LiveBriefClient({ slug, initialBrief }: { slug: string; 
                           <div className="text-xs text-slate-400 mt-1 line-clamp-2">{item.snippet}</div>
                         )}
                         <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                          <span className="text-[10px] text-slate-400">{item.publisher}</span>
+                          <NewsSourceBadge publisher={item.publisher} link={item.link} />
                           {item.publishedAt && (
                             <span className="text-[10px] text-slate-400">
                               {formatEtDateTime(item.publishedAt)}
