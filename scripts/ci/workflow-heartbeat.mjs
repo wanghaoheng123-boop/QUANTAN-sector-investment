@@ -150,15 +150,32 @@ for (let page = 1; page <= 10; page++) {
 const findIssue = (title) =>
   openIssues.find((i) => i.title === title && (i.body ?? '').includes(ALERT_MARKER)) ?? null
 
+/** Q-113: the open alert's body and every comment, so a failure is reported once. */
+const threadOf = async (issue) => {
+  if (!issue) return []
+  const bodies = [issue.body ?? '']
+  for (let page = 1; page <= 10; page++) {
+    const batch = await gh(`/repos/${repo}/issues/${issue.number}/comments?per_page=100&page=${page}`)
+    bodies.push(...batch.map((c) => c.body ?? ''))
+    if (batch.length < 100) break
+  }
+  return bodies
+}
+
 const runUrl = `${process.env.GITHUB_SERVER_URL ?? 'https://github.com'}/${repo}/actions/runs/${process.env.GITHUB_RUN_ID ?? ''}`
 
 for (const r of results) {
   const conclusion = toAlertConclusion(r.state, r.conclusion)
   const title = alertTitle(r.file)
+  const openIssue = findIssue(title)
   const decision = decideAlert({
     workflow: r.file,
     conclusion,
-    openIssue: findIssue(title),
+    openIssue,
+    // Q-113: key the alert to the failing run (or the missed fire), so the same
+    // weekly failure is not re-reported every day by this daily probe.
+    dedupeKey: r.runUrl ?? (r.due ? `${r.state}:${r.file}:${r.due}` : undefined),
+    thread: conclusion === 'success' ? [] : await threadOf(openIssue),
     runUrl,
     detail: `[heartbeat] ${r.detail}`,
     // This probe runs on a schedule, so it is permitted to close a recovered
@@ -167,7 +184,10 @@ for (const r of results) {
     eventName: 'schedule',
   })
 
-  if (decision.action === 'none') continue
+  if (decision.action === 'none') {
+    if (decision.reason) console.log(`no comment for ${r.file}: ${decision.reason}`)
+    continue
+  }
   if (decision.action === 'create') {
     const created = await gh(`/repos/${repo}/issues`, {
       method: 'POST',

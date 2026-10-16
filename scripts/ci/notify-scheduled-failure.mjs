@@ -76,8 +76,22 @@ const findOpen = async () => {
 }
 
 const openIssue = await findOpen()
-const d = decideAlert({ workflow, conclusion, openIssue, runUrl, detail, eventName })
-console.log(`alert decision for ${workflow} (${conclusion}): ${d.action}`)
+
+/** Q-113: the open alert's body and comments, so the same failed run is reported once. */
+const thread = []
+if (openIssue && conclusion !== 'success') {
+  thread.push(openIssue.body ?? '')
+  for (let page = 1; page <= MAX_PAGES; page++) {
+    const batch = await gh(`/repos/${repo}/issues/${openIssue.number}/comments?per_page=100&page=${page}`)
+    if (!Array.isArray(batch)) break
+    thread.push(...batch.map((c) => c.body ?? ''))
+    if (batch.length < 100) break
+  }
+}
+// This runner reports ITS OWN failing run, so that run's URL is the key — and the
+// daily heartbeat probe keys on the same URL, so the two cannot double-report.
+const d = decideAlert({ workflow, conclusion, openIssue, runUrl, detail, eventName, dedupeKey: runUrl || undefined, thread })
+console.log(`alert decision for ${workflow} (${conclusion}): ${d.action}${d.reason ? ` (${d.reason})` : ''}`)
 
 if (d.action === 'create') {
   const made = await gh(`/repos/${repo}/issues`, {

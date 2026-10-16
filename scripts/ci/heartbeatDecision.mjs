@@ -186,6 +186,8 @@ export function assessWorkflow({ file, crons, runs, now, registeredAt = null, gr
     state: 'unhealthy',
     due: dueIso,
     conclusion: latest.conclusion,
+    // Q-113: the failing run itself, so an alert can be keyed to it.
+    runUrl: latest.url ?? null,
     detail:
       `the run due ${dueIso} concluded \`${latest.conclusion || '(empty)'}\`` +
       (latest.conclusion === 'startup_failure'

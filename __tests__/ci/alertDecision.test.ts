@@ -92,3 +92,46 @@ describe('scheduled failure alert — opens, dedupes, and clears itself', () => 
     expect(decideAlert({ ...base, conclusion: 'success', openIssue: { number: 7 }, eventName: 'schedule' }).action).toBe('close')
   })
 })
+
+// Q-113 — a daily probe re-assessing a weekly workflow commented on the same
+// failed run every day: issue #177 drew 44 comments in 41 days.
+describe('decideAlert — one comment per failure, not per look (Q-113)', () => {
+  const failing = 'https://github.com/o/r/actions/runs/111'
+  const base = { workflow: 'refresh-data.yml', runUrl: 'https://github.com/o/r/actions/runs/999', eventName: 'schedule' }
+
+  it('does not re-report a failure already on the thread', () => {
+    const d = decideAlert({ ...base, conclusion: 'failure', openIssue: { number: 7 }, dedupeKey: failing, thread: [`earlier comment … ${failing}`] })
+    expect(d).toEqual({ action: 'none', reason: 'already reported' })
+  })
+
+  it('reports a NEW failed run on the same thread', () => {
+    const d = decideAlert({ ...base, conclusion: 'failure', openIssue: { number: 7 }, dedupeKey: 'https://github.com/o/r/actions/runs/222', thread: [`earlier comment … ${failing}`] })
+    expect(d.action).toBe('comment')
+    expect(d.body).toContain('runs/222')
+  })
+
+  it('embeds the key so the next look can find it, even when the body would not', () => {
+    const d = decideAlert({ ...base, conclusion: 'failure', openIssue: null, dedupeKey: 'missing:nightly-backtest.yml:2026-10-17T03:00:00Z' })
+    expect(d.action).toBe('create')
+    expect(d.body).toContain('missing:nightly-backtest.yml:2026-10-17T03:00:00Z')
+  })
+
+  it('still closes promptly on recovery, whatever the thread says', () => {
+    const d = decideAlert({ ...base, conclusion: 'success', openIssue: { number: 7 }, dedupeKey: failing, thread: [failing] })
+    expect(d.action).toBe('close')
+  })
+
+  it('replayed against #177: six distinct weekly failures make six comments, not one a day', () => {
+    const weekly = ['34066964667', '34790929873', '35545800543', '36361648320', '37247468640', '38189996112']
+      .map((id) => `https://github.com/o/r/actions/runs/${id}`)
+    const thread: string[] = ['issue body']
+    let comments = 0
+    // 41 daily looks; each day the latest weekly failure is the one assessed.
+    for (let day = 0; day < 41; day++) {
+      const key = weekly[Math.min(weekly.length - 1, Math.floor(day / 7))]
+      const d = decideAlert({ ...base, conclusion: 'failure', openIssue: { number: 177 }, dedupeKey: key, thread })
+      if (d.action === 'comment') { comments++; thread.push(d.body as string) }
+    }
+    expect(comments).toBe(weekly.length)
+  })
+})

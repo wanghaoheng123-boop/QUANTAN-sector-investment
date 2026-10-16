@@ -18,6 +18,15 @@
  *    later failures comment on the first. Alert fatigue is how the next outage
  *    goes unread.
  *
+ * 2b. **One comment per failure, not per look (Q-113).** The daily heartbeat
+ *    probe re-assesses every workflow every day, so a weekly workflow that
+ *    stayed broken drew a comment a DAY about the same failed run — issue #177
+ *    collected 44 comments in 41 days for a handful of distinct weekly
+ *    failures. A comment now carries a dedupe key (the failing run's URL, or the
+ *    missed fire's due time), and a key already present in the thread is not
+ *    reported again. No throttle period is invented: the "period" is the
+ *    workflow's own cadence, because a new failure is a new run.
+ *
  * 3. **Auto-closing on recovery.** An alert that never clears trains people to
  *    ignore it, and a stale open issue is indistinguishable from a live one. The
  *    close is the signal that the pipeline came back.
@@ -59,9 +68,11 @@ const INCONCLUSIVE = new Set(['cancelled', 'skipped'])
  * @param {string} input.runUrl
  * @param {string} [input.detail]    one line of context, e.g. the quarantine reason
  * @param {string} [input.eventName] the triggering event; only a scheduled run may CLOSE
- * @returns {{action:'create'|'comment'|'close'|'none', title?:string, body?:string, issue?:number}}
+ * @param {string} [input.dedupeKey] identifies THIS failure (e.g. the failing run's URL)
+ * @param {string[]} [input.thread] the open issue's body and comment bodies
+ * @returns {{action:'create'|'comment'|'close'|'none', title?:string, body?:string, issue?:number, reason?:string}}
  */
-export function decideAlert({ workflow, conclusion, openIssue, runUrl, detail, eventName }) {
+export function decideAlert({ workflow, conclusion, openIssue, runUrl, detail, eventName, dedupeKey, thread }) {
   if (conclusion === HEALTHY) {
     // Only a SCHEDULED run may close. A manual `workflow_dispatch` succeeds the
     // moment someone re-runs it by hand, which says nothing about whether the
@@ -98,6 +109,16 @@ export function decideAlert({ workflow, conclusion, openIssue, runUrl, detail, e
     '**It will close itself when the workflow next succeeds on schedule.** Repeated failures ' +
     'comment here rather than opening new issues, so if this thread is long, the problem is old.'
 
-  if (openIssue) return { action: 'comment', issue: openIssue.number, body }
-  return { action: 'create', title: alertTitle(workflow), body }
+  if (openIssue) {
+    // Q-113: this failure is already on the thread — say nothing new.
+    if (dedupeKey && (thread ?? []).some((t) => t.includes(dedupeKey))) {
+      return { action: 'none', reason: 'already reported' }
+    }
+    return { action: 'comment', issue: openIssue.number, body: dedupeKey && !body.includes(dedupeKey) ? `${body}\n\n<!-- alert-key: ${dedupeKey} -->` : body }
+  }
+  return {
+    action: 'create',
+    title: alertTitle(workflow),
+    body: dedupeKey && !body.includes(dedupeKey) ? `${body}\n\n<!-- alert-key: ${dedupeKey} -->` : body,
+  }
 }
