@@ -8,9 +8,29 @@ import { withRetry } from '@/lib/api/reliability'
 
 const yahooFinance = new YahooFinance()
 
+/** One row of yahoo-finance2's chart() quotes, as this route reads it (Q-093: was `any`). */
+interface YahooChartQuote {
+  date: Date | string | number
+  open?: number | null
+  high?: number | null
+  low?: number | null
+  close?: number | null
+  volume?: number | null
+}
+
+/** A candle as this route serves it. */
+interface ServedCandle {
+  time: number | string
+  open: number
+  high: number
+  low: number
+  close: number
+  volume: number
+}
+
 const _chartCache = new Map<
   string,
-  { candles: any[]; expiresAt: number; range: string; interval: string }
+  { candles: ServedCandle[]; expiresAt: number; range: string; interval: string }
 >()
 const CHART_CACHE_TTL_MS = 30_000
 const CHART_CACHE_MAX_SIZE = 500
@@ -202,23 +222,24 @@ export async function GET(
     const candles = sortChartCandles(
       result.quotes
         .filter(
-          (c: any) =>
+          (c: YahooChartQuote) =>
             Number.isFinite(c?.open) &&
             Number.isFinite(c?.high) &&
             Number.isFinite(c?.low) &&
             Number.isFinite(c?.close),
         )
-        .map((c: any) => {
+        .map((c: YahooChartQuote): ServedCandle => {
           const d = c.date instanceof Date ? c.date : new Date(c.date)
           const timeVal = isIntraday
             ? Math.floor(d.getTime() / 1000)
             : d.toISOString().split('T')[0]
           return {
             time: timeVal,
-            open: c.open,
-            high: c.high,
-            low: c.low,
-            close: c.close,
+            // Finite by the filter above.
+            open: c.open as number,
+            high: c.high as number,
+            low: c.low as number,
+            close: c.close as number,
             volume: c.volume ?? 0,
           }
         }),

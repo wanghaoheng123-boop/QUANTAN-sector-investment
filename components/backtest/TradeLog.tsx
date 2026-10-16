@@ -30,10 +30,9 @@ export const HEADER_TOOLTIPS: Record<string, { metricKey?: string; content?: str
 
 interface Props {
   trades: Trade[]
-  sectorColors: Record<string, string>
 }
 
-export default function TradeLog({ trades, sectorColors }: Props) {
+export default function TradeLog({ trades }: Props) {
   const [filterSector, setFilterSector] = useState<string>('All')
   const [filterAction, setFilterAction] = useState<string>('All')
   const [filterTicker, setFilterTicker] = useState<string>('')

@@ -1843,6 +1843,57 @@
         "lib/news/newsPayload.ts"
       ],
       "routes_to": []
+    },
+    {
+      "kind": "npm-package",
+      "id": "eslint",
+      "lifecycle": "active",
+      "classification": "build-tooling",
+      "vendor": "n/a",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Not a data vendor: the linter. devDependency only; it runs in CI and locally and ships nothing to the browser or the server bundle. Its package.json declares MIT (read from the installed package on 2026-10-17). Added by Q-093, which installed the lint that CLAUDE.md's definition of done had named since Phase 15 with nothing to run it.",
+      "recorded_by": "Q-093 (agent, lead engineer) — factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-10-17",
+      "evidence": [
+        "package.json"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "npm-package",
+      "id": "eslint-config-next",
+      "lifecycle": "active",
+      "classification": "build-tooling",
+      "vendor": "n/a",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Not a data vendor: Next.js's own lint rule set (core-web-vitals + typescript). devDependency only; it runs in CI and locally and ships nothing to the browser or the server bundle. Its package.json declares MIT (read from the installed package on 2026-10-17). Added by Q-093, which installed the lint that CLAUDE.md's definition of done had named since Phase 15 with nothing to run it.",
+      "recorded_by": "Q-093 (agent, lead engineer) — factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-10-17",
+      "evidence": [
+        "package.json"
+      ],
+      "routes_to": []
+    },
+    {
+      "kind": "npm-package",
+      "id": "@eslint/eslintrc",
+      "lifecycle": "active",
+      "classification": "build-tooling",
+      "vendor": "n/a",
+      "end_user_exposed": false,
+      "authenticated": false,
+      "licence_status": "NOT_APPLICABLE",
+      "finding": "Not a data vendor: the compatibility layer that lets a flat ESLint config load the Next.js rule set. devDependency only; it runs in CI and locally and ships nothing to the browser or the server bundle. Its package.json declares MIT (read from the installed package on 2026-10-17). Added by Q-093, which installed the lint that CLAUDE.md's definition of done had named since Phase 15 with nothing to run it.",
+      "recorded_by": "Q-093 (agent, lead engineer) — factual position recorded from the repository; no legal conclusion drawn",
+      "recorded_on": "2026-10-17",
+      "evidence": [
+        "package.json"
+      ],
+      "routes_to": []
     }
   ],
   "field_definitions": {

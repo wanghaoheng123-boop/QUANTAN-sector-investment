@@ -319,7 +319,6 @@ export function useLiveQuotes(tickers: ReadonlyArray<string>): UseLiveQuotesResu
     // activeKey is a stable string fingerprint; supported is constant per
     // browser. We don't want to thrash on every render — only on actual
     // ticker-list changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeKey, supported])
 
   // ANY-semantics, derived — never latched. An empty map (nothing has reported

@@ -30,7 +30,6 @@ export default function InstrumentTable({ results, sectorColors }: Props) {
   const [sortKey, setSortKey] = useState<SortKey>('annualizedReturn')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [filterSector, setFilterSector] = useState<string>('All')
-  const [filterAction, setFilterAction] = useState<string>('All')
 
   const sectors = useMemo(() => {
     const s = new Set(results.map(r => r.sector))

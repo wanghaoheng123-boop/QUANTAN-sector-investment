@@ -34,9 +34,9 @@ vi.mock('@/lib/backtest/engine', async (importOriginal) => {
   const mod = await importOriginal<typeof import('@/lib/backtest/engine')>()
   return {
     ...mod,
-    aggregatePortfolio: (results: Parameters<typeof mod.aggregatePortfolio>[0], cap: number) => {
+    aggregatePortfolio: (results: Parameters<typeof mod.aggregatePortfolio>[0]) => {
       seen.aggregatorInput = results as unknown as Record<string, unknown>[]
-      return mod.aggregatePortfolio(results, cap)
+      return mod.aggregatePortfolio(results)
     },
   }
 })

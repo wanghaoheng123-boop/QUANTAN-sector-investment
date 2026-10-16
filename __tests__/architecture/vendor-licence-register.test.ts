@@ -368,7 +368,6 @@ const NAMED_MARKET_DATA_VENDORS = [
 
 describe('I8 — the register has not been quietly softened', () => {
   const entries = register.entries
-  const exposed = entries.filter((e) => e.end_user_exposed && e.lifecycle === 'active')
 
   it('accounts for every named market-data vendor — exposed, or withdrawn on the record', () => {
     // NOT a count. An earlier version asserted `exposed.length >= 6`, which goes

@@ -4,17 +4,15 @@
  */
 
 import type { OhlcBar, OhlcvBar } from '@/lib/quant/indicators'
-import { useEnhancedCombinedSignal } from '@/lib/featureFlags'
+import { enhancedSignalEnabled } from '@/lib/featureFlags'
 import {
-  smaLatest as sma,
-  emaFull,
   rsiArray as rsi,
   macdArray as macdFn,
   atrArray as atr,
   bollingerArray as bollinger,
 } from '@/lib/quant/indicators'
 import { multiTimeframeSignal } from '@/lib/quant/multiTimeframe'
-import { detectRegime, type RegimeState as VolRegimeState } from '@/lib/quant/regimeDetection'
+import { detectRegime } from '@/lib/quant/regimeDetection'
 import { volumeProfile, priceRelativeToPOC, type PriceZone } from '@/lib/quant/volumeProfile'
 import { halfKelly } from '@/lib/quant/kelly'
 
@@ -329,7 +327,7 @@ export function resolveBacktestSignal(
   config: Partial<BacktestConfig> = {},
   sectorGates?: SectorGateConfig,
 ): EnhancedCombinedSignal {
-  if (useEnhancedCombinedSignal()) {
+  if (enhancedSignalEnabled()) {
     return enhancedCombinedSignal(ticker, date, price, closes, bars, ohlcvBars, config, sectorGates)
   }
   const rsi14 = rsi(closes).at(-1) ?? NaN

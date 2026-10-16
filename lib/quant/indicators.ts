@@ -249,7 +249,7 @@ export function macdLatest(closes: number[]): {
   histogram: number | null
 } {
   if (closes.length < 35) return { line: null, signal: null, histogram: null }
-  const { line, signal, histogram } = macdArray(closes)
+  const { line, signal } = macdArray(closes)
   const i = closes.length - 1
   const l = Number.isFinite(line[i]) ? line[i] : null
   const s = Number.isFinite(signal[i]) ? signal[i] : null

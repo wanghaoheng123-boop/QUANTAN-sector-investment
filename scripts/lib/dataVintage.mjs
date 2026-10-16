@@ -113,7 +113,7 @@ export function diffSeries(existing, incoming) {
   const prevKeys = [...prev.keys()].sort()
   const ageOf = new Map(prevKeys.map((k, i) => [k, prevKeys.length - 1 - i]))
 
-  for (const [k, c] of next) if (!prev.has(k)) appended.push(k)
+  for (const k of next.keys()) if (!prev.has(k)) appended.push(k)
   for (const [k, was] of prev) {
     const now = next.get(k)
     if (!now) {

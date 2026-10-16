@@ -5,7 +5,7 @@ import dynamic from 'next/dynamic'
 import CryptoChartBoundary from '@/components/crypto/CryptoChartBoundary'
 import IndicatorPanel from '@/components/IndicatorPanel'
 import type { BtcCandle } from '@/lib/crypto'
-import type { ChartEmaKey, ChartVisKey } from '@/lib/chartEma'
+import type { ChartVisKey } from '@/lib/chartEma'
 
 const KLineChart = dynamic(() => import('@/components/KLineChart'), {
   ssr: false,

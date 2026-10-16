@@ -132,19 +132,16 @@ export default function DarkPoolPanel({
               label="Off-Exchange Vol"
               value={fmtPct(offPct, 2)}
               sub={offPct != null ? `${(100 - offPct).toFixed(1)}% on-exchange` : 'Finra BATS'}
-              color="#f59e0b"
             />
             <MetricCard
               label="Short Interest"
               value={fmtPct(shortPct, 2)}
               sub={metrics.sharesShorted != null ? `${fmtShares(metrics.sharesShorted)} shares` : 'of float'}
-              color={shortColor}
             />
             <MetricCard
               label="Days to Cover"
               value={metrics.daysToCover != null ? metrics.daysToCover.toFixed(1) : '—'}
               sub={metrics.avgDailyVolume != null ? `Vol: ${fmtShares(metrics.avgDailyVolume)}/day` : 'avg daily vol'}
-              color="#3b82f6"
             />
             <MetricCard
               label="Float / Shares Out"
@@ -156,7 +153,6 @@ export default function DarkPoolPanel({
                     : '—'
               }
               sub="Yahoo Finance"
-              color="#8b5cf6"
             />
           </div>
 
@@ -374,12 +370,10 @@ function MetricCard({
   label,
   value,
   sub,
-  color,
 }: {
   label: string
   value: string
   sub: string
-  color: string
 }) {
   return (
     <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-3">

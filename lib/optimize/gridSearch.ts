@@ -178,10 +178,9 @@ export function simpleBacktestSlice(
     return avg
   }
 
-  let wins = 0, losses = 0, trades = 0
+  let wins = 0, trades = 0
   const returns: number[] = []
   const dailyRets: number[] = []
-  let equity = 1.0
 
   for (let i = 220; i < closes.length - 21; i++) {
     const lb = closes.slice(0, i + 1)
@@ -215,8 +214,7 @@ export function simpleBacktestSlice(
       }
       const ret = (exitPrice - entryPrice) / entryPrice
       returns.push(ret)
-      equity *= (1 + ret * 0.15)
-      if (ret > 0) wins++; else losses++
+      if (ret > 0) wins++
       trades++
     }
 

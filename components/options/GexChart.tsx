@@ -64,7 +64,6 @@ export default function GexChart({ gex, spot }: Props) {
   const allStrikes = strikeGex.map((s) => s.strike)
   const minStrike = Math.min(...allStrikes)
   const maxStrike = Math.max(...allStrikes)
-  const strikeRange = maxStrike - minStrike || 1
 
   return (
     <div className="space-y-2">
@@ -115,7 +114,6 @@ export default function GexChart({ gex, spot }: Props) {
             const x = isPositive ? BAR_MAX_WIDTH : BAR_MAX_WIDTH - barWidth
 
             // Spot marker line
-            const spotNorm = (item.strike - minStrike) / strikeRange
             const isNearSpot = Math.abs(item.strike - spot) < (maxStrike - minStrike) / strikeGex.length / 2
 
             return (

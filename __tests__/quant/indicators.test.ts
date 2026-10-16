@@ -417,7 +417,7 @@ describe('OBV', () => {
 
 describe('Stochastic RSI', () => {
   it('returns NaN arrays for insufficient data', () => {
-    const { k, d } = stochRsiArray(CLOSES.slice(0, 10))
+    const { k } = stochRsiArray(CLOSES.slice(0, 10))
     expect(k.every(v => isNaN(v))).toBe(true)
   })
 

@@ -588,7 +588,7 @@ export default function MADeviationPage() {
               <div>
                 <div className="text-yellow-400 font-semibold mb-1">⚠️ Watch Zone Discipline</div>
                 <p className="text-slate-400">
-                  When the signal shows "Watch / Caution", scale in with a maximum of 30–40% of your target position.
+                  When the signal shows &ldquo;Watch / Caution&rdquo;, scale in with a maximum of 30–40% of your target position.
                   Use a staged entry (e.g., 3 tranches over 2–4 weeks). Only add if the 200MA slope shows signs of flattening.
                 </p>
               </div>

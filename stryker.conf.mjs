@@ -1,5 +1,5 @@
 /** @type {import('@stryker-mutator/api/core').PartialStrykerOptions} */
-export default {
+const config = {
   packageManager: 'npm',
   testRunner: 'vitest',
   vitest: { configFile: 'vitest.config.ts' },
@@ -11,3 +11,5 @@ export default {
   thresholds: { high: 80, low: 70, break: 70 },
   reporters: ['html', 'clear-text', 'progress'],
 }
+
+export default config

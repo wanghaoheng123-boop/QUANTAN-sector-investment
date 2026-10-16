@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { readFileSync } from 'fs'
+import { existsSync, readdirSync, readFileSync } from 'fs'
 import { join } from 'path'
 import {
   canonicalSecurityId,
@@ -63,7 +63,6 @@ describe('file-name encoding round-trips — the old pair did not', () => {
   it('round-trips every fixture actually on disk', () => {
     // The property that matters is not that the rule is elegant but that it
     // holds for the real corpus.
-    const { readdirSync, existsSync } = require('fs') as typeof import('fs')
     const dir = join(ROOT, 'scripts/backtestData')
     if (!existsSync(dir)) return
     const names = readdirSync(dir).filter((f) => f.endsWith('.json')).map((f) => f.replace(/\.json$/, ''))
@@ -124,7 +123,6 @@ describe('assertNoIdCollisions — detects a REAL conflict, not a convention dif
     // declares `BRK.B` while the file on disk is `BRK-B.json`, and a divergence
     // between those two is the exact defect class Q-080 existed to close. The
     // old test covered the declaration and never looked at the directory.
-    const { readdirSync } = require('fs') as typeof import('fs')
     const dir = join(ROOT, 'scripts/backtestData')
     const fromDisk = readdirSync(dir)
       .filter((f: string) => f.endsWith('.json'))

@@ -348,7 +348,6 @@ export default function BacktestPage() {
           <OverviewTab
             results={results}
             sectorSummary={sectorSummary}
-            sectorColors={sectorColors}
             initialCapital={INITIAL_CAPITAL}
             signalPath={data.signalPath}
           />
@@ -359,7 +358,7 @@ export default function BacktestPage() {
         )}
 
         {activeTab === 'trades' && (
-          <TradeLog trades={results.flatMap(r => r.closedTrades)} sectorColors={sectorColors} />
+          <TradeLog trades={results.flatMap(r => r.closedTrades)} />
         )}
 
         {activeTab === 'signals' && (

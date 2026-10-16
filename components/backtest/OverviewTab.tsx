@@ -27,18 +27,17 @@ export { TX_COST_RULE }
 interface OverviewTabProps {
   results: BacktestResult[]
   sectorSummary: Record<string, { totalReturn: number; annReturn: number; tickers: string[] }>
-  sectorColors: Record<string, string>
   initialCapital: number
   /** Q-134: the path that produced `results`; rules render only when they describe it. */
   signalPath?: SignalPath
 }
 
-export function OverviewTab({ results, sectorSummary, sectorColors, initialCapital, signalPath }: OverviewTabProps) {
+export function OverviewTab({ results, sectorSummary, initialCapital, signalPath }: OverviewTabProps) {
   const rules = rulesForPath(signalPath)
   return (
     <div className="space-y-6">
       {/* Sector heatmap */}
-      <SectorHeatmap sectorSummary={sectorSummary} sectorColors={sectorColors} />
+      <SectorHeatmap sectorSummary={sectorSummary} />
 
       {/* Equity curves — top performers */}
       <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-6">

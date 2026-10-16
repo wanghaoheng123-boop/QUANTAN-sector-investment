@@ -11,6 +11,8 @@
  * contain — including the day EQIX is refetched and the real instance vanishes.
  */
 import { describe, it, expect } from 'vitest'
+import { readdirSync, readFileSync } from 'fs'
+import { join } from 'path'
 import { findSessionHoles, DEFAULT_QUORUM } from '../../scripts/lib/sessionCoverage.mjs'
 
 type Holes = { sessions: string[]; holes: Array<{ ticker: string; missing: string[] }> }
@@ -100,8 +102,6 @@ describe('findSessionHoles — the live fixture directory', () => {
     // executable forever, and the "no holes today" assertion below carries the
     // live state separately. A positive control that dies when the bug is fixed
     // is a control with an expiry date.
-    const { readdirSync, readFileSync } = require('fs') as typeof import('fs')
-    const { join } = require('path') as typeof import('path')
     const dir = join(__dirname, '../../scripts/backtestData')
     const byTicker = new Map<string, Set<string>>()
     for (const f of readdirSync(dir).filter((x) => x.endsWith('.json'))) {

@@ -6,8 +6,14 @@
  * and opt-in env, but is OFF in production by default until vsBaseline >= 0.
  */
 
-/** Explicit opt-in: QUANTAN_USE_ENHANCED_SIGNAL=1 */
-export function useEnhancedCombinedSignal(): boolean {
+/**
+ * Explicit opt-in: QUANTAN_USE_ENHANCED_SIGNAL=1
+ *
+ * Q-093: named `useEnhancedCombinedSignal` until lint ran — the `use` prefix
+ * made React's rules-of-hooks treat a plain feature flag as a hook in three
+ * non-component call sites.
+ */
+export function enhancedSignalEnabled(): boolean {
   const raw = process.env.QUANTAN_USE_ENHANCED_SIGNAL
   if (raw === '1' || raw === 'true') return true
   if (raw === '0' || raw === 'false') return false
