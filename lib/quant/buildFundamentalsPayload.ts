@@ -108,61 +108,53 @@ export function buildFundamentalsPayload(
   const shares = num(keyStats?.sharesOutstanding) ?? num(keyStats?.ordinarySharesNumber)
   const fcf0 = pickFcf0(cashModule, financialData)
 
-  // Net debt = (long-term debt + short-term debt) − cash & equivalents
-  // (most-recent balance sheet). Required for the FCFF→equity bridge in runDcf.
+  // Q-086 (2026-10-17) — this is an FCFE model, and says so.
   //
-  // Phase 14 wave 13: was using LTD alone, which understates net debt for
-  // companies with material short-term obligations (commercial-paper-heavy
-  // financials, REITs with revolving credit lines, retailers with seasonal
-  // working-capital financing). The Damodaran (2012) FCFF→equity bridge
-  // explicitly subtracts ALL interest-bearing debt, not just long-term.
+  // `fcf0` is Yahoo's `financialData.freeCashflow`, which Yahoo labels LEVERED
+  // free cash flow: after interest, i.e. cash available to EQUITY. The code
+  // used to discount it at a "WACC" and then subtract net debt built from
+  // `balanceSheetHistory` — the FCFF bridge, applied to a cash flow that had
+  // already paid the debt holders. That bridge was also inert: Yahoo has
+  // returned no balance-sheet fields since Nov 2024 (every row carries only
+  // `endDate`, measured on AAPL/JPM/NEE/XOM 2026-10-16), so `longTermDebt ?? 0`
+  // and `cash ?? 0` made net debt exactly 0 for every ticker. Equity value was
+  // therefore already levered FCF discounted at the user's rate — an FCFE
+  // valuation mislabelled as FCFF. The numbers do not change here; the model
+  // name, the rate's label (a cost of equity), and the dead bridge do.
   //
-  // Also adds `shortLongTermDebt` (Yahoo's name for the current portion of
-  // long-term debt). When the balance-sheet module is unavailable we fall
-  // back to undefined → runDcf assumes netDebt=0 (preserves prior behaviour
-  // for those tickers).
-  //
-  // Citation: Damodaran, A. (2012). Investment Valuation (3rd ed.), Wiley,
-  //           ch.2 — "subtract all interest-bearing debt obligations from EV
-  //           to derive equity value".
-  let netDebt: number | undefined
-  if (balanceHist.length > 0) {
-    const latest = balanceHist[0] as AnyRec
-    const ltd = num(latest?.longTermDebt) ?? 0
-    // Short-term debt may surface under different Yahoo names. Try the
-    // common ones; default to 0 if none present.
-    const std = num(latest?.shortLongTermDebt)
-              ?? num(latest?.shortTermDebt)
-              ?? num(latest?.currentDebt)
-              ?? 0
-    const cash = num(latest?.cash) ?? 0
-    netDebt = ltd + std - cash
-  }
+  // Citation: Damodaran, A. (2012). Investment Valuation (3rd ed.), ch. 14 —
+  // FCFE discounted at the cost of equity yields equity value directly.
+  const industry = typeof profile?.industry === 'string' ? profile.industry : ''
+  // Banks, insurers and brokers fund operations with debt, so "free cash flow"
+  // after debt flows is not a valuation base (Damodaran ch. 21). Refuse rather
+  // than print a number (the refusal-gate rule in CLAUDE.md).
+  const dcfNotApplicable = /^(?:Banks|Insurance)\b|Capital Markets|Mortgage Finance/i.test(industry)
+    ? `An FCF-based DCF does not apply to ${industry || 'this business'}: its debt is operating capital, so cash flow after debt is not a valuation base.`
+    : null
 
+  const canDcf = Boolean(shares && fcf0) && dcfNotApplicable === null
   const dcfBear =
-    shares && fcf0
+    canDcf && shares && fcf0
       ? runDcf({
           fcf0,
           shares,
           wacc: q.wacc + 0.015,
           terminalGrowth: Math.min(q.terminalGrowth, 0.02),
           explicitGrowth: q.gBear,
-          netDebt,
         })
       : null
   const dcfBase =
-    shares && fcf0
-      ? runDcf({ fcf0, shares, wacc: q.wacc, terminalGrowth: q.terminalGrowth, explicitGrowth: q.gBase, netDebt })
+    canDcf && shares && fcf0
+      ? runDcf({ fcf0, shares, wacc: q.wacc, terminalGrowth: q.terminalGrowth, explicitGrowth: q.gBase })
       : null
   const dcfBull =
-    shares && fcf0
+    canDcf && shares && fcf0
       ? runDcf({
           fcf0,
           shares,
           wacc: Math.max(q.wacc - 0.01, 0.06),
           terminalGrowth: q.terminalGrowth,
           explicitGrowth: q.gBull,
-          netDebt,
         })
       : null
 
@@ -368,6 +360,10 @@ export function buildFundamentalsPayload(
     balances,
     incomes,
     dcf: {
+      /** Q-086: levered FCF discounted at a cost of equity — no debt bridge. */
+      model: 'FCFE' as const,
+      /** Why no scenario is computed, when one is refused. */
+      notApplicable: dcfNotApplicable,
       inputs: {
         fcf0,
         shares,

@@ -40,7 +40,7 @@ export function ValuationTab({
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              <Slider label="WACC" value={wacc} min={0.04} max={0.16} step={0.005} onChange={setWacc} fmt={(v) => `${(v * 100).toFixed(1)}%`} />
+              <Slider label="Discount rate (cost of equity)" value={wacc} min={0.04} max={0.16} step={0.005} onChange={setWacc} fmt={(v) => `${(v * 100).toFixed(1)}%`} />
               <Slider label="Terminal growth" value={tg} min={0} max={0.045} step={0.005} onChange={setTg} fmt={(v) => `${(v * 100).toFixed(1)}%`} />
               <Slider label="FCF growth bear" value={gBear} min={-0.05} max={0.12} step={0.005} onChange={setGBear} fmt={(v) => `${(v * 100).toFixed(1)}%`} />
               <Slider label="FCF growth base" value={gBase} min={-0.05} max={0.15} step={0.005} onChange={setGBase} fmt={(v) => `${(v * 100).toFixed(1)}%`} />
@@ -55,6 +55,11 @@ export function ValuationTab({
               Recalculate
             </button>
 
+            {data.dcf.notApplicable && (
+              <p role="status" data-testid="dcf-not-applicable" className="text-xs text-amber-300">
+                No DCF: {data.dcf.notApplicable}
+              </p>
+            )}
             <div className="rounded-xl border border-slate-800 overflow-hidden">
               <table className="w-full text-sm">
                 <thead>
@@ -65,7 +70,7 @@ export function ValuationTab({
                 </thead>
                 <tbody className="font-mono text-slate-200">
                   <tr className="border-t border-slate-800">
-                    <td className="p-3 text-red-300/90">Bear (higher WACC, lower growth)</td>
+                    <td className="p-3 text-red-300/90">Bear (higher discount rate, lower growth)</td>
                     <td className="p-3 text-right">
                       {data.dcf.scenarios.bear ? `$${data.dcf.scenarios.bear.valuePerShare.toFixed(2)}` : '—'}
                     </td>
@@ -77,7 +82,7 @@ export function ValuationTab({
                     </td>
                   </tr>
                   <tr className="border-t border-slate-800">
-                    <td className="p-3 text-emerald-300/90">Bull (lower WACC, higher growth)</td>
+                    <td className="p-3 text-emerald-300/90">Bull (lower discount rate, higher growth)</td>
                     <td className="p-3 text-right">
                       {data.dcf.scenarios.bull ? `$${data.dcf.scenarios.bull.valuePerShare.toFixed(2)}` : '—'}
                     </td>
@@ -108,8 +113,14 @@ export function ValuationTab({
             </div>
 
             <div className="text-[10px] text-slate-400 space-y-1">
-              <p>FCF₀ from Yahoo (TTM or latest annual cash flow statement). Shares from key statistics.</p>
-              <p>DCF ignores net cash/debt adjustment in equity bridge — upgrade for production by netting debt and minority interest.</p>
+              {/* Q-086: the second line said the DCF "ignores net cash/debt" — true only by
+                  accident (the balance-sheet module has been empty since Nov 2024). It is an
+                  FCFE model, which needs no debt bridge, and now says so. */}
+              <p>
+                FCFE model: Yahoo&apos;s levered free cash flow (after interest, so already net of debt service), grown and
+                discounted at the rate you set, which should be a cost of equity. No net-debt bridge is applied because
+                the cash flow is already the equity holders&apos;. Shares from key statistics.
+              </p>
             </div>
     </div>
   )

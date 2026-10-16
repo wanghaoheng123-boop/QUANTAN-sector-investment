@@ -224,18 +224,25 @@ describe('buildFundamentalsPayload — RICH fixture (full payload)', () => {
   })
 
   it('DENSE GOLDENS: DCF scenarios, bands, anchors, volatility', () => {
+    // MIGRATION NOTE — Q-086 (2026-10-17): FCFE, no net-debt bridge. This fixture
+    // carries a balance sheet (30e9 + 5e9 debt, 20e9 cash) that Yahoo has not
+    // sent since Nov 2024, so in PRODUCTION net debt was already 0 and live
+    // values do not move; here every per-share value rises by exactly 15e9 /
+    // 1e9 shares = $15, and the composite bands (median anchor 160) do not move.
     const base = payload.dcf.scenarios.base!
+    expect(payload.dcf.model).toBe('FCFE')
+    expect(payload.dcf.notApplicable).toBeNull()
     expect(base.enterpriseValue).toBeCloseTo(146538889000, -4)
-    expect(base.equityValue).toBeCloseTo(131538889000, -4)
-    expect(base.valuePerShare).toBeCloseTo(131.538889, 5)
+    expect(base.equityValue).toBeCloseTo(146538889000, -4)
+    expect(base.valuePerShare).toBeCloseTo(146.538889, 5)
     expect(base.pvExplicit).toBeCloseTo(36815975170, -4)
     expect(base.pvTerminal).toBeCloseTo(109722913800, -4)
     expect(base.terminalValueRaw).toBeCloseTo(168822303600, -4)
-    expect(base.netDebtUsed).toBe(15e9) // 30e9 LTD + 5e9 STD − 20e9 cash
-    expect(payload.dcf.scenarios.bear!.valuePerShare).toBeCloseTo(81, 4)
-    expect(payload.dcf.scenarios.bull!.valuePerShare).toBeCloseTo(190.6943245, 5)
+    expect(base.netDebtUsed).toBe(0) // FCFE: levered FCF is already after debt service
+    expect(payload.dcf.scenarios.bear!.valuePerShare).toBeCloseTo(96, 4)
+    expect(payload.dcf.scenarios.bull!.valuePerShare).toBeCloseTo(205.6943245, 5)
 
-    expect(payload.bands!.fairValueMid).toBeCloseTo(160, 8) // median of 131.5/180/160
+    expect(payload.bands!.fairValueMid).toBeCloseTo(160, 8) // median of 146.5/180/160
     expect(payload.bands!.buyZoneHigh).toBeCloseTo(142.4, 6)
     expect(payload.bands!.sellZoneLow).toBeCloseTo(171.6, 6)
     expect(payload.anchors).toEqual({
@@ -345,3 +352,24 @@ describe('buildFundamentalsPayload — BRANCH fixture (fallback chains)', () => 
     expect(p.price).toBe(77.5)
   })
 })
+
+describe('Q-086: an FCF DCF is refused where it does not apply', () => {
+  const { closes, dates, ohlc } = series(320)
+  const spy = series(320, 0.0008)
+  const build = (industry: string) => buildFundamentalsPayload(
+    'BANK', { ...richQuoteSummary, summaryProfile: { ...(richQuoteSummary.summaryProfile as object), industry } },
+    closes, dates, ohlc, spy.closes, spy.dates, 150, Q,
+  )
+
+  it.each(['Banks - Diversified', 'Banks - Regional', 'Insurance - Diversified', 'Capital Markets'])('%s: no scenario, and the reason', (industry) => {
+    const p = build(industry)
+    expect(p.dcf.scenarios).toEqual({ bear: null, base: null, bull: null })
+    expect(p.dcf.notApplicable).toMatch(/does not apply/)
+    expect(p.anchors.dcfBase).toBeNull()
+  })
+
+  it('a payments network is not a bank: Credit Services keeps its DCF', () => {
+    expect(build('Credit Services').dcf.scenarios.base).not.toBeNull()
+  })
+})
+

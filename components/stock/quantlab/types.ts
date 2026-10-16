@@ -28,6 +28,10 @@ export type QuantLabPayload = {
     grossProfit: number | null
   }[]
   dcf: {
+    /** Q-086: levered FCF at a cost of equity. */
+    model?: 'FCFE'
+    /** Why no scenario is computed (e.g. a bank), when one is refused. */
+    notApplicable?: string | null
     inputs: Record<string, unknown>
     scenarios: {
       bear: { valuePerShare: number } | null
