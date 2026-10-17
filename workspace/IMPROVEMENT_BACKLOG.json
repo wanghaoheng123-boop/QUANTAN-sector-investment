@@ -1890,7 +1890,7 @@
     "title": "DCF netDebt fallback to 0: is the inflated equity value flagged to the user?",
     "domain": "Quant/Research",
     "priority": "P2",
-    "status": "pending",
+    "status": "done",
     "files": [
       "lib/quant/dcf.ts",
       "lib/quant/buildFundamentalsPayload.ts"
@@ -1904,7 +1904,8 @@
       "npm run test",
       "npm run typecheck"
     ],
-    "notes_2026_08_16": "CANDIDATE FINDING, not a confirmed defect — filed for the accountant agent to own. lib/quant/dcf.ts documents that netDebt defaults to 0 and that this \"silently inflates\" equity value for levered companies (10-200% overstatement per its own docstring). buildFundamentalsPayload.ts DOES compute netDebt = ltd + std - cash whenever balanceSheetHistory is present, so the fallback only triggers when the balance-sheet module is unavailable for a ticker. UNVERIFIED: whether that ever happens in the live 56-name universe, and if so whether the UI marks the result. That is the I2 (fail-closed) question — a silently inflated per-share value rendering as if fully supported is exactly what I2 forbids. Establish the frequency BEFORE deciding on a fix; this may be a no-op."
+    "notes_2026_08_16": "CANDIDATE FINDING, not a confirmed defect — filed for the accountant agent to own. lib/quant/dcf.ts documents that netDebt defaults to 0 and that this \"silently inflates\" equity value for levered companies (10-200% overstatement per its own docstring). buildFundamentalsPayload.ts DOES compute netDebt = ltd + std - cash whenever balanceSheetHistory is present, so the fallback only triggers when the balance-sheet module is unavailable for a ticker. UNVERIFIED: whether that ever happens in the live 56-name universe, and if so whether the UI marks the result. That is the I2 (fail-closed) question — a silently inflated per-share value rendering as if fully supported is exactly what I2 forbids. Establish the frequency BEFORE deciding on a fix; this may be a no-op.",
+    "resolution": "DONE 2026-10-17 — PR #240 (squash 6f96848). FCFE at a cost of equity with no debt bridge. Refusal fails closed, using an allowlist inside Financial Services, and refused names get no bands or signal. The currency check has two sources. The accountant gate gave APPROVE WITH CHANGES and the re-gate gave APPROVE. Production verified 2026-10-17: JPM and V are refused, AAPL gets scenarios."
   },
   {
     "id": "Q-087",
@@ -1982,7 +1983,7 @@
     "title": "News publisher badge launders source tier — Tier-2 aggregator items render identically to Tier-0/1 wires",
     "domain": "Data/Infrastructure",
     "priority": "P2",
-    "status": "pending",
+    "status": "done",
     "files": [
       "components/NewsFeed.tsx",
       "app/api/news/ticker/[ticker]/route.ts",
@@ -1998,7 +1999,8 @@
       "npm run typecheck",
       "npm run test"
     ],
-    "notes_2026_08_16": "Filed by the disinformation-analyst review of Q-088 (PR #147). Yahoo Finance news is an AGGREGATOR republishing other outlets — Tier 2 under the platform's own source-tier model, regardless of which wire originally wrote a story. components/NewsFeed.tsx renders the raw item.publisher string in a plain badge with identical styling for every source, so Reuters and an SEO content mill are visually indistinguishable. Live smoke on /stock/AAPL returned TheStreet, Simply Wall St., Motley Fool and 24/7 Wall St. — all commentary/aggregator tier — each rendered exactly as a named wire would be. CLAUDE.md's own rule is that a Tier-2+ source may never independently move a signal and may only corroborate or flag; the display currently treats all publishers as equivalent with no flag at all. NOT a Q-088 regression — Q-088 replaced fabricated content with real content, which is strictly better; this is the next layer of honesty on the replacement."
+    "notes_2026_08_16": "Filed by the disinformation-analyst review of Q-088 (PR #147). Yahoo Finance news is an AGGREGATOR republishing other outlets — Tier 2 under the platform's own source-tier model, regardless of which wire originally wrote a story. components/NewsFeed.tsx renders the raw item.publisher string in a plain badge with identical styling for every source, so Reuters and an SEO content mill are visually indistinguishable. Live smoke on /stock/AAPL returned TheStreet, Simply Wall St., Motley Fool and 24/7 Wall St. — all commentary/aggregator tier — each rendered exactly as a named wire would be. CLAUDE.md's own rule is that a Tier-2+ source may never independently move a signal and may only corroborate or flag; the display currently treats all publishers as equivalent with no flag at all. NOT a Q-088 regression — Q-088 replaced fabricated content with real content, which is strictly better; this is the next layer of honesty on the replacement.",
+    "resolution": "DONE 2026-10-17 — PR #242 (squash 0aed9aa). There are four explicit source kinds: press release, opinion/analysis outlet, newsroom, and a visible \"Unclassified source\". via is credited only for a renderable link. Pinned against a snapshot of production publishers."
   },
   {
     "id": "Q-091",
@@ -2045,7 +2047,7 @@
     "title": "CLAUDE.md requires \"lint clean\" but no lint script or eslint config exists",
     "domain": "DevOps/CI",
     "priority": "P2",
-    "status": "pending",
+    "status": "done",
     "files": [
       "package.json",
       ".github/workflows/ci.yml"
@@ -2058,7 +2060,8 @@
     "verify_commands": [
       "npm run lint"
     ],
-    "notes_2026_08_16": "Found by the red-team review of Q-088 (finding Q088-11). CLAUDE.md WHAT DONE MEANS lists \"lint clean\" as a gate. There is no `lint` script in package.json and no eslint config; `npx next lint` drops into an interactive setup wizard. So that gate has NEVER been run, on any PR, by any agent — while every session has been reporting \"done\" against a definition that includes it. This is the instructions-are-untested-code lesson (#140) applied to the constitution itself: a rule nothing executes drifts silently and everyone believes it holds. Visible artefact in the Q-088 diff: app/sector/[slug]/page.tsx has a line indented 14 spaces inside a 12-space block, left by a deletion — exactly what a linter catches. RESOLVE IN EITHER DIRECTION, but resolve it: an unenforceable clause in the definition of done is worse than no clause, because it manufactures false confidence."
+    "notes_2026_08_16": "Found by the red-team review of Q-088 (finding Q088-11). CLAUDE.md WHAT DONE MEANS lists \"lint clean\" as a gate. There is no `lint` script in package.json and no eslint config; `npx next lint` drops into an interactive setup wizard. So that gate has NEVER been run, on any PR, by any agent — while every session has been reporting \"done\" against a definition that includes it. This is the instructions-are-untested-code lesson (#140) applied to the constitution itself: a rule nothing executes drifts silently and everyone believes it holds. Visible artefact in the Q-088 diff: app/sector/[slug]/page.tsx has a line indented 14 spaces inside a 12-space block, left by a deletion — exactly what a linter catches. RESOLVE IN EITHER DIRECTION, but resolve it: an unenforceable clause in the definition of done is worse than no clause, because it manufactures false confidence.",
+    "resolution": "DONE 2026-10-17 — PR #244 (squash cb6b49a). The lint CLAUDE.md names now exists: Next core-web-vitals + typescript, `npm run lint` at --max-warnings=0, and a `lint` CI job (advisory until Q-097). Several lint findings were defects: arguments accepted and then ignored, `any` vendor rows, dead props and state."
   },
   {
     "id": "Q-094",
@@ -2088,7 +2091,7 @@
     "title": "findings-ledger.csv is corruption-prone: concurrent appends and 7 malformed rows",
     "domain": "DevOps/CI",
     "priority": "P2",
-    "status": "pending",
+    "status": "done",
     "files": [
       "reviews/findings-ledger.csv"
     ],
@@ -2100,7 +2103,8 @@
     "verify_commands": [
       "npm run test"
     ],
-    "notes_2026_08_16": "Found by the red-team review of Q-088 (finding Q088-12), and it hit during that very review. Two agents appended concurrently; one write left no trailing newline, so the next row glued onto the previous last field and produced a single 23-column row that SWALLOWED AN ENTIRE CRITICAL FINDING — invisible to any CSV reader. It was caught and repaired by hand, and the current file is verified (all 28 Q088-*/MR-* rows well-formed). Separately, a column-count audit shows 7 malformed rows at lines 42, 52, 57, 60, 61, 62, 113 that are PRE-EXISTING on origin/main, not caused by this work. CLAUDE.md calls this file \"the risk register\" and \"this IS the risk register\". A register that silently loses a CRITICAL row under normal multi-agent operation is not one. Consider append-only JSONL, which has no quoting/newline ambiguity, matching .quantlab/TRIAL_REGISTRY.jsonl."
+    "notes_2026_08_16": "Found by the red-team review of Q-088 (finding Q088-12), and it hit during that very review. Two agents appended concurrently; one write left no trailing newline, so the next row glued onto the previous last field and produced a single 23-column row that SWALLOWED AN ENTIRE CRITICAL FINDING — invisible to any CSV reader. It was caught and repaired by hand, and the current file is verified (all 28 Q088-*/MR-* rows well-formed). Separately, a column-count audit shows 7 malformed rows at lines 42, 52, 57, 60, 61, 62, 113 that are PRE-EXISTING on origin/main, not caused by this work. CLAUDE.md calls this file \"the risk register\" and \"this IS the risk register\". A register that silently loses a CRITICAL row under normal multi-agent operation is not one. Consider append-only JSONL, which has no quoting/newline ambiguity, matching .quantlab/TRIAL_REGISTRY.jsonl.",
+    "resolution": "DONE 2026-10-17 — PR #238 (squash 59430d3). The 7 malformed rows were repaired. Appends go through scripts/ledger-append.mjs, which uses one strict RFC 4180 parser shared with the integrity guard and refuses before writing. The lock names its holder, and ids and values are validated. Two red-team rounds: L1-L5 and R2-238-1/2 are all fixed."
   },
   {
     "id": "Q-096",
@@ -2479,7 +2483,7 @@
     "title": "Two untracked agent-definition directories sit outside the declared SSOT",
     "domain": "DevOps/CI",
     "priority": "P3",
-    "status": "pending",
+    "status": "done",
     "files": [
       ".agents/",
       ".codex/",
@@ -2494,14 +2498,16 @@
       "git status --short"
     ],
     "blocked_by": [],
-    "notes_2026_09_09": "Noticed during the Q107-S9 sprint. `.agents/skills/` and `.codex/agents/` are untracked, dated 2026-09-06, and appear in no session note, no commit and no state key. CLAUDE.md's MODEL POLICY says the lever is the `model:` frontmatter in `.claude/agents/<name>.md`; a second and third agents directory is precisely the parallel record-keeping the SSOT table exists to prevent, and the roster is load-bearing for which model runs an adversarial review. LOW priority because nothing reads them today as far as anyone can tell - which is itself the thing to establish rather than assume. Operational note for any agent in this tree: `git add -A` would sweep these plus reviews/wsa-2026-06-23/ and reviews/wspy-2026-06-22/ into an unrelated commit. Add explicit paths."
+    "notes_2026_09_09": "Noticed during the Q107-S9 sprint. `.agents/skills/` and `.codex/agents/` are untracked, dated 2026-09-06, and appear in no session note, no commit and no state key. CLAUDE.md's MODEL POLICY says the lever is the `model:` frontmatter in `.claude/agents/<name>.md`; a second and third agents directory is precisely the parallel record-keeping the SSOT table exists to prevent, and the roster is load-bearing for which model runs an adversarial review. LOW priority because nothing reads them today as far as anyone can tell - which is itself the thing to establish rather than assume. Operational note for any agent in this tree: `git add -A` would sweep these plus reviews/wsa-2026-06-23/ and reviews/wspy-2026-06-22/ into an unrelated commit. Add explicit paths.",
+    "notes_2026_10_17": "Investigated: .agents/skills holds 2 skills (sprint, handoff) and .codex/agents holds 17 agents, a Codex-CLI migration of .claude/commands and .claude/agents generated 2026-09-06. 15 of the 17 are byte-identical to the roster; accountant and coordinator differ only by a mechanical CLAUDE.md -> AGENTS.md rewrite. They will drift (Q-086 edited accountant.md). The records PR gitignores both with a do-not-edit note. Deleting them is the owner's call, because untracked deletes are irreversible.",
+    "resolution": "DONE 2026-10-17 (records PR). Origin established: a Codex-CLI migration of the .claude roster and commands, generated 2026-09-06. They are now gitignored with a note that they are copies and must never be edited. Whether to delete them is Q-155 (owner: the deletes are irreversible)."
   },
   {
     "id": "Q-113",
     "title": "The heartbeat probe comments daily on a persistent failure — an alert-fatigue source it introduced",
     "domain": "DevOps/CI",
     "priority": "P3",
-    "status": "pending",
+    "status": "done",
     "files": [
       "scripts/ci/alertDecision.mjs",
       "scripts/ci/workflow-heartbeat.mjs"
@@ -2515,7 +2521,8 @@
       "npx vitest run __tests__/ci/"
     ],
     "blocked_by": [],
-    "notes_2026_09_10": "Filed by Q107-A22 against ITSELF. decideAlert comments rather than duplicating, which was right when the only callers were weekly/nightly workflows reporting their own result. The out-of-band probe runs DAILY and assesses every workflow every run, so a long outage now accrues a comment a day - refresh-data.yml (open since 2026-09-05, issue #177) already received one from run 34425732638 and another from 34426124881. alertDecision's own docstring says a weekly failure must not open 52 issues because alert fatigue is how the next outage goes unread; a daily comment on one issue is the same argument one level down. NOT fixed inside Q107-A22 because throttling changes the SHARED alerting contract that three other workflows also use, which is a decision rather than a repair. P3 because the signal is correct and merely repetitive - the failure mode is human, not mechanical."
+    "notes_2026_09_10": "Filed by Q107-A22 against ITSELF. decideAlert comments rather than duplicating, which was right when the only callers were weekly/nightly workflows reporting their own result. The out-of-band probe runs DAILY and assesses every workflow every run, so a long outage now accrues a comment a day - refresh-data.yml (open since 2026-09-05, issue #177) already received one from run 34425732638 and another from 34426124881. alertDecision's own docstring says a weekly failure must not open 52 issues because alert fatigue is how the next outage goes unread; a daily comment on one issue is the same argument one level down. NOT fixed inside Q107-A22 because throttling changes the SHARED alerting contract that three other workflows also use, which is a decision rather than a repair. P3 because the signal is correct and merely repetitive - the failure mode is human, not mechanical.",
+    "resolution": "DONE 2026-10-17 — PR #236 (squash 02bdde5). One comment per failed run AND attempt, not per daily look. Both runners are exported and tested against an in-memory GitHub. Thread reads speak on error and read newest pages first. Two red-team rounds: A1-A5 and R2-236-1 are fixed."
   },
   {
     "id": "Q-114",
@@ -3024,7 +3031,7 @@
     "title": "Landing 'Price Signals' card promises entry, stop-loss and target levels and risk/reward that no producer supplies",
     "domain": "Frontend/UX",
     "priority": "P3",
-    "status": "pending",
+    "status": "done",
     "files": [
       "app/page.tsx",
       "components/SignalCard.tsx",
@@ -3037,7 +3044,8 @@
     "verify_commands": [
       "npm run test"
     ],
-    "notes_2026_09_27": "Found during Q-105 while checking a lead that turned out benign: lib/sessionSignalsFromQuotes.ts sets entry = stopLoss = target = price, but SignalCard switches yahoo-session signals to a 'Session vs prior' layout and renders R/R as '—', so equal levels never show. The real defect is one level up: session rows are the ONLY PriceSignal producer, so the landing feature card's 'Entry, stop loss, and target levels with confidence scores and risk/reward ratios' (app/page.tsx ~593) describes a card no user can see, and SignalCard's level branch is unreachable."
+    "notes_2026_09_27": "Found during Q-105 while checking a lead that turned out benign: lib/sessionSignalsFromQuotes.ts sets entry = stopLoss = target = price, but SignalCard switches yahoo-session signals to a 'Session vs prior' layout and renders R/R as '—', so equal levels never show. The real defect is one level up: session rows are the ONLY PriceSignal producer, so the landing feature card's 'Entry, stop loss, and target levels with confidence scores and risk/reward ratios' (app/page.tsx ~593) describes a card no user can see, and SignalCard's level branch is unreachable.",
+    "resolution": "DONE 2026-10-17 — PR #239 (squash 4628daa). Session moves are measurements: UP/DOWN/FLAT from the displayed rounding, and \"No quote\" for missing quotes. The trade-setup and position-sizing copy is gone from the sector page. The copy guard reads visible text and catches paraphrases. S4 (a missing change shown as 0.00%) is Q-145."
   },
   {
     "id": "Q-136",
@@ -3166,7 +3174,7 @@
     "title": "BTC Quant Lab Analysis labels assume daily candles ('200-Day MA Regime', '20-week' band) but follow whatever timeframe the Chart tab last loaded",
     "domain": "Frontend/UX",
     "priority": "P3",
-    "status": "pending",
+    "status": "done",
     "files": [
       "components/crypto/BtcQuantLab.tsx",
       "app/crypto/btc/page.tsx"
@@ -3178,14 +3186,15 @@
     "verify_commands": [
       "npm run test"
     ],
-    "notes_2026_09_28": "Found by the Q-138 round-2 red team. app/crypto/btc/page.tsx passes <BtcQuantLab candles={candles} /> whatever timeframe was last loaded (1m-1M via BtcTabBar); the Analysis tab labels a 200-bar average '200-Day MA Regime' and a 20-bar range position '20-week' band. Q-138 corrected only its own intro sentence."
+    "notes_2026_09_28": "Found by the Q-138 round-2 red team. app/crypto/btc/page.tsx passes <BtcQuantLab candles={candles} /> whatever timeframe was last loaded (1m-1M via BtcTabBar); the Analysis tab labels a 200-bar average '200-Day MA Regime' and a 20-bar range position '20-week' band. Q-138 corrected only its own intro sentence.",
+    "resolution": "DONE 2026-10-17 — PR #241 (squash 6bb41a7). The BTC lab names the bars it reads, and the daily-calibrated regime text, dip badge and signals label are hidden off daily candles. The slope reads its real sign and its unit is \"over 20 bars\". The fabricated rainbow band is deleted. The daily copy is Q-153."
   },
   {
     "id": "Q-142",
     "title": "React hydration error #418 on production pages (server/client text mismatch)",
     "domain": "Frontend/UX",
     "priority": "P2",
-    "status": "pending",
+    "status": "done",
     "files": [
       "app/briefs/sector/[sector]/LiveBriefClient.tsx"
     ],
@@ -3198,7 +3207,8 @@
       "npm run build",
       "npm run test"
     ],
-    "notes_2026_10_01": "Seen during Q-140 verification on PRODUCTION at /briefs/sector/technology (Minified React error #418 — server-rendered text did not match the client). Pre-existing: production did not yet contain Q-140. Likely cause: relative ages / locale time strings rendered on the server in UTC and again on the client in local time."
+    "notes_2026_10_01": "Seen during Q-140 verification on PRODUCTION at /briefs/sector/technology (Minified React error #418 — server-rendered text did not match the client). Pre-existing: production did not yet contain Q-140. Likely cause: relative ages / locale time strings rendered on the server in UTC and again on the client in local time.",
+    "resolution": "DONE 2026-10-17 — PR #237 (squash 27d24a9) and the red-team follow-up #243 (squash 2f0d5d3). Briefs render in ET (EDT/EST). Every locale-sensitive call names its locale, enforced by a parse-tree guard. Viewer-zone times render through <LocalTime>, which shows a dash until mounted."
   },
   {
     "id": "Q-143",
@@ -3241,7 +3251,7 @@
       "npm run test",
       "npm run verify:data"
     ],
-    "notes_2026_10_17": "Measured from run logs: every scheduled refresh since 2026-09-06 ends 'QUARANTINED: BTC — VENDOR RESTATEMENT: 1 existing bar(s) changed value (1786838400 open 63024.636… -> 63023.421…)'. The other 55 instruments refresh and commit; BTC's fixture has not been updated for ~6 weeks. Alert issue #177 collected 44 comments for it (Q-113 dedupes the noise, not the cause)."
+    "notes_2026_10_17": "Measured from run logs: every scheduled refresh since 2026-09-06 ends 'QUARANTINED: BTC — VENDOR RESTATEMENT: 1 existing bar(s) changed value (1786838400 open 63024.636… -> 63023.421…)'. The other 55 instruments refresh and commit; BTC's fixture has not been updated for ~6 weeks. Alert issue #177 collected 44 comments for it (Q-113 dedupes the noise, not the cause). DESIGN (2026-10-17, not implemented): the I4-consistent fix is to keep the FIRST-ingested value of a restated bar, append new bars, and record the restatement by key/field/relative size only, with no vendor values in the public repo. BTC would then stop freezing and history stays as known at the time. Needs a data-integrity review before it is built."
   },
   {
     "id": "Q-145",
@@ -3379,7 +3389,7 @@
     "title": "stryker-weekly's scheduled run of 2026-10-11 concluded 'cancelled' — the mutation gate did not run that week",
     "domain": "CI/Testing",
     "priority": "P2",
-    "status": "pending",
+    "status": "done",
     "files": [
       ".github/workflows/stryker-weekly.yml"
     ],
@@ -3390,7 +3400,8 @@
     "verify_commands": [
       "gh run list --workflow stryker-weekly.yml --limit 5"
     ],
-    "notes_2026_10_17": "Seen in the heartbeat dry run on 2026-10-17 (run 38148621802)."
+    "notes_2026_10_17": "Seen in the heartbeat dry run on 2026-10-17 (run 38148621802).",
+    "resolution": "DONE 2026-10-17 — PR #246 (squash de2c1a8). The quant-indicators shard is split into indicators.ts (844 mutants) and the other three files (972). The Stryker step has timeout-minutes 330, so an overrun FAILS the run instead of being cancelled (the alerter treats a cancellation as inconclusive). Diagnosis: on 2026-10-11 the shard was at 62% after 6h; it normally takes about 3h."
   },
   {
     "id": "Q-152",
@@ -3417,5 +3428,76 @@
       "npm run test"
     ],
     "notes_2026_10_17": "reviews/dead-code-sweep-2026-10-16.md (#234). Also left for the owner there: .env.example:64 documents NEXT_PUBLIC_APP_URL, which nothing reads; CLAUDE.md forbids agents to edit .env files."
+  },
+  {
+    "id": "Q-153",
+    "title": "ma200Regime copy issues trade instructions and unsourced forward-return claims on three surfaces, and its two-state slope calls a slowly rising average 'declining'",
+    "domain": "Compliance",
+    "priority": "P1",
+    "status": "pending",
+    "files": [
+      "lib/quant/technicals.ts",
+      "components/crypto/BtcQuantLab.tsx",
+      "components/stock/quantlab/tabs/TechnicalsTab.tsx",
+      "app/ma-deviation/page.tsx",
+      "app/api/ma-deviation/route.ts"
+    ],
+    "acceptance_criteria": [
+      "dipSignalExplained, interpretation and forwardReturnContext describe the measurement (e.g. 'N% below a falling 200-day average') with no buy/add/avoid/scale-in/positioning verbs",
+      "Forward-return figures ('median 18M forward return +30-50%+') are removed or each carries a sourced, dated citation (I5: no unsourced performance claims)",
+      "The slope is three-state (rising / flat / falling) with the threshold stated, so a +0.16%/20-bar average is not called declining",
+      "The 'BUY THE DIP' / 'WATCH — NO ADD' labels are replaced by descriptions; route through Q-083",
+      "A copy guard over the rendered text of all three surfaces"
+    ],
+    "verify_commands": [
+      "npm run test"
+    ],
+    "notes_2026_10_17": "Red-team R2-241-3 (HIGH, pre-existing). #241 hid this copy off daily candles, where it was never calibrated; on daily it is unchanged. The slope mislabel was found while fixing #241's display, which now shows the measured sign."
+  },
+  {
+    "id": "Q-154",
+    "title": "DCF residuals from the accountant re-gate: leverage penalty on refused banks, hardcoded $, ADR share ratios, terminal-growth ceiling, missing-sector classification",
+    "domain": "Quant/Valuation",
+    "priority": "P2",
+    "status": "pending",
+    "files": [
+      "lib/quant/researchScore.ts",
+      "lib/quant/buildFundamentalsPayload.ts",
+      "components/stock/quantlab/tabs/ValuationTab.tsx",
+      "components/stock/quantlab/tabs/SummaryTab.tsx"
+    ],
+    "acceptance_criteria": [
+      "N10: the quality pillar does not penalise debt/equity for a company the DCF refused because its balance sheet IS its product (route via Q-083)",
+      "N12: per-share values render in the quote currency, not a hardcoded $",
+      "ADR ratio: a USD-quoted ADR whose share ratio is not 1:1 is reconciled or refused",
+      "S2: the terminal-growth cap (route 5%, runDcf 6%) is cited (e.g. long-run nominal GDP / risk-free) or lowered",
+      "N1 residual: a missing sector with an unrecognised industry is refused or recorded"
+    ],
+    "verify_commands": [
+      "npm run test"
+    ],
+    "notes_2026_10_17": "reviews/q086-accountant-regate-2026-10-17.md, should-fix items not done in #240. Q-146/Q-147 hold the first gate's L1-L5 and S6."
+  },
+  {
+    "id": "Q-155",
+    "title": "Owner decision: delete or keep the Codex-format agent copies (.agents/, .codex/) now gitignored",
+    "domain": "Architecture",
+    "priority": "P3",
+    "status": "pending",
+    "owner_role": "Owner (PM)",
+    "human_blocker": "They are untracked files in the owner's checkout; deleting them is irreversible.",
+    "files": [
+      ".agents/",
+      ".codex/",
+      ".gitignore"
+    ],
+    "acceptance_criteria": [
+      "Decide: delete them, or regenerate them from .claude/ when Codex is used",
+      "Either way they are never edited by hand (the .gitignore note says so)"
+    ],
+    "verify_commands": [
+      "git status --short"
+    ],
+    "notes_2026_10_17": "Q-112's investigation (2026-10-17)."
   }
 ]
