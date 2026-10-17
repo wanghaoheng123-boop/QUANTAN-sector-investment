@@ -8,7 +8,10 @@
  * forward-heuristic PE fallback chain).
  */
 import { describe, it, expect } from 'vitest'
-import { buildFundamentalsPayload, type FundamentalsQuery } from '@/lib/quant/buildFundamentalsPayload'
+import {
+  buildFundamentalsPayload, dcfApplicability, scenarioRates, scenarioOrderNote, MIN_RATE_SPREAD,
+  type FundamentalsQuery,
+} from '@/lib/quant/buildFundamentalsPayload'
 import type { OhlcBar } from '@/lib/quant/technicals'
 
 const Q: FundamentalsQuery = {
@@ -224,18 +227,26 @@ describe('buildFundamentalsPayload — RICH fixture (full payload)', () => {
   })
 
   it('DENSE GOLDENS: DCF scenarios, bands, anchors, volatility', () => {
+    // MIGRATION NOTE — Q-086 (2026-10-17): FCFE, no net-debt bridge. This fixture
+    // carries a balance sheet (30e9 + 5e9 debt, 20e9 cash) of the kind Yahoo
+    // stopped sending on the tickers measured, so here every per-share value
+    // rises by exactly 15e9 / 1e9 shares = $15 and the composite bands (median
+    // anchor 160) do not move. That holds for an ADMITTED name only: a refused
+    // name loses its bands and signal (see the B1 + B5 suite below).
     const base = payload.dcf.scenarios.base!
+    expect(payload.dcf.model).toBe('FCFE')
+    expect(payload.dcf.notApplicable).toBeNull()
     expect(base.enterpriseValue).toBeCloseTo(146538889000, -4)
-    expect(base.equityValue).toBeCloseTo(131538889000, -4)
-    expect(base.valuePerShare).toBeCloseTo(131.538889, 5)
+    expect(base.equityValue).toBeCloseTo(146538889000, -4)
+    expect(base.valuePerShare).toBeCloseTo(146.538889, 5)
     expect(base.pvExplicit).toBeCloseTo(36815975170, -4)
     expect(base.pvTerminal).toBeCloseTo(109722913800, -4)
     expect(base.terminalValueRaw).toBeCloseTo(168822303600, -4)
-    expect(base.netDebtUsed).toBe(15e9) // 30e9 LTD + 5e9 STD − 20e9 cash
-    expect(payload.dcf.scenarios.bear!.valuePerShare).toBeCloseTo(81, 4)
-    expect(payload.dcf.scenarios.bull!.valuePerShare).toBeCloseTo(190.6943245, 5)
+    expect(base.netDebtUsed).toBe(0) // FCFE: levered FCF is already after debt service
+    expect(payload.dcf.scenarios.bear!.valuePerShare).toBeCloseTo(96, 4)
+    expect(payload.dcf.scenarios.bull!.valuePerShare).toBeCloseTo(205.6943245, 5)
 
-    expect(payload.bands!.fairValueMid).toBeCloseTo(160, 8) // median of 131.5/180/160
+    expect(payload.bands!.fairValueMid).toBeCloseTo(160, 8) // median of 146.5/180/160
     expect(payload.bands!.buyZoneHigh).toBeCloseTo(142.4, 6)
     expect(payload.bands!.sellZoneLow).toBeCloseTo(171.6, 6)
     expect(payload.anchors).toEqual({
@@ -313,6 +324,8 @@ describe('buildFundamentalsPayload — BRANCH fixture (fallback chains)', () => 
 
   it('FCF falls back to OCF − |capex| from the statements', () => {
     const qs = {
+      // Classification present: without it the DCF now refuses (fails closed, accountant B2).
+      summaryProfile: { sector: 'Technology', industry: 'Software' },
       defaultKeyStatistics: { sharesOutstanding: 1e9 },
       cashflowStatementHistory: {
         cashflowStatements: [
@@ -322,6 +335,7 @@ describe('buildFundamentalsPayload — BRANCH fixture (fallback chains)', () => 
     }
     const p = buildFundamentalsPayload('X', qs, closes, dates, ohlc, [], [], 100, Q)
     expect(p.dcf.inputs.fcf0).toBe(7e9) // 10e9 − |−3e9|
+    expect(p.dcf.inputs.fcf0Source).toBe('statement.ocfLessCapex')
     expect(p.dcf.scenarios.base).not.toBeNull()
   })
 
@@ -343,5 +357,230 @@ describe('buildFundamentalsPayload — BRANCH fixture (fallback chains)', () => 
       financialData: { currentPrice: 77.5 },
     }, closes, dates, ohlc, [], [], null, Q)
     expect(p.price).toBe(77.5)
+  })
+})
+
+describe('Q-086: an FCF DCF is refused where it does not apply', () => {
+  const { closes, dates, ohlc } = series(320)
+  const spy = series(320, 0.0008)
+  const build = (industry: string) => buildFundamentalsPayload(
+    'BANK', { ...richQuoteSummary, summaryProfile: { ...(richQuoteSummary.summaryProfile as object), industry } },
+    closes, dates, ohlc, spy.closes, spy.dates, 150, Q,
+  )
+
+  it.each(['Banks - Diversified', 'Banks - Regional', 'Insurance - Diversified', 'Capital Markets'])('%s: no scenario, and the reason', (industry) => {
+    const p = build(industry)
+    expect(p.dcf.scenarios).toEqual({ bear: null, base: null, bull: null })
+    expect(p.dcf.notApplicable).toMatch(/does not apply/)
+    expect(p.anchors.dcfBase).toBeNull()
+  })
+
+  // Re-titled (accountant B3): the old test, "a payments network is not a
+  // bank: Credit Services keeps its DCF", approved a label that also holds card
+  // and consumer lenders. No field separates them, so the label is refused.
+  it.each(['Credit Services', 'Asset Management'])('%s is a mixed label and is refused, with that reason', (industry) => {
+    const p = build(industry)
+    expect(p.dcf.scenarios.base).toBeNull()
+    expect(p.dcf.notApplicable).toMatch(/no field separates them/)
+  })
+
+  it.each(['REIT - Mortgage', 'Financial Conglomerates', 'Mortgage Finance', 'Insurance - Life', 'Banks—Regional'])(
+    '%s is refused (accountant B3: the first two were admitted)', (industry) => {
+      expect(build(industry).dcf.notApplicable).toMatch(/balance sheet is the product/)
+    })
+
+  it('Insurance Brokers and exchanges are fee businesses and keep their DCF', () => {
+    for (const industry of ['Insurance Brokers', 'Financial Data & Stock Exchanges']) {
+      const p = buildFundamentalsPayload('X', { ...richQuoteSummary, summaryProfile: { sector: 'Financial Services', industry } },
+        closes, dates, ohlc, spy.closes, spy.dates, 150, Q)
+      expect(p.dcf.notApplicable, industry).toBeNull()
+      expect(p.dcf.scenarios.base, industry).not.toBeNull()
+    }
+  })
+})
+
+describe('Q-086 accountant B2: the refusal fails CLOSED on missing classification', () => {
+  const { closes, dates, ohlc } = series(320)
+  const spy = series(320, 0.0008)
+  const run = (over: Record<string, unknown>) => {
+    const { summaryProfile: _sp, ...rest } = richQuoteSummary as Record<string, unknown>
+    return buildFundamentalsPayload('X', { ...rest, ...over }, closes, dates, ohlc, spy.closes, spy.dates, 150, Q)
+  }
+
+  it('no profile at all: refused, with the reason', () => {
+    const p = run({})
+    expect(p.dcf.scenarios.base).toBeNull()
+    expect(p.dcf.notApplicable).toMatch(/sector and industry are unavailable/)
+  })
+
+  it('a profile with no industry and no sector: refused', () => {
+    expect(run({ summaryProfile: { longName: 'X' } }).dcf.notApplicable).toMatch(/unavailable/)
+  })
+
+  it('summaryProfile {} no longer hides a populated assetProfile', () => {
+    expect(run({ summaryProfile: {}, assetProfile: { sector: 'Financial Services', industry: 'Banks - Regional' } }).dcf.notApplicable)
+      .toMatch(/Banks - Regional/)
+  })
+
+  it('a non-string industry is not read as an industry', () => {
+    expect(run({ summaryProfile: { industry: 42 } }).dcf.notApplicable).toMatch(/unavailable/)
+  })
+
+  it('Financial Services with no industry is refused; another sector with no industry is not', () => {
+    expect(dcfApplicability({ sector: 'Financial Services', industry: null })).toMatch(/industry unavailable/)
+    expect(dcfApplicability({ sector: 'Technology', industry: null })).toBeNull()
+  })
+
+  it('an unrecognised Financial Services label is refused by default (allowlist, not denylist)', () => {
+    // A lender label Yahoo adds tomorrow must not slip through a denylist.
+    expect(dcfApplicability({ sector: 'Financial Services', industry: 'Specialty Lending' })).toMatch(/only Insurance Brokers and Financial Data & Stock Exchanges are admitted/)
+    expect(dcfApplicability({ sector: 'Technology', industry: 'Specialty Lending' })).toBeNull()
+  })
+})
+
+describe('Q-086 accountant B1 + B5: a refused name gets no bands, signal or band score', () => {
+  const { closes, dates, ohlc } = series(320)
+  const spy = series(320, 0.0008)
+  const build = (industry: string, sector = 'Technology') => buildFundamentalsPayload(
+    'X', { ...richQuoteSummary, summaryProfile: { ...(richQuoteSummary.summaryProfile as object), sector, industry } },
+    closes, dates, ohlc, spy.closes, spy.dates, 150, Q,
+  )
+
+  it('the same company, refused, draws no buy/sell zones from the remaining anchors', () => {
+    const admitted = build('Software')
+    const refused = build('Banks - Regional', 'Financial Services')
+    // Before the refusal existed the bank got the admitted row's numbers; that
+    // the composite moved for refused names is the migration B1 says to record.
+    expect(admitted.bands?.fairValueMid).not.toBeNull()
+    expect(admitted.signal).not.toBeNull()
+    expect(refused.bands).toBeNull()
+    expect(refused.signal).toBeNull()
+    // The band pillar takes its no-band branch rather than scoring a band
+    // drawn from two anchors.
+    const bandPillar = (p: typeof refused) => p.researchScore.pillars.find((x: { name: string }) => x.name === 'Valuation band fit')
+    expect(bandPillar(refused)).toEqual({ name: 'Valuation band fit', score: 50, detail: 'Bands unavailable.' })
+    expect(bandPillar(admitted)?.detail).not.toBe('Bands unavailable.')
+  })
+
+  it('a missing input (not a refusal) still draws bands, and the methodology names only the anchors used', () => {
+    const { defaultKeyStatistics, ...rest } = richQuoteSummary as Record<string, unknown>
+    const p = buildFundamentalsPayload('X', { ...rest, defaultKeyStatistics: { ...(defaultKeyStatistics as object), sharesOutstanding: undefined } },
+      closes, dates, ohlc, spy.closes, spy.dates, 150, Q)
+    expect(p.dcf.unavailable).toMatch(/no shares outstanding/)
+    expect(p.dcf.notApplicable).toBeNull()
+    expect(p.bands?.methodology).toMatch(/median of 2 anchor\(s\) \(analyst mean target, forward EPS × P\/E heuristic\)/)
+    expect(p.bands?.methodology).not.toMatch(/DCF/)
+  })
+})
+
+describe('Q-086 accountant S1/S2/S4/S7: scenarios say what they computed', () => {
+  const { closes, dates, ohlc } = series(320)
+  const spy = series(320, 0.0008)
+  const build = (q: Partial<FundamentalsQuery>, over: Record<string, unknown> = {}) =>
+    buildFundamentalsPayload('X', { ...richQuoteSummary, ...over }, closes, dates, ohlc, spy.closes, spy.dates, 150, { ...Q, ...q })
+
+  it('the bull rate is never above base and no longer pinned at an absolute 6%', () => {
+    // 4.0%: the base spread itself is under MIN_RATE_SPREAD, so that DCF is refused outright.
+    for (const wacc of [0.045, 0.05, 0.06, 0.065, 0.07, 0.09, 0.12]) {
+      const r = scenarioRates({ wacc, terminalGrowth: 0.025 })
+      expect(r.bull, String(wacc)).toBeLessThanOrEqual(r.base)
+      expect(r.bear).toBeGreaterThan(r.base)
+      expect(r.bull - 0.025).toBeGreaterThanOrEqual(MIN_RATE_SPREAD - 1e-12)
+    }
+    // 6.5% and 7% now differ (the old floor gave 6% for both).
+    expect(scenarioRates({ wacc: 0.065, terminalGrowth: 0.025 }).bull).toBeCloseTo(0.055, 12)
+    expect(scenarioRates({ wacc: 0.07, terminalGrowth: 0.025 }).bull).toBeCloseTo(0.06, 12)
+  })
+
+  it('values are ordered bear ≤ base ≤ bull across the slider range, or a note says why not', () => {
+    for (const wacc of [0.05, 0.06, 0.07, 0.09, 0.12]) {
+      const p = build({ wacc })
+      const s = p.dcf.scenarios
+      if (s.bear && s.base && s.bull) {
+        expect(s.bear.valuePerShare, String(wacc)).toBeLessThanOrEqual(s.base.valuePerShare)
+        expect(s.base.valuePerShare, String(wacc)).toBeLessThanOrEqual(s.bull.valuePerShare)
+      }
+    }
+    expect(scenarioOrderNote({ gBear: 0.12, gBase: 0.05, gBull: 0 }, { base: 0.09, bull: 0.08 })).toMatch(/not ordered/)
+    expect(scenarioOrderNote({ gBear: 0.02, gBase: 0.05, gBull: 0.09 }, { base: 0.09, bull: 0.08 })).toBeNull()
+  })
+
+  it('a discount rate within MIN_RATE_SPREAD of terminal growth is refused with a reason, not 105,000/sh', () => {
+    const p = build({ wacc: 0.0501, terminalGrowth: 0.05 })
+    expect(p.dcf.scenarios.base).toBeNull()
+    expect(p.dcf.unavailable).toMatch(/within 2 points of terminal growth/)
+  })
+
+  it('a reporting currency that differs from the quote currency is refused', () => {
+    const p = build({}, {
+      financialData: { ...(richQuoteSummary.financialData as object), financialCurrency: 'TWD' },
+      price: { currency: 'USD' },
+    })
+    expect(p.dcf.scenarios.base).toBeNull()
+    expect(p.dcf.notApplicable).toMatch(/reported in TWD and the price is quoted in USD/)
+  })
+
+  it('a non-positive fallback cash flow gives a reason, not a silent dash', () => {
+    const { financialData, ...rest } = richQuoteSummary as Record<string, unknown>
+    const p = buildFundamentalsPayload('X', {
+      ...rest,
+      financialData: { ...(financialData as object), freeCashflow: undefined },
+      cashflowStatementHistory: { cashflowStatements: [{ totalCashFromOperatingActivities: 1e9, capitalExpenditures: -3e9 }] },
+    }, closes, dates, ohlc, spy.closes, spy.dates, 150, Q)
+    expect(p.dcf.inputs.fcf0).toBeNull()
+    expect(p.dcf.unavailable).toMatch(/no positive free cash flow/)
+  })
+
+  it('records which cash-flow field fired, and the discount rate under its own name', () => {
+    const p = build({})
+    expect(p.dcf.inputs.fcf0Source).toBe('financialData.freeCashflow')
+    expect(p.dcf.inputs.discountRate).toBe(Q.wacc)
+  })
+})
+
+describe('Q-086 accountant re-gate (N1, N2, N3a, N5, N8)', () => {
+  const { closes, dates, ohlc } = series(320)
+  const spy = series(320, 0.0008)
+  const build = (q: Partial<FundamentalsQuery> = {}, over: Record<string, unknown> = {}, quoteCurrency?: string | null) =>
+    buildFundamentalsPayload('X', { ...richQuoteSummary, ...over }, closes, dates, ohlc, spy.closes, spy.dates, 150, { ...Q, ...q }, quoteCurrency)
+
+  it('N5: an exact 2pp spread runs on every slider cell, and 1.5pp is refused', () => {
+    for (const [wacc, tg] of [[0.06, 0.04], [0.055, 0.035], [0.045, 0.025], [0.05, 0.03], [0.065, 0.045], [0.07, 0.05]]) {
+      expect(build({ wacc, terminalGrowth: tg }).dcf.unavailable, `${wacc}/${tg}`).toBeNull()
+    }
+    expect(build({ wacc: 0.06, terminalGrowth: 0.045 }).dcf.unavailable).toMatch(/within 2 points/)
+  })
+
+  it('N2: a known reporting currency with an unknown quote currency is refused', () => {
+    const fd = { ...(richQuoteSummary.financialData as object), financialCurrency: 'TWD' }
+    expect(build({}, { financialData: fd }, null).dcf.notApplicable).toMatch(/price's currency is unavailable/)
+    expect(build({}, { financialData: fd }, 'TWD').dcf.notApplicable).toBeNull()
+  })
+
+  it('CANNOT do (N2 residual): with no reporting currency at all, the check cannot run, and the DCF does', () => {
+    // A known residual, asserted so a green run is not read as proof.
+    expect(build({}, {}, 'USD').dcf.notApplicable).toBeNull()
+    expect(build({}, {}, null).dcf.notApplicable).toBeNull()
+  })
+
+  it('N1: a Real Estate company with no industry is refused (it could be a mortgage REIT)', () => {
+    const p = build({}, { summaryProfile: { sector: 'Real Estate' } })
+    expect(p.dcf.notApplicable).toMatch(/mortgage REIT .* cannot be ruled out/)
+    expect(build({}, { summaryProfile: { sector: 'Real Estate', industry: 'REIT - Industrial' } }).dcf.notApplicable).toBeNull()
+  })
+
+  it('N3a: each refusal branch gives a reason that is true of what it caught', () => {
+    expect(dcfApplicability({ sector: 'Financial Services', industry: 'Shell Companies' })).toMatch(/no operating business/)
+    expect(dcfApplicability({ sector: 'Financial Services', industry: 'Specialty Lending' })).toMatch(/only Insurance Brokers and Financial Data & Stock Exchanges are admitted/)
+    expect(dcfApplicability({ sector: 'Financial Services', industry: 'Specialty Lending' })).not.toMatch(/deposits, reserves/)
+    expect(dcfApplicability({ sector: 'Financial Services', industry: 'Banks - Regional' })).toMatch(/deposits, reserves, borrowings/)
+  })
+
+  it('N8: a refused name has a research score, with the band pillar on its no-band branch', () => {
+    const refused = build({}, { summaryProfile: { sector: 'Financial Services', industry: 'Banks - Regional' } })
+    expect(Number.isFinite(refused.researchScore.total)).toBe(true)
+    const pillars = refused.researchScore.pillars
+    const w = [0.2, 0.25, 0.2, 0.2, 0.15]
+    expect(refused.researchScore.total).toBeCloseTo(pillars.reduce((acc: number, p: { score: number }, i: number) => acc + p.score * w[i], 0), 6)
   })
 })

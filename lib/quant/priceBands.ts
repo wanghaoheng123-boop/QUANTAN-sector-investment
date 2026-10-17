@@ -6,6 +6,12 @@ export interface BandInputs {
   currentPrice: number
   /** Candidate anchors; nulls dropped before median. */
   anchors: (number | null | undefined)[]
+  /**
+   * Names for `anchors`, position for position. When given, the methodology
+   * names the anchors actually used instead of a fixed list (accountant B5:
+   * it said "DCF / analyst target / forward heuristic" when the DCF was absent).
+   */
+  anchorLabels?: string[]
   /** Annualized volatility of log returns, e.g. 0.25 = 25%. */
   annualizedVol: number
   /** Base margin of safety before vol adjustment. */
@@ -20,7 +26,9 @@ export interface PriceBands {
 }
 
 export function computeAdaptiveBands(i: BandInputs): PriceBands {
-  const anchors = i.anchors.filter((x): x is number => typeof x === 'number' && Number.isFinite(x) && x > 0)
+  const usable = (x: number | null | undefined): x is number => typeof x === 'number' && Number.isFinite(x) && x > 0
+  const anchors = i.anchors.filter(usable)
+  const usedLabels = i.anchorLabels ? i.anchors.flatMap((x, k) => (usable(x) && i.anchorLabels?.[k] ? [i.anchorLabels[k]] : [])) : null
   // Phase 14 wave 12 (Q2-M-3): vol cap raised 0.8 → 1.5 to admit crisis-regime
   // volatility. The 80% cap silently suppressed crypto crash periods (2018,
   // 2022 — both hit 100%+ realized 30-day annualized vol) and equity stress
@@ -63,7 +71,7 @@ export function computeAdaptiveBands(i: BandInputs): PriceBands {
     // Math.min(0.12, vol*0.6), so adding it again was double-counting
     // and gave users an inaccurate display of the buy-zone discount.
     methodology:
-      `Composite fair value = median of ${anchors.length} anchor(s) (DCF / analyst target / forward-earnings heuristic). ` +
+      `Composite fair value = median of ${anchors.length} anchor(s) (${usedLabels ? usedLabels.join(', ') : 'DCF / analyst target / forward-earnings heuristic'}). ` +
       `Margin of safety scales with annualized vol (~${(vol * 100).toFixed(1)}%) over a ${(baseM * 100).toFixed(0)}%–${((baseM + 0.12) * 100).toFixed(0)}% range: ` +
       `buy zone at ${(m * 100).toFixed(1)}% below fair value; ` +
       `sell zone at ${(sellOffset * 100).toFixed(1)}% above fair value (asymmetric vol-adjusted extension).`,

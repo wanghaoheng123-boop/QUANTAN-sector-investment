@@ -49,9 +49,18 @@ function extractStatementRows(moduleObj: unknown, fallbacks: string[]): AnyRec[]
   return []
 }
 
-function pickFcf0(cashflowModule: unknown, financialData: AnyRec | null): number | null {
+/** Which field the DCF's starting cash flow came from (accountant S11). */
+export type Fcf0Source = 'financialData.freeCashflow' | 'statement.freeCashflow' | 'statement.ocfLessCapex'
+
+/**
+ * The DCF's starting cash flow, and where it came from. Positive only: a DCF
+ * grows a cash flow forward, and growing a negative one is not a valuation
+ * (accountant S4 — the OCF − capex fallback used to return a negative value,
+ * which then produced a silent null with no reason).
+ */
+function pickFcf0(cashflowModule: unknown, financialData: AnyRec | null): { value: number; source: Fcf0Source } | null {
   const fc = num(financialData?.freeCashflow)
-  if (fc && fc > 0) return fc
+  if (fc && fc > 0) return { value: fc, source: 'financialData.freeCashflow' }
   const cashflowHistory = extractStatementRows(cashflowModule, [
     'cashflowStatements',
     'cashflowStatementHistory',
@@ -59,18 +68,137 @@ function pickFcf0(cashflowModule: unknown, financialData: AnyRec | null): number
   if (cashflowHistory.length === 0) return null
   const latest = cashflowHistory[0] as AnyRec
   const fcf = num(latest?.freeCashflow)
-  if (fcf && fcf > 0) return fcf
+  if (fcf && fcf > 0) return { value: fcf, source: 'statement.freeCashflow' }
   const ocf = num(latest?.totalCashFromOperatingActivities)
   const capexRaw = num(latest?.capitalExpenditures)
   if (ocf != null && capexRaw != null) {
-    const capexOut = Math.abs(capexRaw)
-    return ocf - capexOut
+    const v = ocf - Math.abs(capexRaw)
+    return v > 0 ? { value: v, source: 'statement.ocfLessCapex' } : null
   }
   return null
 }
 
 function lastAnnualBalanceSheets(rows: AnyRec[], max = 5): AnyRec[] {
   return rows.slice(0, max)
+}
+
+function firstString(a: unknown, b: unknown, key: string): string | null {
+  for (const o of [a, b]) {
+    if (o && typeof o === 'object') {
+      const v = (o as AnyRec)[key]
+      if (typeof v === 'string' && v.trim() !== '') return v.trim()
+    }
+  }
+  return null
+}
+
+/** Yahoo's display strings use hyphens; tolerate dash variants and spacing. */
+const normLabel = (s: string) => s.replace(/[‒-―]/g, '-').replace(/\s+/g, ' ').trim().toLowerCase()
+
+/**
+ * Industries inside Financial Services where operating cash flow IS separable
+ * from financing, so an FCF DCF can apply. Everything else in the sector is
+ * refused — an allowlist, because a denylist has to know every lender label
+ * (accountant B3: REIT - Mortgage and Financial Conglomerates were admitted,
+ * Insurance Brokers wrongly refused).
+ */
+export const DCF_ADMITTED_FINANCIAL_INDUSTRIES = ['Insurance Brokers', 'Financial Data & Stock Exchanges']
+
+/** Lender and balance-sheet labels refused wherever they appear, whatever the sector says. */
+const BALANCE_SHEET_INDUSTRY = /^(?:banks\b|insurance\b(?! brokers)|capital markets|mortgage finance|financial conglomerates|reit - mortgage)/
+
+/** A shell or blank-check company has no operating business for an FCF DCF to value. */
+const SHELL_INDUSTRY = /^shell companies\b/
+
+/** Labels Yahoo uses for a MIX of separable and balance-sheet businesses, which no field splits. */
+const MIXED_INDUSTRY = /^(?:credit services|asset management)\b/
+
+const BALANCE_SHEET_REASON =
+  'the balance sheet is the product (deposits, reserves, borrowings), so cash flow cannot be separated from financing.'
+
+/**
+ * Whether an FCF-based DCF applies, as the reason it does not (null = applies).
+ *
+ * Fails CLOSED (accountant B2): an unknown classification refuses rather than
+ * proceeds — the refusal-gate rule in CLAUDE.md. Damodaran (2012) ch. 21:
+ * for financial-service firms, debt is raw material, not capital, so cash flow
+ * to the firm cannot be defined.
+ */
+export function dcfApplicability(c: { sector: string | null; industry: string | null }): string | null {
+  const sector = c.sector ? normLabel(c.sector) : null
+  const industry = c.industry ? normLabel(c.industry) : null
+  if (sector === null && industry === null) {
+    return "The company's sector and industry are unavailable, so whether an FCF DCF applies cannot be checked."
+  }
+  if (industry !== null && BALANCE_SHEET_INDUSTRY.test(industry)) {
+    return `An FCF DCF does not apply to ${c.industry}: ${BALANCE_SHEET_REASON}`
+  }
+  if (industry !== null && SHELL_INDUSTRY.test(industry)) {
+    return `An FCF DCF does not apply to ${c.industry}: a shell or blank-check company has no operating business whose cash flow could be valued.`
+  }
+  if (industry !== null && MIXED_INDUSTRY.test(industry)) {
+    return `An FCF DCF is not applied to ${c.industry}: this label can cover lenders or leveraged investment vehicles as well as fee businesses, and no field separates them.`
+  }
+  if (sector === 'financial services') {
+    const admitted = industry !== null && DCF_ADMITTED_FINANCIAL_INDUSTRIES.some((a) => normLabel(a) === industry)
+    if (!admitted) {
+      // Accountant re-gate N3a: the balance-sheet reason is true of banks and
+      // insurers, not of every label this default catches, so it is not used here.
+      return `An FCF DCF is not applied to ${c.industry ?? 'this Financial Services company (industry unavailable)'}: inside Financial Services only ${DCF_ADMITTED_FINANCIAL_INDUSTRIES.join(' and ')} are admitted, because elsewhere in the sector cash flow usually cannot be separated from financing.`
+    }
+  }
+  // Accountant re-gate N1: a Real Estate company with no industry could be a
+  // mortgage REIT, which is refused above, so it is refused here too.
+  if (sector === 'real estate' && industry === null) {
+    return 'An FCF DCF is not applied: this Real Estate company has no industry label, so a mortgage REIT (a leveraged lender) cannot be ruled out.'
+  }
+  return null
+}
+
+/**
+ * Scenario discount-rate offsets: the bear case adds 1.5pp, the bull case
+ * removes 1pp. PROVENANCE: inherited unchanged from the pre-Q-086 implementation,
+ * kept so the default scenarios do not move. They are sensitivity offsets, not
+ * estimates of any company's risk premium, and no paper is claimed for them.
+ * What changed (accountant S1): the bull rate was floored at an absolute 6%,
+ * which pinned the bull value for every input from 4% to 7% and put the bull
+ * rate ABOVE base at 4-5%. It is now never above base and never closer to
+ * terminal growth than MIN_RATE_SPREAD.
+ */
+export const BEAR_RATE_DELTA = 0.015
+export const BULL_RATE_DELTA = 0.01
+/** Bear-case terminal growth cap. PROVENANCE: inherited unchanged from the pre-Q-086 code. */
+export const BEAR_TERMINAL_GROWTH_CAP = 0.02
+/**
+ * The smallest discount-rate-minus-growth spread a scenario may use.
+ *
+ * The Gordon terminal value is FCF × (1+g) / (r − g), so its multiple of
+ * next year's cash flow is 1 / (r − g) and diverges as the spread closes
+ * (Damodaran, A. (2012). Investment Valuation, 3rd ed., ch. 12, the stable-
+ * growth model). A 2pp spread caps that multiple at 50×. The 2pp is this
+ * platform's choice of cap, not a sourced estimate; the accountant gate
+ * measured 105,000/sh at a 0.01pp spread (S2).
+ */
+export const MIN_RATE_SPREAD = 0.02
+/** Floating-point tolerance for the spread comparison; far below any slider step (0.5pp). */
+const SPREAD_EPSILON = 1e-9
+
+export function scenarioRates(q: { wacc: number; terminalGrowth: number }) {
+  const base = q.wacc
+  const bearTerminalGrowth = Math.min(q.terminalGrowth, BEAR_TERMINAL_GROWTH_CAP)
+  const bull = Math.min(base, Math.max(base - BULL_RATE_DELTA, q.terminalGrowth + MIN_RATE_SPREAD))
+  return { bear: base + BEAR_RATE_DELTA, base, bull, bearTerminalGrowth }
+}
+
+/** When the inputs do not make bear <= base <= bull, say so instead of labelling them as if they did. */
+export function scenarioOrderNote(
+  q: { gBear: number; gBase: number; gBull: number },
+  rates: { base: number; bull: number },
+): string | null {
+  const notes: string[] = []
+  if (!(q.gBear <= q.gBase && q.gBase <= q.gBull)) notes.push('the growth inputs are not ordered bear ≤ base ≤ bull')
+  if (rates.bull >= rates.base) notes.push('the bull discount rate cannot go below the base rate without closing on terminal growth, so it equals the base rate')
+  return notes.length ? `Scenario labels are approximate: ${notes.join('; ')}.` : null
 }
 
 export interface FundamentalsQuery {
@@ -90,8 +218,16 @@ export function buildFundamentalsPayload(
   spyCloses: number[],
   spyDates: string[],
   currentPrice: number | null,
-  q: FundamentalsQuery
+  q: FundamentalsQuery,
+  /**
+   * The currency the price is quoted in, from the route's `quote()` row. The
+   * route does not request the `price` quoteSummary module, so without this the
+   * currency refusal below could never fire in production.
+   */
+  quoteCurrencyIn?: string | null,
 ) {
+  // Narrative text only. Classification (sector, industry) is read field by
+  // field below, because the DCF refusal depends on it.
   const profile = (quoteSummary.summaryProfile || quoteSummary.assetProfile) as AnyRec | null
   const financialData = quoteSummary.financialData as AnyRec | null
   const keyStats = quoteSummary.defaultKeyStatistics as AnyRec | null
@@ -105,66 +241,78 @@ export function buildFundamentalsPayload(
   ])
   const cashModule = quoteSummary.cashflowStatementHistory
 
-  const shares = num(keyStats?.sharesOutstanding) ?? num(keyStats?.ordinarySharesNumber)
-  const fcf0 = pickFcf0(cashModule, financialData)
+  // `ordinarySharesNumber` was a second fallback here; it is not a
+  // DefaultKeyStatistics field in yahoo-finance2 3.13.2, so it never fired.
+  const shares = num(keyStats?.sharesOutstanding)
+  const fcf0Pick = pickFcf0(cashModule, financialData)
+  const fcf0 = fcf0Pick?.value ?? null
 
-  // Net debt = (long-term debt + short-term debt) − cash & equivalents
-  // (most-recent balance sheet). Required for the FCFF→equity bridge in runDcf.
+  // Q-086 (2026-10-17) — this is an FCFE model, and says so.
   //
-  // Phase 14 wave 13: was using LTD alone, which understates net debt for
-  // companies with material short-term obligations (commercial-paper-heavy
-  // financials, REITs with revolving credit lines, retailers with seasonal
-  // working-capital financing). The Damodaran (2012) FCFF→equity bridge
-  // explicitly subtracts ALL interest-bearing debt, not just long-term.
+  // `fcf0` is Yahoo's `financialData.freeCashflow`. Its exact definition is
+  // NOT verified by this platform (yahoo-finance2 types it with no doc; the
+  // accountant gate, reviews/q086-accountant-2026-10-17.md, Q1): it is TREATED
+  // as cash available to equity holders with zero net borrowing, which is an
+  // assumption, not an identity. The code used to discount it at a "WACC" and
+  // subtract net debt built from `balanceSheetHistory` — the FCFF bridge. That
+  // bridge was inert on the four tickers measured (AAPL/JPM/NEE/XOM,
+  // 2026-10-16), whose balance-sheet rows carry only `endDate`, so net debt was
+  // 0 there; tickers that still return the fields would have had debt
+  // subtracted, and no longer do.
   //
-  // Also adds `shortLongTermDebt` (Yahoo's name for the current portion of
-  // long-term debt). When the balance-sheet module is unavailable we fall
-  // back to undefined → runDcf assumes netDebt=0 (preserves prior behaviour
-  // for those tickers).
-  //
-  // Citation: Damodaran, A. (2012). Investment Valuation (3rd ed.), Wiley,
-  //           ch.2 — "subtract all interest-bearing debt obligations from EV
-  //           to derive equity value".
-  let netDebt: number | undefined
-  if (balanceHist.length > 0) {
-    const latest = balanceHist[0] as AnyRec
-    const ltd = num(latest?.longTermDebt) ?? 0
-    // Short-term debt may surface under different Yahoo names. Try the
-    // common ones; default to 0 if none present.
-    const std = num(latest?.shortLongTermDebt)
-              ?? num(latest?.shortTermDebt)
-              ?? num(latest?.currentDebt)
-              ?? 0
-    const cash = num(latest?.cash) ?? 0
-    netDebt = ltd + std - cash
+  // Citation: Damodaran, A. (2012). Investment Valuation (3rd ed.), ch. 14 —
+  // FCFE discounted at the cost of equity yields equity value directly.
+  const classification = {
+    // Field by field (accountant B2): `summaryProfile || assetProfile` took the
+    // first truthy object, so `summaryProfile: {}` hid a populated assetProfile.
+    sector: firstString(quoteSummary.summaryProfile, quoteSummary.assetProfile, 'sector'),
+    industry: firstString(quoteSummary.summaryProfile, quoteSummary.assetProfile, 'industry'),
   }
+  const reportingCurrency = typeof financialData?.financialCurrency === 'string' ? financialData.financialCurrency : null
+  const quoteCurrency =
+    typeof quoteCurrencyIn === 'string' && quoteCurrencyIn !== ''
+      ? quoteCurrencyIn
+      : typeof quoteSummary.price === 'object' && quoteSummary.price !== null && typeof (quoteSummary.price as AnyRec).currency === 'string'
+        ? ((quoteSummary.price as AnyRec).currency as string)
+        : null
+  const dcfNotApplicable =
+    dcfApplicability(classification) ??
+    // Accountant S7: a per-share value in the reporting currency compared with
+    // a price in the quote currency is not a valuation (a foreign ADR).
+    (reportingCurrency && quoteCurrency && reportingCurrency !== quoteCurrency
+      ? `The cash flow is reported in ${reportingCurrency} and the price is quoted in ${quoteCurrency}, and this model does not convert currencies or ADR share ratios.`
+      : null) ??
+    // Re-gate N2: a known reporting currency against an UNKNOWN quote currency
+    // cannot be checked, so it refuses (the unknown-must-refuse rule of B2).
+    (reportingCurrency && !quoteCurrency
+      ? `The cash flow is reported in ${reportingCurrency} and the price's currency is unavailable, so whether they match cannot be checked.`
+      : null)
 
-  const dcfBear =
-    shares && fcf0
-      ? runDcf({
-          fcf0,
-          shares,
-          wacc: q.wacc + 0.015,
-          terminalGrowth: Math.min(q.terminalGrowth, 0.02),
-          explicitGrowth: q.gBear,
-          netDebt,
-        })
+  const fcfReason =
+    fcf0 == null ? 'Yahoo supplied no positive free cash flow for this company, and a DCF needs one to grow.' : null
+  const sharesReason = shares == null || shares <= 0 ? 'Yahoo supplied no shares outstanding, so a per-share value cannot be computed.' : null
+  const spreadReason =
+    // Compared with a tolerance (re-gate N5): 0.06 - 0.04 is 0.0199999… in
+    // floating point, so an exact 2pp spread was refused on half the slider grid.
+    q.wacc - q.terminalGrowth < MIN_RATE_SPREAD - SPREAD_EPSILON
+      ? `The discount rate is within ${(MIN_RATE_SPREAD * 100).toFixed(0)} points of terminal growth, where the terminal value swamps everything and diverges; widen the gap.`
       : null
-  const dcfBase =
-    shares && fcf0
-      ? runDcf({ fcf0, shares, wacc: q.wacc, terminalGrowth: q.terminalGrowth, explicitGrowth: q.gBase, netDebt })
-      : null
-  const dcfBull =
-    shares && fcf0
-      ? runDcf({
-          fcf0,
-          shares,
-          wacc: Math.max(q.wacc - 0.01, 0.06),
-          terminalGrowth: q.terminalGrowth,
-          explicitGrowth: q.gBull,
-          netDebt,
-        })
-      : null
+  /** Why there is no DCF at all, when there is none (accountant S4: every null carries a reason). */
+  const dcfUnavailable = dcfNotApplicable ?? sharesReason ?? fcfReason ?? spreadReason
+
+  const rates = scenarioRates(q)
+  const canDcf = dcfUnavailable === null && shares != null && fcf0 != null
+  const dcfBear = canDcf
+    ? runDcf({ fcf0: fcf0 as number, shares: shares as number, wacc: rates.bear, terminalGrowth: rates.bearTerminalGrowth, explicitGrowth: q.gBear })
+    : null
+  const dcfBase = canDcf
+    ? runDcf({ fcf0: fcf0 as number, shares: shares as number, wacc: rates.base, terminalGrowth: q.terminalGrowth, explicitGrowth: q.gBase })
+    : null
+  const dcfBull = canDcf
+    ? runDcf({ fcf0: fcf0 as number, shares: shares as number, wacc: rates.bull, terminalGrowth: q.terminalGrowth, explicitGrowth: q.gBull })
+    : null
+  /** Accountant S1: the bear/base/bull labels must describe the inputs actually used. */
+  const scenarioNote = scenarioOrderNote(q, rates)
 
   const forwardEps = num(keyStats?.forwardEps)
   const trailingPe = num(keyStats?.trailingPE)
@@ -185,11 +333,14 @@ export function buildFundamentalsPayload(
 
   const vol = annualizedVolFromCloses(closes)
   const price = currentPrice && currentPrice > 0 ? currentPrice : num(financialData?.currentPrice)
+  // Accountant B5: a refused DCF must not reappear as buy/sell zones drawn
+  // from the two remaining anchors (the forward heuristic is ~ the price).
   const bands =
-    price && price > 0
+    price && price > 0 && dcfNotApplicable === null
       ? computeAdaptiveBands({
           currentPrice: price,
           anchors,
+          anchorLabels: ['DCF base', 'analyst mean target', 'forward EPS × P/E heuristic'],
           annualizedVol: vol,
         })
       : null
@@ -228,8 +379,8 @@ export function buildFundamentalsPayload(
 
   const narrative = {
     name: (profile?.longName || profile?.shortName || symbol) as string,
-    sector: profile?.sector as string | undefined,
-    industry: profile?.industry as string | undefined,
+    sector: classification.sector ?? undefined,
+    industry: classification.industry ?? undefined,
     summary: (profile?.longBusinessSummary || '') as string,
     employees: num(profile?.fullTimeEmployees),
     website: profile?.website as string | undefined,
@@ -368,10 +519,22 @@ export function buildFundamentalsPayload(
     balances,
     incomes,
     dcf: {
+      /** Q-086: Yahoo's free cash flow, treated as cash to equity, at a cost of equity — no debt bridge. */
+      model: 'FCFE' as const,
+      /** Why an FCF DCF does not apply to this company (a refusal; no bands are drawn). */
+      notApplicable: dcfNotApplicable,
+      /** Why no scenario was computed, for ANY reason — the refusal above, or a missing input. */
+      unavailable: dcfUnavailable,
+      /** When the bear/base/bull labels do not strictly describe the inputs used. */
+      scenarioNote,
       inputs: {
         fcf0,
+        fcf0Source: fcf0Pick?.source ?? null,
         shares,
         ...q,
+        /** `wacc` is the legacy name of this input; it is used as a cost of equity (accountant S10). */
+        discountRate: q.wacc,
+        scenarioRates: rates,
       },
       scenarios: dcfPack,
     },

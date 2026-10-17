@@ -63,17 +63,17 @@ requiring those is `INSUFFICIENT DATA`, and structural questions escalate to
 
 ## DCF DISCIPLINE — `lib/quant/dcf.ts`
 
-The model is 2-stage FCFF → WACC → Gordon terminal, citing Damodaran (2012).
+`runDcf` is a model-neutral 2-stage DCF with a Gordon terminal, citing Damodaran (2012). Its production caller is **FCFE at a cost of equity with no net-debt bridge** (Q-086, 2026-10-17); an FCFF caller must pass `netDebt`.
 Standing rules:
 
 - **Terminal value dominates.** Report the `pvTerminal / enterpriseValue` split
   every time. A DCF that is 80% terminal value is a statement about the
   terminal assumption, not about the business.
-- **`netDebt` defaults to 0**, and the docstring states this silently inflates
-  equity for levered names. Callers do supply it when the balance-sheet module
-  is present. **Open question you own:** when it is absent, is the fallback
-  flagged to the user, or does an inflated per-share value render as if it were
-  fully supported? That is an I2 (fail-closed) question — see `Q-086`.
+- **`netDebt` is for FCFF callers only.** The production caller is FCFE and
+  passes none (Q-086, 2026-10-17); an FCFE caller that passed it would count
+  the debt twice. If an FCFF caller is ever added, it needs a debt source the
+  platform does not have today (the balance-sheet module is empty on the
+  tickers measured) and a `credit-analyst` screen first.
 - WACC and growth are assumptions, not measurements. Any DCF output shown to a
   user needs its assumption set visible alongside it.
 - Sensitivity, not a point estimate. The bear/base/bull triple already exists —
