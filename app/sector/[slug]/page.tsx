@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import { PanelSpinner } from '@/components/PanelSpinner'
-import SignalCard from '@/components/SignalCard'
+import SessionMoveCard from '@/components/SessionMoveCard'
 const DarkPoolPanel = dynamic(() => import('@/components/DarkPoolPanel'), {
   ssr: false,
   loading: () => <PanelSpinner label="dark pool" />,
@@ -20,7 +20,7 @@ import { generateDarkPoolPrints } from '@/lib/mockData'
 import { markSynthetic, unwrapSynthetic, assertNotSynthetic, type Synthetic } from '@/lib/synthetic'
 import { DarkPoolPrint } from '@/lib/sectors'
 import type { DarkPoolAnalysis } from '@/lib/darkpool'
-import { buildSingleSessionSignal } from '@/lib/sessionSignalsFromQuotes'
+import { sessionMoveFor } from '@/lib/sessionMoves'
 import { tradingDefaultEmaFlags } from '@/lib/chartEma'
 import { STOCK_CHART_RANGES, isStockIntradayPollRange, chartBarKindLabel } from '@/lib/chartYahoo'
 import { formatCompactNumber, formatCurrency, formatFreshness, formatSignedNumber } from '@/lib/format'
@@ -237,10 +237,7 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
     return () => controller.abort()
   }, [sector.etf, activeTab])
 
-  const signal = useMemo(
-    () => (quote ? buildSingleSessionSignal(sector.etf, quote) : null),
-    [quote, sector.etf]
-  )
+  const move = useMemo(() => sessionMoveFor(sector.etf, quote), [quote, sector.etf])
 
   const sectorIndicators = useMemo(
     () => ({
@@ -383,7 +380,7 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
         <DashboardGuide
           pageKey={`sector-${sector.slug}`}
           title={`${sector.name} (${sector.etf})`}
-          summary={`${sector.description}. Use the chart for trend, dark pool for institutional flow, and the right column for quant signals.`}
+          summary={`${sector.description}. Use the chart for trend and the right column for today\u2019s session move.`}
           sections={[
             {
               title: 'Chart tab — what to look at',
@@ -395,36 +392,43 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
               ),
             },
             {
-              title: 'Dark Pool tab — institutional flow',
+              // Red-team S2 (2026-10-17): this called the simulated prints
+              // "institutional flow" and read accumulation into them.
+              title: 'Dark Pool tab — what is measured and what is not',
               body: (
                 <p>
-                  Off-exchange block trades. <strong>Bullish prints near ask</strong> = accumulation; <strong>bearish prints near bid</strong> = distribution.
-                  Cluster of large prints often precedes a directional move — but is rarely a same-day signal.
+                  <strong>Measured:</strong> average daily volume, and short interest, days to cover and float where Yahoo publishes them. For sector ETFs it usually does not, so those fields show &mdash;.
+                  {' '}<strong>Not measured:</strong> the block-print table and the flow gauge are simulated for illustration and say nothing about this ETF.
                 </p>
               ),
             },
             {
-              title: 'Right column — Quant signals',
+              // Q-135: this described a composite BUY/SELL/HOLD signal with a
+              // "Confidence %" that nothing on this page computes or renders.
+              title: 'Right column — session move',
               body: (
                 <p>
-                  Composite signal (BUY/SELL/HOLD) blends: trend (price vs EMA200), momentum (RSI/MACD), volatility regime, and multi-timeframe alignment.
-                  <strong>Confidence %</strong> = how aligned all sub-signals are. Hover any metric’s ⓘ for the formula and how to act on it.
+                  How far the sector ETF has moved today versus the prior close, from the latest Yahoo quote, with the quote&apos;s age.
+                  It is a measurement of the move, not a forecast or a buy/sell signal.
                 </p>
               ),
             },
             {
-              title: 'How to act',
+              // Red-team S1 (2026-10-17): this was "How to act" — trade setups
+              // and a position-sizing rule, on a page whose signals Q-135
+              // removed, and the kind of personal recommendation Q-083 gates.
+              title: 'What this page is not',
               body: (
                 <p>
-                  Strong BUY + price above EMA200 + RSI 50–70 = <strong>quality long setup</strong>. Strong SELL + RSI &gt; 80 + dark pool selling = <strong>top warning</strong>.
-                  Always size position so a 1.5×ATR stop costs ≤1% of account.
+                  Nothing here is a recommendation to buy or sell. The chart and indicators describe past prices and the session move describes today; none of it forecasts a return.
+                  Research tooling, not investment advice.
                 </p>
               ),
             },
           ]}
           legend={[
-            { color: '#00d084', label: 'Bullish bar / signal', meaning: 'price up vs prior close, or BUY signal' },
-            { color: '#ff6b7a', label: 'Bearish bar / signal', meaning: 'price down vs prior close, or SELL signal' },
+            { color: '#00d084', label: 'Green', meaning: 'candle closed above its open; session up vs prior close' },
+            { color: '#ff6b7a', label: 'Red', meaning: 'candle closed below its open; session down vs prior close' },
             { color: '#fbbf24', label: 'Indicator overlay', meaning: 'EMA, MACD, ATR overlays on chart' },
           ]}
         />
@@ -573,22 +577,26 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
             )}
           </div>
 
-          {/* Right: Signal + Dark Pool Summary */}
+          {/* Right: session move + illustrative dark-pool summary */}
           <div className="space-y-6">
-            {/* Signal Card */}
-            {signal && (
+            {/* Session move (Q-135: a measurement, not a signal) */}
+            {move && (
               <div>
                 <h3 className="text-xs font-medium text-slate-400 uppercase tracking-widest mb-3">
                   Session vs prior close (Yahoo)
                 </h3>
-                <SignalCard signal={signal} color={sector.color} />
+                <SessionMoveCard move={move} />
               </div>
             )}
 
-            {/* Dark Pool Summary (always visible) */}
+            {/* Dark Pool Summary — aggregates of the SIMULATED prints. Red-team S2:
+                these tiles carried no label while the table they summarise did.
+                Q-089 (owner) decides whether the surface stays; either way it
+                may not appear unlabelled. */}
             {darkPoolPrintRows.length > 0 && (
               <div>
-                <h3 className="text-xs font-medium text-slate-400 uppercase tracking-widest mb-3">Dark Pool Summary</h3>
+                <h3 className="text-xs font-medium text-slate-400 uppercase tracking-widest mb-1">Dark Pool Summary</h3>
+                <p className="text-[11px] text-amber-300/80 mb-3">Illustrative: simulated prints, not market data.</p>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="bg-slate-900/60 rounded-xl p-3.5 border border-slate-800">
                     <div className="text-xs text-slate-400 mb-1">Total Block Vol</div>

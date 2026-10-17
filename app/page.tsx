@@ -4,11 +4,10 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import { BACKTEST_SCOPE_LINE } from '@/lib/backtest/strategyDescription'
 import SectorCard from '@/components/SectorCard'
-import SignalCard from '@/components/SignalCard'
+import SessionMoveCard from '@/components/SessionMoveCard'
 import PriceTicker from '@/components/PriceTicker'
 import { SECTORS } from '@/lib/sectors'
-import { PriceSignal } from '@/lib/sectors'
-import { buildSessionSignalsFromQuotes } from '@/lib/sessionSignalsFromQuotes'
+import { formatMovePct, sessionMovesFromQuotes, type SessionMove } from '@/lib/sessionMoves'
 import { useErrorToast } from '@/hooks/useErrorToast'
 import { ErrorToastList } from '@/components/ErrorToastList'
 import { useLiveQuotes } from '@/hooks/useLiveQuotes'
@@ -209,42 +208,26 @@ export default function HomePage() {
   // no poll cadence to count down to — the LIVE / MARKET CLOSED / CONNECTING
   // badge plus the `lastUpdate` timestamp already communicate freshness.
 
-  const signals = useMemo(() => buildSessionSignalsFromQuotes(quotes), [quotes])
+  // Q-135: measured session moves — sectors without a usable quote are absent,
+  // not a 0% "Neutral" row (they are counted separately below).
+  const moves = useMemo(() => sessionMovesFromQuotes(quotes), [quotes])
+  const upMoves = useMemo(() => moves.filter((m) => m.direction === 'UP'), [moves])
+  const downMoves = useMemo(() => moves.filter((m) => m.direction === 'DOWN'), [moves])
+  const flatMoves = useMemo(() => moves.filter((m) => m.direction === 'FLAT'), [moves])
+  const noQuote = SECTORS.length - moves.length
 
-  const buySignals = useMemo(() => signals.filter((s) => s.direction === 'BUY'), [signals])
-  const sellSignals = useMemo(() => signals.filter((s) => s.direction === 'SELL'), [signals])
-  const holdSignals = useMemo(() => signals.filter((s) => s.direction === 'HOLD'), [signals])
+  // Spread before sort: sort mutates, and these arrays are memoised.
+  const largestMoves = useMemo(() => [
+    ...[...upMoves].sort((a, b) => b.changePct - a.changePct).slice(0, 3),
+    ...[...downMoves].sort((a, b) => a.changePct - b.changePct).slice(0, 2),
+  ], [upMoves, downMoves])
 
-  // Phase 14 wave 10: spread BEFORE sort to avoid mutating the memoized filter
-  // result. Array.prototype.sort mutates in place — without the spread, the
-  // useMemo cache for `buySignals` would be reordered as a side effect, and
-  // any later consumer that iterates `buySignals` (currently only `.length`
-  // is read, but future code could iterate) would silently observe sorted
-  // order instead of filter order.
-  const topBuy = useMemo(
-    () => [...buySignals].sort((a, b) => Math.abs(b.sessionChangePct ?? 0) - Math.abs(a.sessionChangePct ?? 0)).slice(0, 3),
-    [buySignals],
-  )
-  const topSell = useMemo(
-    () => [...sellSignals].sort((a, b) => Math.abs(b.sessionChangePct ?? 0) - Math.abs(a.sessionChangePct ?? 0)).slice(0, 2),
-    [sellSignals],
-  )
-  const topSignals = useMemo(() => [...topBuy, ...topSell], [topBuy, topSell])
-
-  const signalMap = useMemo(() => signals.reduce<Record<string, PriceSignal>>((acc, s) => {
-    acc[s.etf] = s
+  const moveMap = useMemo(() => moves.reduce<Record<string, SessionMove>>((acc, m) => {
+    acc[m.etf] = m
     return acc
-  }, {}), [signals])
+  }, {}), [moves])
 
-  const medianAbsMove = useMemo(() => {
-    const xs = signals.map((s) => Math.abs(s.sessionChangePct ?? 0)).sort((a, b) => a - b)
-    if (!xs.length) return 0
-    const m = Math.floor(xs.length / 2)
-    return xs.length % 2 ? xs[m] : (xs[m - 1] + xs[m]) / 2
-  }, [signals])
-
-  const avgConfidence = useMemo(() => Math.round(signals.reduce((a, b) => a + b.confidence, 0) / (signals.length || 1)), [signals])
-  const sortedSignals = useMemo(() => [...signals].sort((a, b) => (b.sessionChangePct ?? 0) - (a.sessionChangePct ?? 0)), [signals])
+  const sortedMoves = useMemo(() => [...moves].sort((a, b) => b.changePct - a.changePct), [moves])
 
   const tickerItems = useMemo(() => SECTORS.map(s => ({
     ticker: s.etf,
@@ -255,7 +238,7 @@ export default function HomePage() {
 
   const filteredSectors = useMemo(() => activeFilter === 'ALL'
     ? SECTORS
-    : SECTORS.filter(s => signalMap[s.etf]?.direction === activeFilter), [activeFilter, signalMap])
+    : SECTORS.filter(s => moveMap[s.etf]?.direction === activeFilter), [activeFilter, moveMap])
 
   return (
     <div className="min-h-screen">
@@ -312,7 +295,7 @@ export default function HomePage() {
             <span className="gradient-text">Sector Intelligence</span>
           </h1>
           <p className="text-slate-400 text-base max-w-xl mx-auto leading-relaxed">
-            Institutional-grade market intelligence across all 11 GICS sectors — real-time prices, K-line charts, dark pool data, and curated signal briefs.
+            Market data across all {SECTORS.length} GICS sectors — Yahoo Finance quotes, K-line charts with RSI, MACD and ATR, and sector briefs. Research tooling, not investment advice.
           </p>
         </div>
 
@@ -344,7 +327,7 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* Top Signals */}
+        {/* Largest session moves */}
         <section aria-labelledby="section-top-signals">
           <div className="flex items-center justify-between mb-5">
             <div>
@@ -356,12 +339,12 @@ export default function HomePage() {
             </Link>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
-            {topSignals.map((signal) => {
-              const sector = SECTORS.find(s => s.etf === signal.etf)
+            {largestMoves.map((move) => {
+              const sector = SECTORS.find(s => s.etf === move.etf)
               if (!sector) return null
               return (
-                <Link key={signal.etf} href={`/sector/${sector.slug}`}>
-                  <SignalCard signal={signal} color={sector.color} compact />
+                <Link key={move.etf} href={`/sector/${sector.slug}`}>
+                  <SessionMoveCard move={move} compact />
                 </Link>
               )
             })}
@@ -371,10 +354,12 @@ export default function HomePage() {
         {/* Market Overview Stats */}
         <section aria-label="Market overview stats" className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
-            { label: 'Sectors Bullish', value: buySignals.length, of: 11, color: '#00d084' },
-            { label: 'Sectors Bearish', value: sellSignals.length, of: 11, color: '#ff6b7a' },
-            { label: 'Neutral', value: holdSignals.length, of: 11, color: '#f59e0b' },
-            { label: 'Avg Confidence', value: `${avgConfidence}%`, color: '#f59e0b', noOf: true },
+            // Q-135: "Bullish/Bearish" named a session move as a view, and
+            // "Avg Confidence" averaged a fabricated 42 + 14×|Δ%| score.
+            { label: 'Sectors up today', value: upMoves.length, of: SECTORS.length, color: '#00d084' },
+            { label: 'Sectors down today', value: downMoves.length, of: SECTORS.length, color: '#ff6b7a' },
+            { label: 'Flat (0.00%)', value: flatMoves.length, of: SECTORS.length, color: '#94a3b8' },
+            { label: 'No quote', value: noQuote, of: SECTORS.length, color: noQuote > 0 ? '#f59e0b' : '#64748b' },
           ].map((stat, i) => (
             <div key={i} className="rounded-xl border border-slate-800 p-4 bg-slate-900/60 hover:border-slate-700/80 transition-colors">
               <div className="text-2xl font-bold font-mono" style={{ color: stat.color }}>
@@ -396,48 +381,48 @@ export default function HomePage() {
             <div className="flex items-center gap-4 text-[10px] font-mono">
               <div className="flex items-center gap-1.5">
                 <div className="w-2 h-2 rounded-full bg-green-400" />
-                <span className="text-slate-400">Up {buySignals.length}</span>
+                <span className="text-slate-400">Up {upMoves.length}</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <div className="w-2 h-2 rounded-full bg-red-400" />
-                <span className="text-slate-400">Down {sellSignals.length}</span>
+                <span className="text-slate-400">Down {downMoves.length}</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <div className="w-2 h-2 rounded-full bg-amber-400" />
-                <span className="text-slate-400">Neutral {holdSignals.length}</span>
+                <span className="text-slate-400">Flat {flatMoves.length}{noQuote > 0 ? ` · no quote ${noQuote}` : ''}</span>
               </div>
             </div>
           </div>
 
           {/* Horizontal stacked bar */}
           <div className="w-full h-6 bg-slate-800 rounded-lg overflow-hidden flex">
-            {buySignals.length > 0 && (
+            {upMoves.length > 0 && (
               <div
                 className="h-full bg-gradient-to-r from-green-500 to-green-400 flex items-center justify-center transition-all duration-700"
-                style={{ width: `${(buySignals.length / 11) * 100}%` }}
+                style={{ width: `${(upMoves.length / SECTORS.length) * 100}%` }}
               >
-                {buySignals.length >= 3 && (
-                  <span className="text-[10px] font-bold text-white font-mono">{buySignals.length}</span>
+                {upMoves.length >= 3 && (
+                  <span className="text-[10px] font-bold text-white font-mono">{upMoves.length}</span>
                 )}
               </div>
             )}
-            {holdSignals.length > 0 && (
+            {flatMoves.length > 0 && (
               <div
                 className="h-full bg-gradient-to-r from-yellow-600 to-yellow-400 flex items-center justify-center transition-all duration-700"
-                style={{ width: `${(holdSignals.length / 11) * 100}%` }}
+                style={{ width: `${(flatMoves.length / SECTORS.length) * 100}%` }}
               >
-                {holdSignals.length >= 2 && (
-                  <span className="text-[10px] font-bold text-white font-mono">{holdSignals.length}</span>
+                {flatMoves.length >= 2 && (
+                  <span className="text-[10px] font-bold text-white font-mono">{flatMoves.length}</span>
                 )}
               </div>
             )}
-            {sellSignals.length > 0 && (
+            {downMoves.length > 0 && (
               <div
                 className="h-full bg-gradient-to-r from-red-400 to-red-500 flex items-center justify-center transition-all duration-700"
-                style={{ width: `${(sellSignals.length / 11) * 100}%` }}
+                style={{ width: `${(downMoves.length / SECTORS.length) * 100}%` }}
               >
-                {sellSignals.length >= 3 && (
-                  <span className="text-[10px] font-bold text-white font-mono">{sellSignals.length}</span>
+                {downMoves.length >= 3 && (
+                  <span className="text-[10px] font-bold text-white font-mono">{downMoves.length}</span>
                 )}
               </div>
             )}
@@ -445,23 +430,19 @@ export default function HomePage() {
 
           {/* Sector list below bar */}
           <div className="mt-4 flex flex-wrap gap-2">
-            {sortedSignals
-              .map((signal) => {
-                const sector = SECTORS.find((s) => s.etf === signal.etf)
-                const isUp = signal.direction === 'BUY'
-                const isDown = signal.direction === 'SELL'
-                const color = isUp ? '#00d084' : isDown ? '#ff6b7a' : '#eab308'
+            {sortedMoves
+              .map((move) => {
+                const sector = SECTORS.find((s) => s.etf === move.etf)
+                const color = move.direction === 'UP' ? '#00d084' : move.direction === 'DOWN' ? '#ff6b7a' : '#94a3b8'
                 return (
                   <div
-                    key={signal.etf}
+                    key={move.etf}
                     className="flex items-center gap-1.5 px-2 py-1 rounded bg-slate-800/80 border border-slate-700/50"
                   >
                     <span className="text-xs">{sector?.icon}</span>
-                    <span className="text-[10px] font-mono text-slate-400">{signal.etf}</span>
+                    <span className="text-[10px] font-mono text-slate-400">{move.etf}</span>
                     <span className="text-[10px] font-mono font-medium" style={{ color }}>
-                      {signal.sessionChangePct != null
-                        ? `${signal.sessionChangePct >= 0 ? '+' : ''}${signal.sessionChangePct.toFixed(2)}%`
-                        : '—'}
+                      {formatMovePct(move.changePct)}
                     </span>
                   </div>
                 )
@@ -474,10 +455,11 @@ export default function HomePage() {
           <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
             <div>
               <h2 id="section-all-sectors" className="text-lg font-bold text-white">All Sectors</h2>
-              <p className="text-xs text-slate-400 mt-0.5">Click any sector to view K-line chart, dark pool data, and signals</p>
+              <p className="text-xs text-slate-400 mt-0.5">Click any sector for its K-line chart and news</p>
             </div>
             <div className="flex gap-2 flex-wrap">
-              {['ALL', 'BUY', 'SELL', 'HOLD'].map((f) => (
+              {/* Q-135: these filtered on BUY / SELL / HOLD — trade words for session moves. */}
+              {['ALL', 'UP', 'DOWN', 'FLAT'].map((f) => (
                 <button
                   key={f}
                   onClick={() => setActiveFilter(f)}
@@ -499,7 +481,7 @@ export default function HomePage() {
                 key={sector.slug}
                 sector={sector}
                 quote={quotes[sector.etf]}
-                signal={signalMap[sector.etf]}
+                move={moveMap[sector.etf]}
               />
             ))}
           </div>
@@ -612,12 +594,15 @@ export default function HomePage() {
 
         {/* What's inside */}
         <section aria-labelledby="section-whats-inside" className="rounded-2xl border border-slate-800 p-8 bg-slate-900/30">
-          <h2 id="section-whats-inside" className="text-lg font-bold text-white mb-6 text-center">What every sector brief includes</h2>
+          <h2 id="section-whats-inside" className="text-lg font-bold text-white mb-6 text-center">What every sector page includes</h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
             {[
-              { icon: '📊', title: 'K-Line Chart', desc: 'Candlestick charts with EMA overlays, volume, dark pool print markers, and news event pins.' },
-              { icon: '🔵', title: 'Dark Pool Intelligence', desc: 'Block prints, sweep orders, institutional flow sentiment, and VWAP premium/discount analysis.' },
-              { icon: '⚡', title: 'Price Signals', desc: 'Entry, stop loss, and target levels with confidence scores and risk/reward ratios.' },
+              // Q-135: the third card promised entry, stop and target levels with
+              // risk/reward that no producer supplies; the first promised dark-pool
+              // markers and news pins Q-096 removed from the chart.
+              { icon: '📊', title: 'K-Line Chart', desc: 'Candlestick charts with EMA overlays, volume, and RSI, MACD and ATR panels.' },
+              { icon: '🔵', title: 'Dark-Pool Tab', desc: 'Volume and short-interest fields from Yahoo Finance where it publishes them. For sector ETFs it mostly does not, and the tab shows — rather than a number. Its block-print table is illustrative, and labelled so.' },
+              { icon: '⚡', title: 'Session Moves', desc: 'Each sector ETF\u2019s move versus the prior close, with its quote time — a measurement, not a trade signal.' },
             ].map((item, i) => (
               <div key={i} className="text-center space-y-2 p-4 rounded-xl border border-slate-800 hover:border-amber-800/40 hover:bg-amber-500/5 transition-all">
                 <div className="text-2xl">{item.icon}</div>
