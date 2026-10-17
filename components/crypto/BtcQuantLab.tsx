@@ -14,7 +14,7 @@ import {
   interpretFundingRate,
 } from '@/lib/crypto'
 import { barLabel, isDailyInterval } from '@/lib/barInterval'
-import { ma200Regime, sma200DeviationPct } from '@/lib/quant/technicals'
+import { ma200Regime } from '@/lib/quant/technicals'
 import { fetchJsonSafe } from '@/lib/fetchJsonSafe'
 import { LiquidationsPanel } from '@/components/crypto/LiquidationsPanel'
 
@@ -171,9 +171,6 @@ export default function BtcQuantLab({ candles, interval = '1d' }: Props) {
 
   // 200-day MA deviation regime — buy-the-dip / falling-knife classifier
   const regime = ma200Regime(latestClose, closes, latestRSI)
-  const devPct = sma200DeviationPct(latestClose, closes.length >= 200
-    ? closes.slice(-200).reduce((a, b) => a + b, 0) / 200
-    : 0)
   const ma200 =
     closes.length >= 200
       ? closes.slice(-200).reduce((a, b) => a + b, 0) / 200
@@ -264,7 +261,9 @@ export default function BtcQuantLab({ candles, interval = '1d' }: Props) {
     {
       label: '200MA Deviation',
       value: regime.deviationPct != null ? `${regime.deviationPct > 0 ? '+' : ''}${regime.deviationPct.toFixed(1)}%` : '—',
-      signal: regime.dipSignal === 'STRONG_DIP' ? 'BUY THE DIP' : regime.dipSignal === 'FALLING_KNIFE' ? 'FALLING KNIFE' : regime.dipSignal === 'WATCH_DIP' ? 'WATCH — NO ADD' : regime.dipSignal === 'OVERBOUGHT' ? 'OVERBOUGHT' : regime.dipSignal === 'IN_TREND' ? 'IN TREND' : regime.label,
+      // Red-team R2-241-1/-3: the dip classification is calibrated on daily
+      // candles; on any other bars it is not shown at all.
+      signal: !daily ? 'daily only' : regime.dipSignal === 'STRONG_DIP' ? 'BUY THE DIP' : regime.dipSignal === 'FALLING_KNIFE' ? 'FALLING KNIFE' : regime.dipSignal === 'WATCH_DIP' ? 'WATCH — NO ADD' : regime.dipSignal === 'OVERBOUGHT' ? 'OVERBOUGHT' : regime.dipSignal === 'IN_TREND' ? 'IN TREND' : regime.label,
       color: regime.dipSignal === 'STRONG_DIP' ? 'text-green-400' : regime.dipSignal === 'FALLING_KNIFE' ? 'text-red-400' : regime.dipSignal === 'WATCH_DIP' ? 'text-amber-400' : regime.dipSignal === 'OVERBOUGHT' ? 'text-orange-400' : 'text-slate-400',
     },
   ]
@@ -364,7 +363,7 @@ export default function BtcQuantLab({ candles, interval = '1d' }: Props) {
         {activeMetricTab === 'signals' && (
           <div className="space-y-3">
             <div className="text-xs text-slate-400">
-              This analysis reads only the price candles last loaded on the Chart tab (daily unless you changed the timeframe there): EMA trend, RSI and MACD momentum, volatility, the moving-average regime and the band stage. It does not use the funding, open-interest or liquidation data in the other two tabs. Toggle individual indicators on the chart to see their levels.
+              This analysis reads only the price candles last loaded on the Chart tab (daily unless you changed the timeframe there): EMA trend, RSI and MACD momentum, volatility, and the moving-average regime. It does not use the funding, open-interest or liquidation data in the other two tabs. Toggle individual indicators on the chart to see their levels.
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="bg-slate-900/60 rounded-xl p-4 border border-slate-800">
@@ -396,9 +395,12 @@ export default function BtcQuantLab({ candles, interval = '1d' }: Props) {
                 <div className="text-lg font-bold text-slate-200">
                   {rangePosition != null ? `${(rangePosition * 100).toFixed(0)}%` : '—'}
                 </div>
-                <div className="text-[10px] text-slate-400 mt-1">
-                  Of the last 20 {bars} closes&apos; low–high range (${low20.toLocaleString('en-US', { maximumFractionDigits: 0 })}–${high20.toLocaleString('en-US', { maximumFractionDigits: 0 })})
-                </div>
+                {/* R2-241-2: no "$NaN–$NaN" when the range cannot be computed. */}
+                {rangePosition != null && (
+                  <div className="text-[10px] text-slate-400 mt-1">
+                    Of the last 20 {bars} closes&apos; low–high range (${low20.toLocaleString('en-US', { maximumFractionDigits: 0 })}–${high20.toLocaleString('en-US', { maximumFractionDigits: 0 })})
+                  </div>
+                )}
               </div>
               <div className="bg-slate-900/60 rounded-xl p-4 border border-slate-800">
                 <div className="text-xs text-slate-400 uppercase tracking-wide mb-2">Volatility</div>
@@ -417,32 +419,38 @@ export default function BtcQuantLab({ candles, interval = '1d' }: Props) {
                     <div className="text-[10px] uppercase tracking-widest mb-1" style={{ color: regime.color }}>
                       {daily ? '200-Day MA Regime' : `200-bar MA regime (${bars} bars)`}
                     </div>
-                    <div className="text-xl font-bold" style={{ color: regime.color }}>{regime.label}</div>
+                    <div className="text-xl font-bold" style={{ color: daily ? regime.color : undefined }}>
+                      {daily ? regime.label : `${regime.deviationPct != null && regime.deviationPct >= 0 ? 'Above' : 'Below'} the 200-bar average`}
+                    </div>
                     <div className="text-xs text-slate-400 mt-0.5">
                       {ma200 != null ? `${daily ? '200DMA' : '200-bar MA'}: $${ma200.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : ''}
                       {regime.deviationPct != null ? ` · Deviation: ${regime.deviationPct > 0 ? '+' : ''}${regime.deviationPct.toFixed(1)}%` : ''}
-                      {regime.slopePositive !== null && (
+                      {regime.slopePct != null && (
+                        // The direction is the SIGN of the measured change, and the
+                        // change is over 20 bars (sma200Slope). The card used to
+                        // print the classifier's boolean (slope > 0.5%) as the
+                        // direction and the number as "%/bar", so an average up
+                        // 0.16% over 20 bars read "falling (+0.1649%/bar)".
                         <span className="ml-2">
-                          {regime.slopePositive ? '↗' : '↘'} {daily ? '200DMA' : '200-bar MA'} {regime.slopePositive ? 'rising' : 'falling'}
-                          {regime.slopePct != null
-                            ? ` (${regime.slopePct > 0 ? '+' : ''}${(regime.slopePct * 100).toFixed(4)}%/bar)`
-                            : ''}
+                          {regime.slopePct > 0 ? '↗' : regime.slopePct < 0 ? '↘' : '→'} {daily ? '200DMA' : '200-bar MA'}{' '}
+                          {regime.slopePct > 0 ? 'up' : regime.slopePct < 0 ? 'down' : 'flat'}{' '}
+                          {`${regime.slopePct > 0 ? '+' : ''}${(regime.slopePct * 100).toFixed(2)}% over 20 bars`}
                         </span>
                       )}
                     </div>
                   </div>
-                  <div className={`text-sm font-bold px-3 py-1 rounded-full border ${regime.dipSignal === 'STRONG_DIP' ? 'bg-green-950/60 border-green-500/50 text-green-300' : regime.dipSignal === 'FALLING_KNIFE' ? 'bg-red-950/60 border-red-500/50 text-red-300' : 'bg-slate-900/60 border-slate-700 text-slate-300'}`}>
+                  {daily && (<div className={`text-sm font-bold px-3 py-1 rounded-full border ${regime.dipSignal === 'STRONG_DIP' ? 'bg-green-950/60 border-green-500/50 text-green-300' : regime.dipSignal === 'FALLING_KNIFE' ? 'bg-red-950/60 border-red-500/50 text-red-300' : 'bg-slate-900/60 border-slate-700 text-slate-300'}`}>
                     {regime.dipSignal === 'STRONG_DIP' ? '✓ BUY THE DIP' : regime.dipSignal === 'FALLING_KNIFE' ? '✗ FALLING KNIFE' : regime.dipSignal === 'WATCH_DIP' ? '⚠ WATCH — NO ADD' : regime.dipSignal === 'OVERBOUGHT' ? '⚠ OVERBOUGHT' : regime.dipSignal === 'IN_TREND' ? '→ IN TREND' : regime.dipSignal}
-                  </div>
+                  </div>)}
                 </div>
-                <p className="text-xs text-slate-400 mt-2 leading-relaxed">{regime.dipSignalExplained}</p>
+                {daily && <p className="text-xs text-slate-400 mt-2 leading-relaxed">{regime.dipSignalExplained}</p>}
                 {!daily && (
                   <p role="note" data-testid="regime-interval-caution" className="text-[11px] text-amber-300/90 mt-2">
-                    These thresholds are calibrated on daily candles. On {bars} candles this is a 200-bar average, not the
-                    200-day moving average, so treat the classification as indicative only.
+                    The regime zones, dip classification and their notes are calibrated on daily candles, so on {bars} candles
+                    they are not shown. This is a 200-bar average, not the 200-day moving average.
                   </p>
                 )}
-                <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-2 text-[10px] text-slate-400">
+                {daily && <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-2 text-[10px] text-slate-400">
                   <div>
                     <span className="uppercase tracking-wide">Risk: </span>
                     <span className={regime.riskLevel === 'low' ? 'text-green-400' : regime.riskLevel === 'medium' ? 'text-amber-400' : 'text-red-400'}>{regime.riskLevel}</span>
@@ -451,7 +459,7 @@ export default function BtcQuantLab({ candles, interval = '1d' }: Props) {
                     <span className="uppercase tracking-wide">Forward context: </span>
                     <span className="text-slate-400">{regime.forwardReturnContext}</span>
                   </div>
-                </div>
+                </div>}
               </div>
             )}
             {ma200 == null && (

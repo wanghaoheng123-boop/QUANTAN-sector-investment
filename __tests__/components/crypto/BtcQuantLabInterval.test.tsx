@@ -24,12 +24,36 @@ function renderSignals(interval?: string) {
 }
 
 describe('BtcQuantLab — labels follow the candle interval', () => {
-  it('on 1-hour candles: a 200-bar regime, with the calibration caution', () => {
+  it('on 1-hour candles: a 200-bar regime, with the calibration caution, and no daily words', () => {
     renderSignals('1h')
     expect(screen.getByText('200-bar MA regime (1-hour bars)')).toBeInTheDocument()
     expect(screen.getByTestId('regime-interval-caution')).toHaveTextContent('calibrated on daily candles')
-    expect(screen.queryByText(/200-Day MA Regime/)).not.toBeInTheDocument()
-    expect(screen.queryByText(/200DMA/)).not.toBeInTheDocument()
+    // Red-team R2-241-1: case-insensitive, and "200-day" in any form. The old
+    // checks passed beside "8% above the 200-day SMA" in the explanation.
+    const text = document.body.textContent ?? ''
+    expect(text.replace(/not the 200-day moving average/i, '')).not.toMatch(/200-day|200DMA|200-Day MA Regime/i)
+  })
+
+  it('on 1-hour candles: no daily-calibrated dip classification or trade wording (R2-241-3)', () => {
+    renderSignals('1h')
+    const text = document.body.textContent ?? ''
+    expect(text).not.toMatch(/buy the dip|falling knife|watch — no add|in trend|accumulate|scaling in|avoid long|positioning|buy zone|forward context/i)
+    // The signals table's 200MA row says the classification is daily-only.
+    expect(screen.getByText('daily only')).toBeInTheDocument()
+  })
+
+  it('the 200-bar slope reads its real direction and unit (a rising average is not "falling")', () => {
+    renderSignals('1h')
+    const text = document.body.textContent ?? ''
+    // The synthetic series rises steadily, so its 200-bar average is up.
+    expect(text).toMatch(/200-bar MA up \+\d+\.\d{2}% over 20 bars/)
+    expect(text).not.toMatch(/%\/bar|200-bar MA falling/)
+  })
+
+  it('a 1D interval is daily, not "1D bars" (R2-241-2)', () => {
+    renderSignals('1D')
+    expect(screen.getByText('200-Day MA Regime')).toBeInTheDocument()
+    expect(screen.queryByTestId('regime-interval-caution')).not.toBeInTheDocument()
   })
 
   it('on daily candles: the 200-day wording, and no caution', () => {
@@ -40,7 +64,7 @@ describe('BtcQuantLab — labels follow the candle interval', () => {
 
   it('no fabricated "rainbow" band, on any interval', () => {
     renderSignals('1h')
-    expect(document.body.textContent).not.toMatch(/Rainbow|Bubble Peak|Sell Peak|Deep Value|Accumulate|20-week/)
+    expect(document.body.textContent).not.toMatch(/Rainbow|Bubble Peak|Sell Peak|Deep Value|Accumulate|20-week/i)
     expect(screen.getAllByText(/1-hour closes/).length).toBeGreaterThan(0)
   })
 })
