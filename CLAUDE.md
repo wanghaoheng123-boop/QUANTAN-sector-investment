@@ -356,9 +356,11 @@ a ~2021-2026 window — not a fixed historical one.
 wrong in both directions. The real OOS research path
 (`lib/optimize/gridSearch.ts:347`) **does** apply embargo 5 and is tested.
 `lib/backtest/walkForward.ts:158-160` has **embargo 0** against 60-day holds, but
-every *invocation* is in `__tests__/` (15 across three suites);
-`lib/backtest/engine.ts:239-240` re-exports it and nothing in `app/` or
-`scripts/` calls it — so that defect is **latent, not live**. Do not cite `lib/backtest/gridSearch.ts`; it does not exist.
+every *invocation* is in `__tests__/` (15 across three suites), and no
+product file imports it — it is recorded as test-only in
+`__tests__/architecture/no-orphan-modules.test.ts` (`TEST_ONLY_PENDING`; the
+`engine.ts` re-export that used to hide that was deleted 2026-10-17) — so that
+defect is **latent, not live**. Do not cite `lib/backtest/gridSearch.ts`; it does not exist.
 *Affirmative negative, established by search:* fundamentals reach **no** backtest
 or signal path — they are UI-only (`app/api/fundamentals/[ticker]/route.ts:68`,
 `lib/briefs/sectorBrief.ts:214`). `Q-080` should install a tripwire there, not a

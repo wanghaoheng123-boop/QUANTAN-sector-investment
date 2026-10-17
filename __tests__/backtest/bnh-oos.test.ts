@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { computeBuyAndHoldReturn, computeOosRatio } from '@/lib/backtest/engine'
+import { computeBuyAndHoldReturn } from '@/lib/backtest/engine'
+import { computeOosRatio } from '@/lib/backtest/walkForward'
 import type { OhlcvRow } from '@/lib/backtest/engine'
 
 describe('computeBuyAndHoldReturn (Q-021)', () => {

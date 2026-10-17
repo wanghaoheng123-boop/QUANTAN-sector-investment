@@ -33,7 +33,7 @@ Goal: >80% selective signal accuracy across all market conditions. Bloomberg-lik
 | **Branch / worktree** | `fix/options-investigation` · `.claude/worktrees/competent-wu-a84629` |
 | **Canonical plan** | `reviews/PHASE-15-PLAN.md` · backlog `workspace/IMPROVEMENT_BACKLOG.json` |
 
-**Present on disk (do not treat as deleted):** `lib/portfolio/*`, `lib/data/providers/*`, `lib/data/warehouse.ts`, `components/SectorRotationPanel.tsx`, Phase 8 scripts (`optimize-grid.ts`, `portfolio-backtest.ts`, `benchmark-enhanced.ts`).
+**Present on disk (do not treat as deleted):** `lib/portfolio/*`, `lib/data/providers/*`, `lib/data/warehouse.ts`, Phase 8 scripts (`optimize-grid.ts`, `portfolio-backtest.ts`, `benchmark-enhanced.ts`).
 
 **Auth nav:** `components/SafeAuth.tsx` replaced `AuthNav.tsx` intentionally.
 
@@ -111,8 +111,7 @@ Goal: >80% selective signal accuracy across all market conditions. Bloomberg-lik
 ### Phase 4 (current branch)
 - `lib/quant/intermarket.ts` — correlations vs SPY/^VIX/UUP/TLT (63d + 252d), risk_on/risk_off/mixed regime
 - `lib/quant/sectorRotation.ts` — momentum (40×3mo + 30×6mo + 30×12mo − 1mo crash filter) + RSI mean-reversion boost
-- `app/api/sector-rotation/route.ts` — 1hr cached endpoint
-- `components/SectorRotationPanel.tsx` — sector heatmap grid, OW/UW signals
+- `app/api/sector-rotation/route.ts` — 1hr cached endpoint; NO UI consumer since `components/SectorRotationPanel.tsx` was deleted (PR #232). Deleting the route is an owner decision (`reviews/dead-code-sweep-2026-10-16.md`).
 - `ml/` — Python FastAPI sidecar (RandomForest + XGBoost + LogReg ensemble, walk-forward 500d train / 60d predict)
 - `lib/ml/client.ts` + `app/api/ml/[ticker]/route.ts` — graceful TS proxy
 - 2 new test files
