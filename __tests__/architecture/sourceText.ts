@@ -78,3 +78,54 @@ export function stripComments(src: string, fileName = 'source.tsx'): string {
     },
   }).outputText
 }
+
+/**
+ * COPY IS PHRASES; IDENTIFIERS ARE SINGLE TOKENS.
+ *
+ * This is the discriminator, and it matters because `alpha` is a legitimate
+ * identifier in real statistics here — `lib/portfolio/var.ts` uses it for a
+ * significance level and `lib/portfolio/factorAttribution.ts` for a regression
+ * intercept. Neither is a claim, and neither should be renamed to satisfy a
+ * wording ban. A rendered phrase contains whitespace; `'alpha'` alone does not.
+ *
+ * The previous extractor was the whole defect: it took string literals plus JSX
+ * text matched by `/>[^<>{}]{2,80}</`, which silently skipped
+ *   - any JSX text longer than 80 characters (both sr-only table captions), and
+ *   - any JSX text containing an interpolation (the factor-attribution label).
+ * Its "positive control" asserted `BANNED.test('Alpha vs B&H')` — validating the
+ * DECIDER while the VISITOR returned nothing. Green, and blind.
+ */
+export function renderedPhrases(source: string): string[] {
+  const out: string[] = []
+
+  // 1. String and template literals that contain whitespace.
+  for (const m of source.matchAll(/(['"`])((?:(?!\1)[^\\]|\\.)*)\1/g)) {
+    const body = m[2]
+    if (/\s/.test(body) && /[A-Za-z]/.test(body)) out.push(body)
+  }
+
+  // 2. JSX text nodes: any length, across newlines, interpolations removed.
+  for (const m of source.matchAll(/>([^<]{2,400})</g)) {
+    const text = m[1].replace(/\{[^{}]*\}/g, ' ')
+    // Reject anything that reads as code rather than prose. Parentheses are
+    // NOT rejected — prose uses them ("Alpha (daily):"), and excluding them was
+    // how the factor-attribution label stayed invisible.
+    // Reject only on STRUCTURAL code markers.
+    //
+    // Two earlier attempts each blinded the guard, and both looked sensible:
+    //   - rejecting any text containing `;` hid a live disclaimer, because
+    //     prose uses semicolons;
+    //   - rejecting the WORD `return` hid essentially all of this product's
+    //     copy, because it is a finance app and its UI says "annualised
+    //     return" everywhere.
+    // Every filter here shrinks what the guard visits, so prefer over-matching
+    // and let the offender list be the judge.
+    if (/=>|\)\s*;|={/.test(text)) continue
+    // Type syntax, not prose: `Record<'alpha' | K, number>` puts an interface
+    // body between angle brackets and it reads as a JSX text node otherwise.
+    if (/\||\?:|\b(?:number|string|boolean|null|undefined|unknown|void)\b/.test(text)) continue
+    if (!/[A-Za-z]{2,}/.test(text)) continue
+    out.push(text)
+  }
+  return out
+}
