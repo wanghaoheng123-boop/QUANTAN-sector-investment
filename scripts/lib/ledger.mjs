@@ -18,6 +18,12 @@ export const SEVERITIES = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO']
 export const REQUIRED_NON_EMPTY = ['id', 'severity', 'one_line', 'status']
 
 /**
+ * What an id may look like. `trim()` does not strip U+200B, so "WS-1" and
+ * "WS-1\u200B" were two rows that look identical (red-team R2-238-2).
+ */
+export const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
+
+/**
  * Strict RFC 4180 parse: quoted fields may hold commas, quotes ("") and
  * newlines; a quote may only OPEN a field, and only a separator may follow a
  * closing quote.
@@ -94,6 +100,15 @@ export function ledgerProblems(text) {
   if (header[0] !== 'id') problems.push('the first column of the header is not `id`')
   for (const r of rows) {
     if (r.length !== header.length) problems.push(`row ${r[0]}: ${r.length} columns, expected ${header.length}`)
+    // Red-team R2-238-1: an open quote CLOSED by a later stray `x",` still
+    // swallows the well-formed rows between them — the two defects bracket a
+    // CRITICAL finding and every column count passes. No field in the ledger
+    // has ever held a newline (measured 2026-10-17), so a newline inside a
+    // field is refused outright: a swallowed row always leaves one behind.
+    r.forEach((f, k) => {
+      if (/[\r\n]/.test(f)) problems.push(`row ${r[0]}: column ${header[k] ?? k} contains a line break, which is how a swallowed row looks`)
+    })
+    if (!ID_PATTERN.test(r[0].trim())) problems.push(`row ${JSON.stringify(r[0])}: id has characters outside ${ID_PATTERN}`)
   }
   return { header, rows, problems }
 }
@@ -156,6 +171,10 @@ export function validateNewRows(existingText, rows) {
       problems.push(`row ${i}: severity ${JSON.stringify(n.severity)} is not one of ${SEVERITIES.join('/')}`)
     }
     const id = typeof n.id === 'string' ? n.id : ''
+    if (id && !ID_PATTERN.test(id)) problems.push(`row ${i}: id ${JSON.stringify(id)} has characters outside ${ID_PATTERN}`)
+    for (const h of header) {
+      if (typeof n[h] === 'string' && /[\r\n]/.test(n[h])) problems.push(`row ${i}: ${h} contains a line break; write it on one line`)
+    }
     if (id && ids.has(id)) problems.push(`row ${i}: id ${id} already exists`)
     if (id) ids.add(id)
   }

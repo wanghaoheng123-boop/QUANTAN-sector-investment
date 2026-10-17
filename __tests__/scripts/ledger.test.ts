@@ -82,6 +82,19 @@ describe('ledger append rules', () => {
     expect(validateNewRows(LEDGER, [null as unknown as Record<string, string>]).problems.join()).toMatch(/not an object/)
   })
 
+  it('R2-238-1: an open quote closed by a later stray quote cannot swallow the rows between', () => {
+    // Both defects together pass every column check; the line break inside a field does not.
+    const bracket = `${LEDGER}ZZ-1,r,HIGH,d,f,l,"open (see\nZZ-2,r,CRITICAL,d,f,l,o,c,a,e,s,open\nZZ-3,r,LOW,d,f,l,tail",c,a,e,s,open\n`
+    expect(ledgerProblems(bracket).problems.join()).toMatch(/row ZZ-1: column one_line contains a line break/)
+    expect(validateNewRows(LEDGER, [{ ...row(), one_line: 'two\nlines' }]).problems.join()).toMatch(/one_line contains a line break/)
+  })
+
+  it('R2-238-2: an id is visible characters only', () => {
+    expect(validateNewRows(LEDGER, [{ ...row(), id: 'WS-1\u200b' }]).problems.join()).toMatch(/characters outside/)
+    expect(ledgerProblems(`${LEDGER}A-1\u200b,r,LOW,d,f.ts,1,thing,c,AT,e,s,open\n`).problems.join()).toMatch(/characters outside/)
+    expect(validateNewRows(LEDGER, [{ ...row(), id: 'Q140-R7' }]).problems).toEqual([])
+  })
+
   it('L5: values must be text, required columns non-empty, severity from the scale', () => {
     expect(validateNewRows(LEDGER, [{ ...row(), severity: null as unknown as string }]).problems.join()).toMatch(/severity must be a string, got null/)
     expect(validateNewRows(LEDGER, [{ ...row(), one_line: { a: 1 } as unknown as string }]).problems.join()).toMatch(/one_line must be a string, got object/)
