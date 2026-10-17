@@ -3242,5 +3242,180 @@
       "npm run verify:data"
     ],
     "notes_2026_10_17": "Measured from run logs: every scheduled refresh since 2026-09-06 ends 'QUARANTINED: BTC — VENDOR RESTATEMENT: 1 existing bar(s) changed value (1786838400 open 63024.636… -> 63023.421…)'. The other 55 instruments refresh and commit; BTC's fixture has not been updated for ~6 weeks. Alert issue #177 collected 44 comments for it (Q-113 dedupes the noise, not the cause)."
+  },
+  {
+    "id": "Q-145",
+    "title": "Quote producers substitute 0 for a missing price or change, so missing data renders as a measured $0.00 / 0.00% (I2)",
+    "domain": "Data/Integrity",
+    "priority": "P1",
+    "status": "pending",
+    "files": [
+      "app/api/prices/route.ts",
+      "app/api/stream/route.ts",
+      "app/api/stream/[ticker]/route.ts",
+      "lib/yahooQuoteFields.ts",
+      "hooks/useLiveQuote.ts",
+      "lib/sessionMoves.ts",
+      "app/page.tsx"
+    ],
+    "acceptance_criteria": [
+      "normalizedChangePercent returns null when Yahoo supplies neither a change % nor a change, instead of 0",
+      "app/api/prices num() is number-or-null, as its own F4.6 comment already claims; a missing price is null, never $0.00",
+      "parseLiveQuote carries change/changePct as number | null; a live tick with a null change does not overwrite a known one (app/page.tsx merge)",
+      "sessionMoveFor returns null for a null change, so a missing change is 'No quote', not a measured FLAT 0.00%",
+      "Producer types change to number | null and tsc enumerates every consumer; each renders — for null",
+      "Regression tests for each producer and for the landing-page merge"
+    ],
+    "verify_commands": [
+      "npm run typecheck",
+      "npm run test"
+    ],
+    "notes_2026_10_17": "Red-team S4 on #239 (reviews/combined-red-team-2026-10-17.md): parseLiveQuote({changePct:null}) -> 0 -> FLAT. Also found while typing /api/prices for Q-093: num() returns 0 for missing values under a comment that says 'explicit number-or-null'. About thirty files consume changePct, so this is its own package; lib/sessionMoves.ts states the gap and cites this id."
+  },
+  {
+    "id": "Q-146",
+    "title": "The forward-earnings band anchor is circular: forwardEps x forwardPE is approximately the current price",
+    "domain": "Quant/Valuation",
+    "priority": "P2",
+    "status": "pending",
+    "files": [
+      "lib/quant/buildFundamentalsPayload.ts",
+      "lib/quant/priceBands.ts"
+    ],
+    "acceptance_criteria": [
+      "Decide (accountant gate) whether the forward heuristic stays an anchor; forward P/E is price / forward EPS by definition, so the anchor restates the price",
+      "If kept, the methodology says so; if dropped, the composite needs a stated minimum anchor count"
+    ],
+    "verify_commands": [
+      "npm run test"
+    ],
+    "notes_2026_10_17": "Accountant gate on #240, backlog item L1 (reviews/q086-accountant-2026-10-17.md). Pre-existing; pulls every composite fair value toward the price."
+  },
+  {
+    "id": "Q-147",
+    "title": "DCF construction gaps the accountant gate named: single-point TTM FCF, REIT issuance, SBC/minority/preferred, BDCs, one 9% default for every company",
+    "domain": "Quant/Valuation",
+    "priority": "P2",
+    "status": "pending",
+    "files": [
+      "lib/quant/buildFundamentalsPayload.ts",
+      "components/stock/quantlab/hooks/useQuantLabFundamentals.ts",
+      "components/stock/quantlab/tabs/ValuationTab.tsx"
+    ],
+    "acceptance_criteria": [
+      "L2: normalise the perpetuity base for cyclicality/capex timing, or state that it is a single TTM point",
+      "L3: equity REITs' growth assumes no issuance; show or adjust for it",
+      "L4: say on every per-share value that SBC, minority interest and preferred cannot be bridged (no data)",
+      "L5: BDCs and alternative managers inside Asset Management cannot be separated (now refused as a mixed label)",
+      "S6: replace the flat 9% default with a stated CAPM default using the beta already in the payload, or keep it labelled as one default"
+    ],
+    "verify_commands": [
+      "npm run test"
+    ],
+    "notes_2026_10_17": "Accountant gate on #240 (L2-L5, S6). #240 labels the default 'one default for every company' and refuses Asset Management outright."
+  },
+  {
+    "id": "Q-148",
+    "title": "Verify what Yahoo's financialData.freeCashflow deducts before any copy calls it levered/after-interest",
+    "domain": "Data/Integrity",
+    "priority": "P2",
+    "status": "pending",
+    "owner_role": "Owner (PM)",
+    "files": [
+      "lib/quant/buildFundamentalsPayload.ts"
+    ],
+    "acceptance_criteria": [
+      "Field-presence probe (no vendor values committed) comparing freeCashflow with operatingCashflow and trailing capex for 4-6 levered names",
+      "Record whether it tracks CFO - capex (after interest under US GAAP) or something else; until then the UI keeps the hedged wording #240 introduced"
+    ],
+    "verify_commands": [
+      "npm run test"
+    ],
+    "notes_2026_10_17": "Accountant gate on #240, Q1: UNVERIFIED. yahoo-finance2 3.13.2 types the field with no doc; the repo's 'levered' claim had no source."
+  },
+  {
+    "id": "Q-149",
+    "title": "Dark-pool route reads fields that do not exist, so off-exchange share and float are always — and the panel's sub-label credits 'Finra BATS'",
+    "domain": "Data/Integrity",
+    "priority": "P2",
+    "status": "pending",
+    "files": [
+      "app/api/darkpool/[ticker]/route.ts",
+      "components/DarkPoolPanel.tsx"
+    ],
+    "acceptance_criteria": [
+      "Remove the reads of keyStats.ordinarySharesNumber, financialData.sharesOutstanding, offExchangeShares and marketStore, none of which yahoo-finance2 types",
+      "The off-exchange card says the figure is not published rather than citing Finra BATS for a value nobody fetched",
+      "Production probe: field presence for the 11 sector ETFs"
+    ],
+    "verify_commands": [
+      "npm run test"
+    ],
+    "notes_2026_10_17": "Found while fixing #240 (ordinarySharesNumber was also dead there) and red-team S2 on #239 (offExchangePct null for 11 of 11 sector ETFs on production)."
+  },
+  {
+    "id": "Q-150",
+    "title": "Owner decision: the /portfolio tail-risk banner lists trade actions ('Buy OTM puts', 'Add VIX hedge') for a demo portfolio",
+    "domain": "Compliance",
+    "priority": "P1",
+    "status": "pending",
+    "owner_role": "Owner (PM)",
+    "human_blocker": "Regulatory call under Q-083 (MAS/FAA): whether trade-action text belongs on the page at all, even labelled illustrative.",
+    "files": [
+      "components/risk/TailRiskBanner.tsx",
+      "lib/portfolio/tailRiskAlerts.ts"
+    ],
+    "acceptance_criteria": [
+      "Decide: remove the suggestions, or keep them with a legal opinion",
+      "If removed, the TailRiskAlert.suggestions field goes too (no reader left)"
+    ],
+    "verify_commands": [
+      "npm run test"
+    ],
+    "notes_2026_10_17": "Noted on #243. An earlier change reworded 'Suggestions:' to 'What this alert type would suggest:' and kept the content; the sector page's position-sizing rule was removed on #239 for the same reason."
+  },
+  {
+    "id": "Q-151",
+    "title": "stryker-weekly's scheduled run of 2026-10-11 concluded 'cancelled' — the mutation gate did not run that week",
+    "domain": "CI/Testing",
+    "priority": "P2",
+    "status": "pending",
+    "files": [
+      ".github/workflows/stryker-weekly.yml"
+    ],
+    "acceptance_criteria": [
+      "Find why the run was cancelled (timeout, concurrency, manual)",
+      "The next scheduled run completes all four shards, or the cause is fixed"
+    ],
+    "verify_commands": [
+      "gh run list --workflow stryker-weekly.yml --limit 5"
+    ],
+    "notes_2026_10_17": "Seen in the heartbeat dry run on 2026-10-17 (run 38148621802)."
+  },
+  {
+    "id": "Q-152",
+    "title": "Owner decision: four public API routes nothing in the product calls, and eight modules only tests reach",
+    "domain": "Architecture",
+    "priority": "P2",
+    "status": "pending",
+    "owner_role": "Owner (PM)",
+    "human_blocker": "Outward-facing endpoints; traffic is not visible from the repo while the Vercel connector is unauthorised.",
+    "files": [
+      "app/api/sector-rotation/route.ts",
+      "app/api/ml/[ticker]/route.ts",
+      "app/api/conditional-vol/[ticker]/route.ts",
+      "app/api/regime/[ticker]/route.ts",
+      "lib/portfolio/",
+      "lib/quant/intermarket.ts",
+      "lib/backtest/walkForward.ts"
+    ],
+    "acceptance_criteria": [
+      "Delete or wire each route (the dead-code note recommends deleting all four: unauthenticated proxies with no product purpose are attack surface and I8 exposure)",
+      "Wire or delete each TEST_ONLY_PENDING module with its tests"
+    ],
+    "verify_commands": [
+      "npm run test"
+    ],
+    "notes_2026_10_17": "reviews/dead-code-sweep-2026-10-16.md (#234). Also left for the owner there: .env.example:64 documents NEXT_PUBLIC_APP_URL, which nothing reads; CLAUDE.md forbids agents to edit .env files."
   }
 ]
