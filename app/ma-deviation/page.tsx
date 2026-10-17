@@ -1,6 +1,7 @@
 'use client'
 
-import { formatLocalTime } from '@/lib/format'
+import { UI_LOCALE } from '@/lib/format'
+import { LocalTime } from '@/components/LocalTime'
 import { useState, useEffect } from 'react'
 import { DataFreshnessIndicator } from '@/components/DataFreshnessIndicator'
 import Link from 'next/link'
@@ -210,7 +211,7 @@ export default function MADeviationPage() {
       av = 0; bv = 0 // name: handled separately
     }
     if (sortKey === 'name') {
-      const cmp = a.name.localeCompare(b.name)
+      const cmp = a.name.localeCompare(b.name, UI_LOCALE)
       return sortDir === 'asc' ? cmp : -cmp
     }
     return sortDir === 'asc' ? av - bv : bv - av
@@ -253,7 +254,7 @@ export default function MADeviationPage() {
                     label="Data"
                   />
                   <div className="text-xs text-slate-400 font-mono">
-                    Computed: {formatLocalTime(data.computedAt)}
+                    Computed: <LocalTime value={data.computedAt} />
                   </div>
                 </div>
               )}

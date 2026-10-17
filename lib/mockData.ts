@@ -31,6 +31,7 @@
  */
 
 
+import { UI_LOCALE } from '@/lib/format'
 import { DarkPoolPrint } from './sectors'
 import { markSynthetic, type Synthetic } from './synthetic'
 
@@ -88,7 +89,7 @@ export function generateDarkPoolPrints(ticker: string, count: number = 12): Synt
       type,
       sentiment
     }
-  }).sort((a, b) => b.time.localeCompare(a.time))
+  }).sort((a, b) => b.time.localeCompare(a.time, UI_LOCALE))
 
   // Wrapped, not cast. `markSynthetic` is the one sanctioned constructor, and
   // the wrapper is NOT assignable to DarkPoolPrint[] — so this value cannot

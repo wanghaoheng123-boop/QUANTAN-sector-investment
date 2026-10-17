@@ -1,5 +1,6 @@
 'use client'
 
+import { LocalTime } from '@/components/LocalTime'
 import { formatLocalTime } from '@/lib/format'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { DataFreshnessIndicator } from '@/components/DataFreshnessIndicator'
@@ -44,7 +45,7 @@ interface MetricsData {
 
 
 // ─── Metric card ───────────────────────────────────────────────────────────────
-function MetricCard({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
+function MetricCard({ label, value, sub, color }: { label: string; value: string; sub?: React.ReactNode; color?: string }) {
   return (
     <div className="bg-slate-900/60 rounded-xl p-4 border border-slate-800">
       <div className="text-xs text-slate-400 mb-1 uppercase tracking-wider">{label}</div>
@@ -334,7 +335,7 @@ export default function BtcQuantLab({ candles, interval = '1d' }: Props) {
             <MetricCard
               label="Funding Rate (8h)"
               value={metrics?.fundingRate != null ? `${(metrics.fundingRate * 100).toFixed(4)}%` : '—'}
-              sub={metrics?.nextFundingTime ? `Next: ${formatLocalTime(metrics.nextFundingTime)}` : undefined}
+              sub={metrics?.nextFundingTime ? <>Next: <LocalTime value={metrics.nextFundingTime} /></> : undefined}
               color={fundingInfo?.color ?? 'text-slate-400'}
             />
             <MetricCard

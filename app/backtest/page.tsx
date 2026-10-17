@@ -1,12 +1,13 @@
 'use client'
 
+import { LocalTime } from '@/components/LocalTime'
 import { useState, useEffect, useCallback } from 'react'
 import { DataFreshnessIndicator } from '@/components/DataFreshnessIndicator'
 import { apiUrl } from '@/lib/apiBase'
 import InstrumentTable from '@/components/backtest/InstrumentTable'
 import TradeLog from '@/components/backtest/TradeLog'
 import type { BacktestResult } from '@/lib/backtest/engine'
-import { formatFreshness, formatLocalDateTime } from '@/lib/format'
+import { formatFreshness } from '@/lib/format'
 import { SECTOR_COLORS_BY_NAME } from '@/lib/sectorColors'
 // Q-054-NEW (Phase 16 S2): god-component decomposition. Previously
 // AnalysisTab / PeriodSplitPanel / LiveSignalsPanel / MetricCard +
@@ -191,7 +192,7 @@ export default function BacktestPage() {
                   />
                   <div className="text-xs text-slate-400">Last computed</div>
                 </div>
-                <div className="text-sm font-mono text-slate-300">{formatLocalDateTime(computedAt)}</div>
+                <div className="text-sm font-mono text-slate-300"><LocalTime value={computedAt} withDate /></div>
                 <div className="text-[10px] text-slate-400">{formatFreshness(computedAt)}{/* Q-114: computedAt is when WE ran the backtest, not a vendor stamp. */}</div>
               </div>
               <button

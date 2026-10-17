@@ -1,6 +1,6 @@
 'use client'
 
-import { formatLocalTime } from '@/lib/format'
+import { LocalTime } from '@/components/LocalTime'
 import { useState, useEffect } from 'react'
 import { safeHref } from '@/lib/security/urlValidation'
 import { parseNewsPayload, type NewsItem } from '@/lib/news/newsPayload'
@@ -165,7 +165,7 @@ export default function NewsFeed({ sector, ticker, color }: NewsFeedProps) {
             ? <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />
             : <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse inline-block" />}
           {degradedMessage ? 'Partial' : 'Live'} · Yahoo Finance
-          <span>· Fetched {formatLocalTime(fetchedAt)}</span>
+          <span>· Fetched <LocalTime value={fetchedAt} /></span>
         </div>
       )}
 

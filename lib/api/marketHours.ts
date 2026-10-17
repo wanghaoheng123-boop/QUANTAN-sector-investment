@@ -196,9 +196,17 @@ const NY_LABEL_FORMATTER = new Intl.DateTimeFormat('en-US', {
   hour: 'numeric',
   minute: '2-digit',
   hour12: false,
+  timeZoneName: 'short',
 })
 
-/** "Fri 16:00 ET" — the stamp itself, so changing the alarm never hides the number. */
+/**
+ * "Fri 16:00 EDT" — the stamp itself, so changing the alarm never hides the
+ * number. EDT/EST rather than "ET" (red-team R2-243-4): on the fall-back
+ * morning 01:30 happens twice, and "ET" named both the same. Assembled from
+ * parts so no ICU-specific separator leaks in.
+ */
 export function formatNySessionStamp(d: Date): string {
-  return `${NY_LABEL_FORMATTER.format(d)} ET`
+  const p: Partial<Record<Intl.DateTimeFormatPartTypes, string>> = {}
+  for (const part of NY_LABEL_FORMATTER.formatToParts(d)) p[part.type] = part.value
+  return `${p.weekday} ${p.hour}:${p.minute} ${p.timeZoneName}`
 }
