@@ -2,7 +2,7 @@ import { writeFileSync, mkdirSync, readFileSync, existsSync, appendFileSync } fr
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
-import { WINDOW_START, assessRefresh, seriesFingerprint } from './lib/dataVintage.mjs';
+import { WINDOW_START, assessRefresh, mergeKeepingFirstVintage, recordKeptRestatements, seriesFingerprint } from './lib/dataVintage.mjs';
 import { TICKERS } from './lib/universe.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -72,6 +72,8 @@ function saveResult(ticker, sector, candles) {
   // win rate. Appends are normal and pass; a changed or vanished historical bar
   // fails closed (I2) so a human sees it before it reaches a benchmark.
   let vintage = { appended: candles.length, restated: 0, missing: 0, finalized: 0 };
+  /** Q-144: minor restatements kept at their first vintage, carried forward across refreshes. */
+  let keptRestatements = [];
   if (existsSync(filePath)) {
     try {
       const prev = JSON.parse(readFileSync(filePath, 'utf8'));
@@ -90,6 +92,19 @@ function saveResult(ticker, sector, candles) {
       vintage = { appended: verdict.appended, restated: verdict.restated, missing: verdict.missing, finalized: verdict.finalized };
       if (!verdict.ok) {
         throw new Error(`REFUSED to save ${ticker}: ${verdict.reasons.join(' | ')}`);
+      }
+      const prior = Array.isArray(prev.vintage?.keptRestatements) ? prev.vintage.keptRestatements : [];
+      if (verdict.keepFirstVintage) {
+        // Keep the bars already on disk (their first vintage, I4) and record
+        // the revision — date, field and relative size, never the vendor values.
+        candles = mergeKeepingFirstVintage(prev.candles, candles, verdict.keptRestatements.map((r) => r.key));
+        const { records, fresh } = recordKeptRestatements(prior, verdict.keptRestatements, new Date().toISOString());
+        if (fresh.length > 0) {
+          console.log(`::notice title=Restatement kept at first vintage ${ticker}::${fresh.map((r) => `${r.key} ${r.field} ${r.relativeChange}`).join('; ')}`);
+        }
+        keptRestatements = records;
+      } else {
+        keptRestatements = prior;
       }
       if (verdict.appended > 0 || verdict.finalized > 0) {
         const fin = verdict.finalized > 0 ? `, ${verdict.finalized} volume finalization(s)` : '';
@@ -119,7 +134,7 @@ function saveResult(ticker, sector, candles) {
     windowStart: WINDOW_START,
     fingerprint: seriesFingerprint(candles),
     rows: candles.length,
-    vintage,
+    vintage: { ...vintage, keptRestatements },
     candles,
   };
   writeFileSync(filePath, JSON.stringify(output, null, 2), 'utf8');
