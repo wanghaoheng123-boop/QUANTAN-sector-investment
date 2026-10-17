@@ -34,12 +34,9 @@ const PRINTS = markSynthetic<DarkPoolPrint[]>([
 ])
 
 const METRICS: DarkPoolMetric = {
-  offExchangePct: 42.1,
-  onExchangePct: 57.9,
-  offExchangeShares: 1_000_000,
-  totalShares: 2_400_000,
   sharesShorted: 141_610_000,
-  shortFloatPct: 0.01,
+  shortFloatPct: 0.97,
+  shortInterestAsOf: '2026-07-31',
   daysToCover: 2.6,
   avgDailyVolume: 54_000_000,
   sharesOutstanding: 14_900_000_000,
@@ -120,16 +117,55 @@ describe('DarkPoolPanel — the synthetic flow gauge carries its own label', () 
 describe('DarkPoolPanel — the Yahoo attribution is scoped to the metrics', () => {
   it('names what the source covers and disclaims what it does not', () => {
     const html = render(analysis(true))
-    expect(html).toContain('Source for the metrics above: Yahoo Finance')
-    expect(html).toContain('does not cover the flow gauge or the block prints below')
+    expect(html).toContain('Source for the figures above: Yahoo Finance (short interest, share counts, 10-day average')
+    expect(html).toContain('The flow gauge and the block prints below are not from this source.')
     // The unscoped phrasing must not come back.
     expect(html).not.toContain('Source: Yahoo Finance aggregate off-exchange trading data.')
   })
 
   it('still reports the real metrics it does cover', () => {
     const html = render(analysis(true))
-    expect(html).toContain('Off-Exchange Vol')
-    expect(html).toContain('Short Interest')
-    expect(html).toContain('Short Interest Signal')
+    expect(html).toContain('Short Interest (% of float)')
+    expect(html).toContain('0.97%')
+    expect(html).toContain('141.61M shares · as of 2026-07-31')
+    expect(html).toContain('14.90B')
+    expect(html).toContain('Float 14.59B')
+  })
+})
+
+/**
+ * Q-149 — the panel credited "Finra BATS" for an off-exchange figure no field
+ * supplied, and its short-interest "signal" read a fraction as a percent. These
+ * pin what replaced them, on the rendered markup.
+ */
+describe('DarkPoolPanel — says what this source does not publish (Q-149)', () => {
+  it('states once that off-exchange volume is not published, in every loaded state', () => {
+    for (const state of [analysis(true), analysis(false)]) {
+      expect(render(state)).toContain('Off-exchange (dark-pool) volume is not published by this data source.')
+    }
+  })
+
+  it('credits no venue and names no signal', () => {
+    for (const state of [analysis(true), analysis(false), null]) {
+      const html = render(state)
+      for (const banned of ['Finra', 'FINRA', 'BATS', 'OTCQX', 'UQDF', 'ACCUMULATION', 'DISTRIBUTION', 'Short Interest Signal', 'Off-Exchange Vol']) {
+        expect(html, banned).not.toContain(banned)
+      }
+    }
+  })
+
+  it('an ETF (no short-interest figure) is not told its short interest is moderate', () => {
+    const etf: DarkPoolAnalysis = {
+      ...analysis(false),
+      ticker: 'XLK',
+      metrics: { sharesShorted: null, shortFloatPct: null, shortInterestAsOf: null, daysToCover: null, avgDailyVolume: 6_000_000, sharesOutstanding: null, sharesFloat: null },
+      statusNote: 'Yahoo Finance reports no short-interest or share-count figures for this ticker.',
+    }
+    const html = render(etf)
+    expect(html).not.toMatch(/moderate/i)
+    expect(html).toContain('Yahoo Finance reports no short-interest or share-count figures for this ticker.')
+    expect(html).toContain('Float not reported')
+    // The definition line describes a number; with no number it does not render.
+    expect(html).not.toContain('reported twice a month')
   })
 })
