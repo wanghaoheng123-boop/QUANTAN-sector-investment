@@ -108,20 +108,26 @@ export async function runNotifier({ env, gh, log = console }) {
   return d
 }
 
+/**
+ * The variables the runner reads — only these reach it. Exported so the
+ * attempt is tested end to end (red-team R2-236-1: dropping ALERT_RUN_ATTEMPT
+ * here left every test green and restored the re-run suppression A2 fixed).
+ */
+export const notifierEnvFrom = (e) => ({
+  GITHUB_TOKEN: e.GITHUB_TOKEN,
+  GITHUB_REPOSITORY: e.GITHUB_REPOSITORY,
+  ALERT_WORKFLOW: e.ALERT_WORKFLOW,
+  ALERT_CONCLUSION: e.ALERT_CONCLUSION,
+  ALERT_RUN_URL: e.ALERT_RUN_URL,
+  ALERT_RUN_ATTEMPT: e.ALERT_RUN_ATTEMPT,
+  ALERT_DETAIL: e.ALERT_DETAIL,
+  ALERT_EVENT: e.ALERT_EVENT,
+})
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  // Named reads, not `process.env` passed whole: only these reach the runner,
-  // and the vendor-licence register's detector sees the host-bearing
-  // ALERT_RUN_URL where it is read.
-  const env = {
-    GITHUB_TOKEN: process.env.GITHUB_TOKEN,
-    GITHUB_REPOSITORY: process.env.GITHUB_REPOSITORY,
-    ALERT_WORKFLOW: process.env.ALERT_WORKFLOW,
-    ALERT_CONCLUSION: process.env.ALERT_CONCLUSION,
-    ALERT_RUN_URL: process.env.ALERT_RUN_URL,
-    ALERT_RUN_ATTEMPT: process.env.ALERT_RUN_ATTEMPT,
-    ALERT_DETAIL: process.env.ALERT_DETAIL,
-    ALERT_EVENT: process.env.ALERT_EVENT,
-  }
+  // ALERT_RUN_URL is read by name here so the vendor-licence register's
+  // detector sees the host-bearing variable where it enters the process.
+  const env = notifierEnvFrom({ ...process.env, ALERT_RUN_URL: process.env.ALERT_RUN_URL })
   if (!env.GITHUB_TOKEN || !env.GITHUB_REPOSITORY || !env.ALERT_WORKFLOW || !env.ALERT_CONCLUSION) {
     console.error('notify-scheduled-failure: missing GITHUB_TOKEN / GITHUB_REPOSITORY / ALERT_WORKFLOW / ALERT_CONCLUSION')
     process.exit(1)

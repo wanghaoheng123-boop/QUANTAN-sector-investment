@@ -30,6 +30,19 @@ import { decideAlert, alertTitle, alertKeyFor, readThread, ALERT_MARKER } from '
 import { makeGh } from './githubApi.mjs'
 
 /**
+ * One API workflow run, as the decision code reads it. Exported so the attempt
+ * mapping is tested (red-team R2-236-1: `attempt: undefined` here left every
+ * test green and silenced the probe on a re-run).
+ */
+export const toWatchedRun = (r) => ({
+  createdAt: r.created_at,
+  status: r.status,
+  conclusion: r.conclusion,
+  url: r.html_url,
+  attempt: r.run_attempt,
+})
+
+/**
  * Act on assessed results: open, comment on, or close each workflow's alert
  * issue. Exported with its I/O injected so a test can drive it (red-team A1).
  *
@@ -198,13 +211,7 @@ async function main() {
     withRuns.push({
       ...w,
       registeredAt: registry.get(w.file) ?? null,
-      runs: (data.workflow_runs ?? []).map((r) => ({
-        createdAt: r.created_at,
-        status: r.status,
-        conclusion: r.conclusion,
-        url: r.html_url,
-        attempt: r.run_attempt,
-      })),
+      runs: (data.workflow_runs ?? []).map(toWatchedRun),
     })
   }
 
