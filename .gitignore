@@ -86,3 +86,9 @@ workspace/shadow/
 
 # Q-095: the ledger-append lock; committing one would block every clone
 *.csv.lock
+
+# Q-112 (2026-10-17): a Codex-CLI migration of .claude/agents and .claude/commands,
+# generated 2026-09-06 in the owner checkout. They are COPIES, not the roster:
+# never edit them; .claude/ is the single source. Delete or regenerate: Q-155.
+.agents/
+.codex/

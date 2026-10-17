@@ -2551,3 +2551,31 @@ therefore get fixed first, which is backwards.**
 The jsdom note in CLAUDE.md said component tests were CI-only here. They run
 in three seconds. The check I used to "confirm" otherwise called `timeout`,
 which does not exist on macOS, and I read its instant exit as a hang.
+
+## 2026-10-01 → 10-17 — Fifteen PRs, two adversary rounds, and the guards were the weak part
+
+Merged #232, #233, #235 and #237 early in the session, and then #234 and #236–#246. Every route now says when its upstream failed (Q-140). The backtest records why each trade closed (Q-133). The dead tradingagents dependency is gone. Brief times render in New York time with EDT/EST (Q-142, #243). On top of those:
+- **Q-095:** the ledger has one strict parser and a locked append.
+- **Q-113:** alerts post one comment per failed run and attempt.
+- **Dead-code sweep:** an orphan-module guard now runs.
+- **Q-086:** the DCF is FCFE and refuses banks, mixed financial labels and currency mismatches, and a refused name gets no buy/sell zones.
+- **Q-135:** session moves are measurements; the sector page's "Strong BUY … size position" guide is gone.
+- **Q-141:** the BTC lab names the bars it reads.
+- **Q-090:** news sources come in four explicit kinds.
+- **Q-151:** the Stryker shard is split.
+- **Q-093:** lint finally exists, at zero warnings.
+
+**The round-1 red-team broke four packages with HIGH findings, and round 2 then broke three of my fixes to them.** In each case the broken thing was the guard, not the fix:
+- **The copy guard** was a list of the deleted sentences, so lower-casing one word and adding a hyphen passed it.
+- **The locale guard** matched only an empty argument list, so `toLocaleString(undefined, {…})` (the original defect, written back) passed.
+- **The alert fix** carried the run attempt through three hops of production wiring, and no test executed any of them.
+
+The lesson I keep re-learning: **a guard written to catch the defect you just fixed is tuned to that defect's spelling.** Give it the paraphrase as its positive control, not the sentence you deleted.
+
+**The accountant gate caught me writing "no change" into a migration note** for a change that removed bands and signals from every refused bank. It also caught the refusal I had just built failing open the first time `industry` was missing. A refusal gate that proceeds when its input is absent is the defect class it exists to prevent.
+
+**Two process traps, both silent:**
+- A CRLF check written as `'\r' not in open(p).read()` is always true, because Python's text mode strips `\r`. One route went from CRLF to LF behind it, and I caught it only with a byte-level comparison against the merge base.
+- An untracked file at a path the new base adds makes `git rebase` refuse with "could not detach HEAD". My chained test run then passed on the OLD base and I nearly pushed it as rebased.
+
+Open and next: Q-145 (quote producers emit 0 for a missing price or change), Q-153 (the daily 200-MA regime copy still gives trade instructions and unsourced forward returns), Q-144 (BTC frozen by a 0.002% restatement), and the owner-gated items in SESSION_STATE.
