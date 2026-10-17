@@ -146,20 +146,95 @@ export function diffSeries(existing, incoming) {
 }
 
 /**
+ * Q-144 — the largest relative change a restated bar may carry and still be
+ * kept at its FIRST vintage rather than quarantined.
+ *
+ * Measured before it was set: the restatement that froze BTC for six weeks
+ * (2026-09-06 onward) was a 1.9e-5 relative move in one daily open — vendor
+ * rounding, not a revision. A split restates every bar by its ratio (a 3:2
+ * split moves each price 33%), so 0.1% can never admit one, and it sits ~50x
+ * above the observed noise.
+ */
+export const MAX_KEEPABLE_RESTATEMENT = 1e-3
+
+/**
+ * At most this many restated bars may be kept per refresh. A systematic
+ * revision (an adjustment applied to a whole stretch of history) touches many
+ * bars at once and must reach a human, however small each change is.
+ */
+export const MAX_KEEPABLE_RESTATED_BARS = 3
+
+const PRICE_FIELDS = new Set(['open', 'high', 'low', 'close'])
+
+/**
+ * Whether a restatement can be resolved by keeping the bars already on disk.
+ *
+ * I4 (point-in-time): the value first ingested is the one that existed at the
+ * time, so keeping it is the point-in-time answer and the later vintage is the
+ * revision. Only for MINOR restatements, and never when a bar went missing.
+ */
+export function keepableRestatement(d) {
+  if (d.missing.length > 0 || d.restated.length === 0) return false
+  const keys = new Set(d.restated.map((r) => r.key))
+  if (keys.size > MAX_KEEPABLE_RESTATED_BARS) return false
+  // PRICE fields only. Volume has its own, deliberately narrower rule
+  // (FINALIZATION_SESSIONS): a volume revision outside the settling window is
+  // a data event a human must see, and keeping it here would quietly overrule
+  // that decision. Vendor rounding of a price — the BTC case — is what this is for.
+  return d.restated.every((r) => PRICE_FIELDS.has(r.field) && drift(r.was, r.now) <= MAX_KEEPABLE_RESTATEMENT)
+}
+
+/**
+ * The series to write when a restatement is kept at its first vintage: every
+ * restated bar is the bar ALREADY ON DISK, whole; everything else is the
+ * incoming series (so appends and volume finalizations still land).
+ */
+export function mergeKeepingFirstVintage(existing, incoming, restatedKeys) {
+  const keep = new Set(restatedKeys)
+  const prev = new Map((existing ?? []).map((c) => [KEY(c), c]))
+  return (incoming ?? []).map((c) => (keep.has(KEY(c)) && prev.has(KEY(c)) ? prev.get(KEY(c)) : c))
+}
+
+/** How many kept-restatement records a fixture carries (newest kept). */
+export const MAX_RECORDED_RESTATEMENTS = 50
+
+/**
+ * The fixture's restatement record after a refresh: prior records, plus the
+ * newly kept ones not already recorded. The vendor keeps serving a revised
+ * value, so the same restatement is detected every week; it is recorded once,
+ * by date and field. Carries no vendor values — only key, field, relative size
+ * and when it was first seen.
+ */
+export function recordKeptRestatements(prior, kept, detectedAt) {
+  const base = Array.isArray(prior) ? prior : []
+  const seen = new Set(base.map((r) => `${r.key}|${r.field}`))
+  const fresh = (kept ?? []).filter((r) => !seen.has(`${r.key}|${r.field}`)).map((r) => ({ key: r.key, field: r.field, relativeChange: r.relativeChange, detectedAt }))
+  return { records: [...base, ...fresh].slice(-MAX_RECORDED_RESTATEMENTS), fresh }
+}
+
+/**
  * Decide whether a refresh may be written.
  *
  * Appends are always fine. A restatement or a disappearing bar is a DATA event
  * that a human must see, so it fails closed (I2) rather than being absorbed
  * into the next benchmark run as signal drift.
+ *
+ * Q-144 exception: a MINOR restatement (keepableRestatement) is resolved by
+ * keeping the bars on disk — their first vintage — and is RECORDED, not
+ * absorbed: the caller writes `keptRestatements` into the fixture. Refusing it
+ * froze BTC's history for six weeks over a 1.9e-5 move in one open, while the
+ * weekly run went red every Sunday and stopped meaning anything.
  */
 export function assessRefresh(existing, incoming) {
   const d = diffSeries(existing, incoming)
   // `finalized` deliberately does NOT block. It is reported so a human can see it
   // happening, which is the whole difference between absorbing a change silently
   // and accepting a known, named vendor behaviour.
-  const ok = d.restated.length === 0 && d.missing.length === 0
+  // Q-144: a MINOR restatement keeps the first vintage instead of refusing.
+  const keepFirstVintage = keepableRestatement(d)
+  const ok = (d.restated.length === 0 || keepFirstVintage) && d.missing.length === 0
   const reasons = []
-  if (d.restated.length > 0) {
+  if (d.restated.length > 0 && !keepFirstVintage) {
     const sample = d.restated
       .slice(0, 3)
       .map((r) => `${r.key} ${r.field} ${r.was} -> ${r.now}`)
@@ -182,6 +257,12 @@ export function assessRefresh(existing, incoming) {
     missing: d.missing.length,
     finalized: d.finalized.length,
     reasons,
+    /** True when the restated bars are kept at their first vintage (Q-144). */
+    keepFirstVintage,
+    /** The kept restatements, by date, field and relative size — no vendor values. */
+    keptRestatements: keepFirstVintage
+      ? d.restated.map((r) => ({ key: r.key, field: r.field, relativeChange: Number(drift(r.was, r.now).toPrecision(3)) }))
+      : [],
   }
 }
 

@@ -1,13 +1,6 @@
 import { describe, it, expect } from 'vitest'
 // Plain .mjs so the fetch script can import it without a TS build step.
-import {
-  diffSeries,
-  assessRefresh,
-  seriesFingerprint,
-  WINDOW_START,
-  FINALIZATION_SESSIONS,
-  FINALIZATION_MAX_VOLUME_DRIFT,
-} from '../../scripts/lib/dataVintage.mjs'
+import { diffSeries, assessRefresh, seriesFingerprint, WINDOW_START, FINALIZATION_SESSIONS, FINALIZATION_MAX_VOLUME_DRIFT, mergeKeepingFirstVintage, MAX_KEEPABLE_RESTATEMENT, MAX_KEEPABLE_RESTATED_BARS, recordKeptRestatements } from '../../scripts/lib/dataVintage.mjs'
 
 const bar = (time: number, close: number, extra: Record<string, number> = {}) => ({
   time, open: close, high: close + 1, low: close - 1, close, volume: 100, ...extra,
@@ -215,5 +208,90 @@ describe('volume finalization is not a restatement — the defect that deadlocke
     const v = assessRefresh(disk, disk.slice(0, -1))
     expect(v.ok).toBe(false)
     expect(v.reasons.join(' ')).toMatch(/HISTORY LOSS/)
+  })
+})
+
+// Q-144 — BTC was quarantined every week from 2026-09-06 for a 1.9e-5 move in
+// ONE daily open, so its history froze for six weeks and the weekly run went
+// red every Sunday. A MINOR restatement now keeps the first vintage (I4: the
+// value that existed at the time) and is recorded; anything larger, wider, or
+// with a lost bar still fails closed.
+describe('Q-144: a minor restatement keeps its first vintage; a real one still refuses', () => {
+  const day = (i: number) => 1_700_000_000 + i * 86_400
+  const bar = (i: number, o = 100 + i) => ({ time: day(i), open: o, high: o + 2, low: o - 2, close: o + 1, volume: 1_000 })
+  const disk = Array.from({ length: 30 }, (_, i) => bar(i))
+
+  it('keeps the exact BTC-shaped revision (one open, 1.9e-5) and records it without values', () => {
+    const fresh = [...disk.map((c) => ({ ...c })), bar(30), bar(31)]
+    fresh[10] = { ...fresh[10], open: fresh[10].open * (1 + 1.9e-5) }
+    const v = assessRefresh(disk, fresh)
+    expect(v.ok).toBe(true)
+    expect(v.keepFirstVintage).toBe(true)
+    expect(v.keptRestatements).toEqual([{ key: String(day(10)), field: 'open', relativeChange: 1.9e-5 }])
+    const merged = mergeKeepingFirstVintage(disk, fresh, v.keptRestatements.map((r) => r.key))
+    expect(merged[10]).toEqual(disk[10])           // the bar on disk, whole
+    expect(merged).toHaveLength(32)                 // the appends still land
+    expect(merged[31]).toEqual(bar(31))
+    expect(JSON.stringify(v.keptRestatements)).not.toMatch(/"(?:was|now)"/) // no vendor values recorded
+  })
+
+  it('still refuses a split: every bar moves by the ratio', () => {
+    const split = disk.map((c) => ({ ...c, open: c.open / 2, high: c.high / 2, low: c.low / 2, close: c.close / 2 }))
+    const v = assessRefresh(disk, split)
+    expect(v.ok).toBe(false)
+    expect(v.keepFirstVintage).toBe(false)
+    expect(v.reasons.join()).toMatch(/VENDOR RESTATEMENT/)
+  })
+
+  it('still refuses a restatement above the size bound', () => {
+    const fresh = disk.map((c) => ({ ...c }))
+    fresh[5] = { ...fresh[5], close: fresh[5].close * (1 + 2 * MAX_KEEPABLE_RESTATEMENT) }
+    expect(assessRefresh(disk, fresh).ok).toBe(false)
+    fresh[5] = { ...disk[5], close: disk[5].close * (1 + MAX_KEEPABLE_RESTATEMENT * 0.99) }
+    expect(assessRefresh(disk, fresh).ok).toBe(true)
+  })
+
+  it('still refuses more than MAX_KEEPABLE_RESTATED_BARS small revisions (a systematic adjustment)', () => {
+    const fresh = disk.map((c) => ({ ...c }))
+    for (let i = 0; i <= MAX_KEEPABLE_RESTATED_BARS; i++) fresh[i] = { ...fresh[i], close: fresh[i].close * (1 + 1e-5) }
+    expect(assessRefresh(disk, fresh).ok).toBe(false)
+    const fewer = disk.map((c) => ({ ...c }))
+    for (let i = 0; i < MAX_KEEPABLE_RESTATED_BARS; i++) fewer[i] = { ...fewer[i], close: fewer[i].close * (1 + 1e-5) }
+    expect(assessRefresh(disk, fewer).ok).toBe(true)
+  })
+
+  it('is for PRICE rounding only: a small old-bar VOLUME revision still refuses (the Q-102 rule)', () => {
+    const fresh = disk.map((c) => ({ ...c }))
+    fresh[2] = { ...fresh[2], volume: fresh[2].volume * (1 + 1e-5) }
+    expect(assessRefresh(disk, fresh).ok).toBe(false)
+  })
+
+  it('a kept restatement never excuses a lost bar', () => {
+    const fresh = disk.slice(1).map((c) => ({ ...c }))
+    fresh[5] = { ...fresh[5], open: fresh[5].open * (1 + 1e-5) }
+    const v = assessRefresh(disk, fresh)
+    expect(v.ok).toBe(false)
+    expect(v.keepFirstVintage).toBe(false)
+    expect(v.reasons.join()).toMatch(/HISTORY LOSS/)
+  })
+
+  it('records a kept restatement once, not every week the vendor re-serves it', () => {
+    const kept = [{ key: '1700864000', field: 'open', relativeChange: 1.9e-5 }]
+    const week1 = recordKeptRestatements([], kept, '2026-10-18T00:00:00Z')
+    expect(week1.fresh).toHaveLength(1)
+    const week2 = recordKeptRestatements(week1.records, kept, '2026-10-25T00:00:00Z')
+    expect(week2.fresh).toHaveLength(0)
+    expect(week2.records).toEqual(week1.records)
+    expect(week2.records[0].detectedAt).toBe('2026-10-18T00:00:00Z')
+    expect(recordKeptRestatements(undefined, kept, 'x').records).toHaveLength(1)
+  })
+
+  it('the fetch script writes the merged series and the record, not the incoming series', async () => {
+    const { readFileSync } = await import('node:fs')
+    const { join } = await import('node:path')
+    const src = readFileSync(join(__dirname, '../../scripts/fetchBacktestData.mjs'), 'utf8')
+    expect(src).toMatch(/candles = mergeKeepingFirstVintage\(prev\.candles, candles,/)
+    expect(src).toMatch(/vintage: \{ \.\.\.vintage, keptRestatements \}/)
+    expect(src).toMatch(/recordKeptRestatements\(prior, verdict\.keptRestatements,/)
   })
 })
