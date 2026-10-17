@@ -17,6 +17,7 @@ import { parseQuoteTime } from '@/lib/format'
 import { applyRateLimit } from '@/lib/api/rateLimit'
 import { DEGRADED_CACHE_CONTROL } from '@/lib/api/reliability'
 import { normalizeTicker, sanitizeError } from '@/lib/api/sanitize'
+import { normalizedChangePercent } from '@/lib/yahooQuoteFields'
 import {
   NO_SHORT_DATA_NOTE,
   buildDarkPoolMetrics,
@@ -60,7 +61,6 @@ function buildAnalysis(
     }))
   }
 
-  const hasRealData = hasShortOrShareData(metrics)
   // Red-team L9: say only what was observed — the route does not know the
   // security type.
   return {
@@ -68,8 +68,7 @@ function buildAnalysis(
     fetchedAt: new Date().toISOString(),
     quote,
     metrics,
-    hasRealData,
-    statusNote: hasRealData ? null : NO_SHORT_DATA_NOTE,
+    statusNote: hasShortOrShareData(metrics) ? null : NO_SHORT_DATA_NOTE,
   }
 }
 
@@ -126,11 +125,12 @@ export async function GET(
         ? {
             price: rawPrice,
             change: finiteOrNull(rawChange),
-            changePct: Number.isFinite(rawChangePct)
-              ? (rawChangePct as number)
-              : Number.isFinite(rawChange) && rawPrice > 0
-                ? (100 * (rawChange as number)) / rawPrice
-                : null,
+            // Red-team Q145-R5: the percent was taken raw, so a decimal-form
+            // row (0.016 meaning 1.6%) rendered +0.02%. It goes through the
+            // same normaliser as /api/prices and both streams.
+            changePct: rawChangePct != null || rawChange != null
+              ? normalizedChangePercent(rawChangePct, rawChange, rawPrice)
+              : null,
             quoteTime: parseQuoteTime(q.regularMarketTime),
           }
         : {

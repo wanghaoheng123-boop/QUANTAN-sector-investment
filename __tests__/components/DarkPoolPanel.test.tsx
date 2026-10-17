@@ -43,14 +43,14 @@ const METRICS: DarkPoolMetric = {
   sharesFloat: 14_590_000_000,
 }
 
-function analysis(hasRealData: boolean): DarkPoolAnalysis {
+/** `hasData` stands for the route's hasShortOrShareData — it sets statusNote. */
+function analysis(hasData: boolean): DarkPoolAnalysis {
   return {
     ticker: 'AAPL',
     fetchedAt: '2026-08-15T00:39:59.000Z',
     quote: { price: 305.4, change: 1.2, changePct: 0.39, quoteTime: '2026-08-14T20:00:00.000Z' },
     metrics: METRICS,
-    hasRealData,
-    statusNote: hasRealData ? null : 'Off-exchange volume unavailable for this ticker.',
+    statusNote: hasData ? null : 'Yahoo Finance reports no short-interest or share-count figures for this ticker.',
   }
 }
 
