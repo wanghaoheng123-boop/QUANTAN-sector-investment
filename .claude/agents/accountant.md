@@ -63,7 +63,7 @@ requiring those is `INSUFFICIENT DATA`, and structural questions escalate to
 
 ## DCF DISCIPLINE — `lib/quant/dcf.ts`
 
-The model is 2-stage FCFF → WACC → Gordon terminal, citing Damodaran (2012).
+`runDcf` is a model-neutral 2-stage DCF with a Gordon terminal, citing Damodaran (2012). Its production caller is **FCFE at a cost of equity with no net-debt bridge** (Q-086, 2026-10-17); an FCFF caller must pass `netDebt`.
 Standing rules:
 
 - **Terminal value dominates.** Report the `pvTerminal / enterpriseValue` split

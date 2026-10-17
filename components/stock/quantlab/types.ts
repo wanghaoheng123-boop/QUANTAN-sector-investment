@@ -1,3 +1,12 @@
+/** One DCF scenario as the Valuation tab reads it. */
+export interface DcfScenario {
+  valuePerShare: number
+  /** Present value of the terminal value; with enterpriseValue gives its share. */
+  pvTerminal?: number
+  /** Value of the discounted stream (equity value under FCFE). */
+  enterpriseValue?: number
+}
+
 export type QuantLabPayload = {
   symbol: string
   fetchedAt: string
@@ -28,15 +37,21 @@ export type QuantLabPayload = {
     grossProfit: number | null
   }[]
   dcf: {
-    /** Q-086: levered FCF at a cost of equity. */
+    /** Q-086: Yahoo's free cash flow, treated as cash to equity, at a cost of equity. */
     model?: 'FCFE'
-    /** Why no scenario is computed (e.g. a bank), when one is refused. */
+    /** Why an FCF DCF does not apply to this company (a refusal; no bands are drawn). */
     notApplicable?: string | null
-    inputs: Record<string, unknown>
+    /** Why no scenario was computed, for any reason. */
+    unavailable?: string | null
+    /** When the bear/base/bull labels do not strictly describe the inputs used. */
+    scenarioNote?: string | null
+    inputs: Record<string, unknown> & {
+      scenarioRates?: { bear: number; base: number; bull: number; bearTerminalGrowth: number }
+    }
     scenarios: {
-      bear: { valuePerShare: number } | null
-      base: { valuePerShare: number } | null
-      bull: { valuePerShare: number } | null
+      bear: DcfScenario | null
+      base: DcfScenario | null
+      bull: DcfScenario | null
     }
   }
   anchors: Record<string, number | null>

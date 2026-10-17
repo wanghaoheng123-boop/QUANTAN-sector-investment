@@ -173,6 +173,12 @@ export function SummaryTab({ data, summaryOpen, setSummaryOpen }: { data: QuantL
                     )}
                     <p className="text-[10px] text-slate-400 leading-relaxed">{data.bands.methodology}</p>
                   </>
+                ) : data.dcf.notApplicable ? (
+                  // Accountant B5: a refused DCF draws no buy/sell zones from the
+                  // remaining anchors either, and the panel says why.
+                  <p className="text-xs text-amber-300" data-testid="bands-refused">
+                    No band: {data.dcf.notApplicable} The remaining anchors (analyst target, forward-earnings heuristic) are not a valuation on their own.
+                  </p>
                 ) : (
                   <p className="text-xs text-slate-400">Not enough anchors (DCF / analyst / forward heuristic) to draw bands.</p>
                 )}

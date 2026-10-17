@@ -1,8 +1,15 @@
 'use client'
 
-import { fmtB } from '@/components/stock/quantlab/formatters'
 import { Slider } from '@/components/stock/quantlab/ui'
-import type { QuantLabPayload } from '@/components/stock/quantlab/types'
+import type { DcfScenario, QuantLabPayload } from '@/components/stock/quantlab/types'
+
+const pct1 = (v: number) => `${(v * 100).toFixed(1)}%`
+
+/** Share of the value that comes from the terminal value (accountant S2: report it every time). */
+function terminalShare(s: DcfScenario | null): string {
+  if (!s || s.pvTerminal == null || !s.enterpriseValue) return '—'
+  return `${((s.pvTerminal / s.enterpriseValue) * 100).toFixed(0)}%`
+}
 
 export function ValuationTab({
   data,
@@ -33,6 +40,7 @@ export function ValuationTab({
   buildQuery: () => string
   fetchPayload: (q: string) => Promise<void>
 }) {
+  const rates = data.dcf.inputs.scenarioRates
   return (
     <div className="space-y-6">
             <p className="text-xs text-slate-400">
@@ -40,7 +48,7 @@ export function ValuationTab({
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              <Slider label="Discount rate (cost of equity)" value={wacc} min={0.04} max={0.16} step={0.005} onChange={setWacc} fmt={(v) => `${(v * 100).toFixed(1)}%`} />
+              <Slider label="Discount rate (cost of equity; one default for every company)" value={wacc} min={0.04} max={0.16} step={0.005} onChange={setWacc} fmt={(v) => `${(v * 100).toFixed(1)}%`} />
               <Slider label="Terminal growth" value={tg} min={0} max={0.045} step={0.005} onChange={setTg} fmt={(v) => `${(v * 100).toFixed(1)}%`} />
               <Slider label="FCF growth bear" value={gBear} min={-0.05} max={0.12} step={0.005} onChange={setGBear} fmt={(v) => `${(v * 100).toFixed(1)}%`} />
               <Slider label="FCF growth base" value={gBase} min={-0.05} max={0.15} step={0.005} onChange={setGBase} fmt={(v) => `${(v * 100).toFixed(1)}%`} />
@@ -55,9 +63,14 @@ export function ValuationTab({
               Recalculate
             </button>
 
-            {data.dcf.notApplicable && (
+            {(data.dcf.unavailable ?? data.dcf.notApplicable) && (
               <p role="status" data-testid="dcf-not-applicable" className="text-xs text-amber-300">
-                No DCF: {data.dcf.notApplicable}
+                No DCF: {data.dcf.unavailable ?? data.dcf.notApplicable}
+              </p>
+            )}
+            {data.dcf.scenarioNote && (
+              <p role="note" data-testid="dcf-scenario-note" className="text-xs text-slate-400">
+                {data.dcf.scenarioNote}
               </p>
             )}
             <div className="rounded-xl border border-slate-800 overflow-hidden">
@@ -65,24 +78,32 @@ export function ValuationTab({
                 <thead>
                   <tr className="bg-slate-900/80 text-left text-xs text-slate-400 uppercase tracking-wider">
                     <th className="p-3">Scenario</th>
+                    <th className="p-3 text-right font-mono">Rate</th>
+                    <th className="p-3 text-right font-mono">Terminal share</th>
                     <th className="p-3 text-right font-mono">Implied / sh</th>
                   </tr>
                 </thead>
                 <tbody className="font-mono text-slate-200">
                   <tr className="border-t border-slate-800">
                     <td className="p-3 text-red-300/90">Bear (higher discount rate, lower growth)</td>
+                    <td className="p-3 text-right">{rates ? pct1(rates.bear) : '—'}</td>
+                    <td className="p-3 text-right">{terminalShare(data.dcf.scenarios.bear)}</td>
                     <td className="p-3 text-right">
                       {data.dcf.scenarios.bear ? `$${data.dcf.scenarios.bear.valuePerShare.toFixed(2)}` : '—'}
                     </td>
                   </tr>
                   <tr className="border-t border-slate-800">
                     <td className="p-3 text-slate-200">Base</td>
+                    <td className="p-3 text-right">{rates ? pct1(rates.base) : '—'}</td>
+                    <td className="p-3 text-right">{terminalShare(data.dcf.scenarios.base)}</td>
                     <td className="p-3 text-right">
                       {data.dcf.scenarios.base ? `$${data.dcf.scenarios.base.valuePerShare.toFixed(2)}` : '—'}
                     </td>
                   </tr>
                   <tr className="border-t border-slate-800">
-                    <td className="p-3 text-emerald-300/90">Bull (lower discount rate, higher growth)</td>
+                    <td className="p-3 text-emerald-300/90">Bull (lower or equal discount rate, higher growth)</td>
+                    <td className="p-3 text-right">{rates ? pct1(rates.bull) : '—'}</td>
+                    <td className="p-3 text-right">{terminalShare(data.dcf.scenarios.bull)}</td>
                     <td className="p-3 text-right">
                       {data.dcf.scenarios.bull ? `$${data.dcf.scenarios.bull.valuePerShare.toFixed(2)}` : '—'}
                     </td>
@@ -116,10 +137,13 @@ export function ValuationTab({
               {/* Q-086: the second line said the DCF "ignores net cash/debt" — true only by
                   accident (the balance-sheet module has been empty since Nov 2024). It is an
                   FCFE model, which needs no debt bridge, and now says so. */}
+              {/* Accountant B4: the vendor's definition of the field is not verified, so
+                  the text says what the model ASSUMES rather than what the field is. */}
               <p>
-                FCFE model: Yahoo&apos;s levered free cash flow (after interest, so already net of debt service), grown and
-                discounted at the rate you set, which should be a cost of equity. No net-debt bridge is applied because
-                the cash flow is already the equity holders&apos;. Shares from key statistics.
+                FCFE model: the cash flow is Yahoo&apos;s <code>freeCashflow</code> field, treated here as cash available to
+                equity holders with no net borrowing. The vendor&apos;s exact definition is not verified by this platform.
+                It is grown and discounted at the rate you set, with no net-debt bridge. The 9% default is one placeholder
+                for every company, not a company-specific cost of equity. Shares are Yahoo&apos;s <code>sharesOutstanding</code>.
               </p>
             </div>
     </div>
