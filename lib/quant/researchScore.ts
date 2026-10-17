@@ -154,7 +154,7 @@ function momentumScore(
 function rsScore(excess: number | null): PillarScore {
   if (excess == null) return { name: 'Relative strength (vs SPY)', score: 50, detail: 'Insufficient overlap with SPY.' }
   const ann = excess
-  let s = 50 + ann * 120
+  const s = 50 + ann * 120
   const detail =
     ann > 0.05
       ? `Higher return than SPY in window (+${(ann * 100).toFixed(1)}%).`

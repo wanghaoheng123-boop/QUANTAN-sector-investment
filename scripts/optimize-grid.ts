@@ -27,7 +27,7 @@ import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 
 import { gridSearch, gridSearchPurged, aggregateGridResults } from '../lib/optimize/gridSearch'
-import type { GridSearchSummary, GridSearchResult, PurgedGridSummary } from '../lib/optimize/gridSearch'
+import type { GridSearchSummary, PurgedGridSummary } from '../lib/optimize/gridSearch'
 import type { OhlcvRow } from '../lib/backtest/dataLoader'
 import {
   LOOP1_GRID,
@@ -187,14 +187,12 @@ function runLoop1Purged(
 
 function runLoop2(
   instruments: Array<{ ticker: string; sector: string; rows: OhlcvRow[] }>,
-  loop1Summaries: GridSearchSummary[],
 ): Record<string, GridSearchSummary[]> {
   console.log('\n══════════════════════════════════════════════════════')
   console.log('  LOOP 2 — Sector-level Narrow Grid (288 combos)')
   console.log('  Narrowed around Loop 1 best results per sector')
   console.log('══════════════════════════════════════════════════════\n')
 
-  const byTicker = new Map(loop1Summaries.map(s => [s.ticker, s]))
   const bySector: Record<string, typeof instruments> = {}
   for (const inst of instruments) {
     if (!bySector[inst.sector]) bySector[inst.sector] = []
@@ -379,7 +377,7 @@ console.log(`  Instruments with evaluable folds: ${purgedWithFolds.length}/${loo
 console.log(`  Pooled OOS trades: ${purgedPooledTrades}  Pooled OOS WR: ${purgedPooledWR != null ? (purgedPooledWR * 100).toFixed(2) + '%' : 'N/A'}`)
 
 // ── Loop 2 ────────────────────────────────────────────────────────────────────
-const loop2Results = runLoop2(allData, loop1Summaries)
+const loop2Results = runLoop2(allData)
 
 // ── Sector recommendations ────────────────────────────────────────────────────
 const sectorRecs = buildSectorRecommendations(loop1Summaries, loop2Results)

@@ -8,10 +8,9 @@ interface SectorSummary {
 
 interface Props {
   sectorSummary: Record<string, SectorSummary> | null
-  sectorColors: Record<string, string>
 }
 
-export default function SectorHeatmap({ sectorSummary, sectorColors }: Props) {
+export default function SectorHeatmap({ sectorSummary }: Props) {
   if (!sectorSummary || typeof sectorSummary !== 'object') {
     return (
       <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-6 flex items-center justify-center h-32">
@@ -32,7 +31,6 @@ export default function SectorHeatmap({ sectorSummary, sectorColors }: Props) {
           const ret = data.annReturn
           const isPositive = ret >= 0
           const abs = Math.abs(ret)
-          const color = sectorColors[sector] ?? '#64748b'
 
           // Gradient based on return magnitude and sign
           let bgClass = 'bg-slate-800/60'

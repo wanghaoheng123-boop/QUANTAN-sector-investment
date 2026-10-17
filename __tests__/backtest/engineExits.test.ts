@@ -125,8 +125,8 @@ describe('Q-136: an instrument that can never afford one unit is not a strategy 
     buyEvery(W, W + 200, 10)
     const equity = backtestInstrument('AAA', 'Tech', rows(W + 260, 100, { [W + 30]: 104, [W + 31]: 104 }))
     const btc = backtestInstrument('BTC', 'Crypto', rows(W + 260, 1_000_000))
-    const alone = aggregatePortfolio([equity], 100_000)
-    const withBtc = aggregatePortfolio([equity, btc], 100_000)
+    const alone = aggregatePortfolio([equity])
+    const withBtc = aggregatePortfolio([equity, btc])
     expect(withBtc.untradeableTickers).toEqual(['BTC'])
     expect(withBtc.totalInstruments).toBe(1)
     // Identical in every figure: before Q-136 a flat $100,000 curve diluted the
@@ -146,6 +146,6 @@ describe('Q-136: an instrument that can never afford one unit is not a strategy 
     const r = backtestInstrument('AAA', 'Tech', rows(W + 300, 100, path))
     expect(r.totalTrades).toBe(1)
     expect(r.unaffordableEntries).toBe(1)
-    expect(aggregatePortfolio([r], 100_000).untradeableTickers).toEqual([])
+    expect(aggregatePortfolio([r]).untradeableTickers).toEqual([])
   })
 })

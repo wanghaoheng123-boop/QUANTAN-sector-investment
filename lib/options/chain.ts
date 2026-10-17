@@ -75,7 +75,6 @@ function normaliseContract(raw: Record<string, unknown>): CallOrPut {
   // for forensics so we can spot upstream schema drift early.
   let ivRaw = Number(raw.impliedVolatility ?? 0)
   if (Number.isFinite(ivRaw) && ivRaw > 5.0) {
-    // eslint-disable-next-line no-console
     console.warn(JSON.stringify({
       event: 'options.iv_out_of_range',
       symbol: String(raw.contractSymbol ?? ''),

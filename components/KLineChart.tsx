@@ -67,7 +67,6 @@ const DEFAULT_INDICATORS: Required<KLineIndicatorFlags> = {
   volSma: true,
 }
 
-import { CHART_EMA_COLORS } from '@/lib/chartEma'
 import type { ChartEmaKey } from '@/lib/chartEma'
 
 const EMA_LEGEND_TAILWIND: Record<ChartEmaPeriod, string> = {
@@ -187,7 +186,6 @@ export default function KLineChart({
   if (process.env.NODE_ENV !== 'production' && indicatorsIn) {
     for (const k of Object.keys(DEFAULT_INDICATORS)) {
       if (!(k in indicatorsIn)) {
-        // eslint-disable-next-line no-console
         console.warn(`KLineChart: indicators prop missing key "${k}" — using default`)
       }
     }

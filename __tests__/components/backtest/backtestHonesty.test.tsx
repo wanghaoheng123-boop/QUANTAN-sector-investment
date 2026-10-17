@@ -32,7 +32,7 @@ function result(over: Partial<BacktestResult>): BacktestResult {
 
 describe('Q-133: the trade log says why each position closed', () => {
   const html = renderToStaticMarkup(
-    <TradeLog sectorColors={{}} trades={[
+    <TradeLog trades={[
       trade({}),
       trade({ ticker: 'BBB', exitReason: 'end_of_data', exitDate: '2026-10-12', netPnl: 500 }),
       trade({ ticker: 'CCC', exitReason: 'max_drawdown', exitDate: '2026-05-01', netPnl: -900 }),
@@ -116,7 +116,7 @@ describe('Q-136 red-team F2/F4: no surface scores an instrument that never trade
 describe('Q-133 red-team F12/F13: the trade log under an older cached response', () => {
   it('closed trades without exitReason/netPnl are not "Open", and the counts are unknown, not 0', () => {
     const old = trade({ exitReason: undefined as unknown as Trade['exitReason'], exitDate: undefined as unknown as string, netPnl: undefined as unknown as number })
-    const html = renderToStaticMarkup(<TradeLog sectorColors={{}} trades={[old]} />)
+    const html = renderToStaticMarkup(<TradeLog trades={[old]} />)
     expect(html).not.toContain('>Open<')
     expect(html).toMatch(/Winning Trades<\/div><div[^>]*>—</)
     expect(html).toContain('Signal date')

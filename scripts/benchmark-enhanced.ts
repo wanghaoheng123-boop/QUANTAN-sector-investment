@@ -125,7 +125,6 @@ interface InstrumentResult {
 function runInstrument(ticker: string, sector: string, rows: OhlcvRow[]): InstrumentResult {
   const closes = closesFromRows(rows)
   const bars = barsFromRows(rows)
-  const ohlcv = ohlcvBarsFromRows(rows)
 
   const bnhReturn = closes.length > 0 ? (closes[closes.length - 1] - closes[0]) / closes[0] : 0
   const profile = getProfileForTicker(ticker)

@@ -26,6 +26,23 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+  # Q-093: the lint CLAUDE.md's definition of done names. Zero warnings, not
+  # just zero errors — a warning budget is a floor that only goes down. Like
+  # every job here it is ADVISORY until Q-097 makes checks required (I7).
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: ESLint
+        run: npm run lint
+
   test:
     runs-on: ubuntu-latest
     steps:

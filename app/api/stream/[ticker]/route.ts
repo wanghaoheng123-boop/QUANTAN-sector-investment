@@ -14,7 +14,7 @@
  * Vercel compatible: uses ReadableStream (Web Streams API), no Node.js streams.
  */
 
-import { normalizeTicker, sanitizeError } from '@/lib/api/sanitize'
+import { normalizeTicker } from '@/lib/api/sanitize'
 import { isMarketOpen } from '@/lib/api/marketHours'
 import { applyRateLimit } from '@/lib/api/rateLimit'
 import YahooFinance from 'yahoo-finance2'

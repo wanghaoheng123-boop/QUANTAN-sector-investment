@@ -5,7 +5,7 @@
 
 import { sortinoRatio } from '@/lib/quant/indicators'
 import { getRiskFreeRateSync } from '@/lib/quant/riskFreeRate'
-import { tradingDaysPerYear, TX_COST_PCT_PER_SIDE, netCashPnl } from './core'
+import { tradingDaysPerYear, netCashPnl } from './core'
 
 export {
   TX_COST_BPS_PER_SIDE,
@@ -66,7 +66,11 @@ export interface PortfolioSummary {
  */
 const MIN_COMBINE_LEN = 30
 
-export function aggregatePortfolio(results: BacktestResult[], initialCapital: number): PortfolioSummary {
+// Takes no capital argument: the summary's initial and final capital are read
+// off the combined equity curves, which already start at whatever capital each
+// instrument was run with. (Q-093 removed an `initialCapital` parameter that was
+// accepted and ignored — a caller passing 1_000_000 got the curves' figure.)
+export function aggregatePortfolio(results: BacktestResult[]): PortfolioSummary {
   // ── Exclude stub / short-history results before ANY aggregation ─────────────
   // The route's inclusion gate is only `rows.length >= 100`
   // (app/api/backtest/route.ts), but core.ts returns a length-1 STUB equityCurve

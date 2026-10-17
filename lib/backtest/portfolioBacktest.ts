@@ -256,8 +256,6 @@ export function runPortfolioBacktest(
     const currentTime = dates[di]
     const currentDate = new Date(currentTime * 1000).toISOString().split('T')[0]
 
-    let dayPnl = 0
-
     // F1.7: update per-ticker daily-return tape for correlation analysis.
     // Computed from the previous trading bar to avoid look-ahead bias —
     // any ticker without a prior bar at this date is skipped.
@@ -365,7 +363,6 @@ export function runPortfolioBacktest(
 
         const exitTxCost = exitShares * exitPrice * perSideCostPct()  // per-side cost (executionModel SSOT)
         capital += (exitShares * exitPrice - exitTxCost)
-        dayPnl += (pnlDollar - exitTxCost)
 
         closedTrades.push({
           ticker, sector: sectorMap[ticker] ?? 'Unknown',

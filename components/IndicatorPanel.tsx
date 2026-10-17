@@ -1,6 +1,6 @@
 'use client'
 
-import { ChartEmaKey, ChartEmaPeriod, CHART_EMA_PERIODS } from '@/lib/chartEma'
+import { ChartEmaKey, CHART_EMA_PERIODS } from '@/lib/chartEma'
 
 type VisKey = ChartEmaKey | 'vwap' | 'bollingerBands' | 'fibonacci' | 'volSma'
 

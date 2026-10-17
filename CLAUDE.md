@@ -565,9 +565,10 @@ old deployment, and nothing alarms. No rollback script or procedure exists;
 `VERCEL_OPERATIONS.md:351` forbids `vercel rollback` without owner request.
 The repo is **public**, so branch protection is free: unconfigured, not
 unavailable. → `Q-097` (owner action — repo settings).
-*Related:* "WHAT DONE MEANS" below requires **lint clean** and **no lint
-exists** — no `lint` script, no tracked config, not installed, zero workflow
-hits. The definition of done names a gate that cannot run. → `Q-093`.
+*Related:* "WHAT DONE MEANS" required **lint clean** while **no lint
+existed**. Closed by `Q-093` (2026-10-17): `npm run lint` and a `lint` CI job
+now run, at zero warnings. Like every other job here it is advisory until
+`Q-097` makes checks required.
 
 ### I8 — Vendor terms are law · VIOLATED *(process half VIOLATED → PARTIAL by `Q-100` 2026-08-27; heading unchanged, and the reason matters)*
 Market data licences almost universally prohibit redistribution. Before any
@@ -753,23 +754,25 @@ regulated-advice line.
 
 ## WHAT "DONE" MEANS
 
-Tests pass · types check · ~~lint clean~~ · the adversary agent has reviewed it
+Tests pass · types check · lint clean · the adversary agent has reviewed it
 and its objections are resolved or logged in `reviews/findings-ledger.csv` · the
 Vercel build is green · a decision note is recorded if an architectural choice
 was made · `workspace/SESSION_STATE.json` and `MEMORY_LOG.md` are updated.
 
-**"lint clean" is struck because no lint exists** — no `lint` script in
-`package.json`, no tracked config, not installed, zero workflow references
-(verified 2026-08-17, `Q-079`). Do not report it as passing. Resolve in either
-direction under `Q-093`; an unenforceable clause in the definition of done
-manufactures false confidence.
+**"lint clean" means `npm run lint` exits 0** — Next.js's own
+`core-web-vitals` + `typescript` rule sets (`eslint.config.mjs`), run with
+`--max-warnings=0`. It was struck from 2026-08-17 (`Q-079`) to 2026-10-17
+(`Q-093`) because no lint existed, and an unenforceable clause in the
+definition of done manufactures false confidence. A warning that is a false
+positive gets an inline `eslint-disable-next-line` WITH the reason, never a
+raised warning budget.
 
 **Tagged code ≠ fixed effect.** A commit that adds the right label but changes
 no behaviour is not done. Prove the effect, then claim it.
 
 ### Verify gates
 ```bash
-npm run typecheck && npm run test
+npm run typecheck && npm run lint && npm run test
 npm run check:ci          # verify:data + smoke
 npm run benchmark         # after ANY signal/backtest change; WR floor in reviews/invariants-baseline.md
 ```

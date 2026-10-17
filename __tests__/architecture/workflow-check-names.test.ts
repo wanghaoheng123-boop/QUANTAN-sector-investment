@@ -73,6 +73,15 @@ const MEASURED_OVER = [
   'refresh-data.yml', 'scheduled-failure-alert.yml', 'stryker-weekly.yml',
 ]
 
+/**
+ * Jobs added to a MEASURED file after the snapshot was taken. The oracle is what
+ * GitHub emitted on 2026-09-09; a job that did not exist then cannot be in it,
+ * and pasting it into OBSERVED_RAW would make the oracle a copy of the model
+ * (F5). Named, dated, and stripped from the historical derivation only.
+ *   lint — Q-093, 2026-10-17
+ */
+const ADDED_SINCE_SNAPSHOT = ['lint']
+
 /** The sources as they stood before this package renamed anything. */
 const preFix: WorkflowFile[] = files.map((f) => ({
   path: f.path,
@@ -111,7 +120,10 @@ describe('Q107-O4 — the derivation reproduces what GitHub actually emits', () 
     // GitHub's own output rather than a restatement of the model. A version that
     // dropped the composite or the matrix suffix fails here.
     const before: WorkflowFile[] = preFix.filter((f) => MEASURED_OVER.includes(f.path))
-    expect([...new Set(checkNames(before).map((c) => c.name))].sort()).toEqual(OBSERVED_BEFORE_THIS_FIX)
+    const derived = [...new Set(checkNames(before).map((c) => c.name))]
+    // Each post-snapshot job must really be derived, or the strip below hides nothing.
+    for (const n of ADDED_SINCE_SNAPSHOT) expect(derived).toContain(n)
+    expect(derived.filter((n) => !ADDED_SINCE_SNAPSHOT.includes(n)).sort()).toEqual(OBSERVED_BEFORE_THIS_FIX)
   })
 
   it('and those pre-fix sources DO collide, which is the finding', () => {
@@ -219,7 +231,7 @@ describe('Q107-O4 — what is SAFE to require when Q-097 lands', () => {
    * and requiring the latter blocks every pull request permanently, because
    * nothing on a PR head will ever report it.
    */
-  const SAFE_TO_REQUIRE = ['benchmark', 'coverage', 'pytest', 'smoke', 'test', 'typecheck', 'workflows']
+  const SAFE_TO_REQUIRE = ['benchmark', 'coverage', 'lint', 'pytest', 'smoke', 'test', 'typecheck', 'workflows']
 
   it('is exactly the ci.yml job set', () => {
     expect(requirable(files)).toEqual(SAFE_TO_REQUIRE.sort())

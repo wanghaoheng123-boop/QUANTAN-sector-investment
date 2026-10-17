@@ -1,10 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { existsSync, readFileSync } from 'node:fs'
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const { PRECACHE_EXCLUDE, isExcludedFromPrecache } = require('../../lib/pwa/precache') as {
-  PRECACHE_EXCLUDE: (RegExp | string)[]
-  isExcludedFromPrecache: (p: string) => boolean
-}
+import { PRECACHE_EXCLUDE, isExcludedFromPrecache } from '../../lib/pwa/precache'
 
 /**
  * Q-120 — the service worker used to precache the entire build at install:

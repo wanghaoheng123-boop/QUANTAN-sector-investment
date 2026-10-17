@@ -159,9 +159,9 @@ const SESSION_OPEN_MINUTES = 9 * 60 + 30
 export function lastSessionDateYmd(now: Date = new Date()): number {
   const t = nyDateTime(now)
   const startedToday = t.weekday !== 'Sat' && t.weekday !== 'Sun' && t.minutes >= SESSION_OPEN_MINUTES
-  let y = Math.floor(t.ymd / 10000)
-  let m = Math.floor((t.ymd % 10000) / 100)
-  let d = t.ymd % 100
+  const y = Math.floor(t.ymd / 10000)
+  const m = Math.floor((t.ymd % 10000) / 100)
+  const d = t.ymd % 100
   let cursor = Date.UTC(y, m - 1, d)
   if (!startedToday) cursor -= 86_400_000
   // Walk back to the nearest weekday. 0 = Sunday, 6 = Saturday.

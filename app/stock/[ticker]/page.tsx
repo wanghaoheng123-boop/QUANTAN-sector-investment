@@ -5,7 +5,7 @@
 // (QuantLabPanel below), so it always has a ticker context. Do not add a
 // bare /quant-lab page; link to /stock/<ticker> with the quant tab instead.
 
-import { useState, useEffect, useCallback, useMemo, useRef, use } from 'react'
+import { useState, useEffect, useCallback, useMemo, use } from 'react'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
 const DarkPoolPanel = dynamic(() => import('@/components/DarkPoolPanel'), {

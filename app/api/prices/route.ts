@@ -29,8 +29,9 @@ function num(v: unknown): number {
   return typeof v === 'number' && Number.isFinite(v) ? v : 0
 }
 
-function isoQuoteTime(q: { regularMarketTime?: unknown }): string | null {
-  const t = q.regularMarketTime
+// Takes the field, not the row: yahoo-finance2's `Quote` is a union and its
+// ECN-quote member has no regularMarketTime, so the row cannot be typed as one shape.
+function isoQuoteTime(t: unknown): string | null {
   if (t instanceof Date) return t.toISOString()
   if (typeof t === 'number' && Number.isFinite(t)) return new Date(t * 1000).toISOString()
   return null
@@ -139,7 +140,8 @@ export async function GET(request: NextRequest) {
     // yahooFinance.quote() returns a single object for one ticker, array for multiple.
     const results = Array.isArray(raw) ? raw : [raw]
 
-    const yahooQuotes = results.map((q: any) => ({
+    // Q-093: was `(q: any)`, which discarded yahoo-finance2's own `Quote` type.
+    const yahooQuotes = results.map((q) => ({
       ticker: q.symbol,
       price: num(q.regularMarketPrice),
       change: num(q.regularMarketChange),
@@ -155,7 +157,7 @@ export async function GET(request: NextRequest) {
       // Phase 13 S2 fix (F4.7): formatCompactNumber handles trillions and sub-billions
       // correctly. Previously: AAPL $3.5T rendered as "3500.0B"; small caps as "0.3B".
       marketCap: q.marketCap ? formatCompactNumber(q.marketCap) : 'N/A',
-      quoteTime: isoQuoteTime(q),
+      quoteTime: isoQuoteTime('regularMarketTime' in q ? q.regularMarketTime : undefined),
     }))
 
     const quotes = mergeYahooAndBloomberg(yahooQuotes, bbMap)

@@ -105,7 +105,7 @@ export default function DeskPage() {
             title: 'Watchlist filter',
             body: (
               <p>
-                Toggle <strong>"Watchlist only"</strong> to hide everything except names you've starred via the watchlist button on detail pages.
+                Toggle <strong>&ldquo;Watchlist only&rdquo;</strong> to hide everything except names you&apos;ve starred via the watchlist button on detail pages.
                 Per-browser localStorage — your watchlist is private.
               </p>
             ),
@@ -115,7 +115,7 @@ export default function DeskPage() {
             body: (
               <p>
                 Use the desk as a <strong>passive monitor</strong>: scan for outliers (large % moves vs sector average), then drill into the suspect name.
-                Don't trade <em>from</em> the desk — confirm with chart + indicators on the detail page first.
+                Don&apos;t trade <em>from</em> the desk — confirm with chart + indicators on the detail page first.
               </p>
             ),
           },

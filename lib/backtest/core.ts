@@ -390,7 +390,7 @@ export function backtestInstrument(
     }
   }
 
-  let state = newPortfolio(initialCapital)
+  const state = newPortfolio(initialCapital)
   const closes = rows.map(r => r.close)
   const bars: OhlcBar[] = rows.map(({ open, high, low, close }) => ({ open, high, low, close }))
 

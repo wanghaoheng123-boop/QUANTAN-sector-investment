@@ -10,11 +10,6 @@ function trendingSeries(n: number, startPrice: number, dailyReturn: number): num
   return closes
 }
 
-// Generate a flat series (for mean-reversion tests with predictable RSI)
-function flatSeries(n: number, price = 100): number[] {
-  return Array.from({ length: n }, () => price)
-}
-
 describe('momentumScore', () => {
   it('returns null for insufficient data (was: silent 0 fallback)', () => {
     // Updated contract: prior signature returned 0 on insufficient data
@@ -88,8 +83,6 @@ describe('meanReversionBoost', () => {
 })
 
 describe('sectorScores', () => {
-  const ETFs = ['XLK', 'XLE', 'XLF', 'XLV', 'XLI', 'XLY']
-
   function makeEtfData(returns: Record<string, number>): Record<string, number[]> {
     const data: Record<string, number[]> = {}
     for (const [etf, dailyRet] of Object.entries(returns)) {

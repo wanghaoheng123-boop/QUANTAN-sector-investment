@@ -279,22 +279,22 @@ describe('marginalVaR — exact perturbation pins', () => {
   ]
 
   it('same-as-portfolio position: marginal VaR = +VaR of the tail bar (0.05)', () => {
-    const out = marginalVaR(portfolioReturns, { SAME: [...portfolioReturns] }, { SAME: 0.5 })
+    const out = marginalVaR(portfolioReturns, { SAME: [...portfolioReturns] })
     // perturbed = 1.01×r → VaR 0.0505 → (0.0505 − 0.05)/0.01 = 0.05
     expect(out.SAME).toBeCloseTo(0.05, 10)
   })
 
   it('perfect hedge position: negative marginal VaR of the same magnitude', () => {
     const hedge = portfolioReturns.map((r) => -r)
-    const out = marginalVaR(portfolioReturns, { HEDGE: hedge }, { HEDGE: 0.5 })
+    const out = marginalVaR(portfolioReturns, { HEDGE: hedge })
     // perturbed = 0.99×r → VaR 0.0495 → (0.0495 − 0.05)/0.01 = −0.05
     expect(out.HEDGE).toBeCloseTo(-0.05, 10)
   })
 
   it('skips length-mismatched positions; empty on insufficient history', () => {
-    const out = marginalVaR(portfolioReturns, { BAD: [0.01, 0.02] }, { BAD: 0.5 })
+    const out = marginalVaR(portfolioReturns, { BAD: [0.01, 0.02] })
     expect(out).toEqual({})
-    expect(marginalVaR([0.01, -0.01], { X: [0.01, -0.01] }, { X: 1 })).toEqual({})
+    expect(marginalVaR([0.01, -0.01], { X: [0.01, -0.01] })).toEqual({})
   })
 })
 

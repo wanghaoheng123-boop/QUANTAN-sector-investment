@@ -12,7 +12,7 @@ import { SECTORS } from '@/lib/sectors'
 import { canonicalSecurityId } from '@/lib/data/securityId'
 import { loadStockHistory, loadBtcHistory, availableTickers } from '@/lib/backtest/dataLoader'
 import { backtestInstrument, aggregatePortfolio } from '@/lib/backtest/engine'
-import { useEnhancedCombinedSignal } from '@/lib/featureFlags'
+import { enhancedSignalEnabled } from '@/lib/featureFlags'
 import type { SignalPath } from '@/lib/backtest/strategyDescription'
 import { validateCsrf } from '@/lib/api/csrf'
 import { applyRateLimit } from '@/lib/api/rateLimit'
@@ -57,9 +57,9 @@ let computing: ReturnType<typeof runBacktest> | null = null
  * only 1.32 kB per result, and a tab named "trades" warrants stronger evidence
  * than a click sweep before its data is removed.
  */
-const OMITTED_FROM_WIRE = ['bnhCurve', 'dailyReturns'] as const
+type OmittedFromWire = 'bnhCurve' | 'dailyReturns'
 
-type WireResult = Omit<ReturnType<typeof backtestInstrument>, (typeof OMITTED_FROM_WIRE)[number]>
+type WireResult = Omit<ReturnType<typeof backtestInstrument>, OmittedFromWire>
 
 function toWireResult(r: ReturnType<typeof backtestInstrument>): WireResult {
   const { bnhCurve: _bnhCurve, dailyReturns: _dailyReturns, ...wire } = r
@@ -127,7 +127,7 @@ async function runBacktest(filterTickers?: string[]): Promise<{
     }
   }
 
-  const portfolio = aggregatePortfolio(results, 100_000)
+  const portfolio = aggregatePortfolio(results)
 
   // Reshape to what the frontend expects. bnhAvg now comes from the aggregator so
   // it stays consistent with `alpha` (both averaged over the same combinable set,
@@ -137,7 +137,7 @@ async function runBacktest(filterTickers?: string[]): Promise<{
     computedAt: new Date().toISOString(),
     dataSource: 'local',
     // Q-134: read at RUN time, so the label cannot disagree with the engine.
-    signalPath: useEnhancedCombinedSignal() ? 'enhanced' : 'regime-only',
+    signalPath: enhancedSignalEnabled() ? 'enhanced' : 'regime-only',
     instruments,
     // Strip AFTER aggregatePortfolio above — it reads bnhCurve.
     results: results.map(toWireResult),

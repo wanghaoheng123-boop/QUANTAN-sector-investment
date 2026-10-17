@@ -23,7 +23,7 @@
  * check the property and not a number someone can quietly re-baseline.
  */
 import { describe, it, expect } from 'vitest'
-import { readFileSync } from 'fs'
+import { readdirSync, readFileSync } from 'fs'
 import { join } from 'path'
 import { maxDrawdown } from '../../lib/quant/indicators'
 
@@ -58,7 +58,6 @@ describe('maxDrawdown — measured against the peak that was standing', () => {
     // The property, over real data, rather than four pinned numbers. If the
     // implementation drifts on ANY of the 56 names this fails and names it.
     const dir = join(__dirname, '../../scripts/backtestData')
-    const { readdirSync } = require('fs') as typeof import('fs')
     const files = readdirSync(dir).filter((f: string) => f.endsWith('.json'))
     expect(files.length).toBeGreaterThan(50) // reachability: not a vacuous loop
 

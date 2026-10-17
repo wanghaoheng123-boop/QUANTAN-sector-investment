@@ -22,6 +22,7 @@
     "check:all": "npm run verify:data && npm run validate:data && npm run check:smoke",
     "check:ci": "npm run lint:workflows && npm run verify:data && npm run check:smoke",
     "typecheck": "tsc --noEmit",
+    "lint": "eslint . --max-warnings=0",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
@@ -57,6 +58,7 @@
     "zod": "^3.22.4"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3.3.7",
     "@stryker-mutator/core": "^9.6.1",
     "@stryker-mutator/vitest-runner": "^9.6.1",
     "@testing-library/jest-dom": "^6.9.1",
@@ -68,6 +70,8 @@
     "@vitejs/plugin-react": "^6.0.2",
     "@vitest/coverage-v8": "^4.1.4",
     "autoprefixer": "^10.0.1",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^15.5.19",
     "fast-check": "^4.8.0",
     "jsdom": "^29.1.1",
     "postcss": "^8",

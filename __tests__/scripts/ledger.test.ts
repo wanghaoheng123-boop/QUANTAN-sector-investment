@@ -8,7 +8,7 @@ import { appendText, formatRow, ledgerProblems, parseCsv, quoteField, validateNe
 
 const HEADER = 'id,reviewer,severity,domain,file,line,one_line,citation,acceptance_test_id,assigned_engineer,target_sprint,status'
 const LEDGER = `${HEADER}\nA-1,r,LOW,d,f.ts,1,thing,c,AT,e,s,open\n`
-const row = (over: Record<string, string> = {}) => Object.fromEntries(HEADER.split(',').map((h) => [h, h === 'id' ? 'B-1' : h === 'severity' ? 'LOW' : 'x'])) as Record<string, string> & typeof over
+const row = () => Object.fromEntries(HEADER.split(',').map((h) => [h, h === 'id' ? 'B-1' : h === 'severity' ? 'LOW' : 'x'])) as Record<string, string>
 /** The red-team L1 reproducer: a quote opened in the last field and never closed. */
 const OPEN_QUOTE = `${LEDGER}Z-1,r,LOW,d,f.ts,1,thing,c,AT,e,s,"open (see note\nZ-2,r,CRITICAL,d,f.ts,1,swallowed,c,AT,e,s,open\n`
 

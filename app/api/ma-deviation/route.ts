@@ -91,7 +91,7 @@ export async function GET(request: Request) {
       }
 
       const quotes = result.value?.quotes?.filter(
-        (c: any) => c.close != null && c.close > 0
+        (c: { close?: number | null }) => c.close != null && c.close > 0
       ) ?? []
 
       if (quotes.length < 10) {
@@ -108,7 +108,7 @@ export async function GET(request: Request) {
         }
       }
 
-      const closes: number[] = quotes.map((c: any) => c.close as number)
+      const closes: number[] = quotes.map((c: { close?: number | null }) => c.close as number)
       const price = closes[closes.length - 1]
       const sma200val = sma(closes, 200)
       const rsi14val = rsi(closes, 14)

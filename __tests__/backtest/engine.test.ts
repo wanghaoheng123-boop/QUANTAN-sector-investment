@@ -175,7 +175,7 @@ describe('Portfolio Aggregation', () => {
     const r1 = backtestInstrument('AAPL', 'Technology', rows1)
     const r2 = backtestInstrument('XOM', 'Energy', rows2)
 
-    const portfolio = aggregatePortfolio([r1, r2], 100_000)
+    const portfolio = aggregatePortfolio([r1, r2])
 
     expect(portfolio.totalInstruments).toBe(2)
     expect(portfolio.totalTrades).toBe(r1.totalTrades + r2.totalTrades)
@@ -190,7 +190,7 @@ describe('Portfolio Aggregation', () => {
     const r1 = backtestInstrument('AAPL', 'Technology', rows1)
     const r2 = backtestInstrument('MSFT', 'Technology', rows2)
 
-    const portfolio = aggregatePortfolio([r1, r2], 100_000)
+    const portfolio = aggregatePortfolio([r1, r2])
 
     expect(portfolio.sectorReturns['Technology']).toBeDefined()
     expect(portfolio.sectorReturns['Technology'].tickers).toContain('AAPL')
@@ -198,7 +198,7 @@ describe('Portfolio Aggregation', () => {
   })
 
   it('handles empty results array', () => {
-    const portfolio = aggregatePortfolio([], 100_000)
+    const portfolio = aggregatePortfolio([])
     expect(portfolio.totalInstruments).toBe(0)
     expect(portfolio.totalTrades).toBe(0)
     expect(portfolio.winRate).toBe(0)
@@ -221,8 +221,8 @@ describe('Portfolio Aggregation', () => {
     expect(short.days).toBe(150)
     expect(short.equityCurve).toHaveLength(1)
 
-    const fullOnly = aggregatePortfolio([full1, full2], 100_000)
-    const mixed = aggregatePortfolio([full1, full2, short], 100_000)
+    const fullOnly = aggregatePortfolio([full1, full2])
+    const mixed = aggregatePortfolio([full1, full2, short])
 
     // Regression guard: the summary did NOT degenerate. Before the fix these were 0.
     expect(mixed.finalCapital).toBeGreaterThan(0)
@@ -258,7 +258,7 @@ describe('Portfolio Aggregation', () => {
     const a = backtestInstrument('AAA', 'Technology', generateRows(120, 100))
     const b = backtestInstrument('BBB', 'Energy', generateRows(200, 50))
 
-    const portfolio = aggregatePortfolio([a, b], 100_000)
+    const portfolio = aggregatePortfolio([a, b])
 
     expect(portfolio.excludedTickers.sort()).toEqual(['AAA', 'BBB'])
     expect(portfolio.totalInstruments).toBe(0)
@@ -383,7 +383,7 @@ describe('F-9 / F-2 regression (2026-07-06)', () => {
     // measured over that window too, not each instrument's full history.
     const r1 = backtestInstrument('AAPL', 'Technology', generateRows(600, 100, 0.0008, 0.02))
     const r2 = backtestInstrument('MSFT', 'Technology', generateRows(420, 80, 0.0004, 0.02))
-    const portfolio = aggregatePortfolio([r1, r2], 100_000)
+    const portfolio = aggregatePortfolio([r1, r2])
 
     const minLen = Math.min(r1.equityCurve.length, r2.equityCurve.length)
     const tailReturn = (curve: number[]) => {
@@ -418,13 +418,13 @@ describe('F-4: net-of-cost win classification', () => {
       trade(roundTrip * 0.5),  // +11 bps price move — loses money net → loss
       trade(0.05),             // +5% — clears costs → win
       trade(-0.01),            // -1% — loss
-    ])], 100_000)
+    ])])
     expect(portfolio.winRate).toBeCloseTo(1 / 3, 10)
   })
 
   it('a move just above the round-trip cost IS a win', () => {
     const roundTrip = 2 * TX_COST_PCT_PER_SIDE
-    const portfolio = aggregatePortfolio([fakeResult([trade(roundTrip * 1.01)])], 100_000)
+    const portfolio = aggregatePortfolio([fakeResult([trade(roundTrip * 1.01)])])
     expect(portfolio.winRate).toBe(1)
   })
 })

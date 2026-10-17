@@ -74,7 +74,7 @@ describe('aggregatePortfolio — end-aligned combine goldens', () => {
     ticker: 'BBB', sector: 'Energy', equityCurve: c2, bnhCurve: bnh2,
     closedTrades: [], totalReturn: 0, annualizedReturn: 0,
   })
-  const s = aggregatePortfolio([r1, r2], 200_000)
+  const s = aggregatePortfolio([r1, r2])
 
   it('combines end-aligned curves: return, annualization, drawdown', () => {
     expect(s.initialCapital).toBe(300_000)
@@ -133,7 +133,7 @@ describe('aggregatePortfolio — end-aligned combine goldens', () => {
   it('Q-124: aggregating ONE result reproduces that result\'s own profit factor', () => {
     // The divergence this ticket names: core.ts and engine.ts computed the
     // metric differently, so a single result and its own aggregation disagreed.
-    const single = aggregatePortfolio([r1], 100_000)
+    const single = aggregatePortfolio([r1])
     const cashOf = (t: Trade) => netCashPnl(t)
     const cs = r1.closedTrades.map(cashOf)
     const gp = cs.reduce((a, v) => (v > 0 ? a + v : a), 0)
@@ -158,7 +158,7 @@ describe('aggregatePortfolio — end-aligned combine goldens', () => {
 
   it('any crypto constituent flips the portfolio calendar to 365d', () => {
     const r2c = mkResult({ ...r2, ticker: 'BTC', sector: 'Crypto', equityCurve: c2, bnhCurve: bnh2 })
-    const sc = aggregatePortfolio([r1, r2c], 200_000)
+    const sc = aggregatePortfolio([r1, r2c])
     expect(sc.annualizedReturn).toBeCloseTo(Math.pow(1.07, 365 / 39) - 1, 10)
     expect(sc.totalReturn).toBeCloseTo(s.totalReturn, 12) // unannualized unchanged
   })
@@ -172,7 +172,7 @@ describe('aggregatePortfolio — stub exclusion and fallbacks', () => {
     const stub = mkResult({ ticker: 'STUB', equityCurve: [100_000] })
     const at30 = mkResult({ ticker: 'AT30', equityCurve: Array(30).fill(50_000) })
     const at31 = mkResult({ ticker: 'AT31', equityCurve: Array(31).fill(50_000) })
-    const s = aggregatePortfolio([real, stub, at30, at31], 100_000)
+    const s = aggregatePortfolio([real, stub, at30, at31])
     expect(s.excludedTickers).toEqual(['STUB', 'AT30'])
     expect(s.totalInstruments).toBe(2)
     // minLen becomes 31 (> MIN_COMBINE_LEN) → combine still runs
@@ -184,7 +184,7 @@ describe('aggregatePortfolio — stub exclusion and fallbacks', () => {
   })
 
   it('all-stub input collapses to explicit zeros, not NaN', () => {
-    const s = aggregatePortfolio([mkResult({ ticker: 'S1', equityCurve: [1] })], 100_000)
+    const s = aggregatePortfolio([mkResult({ ticker: 'S1', equityCurve: [1] })])
     expect(s.totalReturn).toBe(0)
     expect(s.annualizedReturn).toBe(0)
     expect(s.sharpeRatio).toBeNull()
@@ -199,7 +199,7 @@ describe('aggregatePortfolio — stub exclusion and fallbacks', () => {
   })
 
   it('empty input yields the same explicit-zero shape', () => {
-    const s = aggregatePortfolio([], 100_000)
+    const s = aggregatePortfolio([])
     expect(s.totalReturn).toBe(0)
     expect(s.totalInstruments).toBe(0)
     expect(s.excludedTickers).toEqual([])
@@ -212,24 +212,24 @@ describe('aggregatePortfolio — stub exclusion and fallbacks', () => {
     // as it used to be computed and would mislead the next reader.
     const a = mkResult({ ticker: 'A', equityCurve: c1, bnhCurve: undefined, bnhReturn: 0.3 })
     const b = mkResult({ ticker: 'B', equityCurve: c1, bnhCurve: c1.slice(0, 20), bnhReturn: 0.1 })
-    const s = aggregatePortfolio([a, b], 100_000)
+    const s = aggregatePortfolio([a, b])
     expect(s.bnhAvg).toBeCloseTo(0.2, 12) // (0.3 + 0.1) / 2 — legacy path
   })
 
   it('corrupt aligned-B&H window (non-positive start) falls back too', () => {
     const good = mkResult({ ticker: 'G', equityCurve: c1, bnhCurve: Array(40).fill(100), bnhReturn: 0.4 })
     const bad = mkResult({ ticker: 'Z', equityCurve: c1, bnhCurve: [0, ...Array(39).fill(100)], bnhReturn: 0.2 })
-    const s = aggregatePortfolio([good, bad], 100_000)
+    const s = aggregatePortfolio([good, bad])
     // bad's window start is curve[0] = 0 → aligned path aborts → field average
     expect(s.bnhAvg).toBeCloseTo(0.3, 12)
   })
 
   it('profitFactor edges: Infinity with wins and no losses; 0 with neither', () => {
     const wins = mkResult({ ticker: 'W', equityCurve: c1, closedTrades: [mkTrade(0.05)] })
-    expect(aggregatePortfolio([wins], 1).profitFactor).toBe(Infinity)
+    expect(aggregatePortfolio([wins]).profitFactor).toBe(Infinity)
     const flat = mkResult({ ticker: 'F', equityCurve: c1, closedTrades: [mkTrade(0.001)] })
     // 0.1% is a gross win under the F-4 net rule: no NET wins, no losses
-    const sf = aggregatePortfolio([flat], 1)
+    const sf = aggregatePortfolio([flat])
     expect(sf.profitFactor).toBe(0)
     expect(sf.winRate).toBe(0)
   })

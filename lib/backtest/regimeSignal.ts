@@ -12,12 +12,6 @@ import { FIRST_DIP_FLOOR_PCT, MIN_SMA200_SLOPE, NEAR_SMA200_PCT } from './strate
 
 export type { DipSignal, RegimeSignal }
 
-function deviationLabel(dev: number | null): string {
-  if (dev === null) return '?'
-  if (dev >= 0) return `+${dev.toFixed(1)}%`
-  return `${dev.toFixed(1)}%`
-}
-
 // ─── Enhanced weighted confluence signal internal helpers ─────────────────────
 
 /** Clamp a value between min and max. */

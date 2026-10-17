@@ -52,7 +52,7 @@ describe('riskFreeRate — Q-004 + Q-052-NEW', () => {
       // the cache mechanism by stubbing fetch. Q-052-NEW: a stubbed-network
       // resolution flows through to the sync accessor.
       const realFetch = globalThis.fetch
-      globalThis.fetch = async (url: string | URL | Request) => {
+      globalThis.fetch = async (_url: string | URL | Request) => {
         // Return a minimal FRED-shaped CSV. DGS3MO ~5.21% for example.
         const csv = 'DATE,DGS3MO\n2026-05-20,5.21\n2026-05-21,5.22\n'
         return new Response(csv, { status: 200, headers: { 'Content-Type': 'text/csv' } })

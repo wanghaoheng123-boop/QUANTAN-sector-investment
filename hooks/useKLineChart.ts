@@ -644,6 +644,9 @@ export function useKLineChart({
       candleRef.current = null
       volumeRef.current = null
       for (const p of CHART_EMA_PERIODS) {
+        // The ref's object is mutated, never replaced, so reading .current here
+        // reaches the same map the effect populated.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
         delete emaLineRefs.current[p]
       }
       vwapRef.current = null
@@ -861,6 +864,9 @@ export function useKLineChart({
         /* ignore */
       }
     }
+    // `vis` is tracked through `visSerialised` (its JSON.stringify), so a new
+    // object with identical flags does not re-run this effect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [candles, showRSI, indicatorsProp, visSerialised, chartReadyGen, renderFib])
 
   return {

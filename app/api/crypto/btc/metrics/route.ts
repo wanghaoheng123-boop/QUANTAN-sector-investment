@@ -102,7 +102,7 @@ export async function GET(request: Request) {
   const lsrRow = Array.isArray(lsrArr) && lsrArr.length > 0 ? lsrArr[0] : null
   const lsrVal = lsrRow && lsrRow.length >= 2 ? parseFloat(lsrRow[1]) : NaN
 
-  let longShortRatio: number | null = Number.isFinite(lsrVal) ? lsrVal : null
+  const longShortRatio: number | null = Number.isFinite(lsrVal) ? lsrVal : null
   let longAccountPct: number | null = null
   let shortAccountPct: number | null = null
   if (longShortRatio != null && longShortRatio >= 0) {

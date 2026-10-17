@@ -7,7 +7,7 @@ import type { OhlcvRow } from './dataLoader'
 import { resolveBacktestSignal } from './signals'
 import { netReturnAfterCosts, roundTripCostPct, type ExecutionCostConfig, DEFAULT_EXECUTION_COSTS } from './executionModel'
 import { getProfileForTicker } from '@/lib/optimize/sectorProfiles'
-import { useEnhancedCombinedSignal } from '@/lib/featureFlags'
+import { enhancedSignalEnabled } from '@/lib/featureFlags'
 
 export const LABEL_HOLD_DAYS = 20
 export const WARMUP_BARS = 200
@@ -27,7 +27,7 @@ export interface LabelSignalOutcome {
 }
 
 function sectorGatesForTicker(ticker: string) {
-  if (!useEnhancedCombinedSignal()) return undefined
+  if (!enhancedSignalEnabled()) return undefined
   return getProfileForTicker(ticker)
 }
 
@@ -147,7 +147,6 @@ export function runInstrumentLabelBenchmark(
   let wins = 0
   let losses = 0
   let netWins = 0
-  let netLosses = 0
   let buyCount = 0
   const returns20d: number[] = []
   const netReturns20d: number[] = []
@@ -169,7 +168,6 @@ export function runInstrumentLabelBenchmark(
     if (out.grossReturn > 0) wins++
     else losses++
     if (out.netReturn > 0) netWins++
-    else netLosses++
   }
 
   const closes = rows.map((r) => r.close)

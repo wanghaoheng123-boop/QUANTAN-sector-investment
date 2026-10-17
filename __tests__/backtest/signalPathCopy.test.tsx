@@ -35,7 +35,7 @@ describe('Q-134: /api/backtest says which path produced its numbers', () => {
 
 describe('Q-134: the Overview tab shows the regime-only rules only for that path', () => {
   const render = (signalPath?: 'regime-only' | 'enhanced') =>
-    renderToStaticMarkup(<OverviewTab results={[]} sectorSummary={{}} sectorColors={{}} initialCapital={100_000} signalPath={signalPath} />)
+    renderToStaticMarkup(<OverviewTab results={[]} sectorSummary={{}} initialCapital={100_000} signalPath={signalPath} />)
   const firstRule = ENGINE_RULES[0][0]
 
   it('renders the rules for the production path', () => {

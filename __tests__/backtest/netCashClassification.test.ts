@@ -74,7 +74,7 @@ describe('Q-124 — profit factor is net dollars, and size matters', () => {
       mk({ exitPrice: 110 }),      // clear win
       mk({ exitPrice: 100.1 }),    // gross +0.1% -> net loss
     ]
-    const agg = aggregatePortfolio([resultWith(trades)], 100_000)
+    const agg = aggregatePortfolio([resultWith(trades)])
     // Previously: core said 100, aggregating the same result said Infinity.
     expect(Number.isFinite(agg.profitFactor)).toBe(true)
     const cs = trades.map(netCashPnl)
@@ -88,8 +88,8 @@ describe('Q-124 — profit factor is net dollars, and size matters', () => {
     // made these two portfolios identical; summing cash does not.
     const small = [mk({ shares: 1, exitPrice: 110 }), mk({ shares: 1000, exitPrice: 98 })]
     const large = [mk({ shares: 1000, exitPrice: 110 }), mk({ shares: 1, exitPrice: 98 })]
-    const pfSmall = aggregatePortfolio([resultWith(small)], 100_000).profitFactor
-    const pfLarge = aggregatePortfolio([resultWith(large)], 100_000).profitFactor
+    const pfSmall = aggregatePortfolio([resultWith(small)]).profitFactor
+    const pfLarge = aggregatePortfolio([resultWith(large)]).profitFactor
     expect(pfLarge).toBeGreaterThan(pfSmall)
   })
 

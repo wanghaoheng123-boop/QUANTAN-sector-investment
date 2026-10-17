@@ -303,12 +303,14 @@ export function kupiecPOFTest(
  *
  * @param portfolioReturns  Portfolio-level daily returns
  * @param positionReturns   Record of ticker -> daily returns (same length)
- * @param weights           Record of ticker -> current weight
+ *
+ * Takes no weights: the derivative is estimated by perturbing the portfolio
+ * series directly, so the current weight never enters. (Q-093 removed a
+ * `weights` parameter that was accepted and ignored.)
  */
 export function marginalVaR(
   portfolioReturns: number[],
   positionReturns: Record<string, number[]>,
-  weights: Record<string, number>,
   confidenceLevel = 0.99,
 ): Record<string, number> {
   const baseVaR = computeVaR(portfolioReturns, confidenceLevel, 1)
@@ -318,7 +320,6 @@ export function marginalVaR(
   const epsilon = 0.01  // 1% weight shift
 
   for (const [ticker, returns] of Object.entries(positionReturns)) {
-    const weight = weights[ticker] ?? 0
     if (returns.length !== portfolioReturns.length) continue
 
     // Proper weight perturbation: add epsilon × position return to the
