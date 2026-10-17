@@ -66,6 +66,16 @@ describe('DCF refusal reaches the screen', () => {
     expect(summary(payload('Technology', 'Software'))).toMatch(/buy-zone ceiling/)
   })
 
+  it('the scenario note renders when the growth inputs are out of order (re-gate M12)', () => {
+    const { closes, dates, ohlc } = series(320)
+    const data = buildFundamentalsPayload('X', {
+      summaryProfile: { longName: 'X Corp', sector: 'Technology', industry: 'Software' },
+      financialData: { freeCashflow: 8e9, targetMeanPrice: 180 },
+      defaultKeyStatistics: { sharesOutstanding: 1e9, forwardEps: 8, forwardPE: 20 },
+    }, closes, dates, ohlc, closes, dates, 150, { ...Q, gBear: 0.12, gBase: 0.05, gBull: 0 }) as unknown as QuantLabPayload
+    expect(valuation(data)).toMatch(/data-testid="dcf-scenario-note"[^>]*>Scenario labels are approximate: the growth inputs are not ordered/)
+  })
+
   it('the cash-flow note hedges the vendor definition (B4)', () => {
     const v = valuation(payload('Technology', 'Software'))
     expect(v).toMatch(/exact definition is not verified/)

@@ -433,7 +433,7 @@ describe('Q-086 accountant B2: the refusal fails CLOSED on missing classificatio
 
   it('an unrecognised Financial Services label is refused by default (allowlist, not denylist)', () => {
     // A lender label Yahoo adds tomorrow must not slip through a denylist.
-    expect(dcfApplicability({ sector: 'Financial Services', industry: 'Specialty Lending' })).toMatch(/balance sheet is the product/)
+    expect(dcfApplicability({ sector: 'Financial Services', industry: 'Specialty Lending' })).toMatch(/only Insurance Brokers and Financial Data & Stock Exchanges are admitted/)
     expect(dcfApplicability({ sector: 'Technology', industry: 'Specialty Lending' })).toBeNull()
   })
 })
@@ -538,3 +538,49 @@ describe('Q-086 accountant S1/S2/S4/S7: scenarios say what they computed', () =>
   })
 })
 
+describe('Q-086 accountant re-gate (N1, N2, N3a, N5, N8)', () => {
+  const { closes, dates, ohlc } = series(320)
+  const spy = series(320, 0.0008)
+  const build = (q: Partial<FundamentalsQuery> = {}, over: Record<string, unknown> = {}, quoteCurrency?: string | null) =>
+    buildFundamentalsPayload('X', { ...richQuoteSummary, ...over }, closes, dates, ohlc, spy.closes, spy.dates, 150, { ...Q, ...q }, quoteCurrency)
+
+  it('N5: an exact 2pp spread runs on every slider cell, and 1.5pp is refused', () => {
+    for (const [wacc, tg] of [[0.06, 0.04], [0.055, 0.035], [0.045, 0.025], [0.05, 0.03], [0.065, 0.045], [0.07, 0.05]]) {
+      expect(build({ wacc, terminalGrowth: tg }).dcf.unavailable, `${wacc}/${tg}`).toBeNull()
+    }
+    expect(build({ wacc: 0.06, terminalGrowth: 0.045 }).dcf.unavailable).toMatch(/within 2 points/)
+  })
+
+  it('N2: a known reporting currency with an unknown quote currency is refused', () => {
+    const fd = { ...(richQuoteSummary.financialData as object), financialCurrency: 'TWD' }
+    expect(build({}, { financialData: fd }, null).dcf.notApplicable).toMatch(/price's currency is unavailable/)
+    expect(build({}, { financialData: fd }, 'TWD').dcf.notApplicable).toBeNull()
+  })
+
+  it('CANNOT do (N2 residual): with no reporting currency at all, the check cannot run, and the DCF does', () => {
+    // A known residual, asserted so a green run is not read as proof.
+    expect(build({}, {}, 'USD').dcf.notApplicable).toBeNull()
+    expect(build({}, {}, null).dcf.notApplicable).toBeNull()
+  })
+
+  it('N1: a Real Estate company with no industry is refused (it could be a mortgage REIT)', () => {
+    const p = build({}, { summaryProfile: { sector: 'Real Estate' } })
+    expect(p.dcf.notApplicable).toMatch(/mortgage REIT .* cannot be ruled out/)
+    expect(build({}, { summaryProfile: { sector: 'Real Estate', industry: 'REIT - Industrial' } }).dcf.notApplicable).toBeNull()
+  })
+
+  it('N3a: each refusal branch gives a reason that is true of what it caught', () => {
+    expect(dcfApplicability({ sector: 'Financial Services', industry: 'Shell Companies' })).toMatch(/no operating business/)
+    expect(dcfApplicability({ sector: 'Financial Services', industry: 'Specialty Lending' })).toMatch(/only Insurance Brokers and Financial Data & Stock Exchanges are admitted/)
+    expect(dcfApplicability({ sector: 'Financial Services', industry: 'Specialty Lending' })).not.toMatch(/deposits, reserves/)
+    expect(dcfApplicability({ sector: 'Financial Services', industry: 'Banks - Regional' })).toMatch(/deposits, reserves, borrowings/)
+  })
+
+  it('N8: a refused name has a research score, with the band pillar on its no-band branch', () => {
+    const refused = build({}, { summaryProfile: { sector: 'Financial Services', industry: 'Banks - Regional' } })
+    expect(Number.isFinite(refused.researchScore.total)).toBe(true)
+    const pillars = refused.researchScore.pillars
+    const w = [0.2, 0.25, 0.2, 0.2, 0.15]
+    expect(refused.researchScore.total).toBeCloseTo(pillars.reduce((acc: number, p: { score: number }, i: number) => acc + p.score * w[i], 0), 6)
+  })
+})

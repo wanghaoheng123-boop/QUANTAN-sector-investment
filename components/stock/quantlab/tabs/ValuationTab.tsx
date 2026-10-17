@@ -140,10 +140,17 @@ export function ValuationTab({
               {/* Accountant B4: the vendor's definition of the field is not verified, so
                   the text says what the model ASSUMES rather than what the field is. */}
               <p>
-                FCFE model: the cash flow is Yahoo&apos;s <code>freeCashflow</code> field, treated here as cash available to
-                equity holders with no net borrowing. The vendor&apos;s exact definition is not verified by this platform.
-                It is grown and discounted at the rate you set, with no net-debt bridge. The 9% default is one placeholder
-                for every company, not a company-specific cost of equity. Shares are Yahoo&apos;s <code>sharesOutstanding</code>.
+                FCFE model: the cash flow is{' '}
+                {data.dcf.inputs.fcf0Source === 'statement.ocfLessCapex'
+                  ? <>the latest annual statement&apos;s operating cash flow less capex (Yahoo&apos;s <code>freeCashflow</code> field was absent)</>
+                  : data.dcf.inputs.fcf0Source === 'statement.freeCashflow'
+                    ? <>the latest annual statement&apos;s free cash flow (Yahoo&apos;s <code>freeCashflow</code> field was absent)</>
+                    : <>Yahoo&apos;s <code>freeCashflow</code> field</>}
+                , treated here as cash available to equity holders with no net borrowing. The vendor&apos;s exact definition is
+                not verified by this platform. It is grown and discounted at the rate you set, with no net-debt bridge; the
+                bear case also caps terminal growth at {rates ? pct1(rates.bearTerminalGrowth) : '2.0%'}. The 9% default is one
+                placeholder for every company, not a company-specific cost of equity. Shares are Yahoo&apos;s basic{' '}
+                <code>sharesOutstanding</code>, not diluted.
               </p>
             </div>
     </div>

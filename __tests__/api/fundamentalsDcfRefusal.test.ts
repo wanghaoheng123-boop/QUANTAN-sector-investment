@@ -84,4 +84,17 @@ describe('fundamentals route — DCF refusal reaches the response', () => {
     expect(body.dcf.notApplicable).toMatch(/reported in TWD and the price is quoted in USD/)
     expect(body.bands).toBeNull()
   })
+
+  it('re-gate N2: when quote() fails, the chart meta currency is the second source', async () => {
+    quoteMock.mockRejectedValue(new Error('quote down'))
+    chartMock.mockResolvedValue({ ...chart(), meta: { currency: 'USD' } })
+    quoteSummaryMock.mockResolvedValue(summary('Technology', 'Semiconductors', 'TWD'))
+    expect((await get('ADR')).dcf.notApplicable).toMatch(/reported in TWD and the price is quoted in USD/)
+  })
+
+  it('re-gate N2: with no quote currency from either source, a TWD reporter is refused, not valued', async () => {
+    quoteMock.mockRejectedValue(new Error('quote down'))
+    quoteSummaryMock.mockResolvedValue(summary('Technology', 'Semiconductors', 'TWD'))
+    expect((await get('ADR')).dcf.notApplicable).toMatch(/currency is unavailable/)
+  })
 })

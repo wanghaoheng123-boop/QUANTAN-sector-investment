@@ -105,7 +105,10 @@ const normLabel = (s: string) => s.replace(/[‒-―]/g, '-').replace(/\s+/g, ' 
 export const DCF_ADMITTED_FINANCIAL_INDUSTRIES = ['Insurance Brokers', 'Financial Data & Stock Exchanges']
 
 /** Lender and balance-sheet labels refused wherever they appear, whatever the sector says. */
-const BALANCE_SHEET_INDUSTRY = /^(?:banks\b|insurance\b(?! brokers)|capital markets|mortgage finance|financial conglomerates|reit - mortgage|shell companies)/
+const BALANCE_SHEET_INDUSTRY = /^(?:banks\b|insurance\b(?! brokers)|capital markets|mortgage finance|financial conglomerates|reit - mortgage)/
+
+/** A shell or blank-check company has no operating business for an FCF DCF to value. */
+const SHELL_INDUSTRY = /^shell companies\b/
 
 /** Labels Yahoo uses for a MIX of separable and balance-sheet businesses, which no field splits. */
 const MIXED_INDUSTRY = /^(?:credit services|asset management)\b/
@@ -130,21 +133,31 @@ export function dcfApplicability(c: { sector: string | null; industry: string | 
   if (industry !== null && BALANCE_SHEET_INDUSTRY.test(industry)) {
     return `An FCF DCF does not apply to ${c.industry}: ${BALANCE_SHEET_REASON}`
   }
+  if (industry !== null && SHELL_INDUSTRY.test(industry)) {
+    return `An FCF DCF does not apply to ${c.industry}: a shell or blank-check company has no operating business whose cash flow could be valued.`
+  }
   if (industry !== null && MIXED_INDUSTRY.test(industry)) {
-    return `An FCF DCF is not applied to ${c.industry}: Yahoo files lenders or leveraged investment vehicles under this label alongside fee businesses, and no field separates them.`
+    return `An FCF DCF is not applied to ${c.industry}: this label can cover lenders or leveraged investment vehicles as well as fee businesses, and no field separates them.`
   }
   if (sector === 'financial services') {
     const admitted = industry !== null && DCF_ADMITTED_FINANCIAL_INDUSTRIES.some((a) => normLabel(a) === industry)
     if (!admitted) {
-      return `An FCF DCF does not apply to ${c.industry ?? 'this Financial Services company (industry unavailable)'}: ${BALANCE_SHEET_REASON}`
+      // Accountant re-gate N3a: the balance-sheet reason is true of banks and
+      // insurers, not of every label this default catches, so it is not used here.
+      return `An FCF DCF is not applied to ${c.industry ?? 'this Financial Services company (industry unavailable)'}: inside Financial Services only ${DCF_ADMITTED_FINANCIAL_INDUSTRIES.join(' and ')} are admitted, because elsewhere in the sector cash flow usually cannot be separated from financing.`
     }
+  }
+  // Accountant re-gate N1: a Real Estate company with no industry could be a
+  // mortgage REIT, which is refused above, so it is refused here too.
+  if (sector === 'real estate' && industry === null) {
+    return 'An FCF DCF is not applied: this Real Estate company has no industry label, so a mortgage REIT (a leveraged lender) cannot be ruled out.'
   }
   return null
 }
 
 /**
  * Scenario discount-rate offsets: the bear case adds 1.5pp, the bull case
- * removes 1pp. SOURCE: inherited unchanged from the pre-Q-086 implementation,
+ * removes 1pp. PROVENANCE: inherited unchanged from the pre-Q-086 implementation,
  * kept so the default scenarios do not move. They are sensitivity offsets, not
  * estimates of any company's risk premium, and no paper is claimed for them.
  * What changed (accountant S1): the bull rate was floored at an absolute 6%,
@@ -154,7 +167,7 @@ export function dcfApplicability(c: { sector: string | null; industry: string | 
  */
 export const BEAR_RATE_DELTA = 0.015
 export const BULL_RATE_DELTA = 0.01
-/** Bear-case terminal growth cap. SOURCE: inherited unchanged from the pre-Q-086 code. */
+/** Bear-case terminal growth cap. PROVENANCE: inherited unchanged from the pre-Q-086 code. */
 export const BEAR_TERMINAL_GROWTH_CAP = 0.02
 /**
  * The smallest discount-rate-minus-growth spread a scenario may use.
@@ -167,6 +180,8 @@ export const BEAR_TERMINAL_GROWTH_CAP = 0.02
  * measured 105,000/sh at a 0.01pp spread (S2).
  */
 export const MIN_RATE_SPREAD = 0.02
+/** Floating-point tolerance for the spread comparison; far below any slider step (0.5pp). */
+const SPREAD_EPSILON = 1e-9
 
 export function scenarioRates(q: { wacc: number; terminalGrowth: number }) {
   const base = q.wacc
@@ -266,13 +281,20 @@ export function buildFundamentalsPayload(
     // a price in the quote currency is not a valuation (a foreign ADR).
     (reportingCurrency && quoteCurrency && reportingCurrency !== quoteCurrency
       ? `The cash flow is reported in ${reportingCurrency} and the price is quoted in ${quoteCurrency}, and this model does not convert currencies or ADR share ratios.`
+      : null) ??
+    // Re-gate N2: a known reporting currency against an UNKNOWN quote currency
+    // cannot be checked, so it refuses (the unknown-must-refuse rule of B2).
+    (reportingCurrency && !quoteCurrency
+      ? `The cash flow is reported in ${reportingCurrency} and the price's currency is unavailable, so whether they match cannot be checked.`
       : null)
 
   const fcfReason =
     fcf0 == null ? 'Yahoo supplied no positive free cash flow for this company, and a DCF needs one to grow.' : null
   const sharesReason = shares == null || shares <= 0 ? 'Yahoo supplied no shares outstanding, so a per-share value cannot be computed.' : null
   const spreadReason =
-    q.wacc - q.terminalGrowth < MIN_RATE_SPREAD
+    // Compared with a tolerance (re-gate N5): 0.06 - 0.04 is 0.0199999… in
+    // floating point, so an exact 2pp spread was refused on half the slider grid.
+    q.wacc - q.terminalGrowth < MIN_RATE_SPREAD - SPREAD_EPSILON
       ? `The discount rate is within ${(MIN_RATE_SPREAD * 100).toFixed(0)} points of terminal growth, where the terminal value swamps everything and diverges; widen the gap.`
       : null
   /** Why there is no DCF at all, when there is none (accountant S4: every null carries a reason). */

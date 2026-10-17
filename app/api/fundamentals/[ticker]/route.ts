@@ -144,9 +144,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ tick
       // The currency the displayed price is in, so the DCF can refuse a
       // reporting-currency mismatch (accountant S7). From quote(), because this
       // route does not request the quoteSummary `price` module.
+      // Second source: the chart's own meta (re-gate N2), so a failed quote()
+      // does not leave the currency unknown.
       typeof (quoteRow as { currency?: unknown } | null)?.currency === 'string'
         ? ((quoteRow as { currency: string }).currency)
-        : null,
+        : typeof (chart as { meta?: { currency?: unknown } } | null)?.meta?.currency === 'string'
+          ? ((chart as { meta: { currency: string } }).meta.currency)
+          : null,
     )
 
     return NextResponse.json(

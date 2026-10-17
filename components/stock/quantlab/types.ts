@@ -47,6 +47,7 @@ export type QuantLabPayload = {
     scenarioNote?: string | null
     inputs: Record<string, unknown> & {
       scenarioRates?: { bear: number; base: number; bull: number; bearTerminalGrowth: number }
+      fcf0Source?: 'financialData.freeCashflow' | 'statement.freeCashflow' | 'statement.ocfLessCapex' | null
     }
     scenarios: {
       bear: DcfScenario | null
