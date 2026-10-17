@@ -100,15 +100,16 @@ describe('SSE quote events carry the vendor stamp, not the emit time', () => {
     expect(src).not.toMatch(/quoteTime:\s*live\.quote!\.timestamp/)
   })
 
-  it('app/page.tsx carries no quote age at all, and certainly not the emit time', () => {
-    // Q-101 review. The first version of this test asserted the homepage READ
-    // the vendor stamp — but nothing on that page renders an age (SectorCard
-    // does not take it; the hero pill keys off marketOpen && streamConnected),
-    // so the assignment was a dead flag: the exact shape this package removes.
-    // It was deleted, and the property is now the absence of the substitution.
+  it('app/page.tsx carries the VENDOR stamp, never the emit time, and the stamp has a reader', () => {
+    // Q-101 review deleted the homepage's quoteTime because nothing read it (a
+    // dead flag). Q-145 gave it a reader: resolveTickChange derives a tick's
+    // missing change from the prior close only within one New York session,
+    // which needs both quotes' vendor stamps. The property that never changes:
+    // it is the vendor's time, not this server's emit time.
     const src = read('app/page.tsx').replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1')
     expect(src).not.toMatch(/quoteTime:\s*q\.timestamp/)
-    expect(src).not.toMatch(/quoteTime:\s*q\.quoteTime/)
+    expect(src).toMatch(/quoteTime:\s*q\.quoteTime/)
+    expect(src).toMatch(/resolveTickChange\(old, q\)/)
   })
 
   it('the comment-stripper above is not what makes that pass', () => {

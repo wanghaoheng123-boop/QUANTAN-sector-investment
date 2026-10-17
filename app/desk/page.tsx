@@ -219,7 +219,9 @@ export default function DeskPage() {
                 </thead>
                 <tbody>
                   {sectionRows.map(({ t, label, q }) => {
-                    const up = (q?.changePct ?? 0) >= 0
+                    // Q-145: a quote with no change is shown as missing, not as a green 0.
+                    const hasChange = q != null && q.change != null && q.changePct != null
+                    const up = hasChange && (q.changePct as number) >= 0
                     const sym = t === '^VIX' ? 'VIX' : t
                     return (
                       <tr key={t} className="border-b border-slate-800/40 hover:bg-slate-900/60">
@@ -231,10 +233,10 @@ export default function DeskPage() {
                         {/* F6.3 (Phase 13 S2): sign prefix + arrow glyph so direction
                             is clear without relying on color (WCAG 2.2 SC 1.4.1). */}
                         <td
-                          className={`px-2 py-1 text-right ${q ? (up ? 'text-emerald-400' : 'text-red-400') : 'text-slate-400'}`}
-                          aria-label={q ? `${up ? 'up' : 'down'} ${Math.abs(q.change).toFixed(2)}` : 'no change data'}
+                          className={`px-2 py-1 text-right ${hasChange ? (up ? 'text-emerald-400' : 'text-red-400') : 'text-slate-400'}`}
+                          aria-label={hasChange ? `${up ? 'up' : 'down'} ${Math.abs(q.change as number).toFixed(2)}` : 'no change data'}
                         >
-                          {q ? (
+                          {hasChange ? (
                             <>
                               <span aria-hidden="true">{up ? '▲' : '▼'}</span>{' '}
                               {formatSignedNumber(q.change)}
@@ -242,10 +244,10 @@ export default function DeskPage() {
                           ) : '—'}
                         </td>
                         <td
-                          className={`px-2 py-1 text-right hidden sm:table-cell ${q ? (up ? 'text-emerald-400' : 'text-red-400') : 'text-slate-400'}`}
-                          aria-label={q ? `${up ? 'up' : 'down'} ${Math.abs(q.changePct).toFixed(2)} percent` : 'no change data'}
+                          className={`px-2 py-1 text-right hidden sm:table-cell ${hasChange ? (up ? 'text-emerald-400' : 'text-red-400') : 'text-slate-400'}`}
+                          aria-label={hasChange ? `${up ? 'up' : 'down'} ${Math.abs(q.changePct as number).toFixed(2)} percent` : 'no change data'}
                         >
-                          {q ? `${up ? '+' : '−'}${Math.abs(q.changePct).toFixed(2)}%` : '—'}
+                          {hasChange ? `${up ? '+' : '−'}${Math.abs(q.changePct as number).toFixed(2)}%` : '—'}
                         </td>
                         <td className="px-2 py-1 text-right text-slate-400 hidden md:table-cell">
                           {q && q.volume ? formatCompactNumber(q.volume) : '—'}

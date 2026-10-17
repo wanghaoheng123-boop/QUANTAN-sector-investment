@@ -7,7 +7,8 @@ interface TickerItem {
   ticker: string
   name: string
   price: number
-  changePct: number
+  /** Q-145: null when the vendor supplied no change — shown as "—". */
+  changePct: number | null
 }
 
 interface PriceTickerProps {
@@ -97,9 +98,13 @@ export default function PriceTicker({ items }: PriceTickerProps) {
             <div className="flex items-center gap-1.5">
               <span className="text-[11px] font-bold font-mono text-white tracking-wide">{item.ticker}</span>
               <span className="text-[11px] font-mono text-slate-300">{formatCurrency(item.price)}</span>
-              <span className={`text-[11px] font-mono font-medium ${item.changePct >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {item.changePct >= 0 ? '▲' : '▼'}{safeToFixed(Math.abs(item.changePct), 2)}%
-              </span>
+              {item.changePct == null ? (
+                <span className="text-[11px] font-mono text-slate-400">—</span>
+              ) : (
+                <span className={`text-[11px] font-mono font-medium ${item.changePct >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  {item.changePct >= 0 ? '▲' : '▼'}{safeToFixed(Math.abs(item.changePct), 2)}%
+                </span>
+              )}
             </div>
             {i < doubled.length - 1 && (
               // Decorative column rule. It was also the single largest cluster

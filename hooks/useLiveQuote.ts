@@ -44,8 +44,9 @@ import { useEffect, useRef, useState } from 'react'
 export interface LiveQuote {
   ticker: string
   price: number
-  change: number
-  changePct: number
+  /** Q-145: null when the event carried none — never a measured 0. */
+  change: number | null
+  changePct: number | null
   volume?: number
   marketOpen: boolean
   /** When THIS SERVER emitted the event. Never the age of the price. */
@@ -78,8 +79,8 @@ export function parseLiveQuote(raw: unknown): LiveQuote | null {
   const ticker = typeof r.ticker === 'string' && r.ticker.length > 0 ? r.ticker : null
   const timestamp = typeof r.timestamp === 'string' && r.timestamp.length > 0 ? r.timestamp : null
   if (!ticker || !timestamp) return null
-  const change = typeof r.change === 'number' && Number.isFinite(r.change) ? r.change : 0
-  const changePct = typeof r.changePct === 'number' && Number.isFinite(r.changePct) ? r.changePct : 0
+  const change = typeof r.change === 'number' && Number.isFinite(r.change) ? r.change : null
+  const changePct = typeof r.changePct === 'number' && Number.isFinite(r.changePct) ? r.changePct : null
   const volume = typeof r.volume === 'number' && Number.isFinite(r.volume) && r.volume >= 0
     ? r.volume
     : undefined

@@ -23,10 +23,10 @@ const yahooFinance = new YahooFinance()
 // returns `null` for invalid input; we then drop or 400 on the request.
 import { normalizeTicker as strictNormalizeTicker, sanitizeError } from '@/lib/api/sanitize'
 
-// Phase 13 S2 fix (F4.6): explicit number-or-null. Falsy fallback to 0 silently
-// hid yahoo errors as "$0.00" on the UI.
-function num(v: unknown): number {
-  return typeof v === 'number' && Number.isFinite(v) ? v : 0
+// Phase 13 S2 (F4.6) named this "explicit number-or-null" and it returned 0,
+// so a missing field still rendered "$0.00" / "0.00%". Q-145: it returns null.
+function num(v: unknown): number | null {
+  return typeof v === 'number' && Number.isFinite(v) ? v : null
 }
 
 // Takes the field, not the row: yahoo-finance2's `Quote` is a union and its
@@ -141,7 +141,7 @@ export async function GET(request: NextRequest) {
     const results = Array.isArray(raw) ? raw : [raw]
 
     // Q-093: was `(q: any)`, which discarded yahoo-finance2's own `Quote` type.
-    const yahooQuotes = results.map((q) => ({
+    const rows = results.map((q) => ({
       ticker: q.symbol,
       price: num(q.regularMarketPrice),
       change: num(q.regularMarketChange),
@@ -159,13 +159,19 @@ export async function GET(request: NextRequest) {
       marketCap: q.marketCap ? formatCompactNumber(q.marketCap) : 'N/A',
       quoteTime: isoQuoteTime('regularMarketTime' in q ? q.regularMarketTime : undefined),
     }))
+    // Q-145: a row with no usable price is not a quote. It is dropped and the
+    // ticker named in `unpriced`, so a consumer shows it as missing, never $0.00.
+    const yahooQuotes = rows.flatMap((r) => (r.price != null && r.price > 0 ? [{ ...r, price: r.price }] : []))
 
     const quotes = mergeYahooAndBloomberg(yahooQuotes, bbMap)
+    const priced = new Set(quotes.map((q) => q.ticker))
     const bloombergTickers = quotes.filter((q) => q.dataSource === 'bloomberg').map((q) => q.ticker)
 
     return NextResponse.json(
       {
         quotes,
+        /** Requested tickers with no usable price (Q-145: missing, not $0.00). */
+        unpriced: tickers.filter((t) => !priced.has(t)),
         timestamp: new Date().toISOString(),
         dataSources: {
           // Phase 13 S2 fix (F4.11): yahoo flag now reflects actual coverage

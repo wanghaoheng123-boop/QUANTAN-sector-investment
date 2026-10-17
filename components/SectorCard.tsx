@@ -11,8 +11,9 @@ interface SectorCardProps {
   sector: Sector
   quote?: {
     price: number
-    change: number
-    changePct: number
+    /** Q-145: null when Yahoo supplied none; the card shows "—", not 0.00%. */
+    change: number | null
+    changePct: number | null
   }
   /** Q-135: today's measured move; absent when Yahoo gave no usable quote. */
   move?: SessionMove | null
@@ -28,9 +29,10 @@ const MOVE_CONFIG = {
 // change. The dashboard grid renders one card per sector — without memo, a parent state
 // update (e.g. a live-quote tick for a single sector) re-renders all N cards.
 function SectorCard({ sector, quote, move }: SectorCardProps) {
-  const isUp = (quote?.changePct ?? 0) >= 0
+  const pct = quote?.changePct ?? null
+  const isUp = pct != null && pct >= 0
   const sparkData =
-    quote && quote.price > 0 && Number.isFinite(quote.change)
+    quote && quote.price > 0 && quote.change != null && Number.isFinite(quote.change)
       ? [quote.price - quote.change, quote.price]
       : []
   const moveCfg = move ? MOVE_CONFIG[move.direction] : null
@@ -89,13 +91,17 @@ function SectorCard({ sector, quote, move }: SectorCardProps) {
                 </div>
                 {/* F6.3 (Phase 13 S2): icon + sign prefix + aria-label so direction is
                     clear without relying on color hue (WCAG 2.2 SC 1.4.1). */}
-                <div
-                  className={`text-xs font-mono mt-0.5 transition-all duration-300 ${isUp ? 'text-green-400' : 'text-red-400'}`}
-                  aria-label={`${isUp ? 'up' : 'down'} ${safeFixed(Math.abs(quote.changePct), 2)} percent`}
-                >
-                  <span aria-hidden="true">{isUp ? '▲' : '▼'}</span>{' '}
-                  {isUp ? '+' : '−'}{safeFixed(Math.abs(quote.changePct), 2)}%
-                </div>
+                {pct == null ? (
+                  <div className="text-xs font-mono mt-0.5 text-slate-400" aria-label="no change data">—</div>
+                ) : (
+                  <div
+                    className={`text-xs font-mono mt-0.5 transition-all duration-300 ${isUp ? 'text-green-400' : 'text-red-400'}`}
+                    aria-label={`${isUp ? 'up' : 'down'} ${safeFixed(Math.abs(pct), 2)} percent`}
+                  >
+                    <span aria-hidden="true">{isUp ? '▲' : '▼'}</span>{' '}
+                    {isUp ? '+' : '−'}{safeFixed(Math.abs(pct), 2)}%
+                  </div>
+                )}
               </>
             ) : (
               <div className="space-y-1">

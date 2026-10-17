@@ -1,5 +1,6 @@
 'use client'
 
+import { resolveTickChange } from '@/lib/quoteChange'
 import { useState, useEffect, useMemo, useCallback, use } from 'react'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
@@ -51,14 +52,15 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
   if (!sector) notFound()
 
   const [candles, setCandles] = useState<Candle[]>([])
+  // Q-145: every field Yahoo may omit is nullable and renders "—", never 0.
   const [quote, setQuote] = useState<{
     price: number
-    change: number
-    changePct: number
-    volume: number
-    high52w: number
-    low52w: number
-    pe: number
+    change: number | null
+    changePct: number | null
+    volume: number | null
+    high52w: number | null
+    low52w: number | null
+    pe: number | null
     quoteTime?: string | null
   } | null>(null)
   const [darkPoolPrints, setDarkPoolPrints] = useState<Synthetic<DarkPoolPrint[]>>(() => markSynthetic([]))
@@ -194,12 +196,12 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
     if (!live.quote) return
     setQuote((prev) => ({
       price: live.quote!.price,
-      change: live.quote!.change,
-      changePct: live.quote!.changePct,
-      volume: live.quote!.volume ?? prev?.volume ?? 0,
-      high52w: prev?.high52w ?? 0,
-      low52w: prev?.low52w ?? 0,
-      pe: prev?.pe ?? 0,
+      // Q-145: a tick without a change no longer overwrites a known one with 0.
+      ...resolveTickChange(prev, live.quote!),
+      volume: live.quote!.volume ?? prev?.volume ?? null,
+      high52w: prev?.high52w ?? null,
+      low52w: prev?.low52w ?? null,
+      pe: prev?.pe ?? null,
       // Q-101: the VENDOR's stamp, never this server's emit time. Using
       // `timestamp` here made /stock/AAPL read "live" for a Friday close on a
       // Sunday. null when the vendor gave none — unknown must read as unknown.
@@ -254,7 +256,7 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
 
   // newsMarkers removed — live news headlines now shown in NewsFeed panel below chart
 
-  const isUp = (quote?.changePct ?? 0) >= 0
+  const isUp = quote?.changePct != null && quote.changePct >= 0
 
   return (
     <div className="min-h-screen">
@@ -287,9 +289,14 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
               {quote ? (
                 <div className="text-right">
                   <div className="text-2xl font-bold text-white font-mono">{formatCurrency(quote.price)}</div>
-                  <div className={`text-sm font-mono ${isUp ? 'text-green-400' : 'text-red-400'}`}>
-                    {isUp ? '▲' : '▼'} {formatSignedNumber(quote.change)} ({Math.abs(quote.changePct).toFixed(2)}%)
-                  </div>
+                  {quote.changePct == null ? (
+                    // Q-145: no change data is "—", not a green 0.00%.
+                    <div className="text-sm font-mono text-slate-400">— (no change data)</div>
+                  ) : (
+                    <div className={`text-sm font-mono ${isUp ? 'text-green-400' : 'text-red-400'}`}>
+                      {isUp ? '▲' : '▼'} {formatSignedNumber(quote.change)} ({Math.abs(quote.changePct).toFixed(2)}%)
+                    </div>
+                  )}
                   <div className="text-xs text-slate-400 mt-1 font-mono">ETF: {sector.etf}</div>
                   {/* Phase 14 wave 37: real-time SSE stream status pill. */}
                   <div className="flex items-center justify-end gap-2 mt-1">
@@ -348,7 +355,7 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
                 <MetricTooltip label="52-week low" content="Lowest price over the past 52 weeks. Bouncing off 52W low with rising volume = potential capitulation reversal. Breaking below = often a long-term downtrend continuation." compact />
               </span>
               <span className="flex items-center">
-                P/E: <span className="text-white font-mono ml-1">{quote.pe.toFixed(1)}×</span>
+                P/E: <span className="text-white font-mono ml-1">{quote.pe != null ? `${quote.pe.toFixed(1)}×` : '—'}</span>
                 <MetricTooltip label="Price/Earnings" content="Price divided by trailing earnings. Sector P/E < 15× = relatively cheap, > 25× = expensive. Compare across sectors and to the sector's own 5Y average, not just absolute level." compact />
               </span>
               <span className="flex items-center">

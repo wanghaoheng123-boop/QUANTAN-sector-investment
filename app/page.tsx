@@ -12,6 +12,7 @@ import { formatMovePct, sessionMovesFromQuotes, type SessionMove } from '@/lib/s
 import { useErrorToast } from '@/hooks/useErrorToast'
 import { ErrorToastList } from '@/components/ErrorToastList'
 import { useLiveQuotes } from '@/hooks/useLiveQuotes'
+import { resolveTickChange } from '@/lib/quoteChange'
 
 // Real news brief from Yahoo Finance API
 interface NewsBrief {
@@ -32,11 +33,14 @@ interface NewsBrief {
 interface Quote {
   ticker: string
   price: number
-  change: number
-  changePct: number
-  // No `quoteTime`. See the note at the assignment site: it was written and read
-  // by nobody, and a declared-but-unread data-state field is the shape Q-101
-  // exists to remove. Re-add it together with a consumer, never before one.
+  /** Q-145: null when the vendor supplied none; renders "—", never 0.00%. */
+  change: number | null
+  changePct: number | null
+  /**
+   * The vendor's stamp. Re-added with its reader (Q-145): resolveTickChange
+   * derives a missing tick change only within one New York session.
+   */
+  quoteTime: string | null
 }
 
 function formatUtcDateTime(ts: string): string {
@@ -81,7 +85,7 @@ export default function HomePage() {
       if (signal?.aborted) return
       if (data.quotes) {
         const map: Record<string, Quote> = {}
-        data.quotes.forEach((q: Quote) => { map[q.ticker] = q })
+        data.quotes.forEach((q: Quote) => { map[q.ticker] = { ...q, quoteTime: q.quoteTime ?? null } })
         setQuotes(map)
         setLastUpdate(new Date())
       }
@@ -145,21 +149,18 @@ export default function HomePage() {
         ) {
           continue
         }
+        // Q-145: a tick with no change no longer overwrites a known one with 0.
+        // resolveTickChange derives it from the prior close within one session,
+        // or leaves it null ("—").
+        const { change, changePct } = resolveTickChange(old, q)
         next[ticker] = {
           ticker,
           price: q.price,
-          change: q.change,
-          changePct: q.changePct,
-          // Q-101 review: `quoteTime` is NOT carried here, deliberately.
-          //
-          // It was assigned and read by nobody — SectorCard does not take it,
-          // and the hero pill keys off `live.marketOpen && streamConnected`,
-          // not off age. Shipping an assignment whose only consumer is nothing
-          // is the exact shape this package exists to remove, so carrying a
-          // *correct* value there would still have been the defect. If a
-          // homepage surface ever needs the age, take `q.quoteTime` (the vendor
-          // stamp) and pass `calendar="us-equity"` — never `q.timestamp`, which
-          // is this server's emit time.
+          change,
+          changePct,
+          // The VENDOR's stamp (Q-101) — never `q.timestamp`, which is this
+          // server's emit time. Read by resolveTickChange on the next tick.
+          quoteTime: q.quoteTime,
         }
         touched = true
       }
@@ -234,7 +235,8 @@ export default function HomePage() {
     ticker: s.etf,
     name: s.name,
     price: quotes[s.etf]?.price ?? 0,
-    changePct: quotes[s.etf]?.changePct ?? 0,
+    // Q-145: null stays null (the tape shows "—"); `?? 0` turned it into 0.00%.
+    changePct: quotes[s.etf]?.changePct ?? null,
   })).filter(t => t.price > 0), [quotes])
 
   const filteredSectors = useMemo(() => activeFilter === 'ALL'
