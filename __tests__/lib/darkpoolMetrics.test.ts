@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   NO_SHORT_DATA_NOTE,
+  FLOAT_IDENTITY_TOLERANCE,
   SHORT_PERCENT_OF_FLOAT_SCALE,
   buildDarkPoolMetrics,
   hasShortOrShareData,
@@ -41,6 +42,25 @@ describe('buildDarkPoolMetrics', () => {
     expect(buildDarkPoolMetrics({ floatShares: 1.2e6, sharesOutstanding: 4.9e5 }, {}).sharesFloat).toBeNull()
     expect(buildDarkPoolMetrics({ floatShares: 1.2e6 }, {}).sharesFloat).toBe(1.2e6)
     expect(buildDarkPoolMetrics({ floatShares: 0, sharesOutstanding: 0 }, {})).toMatchObject({ sharesFloat: null, sharesOutstanding: null })
+  })
+
+  it('drops a float in different units from the short count it sits beside (BRK-B)', () => {
+    expect(FLOAT_IDENTITY_TOLERANCE).toBe(2)
+    // Magnitudes from the 2026-10-17 probe: float 1.2e6 (Class-A equivalent),
+    // short 1.2e7 (Class B), short % 0.99%.
+    const brkB = buildDarkPoolMetrics({ floatShares: 1.2e6, sharesOutstanding: 1.4e9, sharesShort: 1.2e7, shortPercentOfFloat: 0.0099 }, {})
+    expect(brkB.sharesFloat).toBeNull()
+    expect(brkB.shortFloatPct).toBeCloseTo(0.99, 10)
+    expect(brkB.sharesOutstanding).toBe(1.4e9)
+    // A consistent single-class name keeps its float (AAPL-like: ratio 1.00).
+    const consistent = buildDarkPoolMetrics({ floatShares: 1.47e10, sharesOutstanding: 1.48e10, sharesShort: 1.04e8, shortPercentOfFloat: 1.04e8 / 1.47e10 }, {})
+    expect(consistent.sharesFloat).toBe(1.47e10)
+    // Inside the tolerance either way is kept; outside it either way is dropped.
+    const f = (ratio: number) => buildDarkPoolMetrics({ floatShares: 1e9, sharesShort: 1e7 * ratio, shortPercentOfFloat: 0.01 }, {}).sharesFloat
+    expect(f(1.9)).toBe(1e9)
+    expect(f(1 / 1.9)).toBe(1e9)
+    expect(f(2.1)).toBeNull()
+    expect(f(1 / 2.1)).toBeNull()
   })
 
   it('carries the short-interest settlement date as a UTC calendar date', () => {

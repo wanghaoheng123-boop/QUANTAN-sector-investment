@@ -46,12 +46,11 @@ export interface DarkPoolAnalysis {
   quote: PricePoint
   metrics: DarkPoolMetric
   /**
-   * Whether Yahoo reported any short-interest or share-count figure. The
-   * 10-day volume does not count: it comes from the quote, which every ETF
-   * has, so counting it made all 11 sector ETFs claim data they do not have.
+   * Human-readable diagnostic when Yahoo reported no short-interest or
+   * share-count figure (`hasShortOrShareData`), or why the fetch failed.
+   * Q-149: the `hasRealData` flag that used to sit beside this had no reader
+   * once the signal banner went, so it is not on the wire.
    */
-  hasRealData: boolean
-  /** Human-readable diagnostic when no real data, or why the fetch failed */
   statusNote: string | null
   /** Q-140: set when a Yahoo FETCH failed — distinct from "no data exists". */
   degraded?: boolean
@@ -83,14 +82,26 @@ export function isoDateOrNull(v: unknown): string | null {
 }
 
 /**
+ * How far `sharesShort / floatShares` may sit from `shortPercentOfFloat` before
+ * the float is taken to be in different units from the short count. Measured
+ * 2026-10-17: the ratio of the two was 1.00 (AAPL) and 0.99 (GME), and about
+ * 0.001 for BRK-B, whose float Yahoo reports in Class-A-equivalent units
+ * against a Class-B short count. A factor of 2 separates those by three orders
+ * of magnitude either way.
+ */
+export const FLOAT_IDENTITY_TOLERANCE = 2
+
+/**
  * The metrics this route can stand behind, from `defaultKeyStatistics` and the
  * quote. Pure: the route's only job is to fetch.
  *
- * Float is dropped when it exceeds shares outstanding: the float is a subset of
- * the shares outstanding, so a larger float means the two counts are in
- * different units (BRK-A reports a float of about 1.2M against 0.49M shares out,
- * 2026-10-17) and neither can be shown as the float. A dual-class float smaller
- * than shares out (BRK-B) is not caught — that residual is named in the PR.
+ * The float is dropped when it cannot be the float of the shares it sits
+ * beside:
+ *   - it exceeds shares outstanding (the float is a subset of them; BRK-A
+ *     reports about 1.2M against 0.49M out, 2026-10-17), or
+ *   - with all three of short count, float and short % present, the identity
+ *     short % = short count / float fails by more than FLOAT_IDENTITY_TOLERANCE
+ *     (BRK-B). Yahoo computes the % against its own float, so the % stands.
  */
 export function buildDarkPoolMetrics(
   keyStats: Record<string, unknown>,
@@ -98,22 +109,35 @@ export function buildDarkPoolMetrics(
 ): DarkPoolMetric {
   const sharesOutstanding = positive(keyStats.sharesOutstanding)
   const rawFloat = positive(keyStats.floatShares)
-  const sharesFloat =
-    rawFloat != null && sharesOutstanding != null && rawFloat > sharesOutstanding ? null : rawFloat
   const rawShortFraction = finite(keyStats.shortPercentOfFloat)
-  const shortFloatPct =
-    rawShortFraction != null && rawShortFraction >= 0 ? rawShortFraction * SHORT_PERCENT_OF_FLOAT_SCALE : null
-  const sharesShorted = finite(keyStats.sharesShort)
+  const shortFraction = rawShortFraction != null && rawShortFraction >= 0 ? rawShortFraction : null
+  const rawShorted = finite(keyStats.sharesShort)
+  const sharesShorted = rawShorted != null && rawShorted >= 0 ? rawShorted : null
   const daysToCover = finite(keyStats.shortRatio)
   return {
-    sharesShorted: sharesShorted != null && sharesShorted >= 0 ? sharesShorted : null,
-    shortFloatPct,
+    sharesShorted,
+    shortFloatPct: shortFraction != null ? shortFraction * SHORT_PERCENT_OF_FLOAT_SCALE : null,
     shortInterestAsOf: isoDateOrNull(keyStats.dateShortInterest),
     daysToCover: daysToCover != null && daysToCover >= 0 ? daysToCover : null,
     avgDailyVolume: positive(quote.averageDailyVolume10Day),
     sharesOutstanding,
-    sharesFloat,
+    sharesFloat: floatIfConsistent(rawFloat, sharesOutstanding, sharesShorted, shortFraction),
   }
+}
+
+function floatIfConsistent(
+  float: number | null,
+  sharesOutstanding: number | null,
+  sharesShorted: number | null,
+  shortFraction: number | null,
+): number | null {
+  if (float == null) return null
+  if (sharesOutstanding != null && float > sharesOutstanding) return null
+  if (sharesShorted != null && sharesShorted > 0 && shortFraction != null && shortFraction > 0) {
+    const ratio = sharesShorted / float / shortFraction
+    if (ratio > FLOAT_IDENTITY_TOLERANCE || ratio < 1 / FLOAT_IDENTITY_TOLERANCE) return null
+  }
+  return float
 }
 
 /** True when Yahoo reported any short-interest or share-count figure. */
