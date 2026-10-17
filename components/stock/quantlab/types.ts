@@ -118,7 +118,6 @@ export type QuantLabPayload = {
     color: string
     riskLevel: 'low' | 'medium' | 'high' | 'extreme'
     interpretation: string
-    forwardReturnContext: string
     dipSignal: 'STRONG_DIP' | 'WATCH_DIP' | 'FALLING_KNIFE' | 'OVERBOUGHT' | 'IN_TREND' | 'INSUFFICIENT_DATA'
     dipSignalExplained: string
   } | null

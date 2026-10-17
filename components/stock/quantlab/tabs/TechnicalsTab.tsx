@@ -1,5 +1,6 @@
 'use client'
 
+import { DIP_SIGNAL_LABEL } from '@/lib/quant/technicals'
 import { halfKelly } from '@/lib/quant/kelly'
 import { fmtB, fmtPct } from '@/components/stock/quantlab/formatters'
 import type { QuantLabAdvMetrics } from '@/components/stock/quantlab/hooks/useQuantLabFundamentals'
@@ -68,7 +69,7 @@ export function TechnicalsTab({
               </div>
             </div>
 
-            {/* 200-day MA deviation regime — buy-the-dip / falling-knife signal */}
+            {/* 200-day MA deviation regime: distance and slope, described (Q-153) */}
             {data.ma200Regime && (
               <div
                 className="rounded-xl border p-4"
@@ -102,24 +103,11 @@ export function TechnicalsTab({
                             : 'bg-slate-900/60 border-slate-700 text-slate-300'
                     }`}
                   >
-                    {data.ma200Regime.dipSignal === 'STRONG_DIP'
-                      ? '✓ BUY THE DIP'
-                      : data.ma200Regime.dipSignal === 'FALLING_KNIFE'
-                        ? '✗ FALLING KNIFE'
-                        : data.ma200Regime.dipSignal === 'WATCH_DIP'
-                          ? '⚠ WATCH — NO ADD'
-                          : data.ma200Regime.dipSignal === 'OVERBOUGHT'
-                            ? '⚠ OVERBOUGHT'
-                            : data.ma200Regime.dipSignal === 'IN_TREND'
-                              ? '→ IN TREND'
-                              : data.ma200Regime.dipSignal}
+                    {DIP_SIGNAL_LABEL[data.ma200Regime.dipSignal]}
                   </div>
                 </div>
                 <p className="text-xs text-slate-400 mt-2 leading-relaxed">
                   {data.ma200Regime.dipSignalExplained}
-                </p>
-                <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
-                  {data.ma200Regime.forwardReturnContext}
                 </p>
                 <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-2 text-[10px] text-slate-400">
                   <div>
@@ -138,13 +126,12 @@ export function TechnicalsTab({
                   </div>
                   <div>
                     <span className="uppercase tracking-wide mr-1">200MA slope: </span>
+                    {/* Q-153: the MEASURED sign over 20 days. "Declining" used to mean
+                        "not rising by +0.5%", so a slowly rising average read as falling,
+                        and the 20-day change was labelled "%/bar". */}
                     {data.ma200Regime.slopePct != null
-                      ? `${data.ma200Regime.slopePct > 0 ? '↗' : '↘'} ${data.ma200Regime.slopePositive ? 'Rising' : 'Declining'} (${data.ma200Regime.slopePct > 0 ? '+' : ''}${(data.ma200Regime.slopePct * 100).toFixed(4)}%/bar)`
-                      : data.ma200Regime.slopePositive === true
-                        ? '↗ Rising'
-                        : data.ma200Regime.slopePositive === false
-                          ? '↘ Declining'
-                          : '—'}
+                      ? `${data.ma200Regime.slopePct > 0 ? '↗ up' : data.ma200Regime.slopePct < 0 ? '↘ down' : '→ flat'} ${data.ma200Regime.slopePct > 0 ? '+' : ''}${(data.ma200Regime.slopePct * 100).toFixed(2)}% over 20 days`
+                      : '—'}
                   </div>
                 </div>
               </div>
@@ -152,10 +139,12 @@ export function TechnicalsTab({
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="rounded-xl border border-slate-800 p-4">
-                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">ATR reference stops</h3>
+                {/* Q-153: levels, not stops — "reference stops" / "long risk" was
+                    stop-placement copy of the kind removed from the sector page (S1). */}
+                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Last close ± 2 × ATR(14)</h3>
                 <div className="text-xs space-y-1 font-mono text-slate-300">
-                  <div>Long risk ~2 ATR below: {data.technicals.atrStopLong?.toFixed(2) ?? '—'}</div>
-                  <div>Short risk ~2 ATR above: {data.technicals.atrStopShort?.toFixed(2) ?? '—'}</div>
+                  <div>2 ATR below: {data.technicals.atrStopLong?.toFixed(2) ?? '—'}</div>
+                  <div>2 ATR above: {data.technicals.atrStopShort?.toFixed(2) ?? '—'}</div>
                 </div>
               </div>
               <div className="rounded-xl border border-slate-800 p-4">

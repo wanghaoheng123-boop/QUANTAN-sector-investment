@@ -103,9 +103,41 @@ export interface MA200Regime {
   color: string
   riskLevel: 'low' | 'medium' | 'high' | 'extreme'
   interpretation: string
-  forwardReturnContext: string
   dipSignal: 'STRONG_DIP' | 'WATCH_DIP' | 'FALLING_KNIFE' | 'OVERBOUGHT' | 'IN_TREND' | 'INSUFFICIENT_DATA'
   dipSignalExplained: string
+}
+
+/** The 20-day change of the 200-day average above which ma200Regime calls it rising. */
+export const MA200_RISING_THRESHOLD = 0.005
+
+/**
+ * What ma200Regime measured, in words — no trade instruction (Q-153). The
+ * slope is described by its MEASURED sign and the classifier's threshold:
+ * `slopePositive === false` means "not rising by +0.5% over 20 days", which
+ * includes a flat or slowly rising average. The old text called every such
+ * case "NEGATIVE (declining)".
+ */
+export function describeRegime(dev: number, slope: number | null, slopePositive: boolean | null, rsi14?: number | null): string {
+  const where = `${Math.abs(dev).toFixed(1)}% ${dev >= 0 ? 'above' : 'below'} the 200-day average`
+  const slopeText = slope == null
+    ? 'its 20-day slope cannot be computed yet (fewer than 221 closes)'
+    : `the average moved ${slope >= 0 ? '+' : ''}${(slope * 100).toFixed(2)}% over 20 days (${slopePositive ? 'rising' : 'not rising'} by the +${(MA200_RISING_THRESHOLD * 100).toFixed(1)}% threshold)`
+  const rsiText = rsi14 != null && Number.isFinite(rsi14) ? ` RSI(14) is ${rsi14.toFixed(0)}.` : ''
+  return `Price is ${where}; ${slopeText}.${rsiText}`
+}
+
+/**
+ * Words for each dip classification, shared by every surface that shows one
+ * (Q-153). They replace "BUY THE DIP", "Strong Dip Buy", "WATCH — NO ADD" and
+ * "Falling Knife": the enum values stay, because the backtest uses them.
+ */
+export const DIP_SIGNAL_LABEL: Readonly<Record<MA200Regime['dipSignal'], string>> = {
+  STRONG_DIP: 'Below a rising average',
+  WATCH_DIP: 'Below the average',
+  FALLING_KNIFE: 'Below an average that is not rising',
+  OVERBOUGHT: 'Far above the average',
+  IN_TREND: 'Above the average',
+  INSUFFICIENT_DATA: 'Not enough data',
 }
 
 export function ma200Regime(
@@ -122,7 +154,6 @@ export function ma200Regime(
     color: '#64748b',
     riskLevel: 'medium',
     interpretation: 'Fewer than 200 daily closes available — cannot compute 200-day SMA.',
-    forwardReturnContext: 'N/A',
     dipSignal: 'INSUFFICIENT_DATA',
     dipSignalExplained: 'Not enough history to assess.',
   }
@@ -134,7 +165,7 @@ export function ma200Regime(
   if (dev == null) return insufficient
 
   const slope = sma200Slope(closes)
-  const slopePositive = slope != null ? slope > 0.005 : null
+  const slopePositive = slope != null ? slope > MA200_RISING_THRESHOLD : null
 
   let zone: MA200Zone
   if (dev > 20) zone = 'EXTREME_BULL'
@@ -145,89 +176,39 @@ export function ma200Regime(
   else if (dev >= -30) zone = 'BEAR_ALERT'
   else zone = 'CRASH_ZONE'
 
-  const zoneData: Record<MA200Zone, {
-    label: string; color: string; riskLevel: MA200Regime['riskLevel']
-    interpretation: string; forwardReturnContext: string
-  }> = {
-    EXTREME_BULL: {
-      label: 'Extreme Overextension',
-      color: '#ef4444',
-      riskLevel: 'extreme',
-      interpretation: 'Price is >20% above its 200-day SMA — a historically rare euphoric condition. Mean-reversion risk is elevated.',
-      forwardReturnContext: 'Historically weak: median 12M forward return near +2–4% with high variance and elevated drawdown risk. Avoid new long entries at these levels.',
-    },
-    EXTENDED_BULL: {
-      label: 'Extended Bull Run',
-      color: '#f97316',
-      riskLevel: 'high',
-      interpretation: 'Price is 10–20% above 200-day SMA. Momentum is stretched. Corrections are statistically more likely.',
-      forwardReturnContext: 'Historically mixed to below-average near-term returns (~+5–8% median 12M). Volatility spikes are common. Trim positions on further extensions.',
-    },
-    HEALTHY_BULL: {
-      label: 'Healthy Uptrend',
-      color: '#22c55e',
-      riskLevel: 'low',
-      interpretation: 'Price is 0–10% above 200-day SMA. The classic "in uptrend" zone. Most institutional managers view this as the preferred hold zone.',
-      forwardReturnContext: 'Historically best risk/reward: median 12M forward return ~+10–14%. Low drawdown frequency. Hold existing positions; add on minor pullbacks.',
-    },
-    FIRST_DIP: {
-      label: 'First Dip Zone',
-      color: '#84cc16',
-      riskLevel: 'low',
-      interpretation: 'Price has dipped 0–10% below 200-day SMA — the "first test" of the long-term average. IF the 200MA is still rising, this is historically the highest-probability buy zone.',
-      forwardReturnContext: 'Historically strong when 200MA slope is positive: median 12M return ~+14–18%. Dips like this recover within 3–6 months in ~70% of historical cases (S&P 500, 1950–2020).',
-    },
-    DEEP_DIP: {
-      label: 'Deep Dip / Caution',
-      color: '#eab308',
-      riskLevel: 'medium',
-      interpretation: 'Price is 10–20% below 200-day SMA. Meaningful correction. Must check 200MA slope. Falling knife risk rises significantly if 200MA is declining.',
-      forwardReturnContext: 'Historically variable: +12–16% median 12M when 200MA is rising (true dip); near 0% or negative when 200MA is declining (trend breakdown). RSI divergence is key confirming signal.',
-    },
-    BEAR_ALERT: {
-      label: 'Bear Alert Zone',
-      color: '#f97316',
-      riskLevel: 'high',
-      interpretation: 'Price is 20–30% below 200-day SMA — bear market territory. Either a deep washout opportunity or the beginning of a structural decline. Context is everything.',
-      forwardReturnContext: 'High variance: median 12M return +18–25% in post-crash recovery scenarios (2009, 2020) but -10% to -30% in secular bears (2001–2002, 2008). Never average down without confirming 200MA slope inflection.',
-    },
-    CRASH_ZONE: {
-      label: 'Crash / Capitulation',
-      color: '#ef4444',
-      riskLevel: 'extreme',
-      interpretation: 'Price >30% below 200-day SMA — capitulation or systemic crisis territory. Historically presents the maximum long-term return opportunity but maximum near-term pain.',
-      forwardReturnContext: 'Maximum historical opportunity: median 18M forward return +30–50%+ in recoveries. However, timing is extremely difficult — requires confirmation of 200MA slope stabilizing and market breadth recovering before averaging in.',
-    },
-    INSUFFICIENT_DATA: {
-      label: 'Insufficient Data',
-      color: '#64748b',
-      riskLevel: 'medium',
-      interpretation: 'Not enough historical data to compute 200-day SMA.',
-      forwardReturnContext: 'N/A',
-    },
+  // Q-153 (2026-10-17): the zone text DESCRIBES the measurement. It used to
+  // carry trade instructions ("Avoid new long entries", "Trim positions",
+  // "highest-probability buy zone") and unsourced forward-return figures
+  // ("median 18M forward return +30-50%+") — personal-recommendation copy on
+  // the surface Q-083 gates, and performance claims I5 forbids without a
+  // source. The classification below is unchanged: it mirrors
+  // lib/backtest/regimeSignal.ts (AL-5), which the benchmark depends on.
+  const zoneData: Record<MA200Zone, { label: string; color: string; riskLevel: MA200Regime['riskLevel']; interpretation: string }> = {
+    EXTREME_BULL: { label: 'More than 20% above the 200-day average', color: '#ef4444', riskLevel: 'extreme', interpretation: 'Price is more than 20% above its 200-day simple moving average, a distance it rarely reaches.' },
+    EXTENDED_BULL: { label: '10–20% above the 200-day average', color: '#f97316', riskLevel: 'high', interpretation: 'Price is 10–20% above its 200-day simple moving average.' },
+    HEALTHY_BULL: { label: '0–10% above the 200-day average', color: '#22c55e', riskLevel: 'low', interpretation: 'Price is 0–10% above its 200-day simple moving average.' },
+    FIRST_DIP: { label: '0–10% below the 200-day average', color: '#84cc16', riskLevel: 'low', interpretation: 'Price is 0–10% below its 200-day simple moving average.' },
+    DEEP_DIP: { label: '10–20% below the 200-day average', color: '#eab308', riskLevel: 'medium', interpretation: 'Price is 10–20% below its 200-day simple moving average.' },
+    BEAR_ALERT: { label: '20–30% below the 200-day average', color: '#f97316', riskLevel: 'high', interpretation: 'Price is 20–30% below its 200-day simple moving average.' },
+    CRASH_ZONE: { label: 'More than 30% below the 200-day average', color: '#ef4444', riskLevel: 'extreme', interpretation: 'Price is more than 30% below its 200-day simple moving average.' },
+    INSUFFICIENT_DATA: { label: 'Insufficient Data', color: '#64748b', riskLevel: 'medium', interpretation: 'Not enough history to compute a 200-day simple moving average.' },
   }
 
   const meta = zoneData[zone]
 
   let dipSignal: MA200Regime['dipSignal']
-  let dipSignalExplained: string
 
   if (zone === 'EXTREME_BULL' || zone === 'EXTENDED_BULL') {
     dipSignal = 'OVERBOUGHT'
-    dipSignalExplained = `Price is extended above the 200-day SMA by ${dev.toFixed(1)}%. Not a dip — this is an overextension zone. Avoid chasing; wait for pullback toward the 200MA.`
   } else if (zone === 'HEALTHY_BULL') {
     dipSignal = 'IN_TREND'
-    dipSignalExplained = `Price is in a healthy uptrend, ${dev.toFixed(1)}% above the 200-day SMA. No dip signal — standard hold/accumulate-on-correction posture.`
   } else if (zone === 'FIRST_DIP') {
     if (slopePositive === true) {
       dipSignal = 'STRONG_DIP'
-      dipSignalExplained = `First test of rising 200-day SMA (${dev.toFixed(1)}% below). 200MA slope is POSITIVE — this is a textbook high-probability buy zone. ${rsi14 != null ? `RSI(14) at ${rsi14.toFixed(0)} ${rsi14 < 40 ? '— oversold confirmation' : '— not yet oversold, consider scaling in'}.` : ''}`
     } else if (slopePositive === false) {
       dipSignal = 'WATCH_DIP'
-      dipSignalExplained = `Price is ${dev.toFixed(1)}% below 200-day SMA but the 200MA slope is NEGATIVE (declining). This elevates falling-knife risk. Wait for 200MA to flatten before committing.`
     } else {
       dipSignal = 'WATCH_DIP'
-      dipSignalExplained = `Price is ${dev.toFixed(1)}% below 200-day SMA. Insufficient history to confirm 200MA slope direction — treat as watch until confirmed.`
     }
   } else if (zone === 'DEEP_DIP') {
     // AL-4/AL-5 (2026-08-15) — fail-closed on an UNKNOWN slope.
@@ -247,42 +228,35 @@ export function ma200Regime(
     // The true/false arms are untouched.
     if (slopePositive === true) {
       dipSignal = 'WATCH_DIP'
-      dipSignalExplained = `Deep dip zone (${dev.toFixed(1)}% below 200MA) with a still-rising 200MA. Historical forward returns are positive, but volatility is elevated. Scale in cautiously — do NOT go all-in. ${rsi14 != null ? `RSI(14) at ${rsi14.toFixed(0)}${rsi14 < 30 ? ' — extreme oversold signal supports staged entry.' : '.'}` : ''}`
     } else if (slopePositive === false) {
       dipSignal = 'FALLING_KNIFE'
-      dipSignalExplained = `FALLING KNIFE RISK: Price is ${dev.toFixed(1)}% below a DECLINING 200-day SMA. This pattern (2000–2002, 2008, 2022) historically precedes further downside before stabilization. Avoid averaging down until 200MA slope turns positive.`
     } else {
       dipSignal = 'WATCH_DIP'
-      dipSignalExplained = `Deep dip zone (${dev.toFixed(1)}% below 200MA). Insufficient history to confirm 200MA slope direction — the trend is unknown, not confirmed declining. Treat as watch until the slope can be computed.`
     }
   } else if (zone === 'BEAR_ALERT') {
     if (slopePositive === true) {
       dipSignal = 'WATCH_DIP'
-      dipSignalExplained = `Extreme deep dip (${dev.toFixed(1)}% below 200MA). 200MA is still rising — potential major low. Requires staged accumulation with strict risk management. Historical max-opportunity zone in swift corrections (2020-type).`
     } else if (slopePositive === false) {
       dipSignal = 'FALLING_KNIFE'
-      dipSignalExplained = `FALLING KNIFE — HIGH CONVICTION: ${dev.toFixed(1)}% below a DECLINING 200-day SMA. This matches historical bear market profiles (2001, 2008, 2022). Avoid long exposure until 200MA slope inflects positive.`
     } else {
       dipSignal = 'WATCH_DIP'
-      dipSignalExplained = `Extreme deep dip (${dev.toFixed(1)}% below 200MA). Insufficient history to confirm 200MA slope direction — the trend is unknown, not confirmed declining. Treat as watch until the slope can be computed.`
     }
   } else if (zone === 'CRASH_ZONE') {
     // Restructured from a pair of ternaries to the same if/else-if/else shape
     // as its sibling zones so the null arm is explicit rather than implied.
     if (slopePositive === true) {
       dipSignal = 'STRONG_DIP'
-      dipSignalExplained = `Capitulation zone (${dev.toFixed(1)}% below 200MA) with 200MA slope starting to flatten/rise — this mirrors post-crash bottoming patterns. Maximum long-term opportunity with disciplined staged buying.`
     } else if (slopePositive === false) {
       dipSignal = 'FALLING_KNIFE'
-      dipSignalExplained = `EXTREME FALLING KNIFE: ${dev.toFixed(1)}% below a still-declining 200-day SMA. Systemic bear market or structural breakdown. Only the most aggressive contrarian positioning is warranted, with full expectation of further short-term pain.`
     } else {
       dipSignal = 'WATCH_DIP'
-      dipSignalExplained = `Capitulation zone (${dev.toFixed(1)}% below 200MA). Insufficient history to confirm 200MA slope direction — the trend is unknown, not confirmed declining. Treat as watch until the slope can be computed.`
     }
   } else {
     dipSignal = 'INSUFFICIENT_DATA'
-    dipSignalExplained = 'Cannot classify.'
   }
+
+  const dipSignalExplained = describeRegime(dev, slope, slopePositive, rsi14)
+
 
   return {
     zone,
@@ -293,7 +267,6 @@ export function ma200Regime(
     color: meta.color,
     riskLevel: meta.riskLevel,
     interpretation: meta.interpretation,
-    forwardReturnContext: meta.forwardReturnContext,
     dipSignal,
     dipSignalExplained,
   }
