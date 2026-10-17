@@ -16,7 +16,7 @@ import {
   interpretFundingRate,
 } from '@/lib/crypto'
 import { barLabel, isDailyInterval } from '@/lib/barInterval'
-import { ma200Regime } from '@/lib/quant/technicals'
+import { DIP_SIGNAL_LABEL, ma200Regime } from '@/lib/quant/technicals'
 import { fetchJsonSafe } from '@/lib/fetchJsonSafe'
 import { LiquidationsPanel } from '@/components/crypto/LiquidationsPanel'
 
@@ -171,7 +171,7 @@ export default function BtcQuantLab({ candles, interval = '1d' }: Props) {
   // where the close sits in the last 20 bars' close range.
   const rangePosition = high20 > low20 ? (latestClose - low20) / (high20 - low20) : null
 
-  // 200-day MA deviation regime — buy-the-dip / falling-knife classifier
+  // 200-day MA deviation regime (lib/quant/technicals.ts ma200Regime)
   const regime = ma200Regime(latestClose, closes, latestRSI)
   const ma200 =
     closes.length >= 200
@@ -265,7 +265,8 @@ export default function BtcQuantLab({ candles, interval = '1d' }: Props) {
       value: regime.deviationPct != null ? `${regime.deviationPct > 0 ? '+' : ''}${regime.deviationPct.toFixed(1)}%` : '—',
       // Red-team R2-241-1/-3: the dip classification is calibrated on daily
       // candles; on any other bars it is not shown at all.
-      signal: !daily ? 'daily only' : regime.dipSignal === 'STRONG_DIP' ? 'BUY THE DIP' : regime.dipSignal === 'FALLING_KNIFE' ? 'FALLING KNIFE' : regime.dipSignal === 'WATCH_DIP' ? 'WATCH — NO ADD' : regime.dipSignal === 'OVERBOUGHT' ? 'OVERBOUGHT' : regime.dipSignal === 'IN_TREND' ? 'IN TREND' : regime.label,
+      // Q-153: a description of the classification, not "BUY THE DIP".
+      signal: !daily ? 'daily only' : DIP_SIGNAL_LABEL[regime.dipSignal],
       color: regime.dipSignal === 'STRONG_DIP' ? 'text-green-400' : regime.dipSignal === 'FALLING_KNIFE' ? 'text-red-400' : regime.dipSignal === 'WATCH_DIP' ? 'text-amber-400' : regime.dipSignal === 'OVERBOUGHT' ? 'text-orange-400' : 'text-slate-400',
     },
   ]
@@ -413,7 +414,7 @@ export default function BtcQuantLab({ candles, interval = '1d' }: Props) {
               </div>
             </div>
 
-            {/* 200-day MA Deviation — buy-the-dip / falling-knife regime */}
+            {/* 200-day MA deviation regime: a description of the distance and slope (Q-153) */}
             {ma200 != null && Number.isFinite(latestClose) && (
               <div className="rounded-xl border p-4 mt-2" style={{ borderColor: regime.color + '55', backgroundColor: regime.color + '0d' }}>
                 <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -442,7 +443,7 @@ export default function BtcQuantLab({ candles, interval = '1d' }: Props) {
                     </div>
                   </div>
                   {daily && (<div className={`text-sm font-bold px-3 py-1 rounded-full border ${regime.dipSignal === 'STRONG_DIP' ? 'bg-green-950/60 border-green-500/50 text-green-300' : regime.dipSignal === 'FALLING_KNIFE' ? 'bg-red-950/60 border-red-500/50 text-red-300' : 'bg-slate-900/60 border-slate-700 text-slate-300'}`}>
-                    {regime.dipSignal === 'STRONG_DIP' ? '✓ BUY THE DIP' : regime.dipSignal === 'FALLING_KNIFE' ? '✗ FALLING KNIFE' : regime.dipSignal === 'WATCH_DIP' ? '⚠ WATCH — NO ADD' : regime.dipSignal === 'OVERBOUGHT' ? '⚠ OVERBOUGHT' : regime.dipSignal === 'IN_TREND' ? '→ IN TREND' : regime.dipSignal}
+                    {DIP_SIGNAL_LABEL[regime.dipSignal]}
                   </div>)}
                 </div>
                 {daily && <p className="text-xs text-slate-400 mt-2 leading-relaxed">{regime.dipSignalExplained}</p>}
@@ -456,10 +457,6 @@ export default function BtcQuantLab({ candles, interval = '1d' }: Props) {
                   <div>
                     <span className="uppercase tracking-wide">Risk: </span>
                     <span className={regime.riskLevel === 'low' ? 'text-green-400' : regime.riskLevel === 'medium' ? 'text-amber-400' : 'text-red-400'}>{regime.riskLevel}</span>
-                  </div>
-                  <div className="sm:col-span-2">
-                    <span className="uppercase tracking-wide">Forward context: </span>
-                    <span className="text-slate-400">{regime.forwardReturnContext}</span>
                   </div>
                 </div>}
               </div>

@@ -204,12 +204,12 @@ describe('technicals.ts wrapper layer (F8.1)', () => {
       expect(r.zone).toBe('CRASH_ZONE')
     })
 
-    it('every regime yields non-empty interpretation + forwardReturnContext', () => {
+    it('every regime yields a non-empty interpretation (forwardReturnContext removed, Q-153)', () => {
       const closes = Array.from({ length: 220 }, () => 100)
       for (const px of [125, 115, 105, 95, 85, 75, 60]) {
         const r = ma200Regime(px, closes)
         expect(r.interpretation.length).toBeGreaterThan(20)
-        expect(r.forwardReturnContext.length).toBeGreaterThan(5)
+        expect('forwardReturnContext' in r).toBe(false)
         expect(r.label.length).toBeGreaterThan(0)
         expect(r.color).toMatch(/^#[0-9a-f]{6}$/i)
       }
@@ -288,7 +288,7 @@ describe('ma200Regime — null-slope fail-closed (AL-4)', () => {
       expect(dipSignalExplained).not.toMatch(/DECLINING/)
       expect(dipSignalExplained).not.toMatch(/FALLING KNIFE/)
       // …and says why, rather than going quiet.
-      expect(dipSignalExplained).toMatch(/Insufficient history to confirm 200MA slope/)
+      expect(dipSignalExplained).toMatch(/slope cannot be computed yet/)
     })
   }
 

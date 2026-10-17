@@ -153,7 +153,10 @@ export async function GET(request: Request) {
       rows,
       computedAt: new Date().toISOString(),
       disclaimer:
-        'Deviation zones and forward return context are based on historical analysis of S&P 500 / sector ETF daily data (1990–2024). Not investment advice. Past performance is not indicative of future results.',
+        // Q-153: this claimed the zones and "forward return context" rested on a
+        // 1990–2024 historical analysis. No such analysis exists in this repo,
+        // and the forward-return text is gone.
+        'Deviation zones describe the distance of price from its 200-day simple moving average. They are not a forecast, and forward returns for them have not been measured. Not investment advice.',
     }
 
     _cache.set('ma-deviation', { data: payload, expiresAt: now + CACHE_TTL_MS, storedAt: now })
