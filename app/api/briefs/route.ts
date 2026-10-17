@@ -122,7 +122,9 @@ async function fetchNewsForTicker(ticker: string): Promise<NewsBrief[]> {
         readTime: estimateReadTime(snippet),
         tags: relatedTickers.slice(0, 4),
         link,
-        publisher: String(item.publisher ?? 'Yahoo Finance'),
+        // Red-team R2-242-4: a missing publisher is unknown, not 'Yahoo Finance'
+        // (which then read "Yahoo Finance via Yahoo Finance").
+        publisher: typeof item.publisher === 'string' && item.publisher.trim() ? item.publisher : 'Unknown publisher',
         tickers: relatedTickers,
       })
     }

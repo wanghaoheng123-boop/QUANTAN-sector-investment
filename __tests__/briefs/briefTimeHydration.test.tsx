@@ -63,6 +63,9 @@ describe('Q-142: brief pages render the same text in every zone', () => {
     expect(out[0]).toContain('Thu, Oct 1, 11:15 AM ET')   // header + footer quote time
     expect(out[0]).toContain('Sep 30, 11:05 PM ET')       // headline crosses midnight in ET
     expect(out[0]).toContain('Fetched: Oct 1, 11:15 AM ET')
+    // Red-team R2-242-2: the sector brief renders the shared source badge.
+    expect(out[0]).toContain('data-source-kind="unclassified"')
+    expect(out[0]).toContain('via example.com')
   })
 
   it('a missing quote time is stated, not replaced by a guess at the market phase', () => {

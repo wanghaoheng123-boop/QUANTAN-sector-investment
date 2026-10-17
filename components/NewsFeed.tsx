@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { safeHref } from '@/lib/security/urlValidation'
 import { parseNewsPayload, type NewsItem } from '@/lib/news/newsPayload'
+import { NewsSourceBadge } from '@/components/NewsSourceBadge'
 
 /**
  * Live news only (Q-088, design invariant I3).
@@ -28,9 +29,6 @@ interface NewsFeedProps {
   color: string
 }
 
-function getPublisher(item: NewsItem): string {
-  return item.publisher ?? 'Unknown'
-}
 /**
  * Returns the safe http(s) link for a news item, or '#' when the URL
  * is missing or uses a disallowed scheme. Defense-in-depth via the
@@ -182,12 +180,9 @@ export default function NewsFeed({ sector, ticker, color }: NewsFeedProps) {
             <h4 className="text-sm font-semibold text-white group-hover:text-slate-200 leading-snug flex-1">
               {item.title}
             </h4>
-            <span
-              className="text-xs px-2 py-0.5 rounded font-mono shrink-0 mt-0.5"
-              style={{ backgroundColor: `${color}20`, color }}
-            >
-              {getPublisher(item)}
-            </span>
+            {/* Q-090: the publisher is Yahoo's free text and every link is Yahoo-hosted,
+                so the badge says "via Yahoo Finance" and never presents a verified wire. */}
+            <NewsSourceBadge publisher={item.publisher} link={item.link} color={color} />
           </div>
 
           {getSnippet(item) && (
