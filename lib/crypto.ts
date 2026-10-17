@@ -197,27 +197,6 @@ export function interpretFundingRate(rate: number): {
   return { label: 'Neutral', color: 'text-slate-400', signal: 'NEUTRAL' }
 }
 
-/** Rainbow chart bands — logarithmic regression levels */
-export const RAINBOW_BANDS = [
-  { label: 'Bubble Peak', color: '#ff0000', floor: 0.9 },
-  { label: 'Sell Peak',   color: '#ff6600', floor: 0.7 },
-  { label: 'FOMO',        color: '#ffcc00', floor: 0.5 },
-  { label: 'Neutral',     color: '#00cc00', floor: 0.35 },
-  { label: 'Accumulate',  color: '#00ffcc', floor: 0.2 },
-  { label: 'Deep Value',  color: '#0000ff', floor: 0.0 },
-]
-
-export function getRainbowBand(price: number, rainbowHigh: number, rainbowLow: number) {
-  const range = rainbowHigh - rainbowLow
-  const position = range > 0 ? (price - rainbowLow) / range : 0.5
-  if (position >= 0.9) return RAINBOW_BANDS[0]
-  if (position >= 0.7) return RAINBOW_BANDS[1]
-  if (position >= 0.5) return RAINBOW_BANDS[2]
-  if (position >= 0.35) return RAINBOW_BANDS[3]
-  if (position >= 0.2) return RAINBOW_BANDS[4]
-  return RAINBOW_BANDS[5]
-}
-
 /** Fear & Greed interpretation */
 export function interpretFearGreed(value: number): {
   label: string
