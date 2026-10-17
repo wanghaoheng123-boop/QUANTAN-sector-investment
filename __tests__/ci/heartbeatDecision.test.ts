@@ -389,3 +389,21 @@ describe('Q107-A22 — what this probe CANNOT do', () => {
     expect(GRACE_MS).toBe(GRACE_HOURS * 3_600_000)
   })
 })
+
+// Q-113 — the probe exposes the failing run, so its alert is keyed to that run.
+describe('assessWorkflow exposes the failing run (Q-113)', () => {
+  it('an unhealthy result carries runUrl', () => {
+    // refresh-data.yml's real schedule; with the 18h grace the fire judged at
+    // this clock is Sun 2026-10-11T22:00Z, and run 38189996112 started 00:57Z.
+    const now = new Date('2026-10-12T20:00:00Z')
+    const r = assessWorkflow({
+      file: 'refresh-data.yml',
+      crons: ['0 22 * * 0'],
+      runs: [{ createdAt: '2026-10-12T00:57:26Z', status: 'completed', conclusion: 'failure', url: 'https://github.com/o/r/actions/runs/38189996112' }],
+      now,
+    })
+    expect(r.state).toBe('unhealthy')
+    expect(r.runUrl).toBe('https://github.com/o/r/actions/runs/38189996112')
+  })
+})
+
