@@ -1,20 +1,14 @@
 /**
  * GET /api/darkpool/[ticker]
  *
- * Off-exchange / dark pool analytics sourced from Yahoo Finance.
+ * Short interest and share counts for a ticker, from Yahoo Finance
+ * (`quoteSummary.defaultKeyStatistics`), plus the quote.
  *
- * Yahoo Finance provides:
- *   • `marketStore`  — Finra BATS/OTCQX off-exchange % via quoteSummary.defaultKeyStatistics
- *   • `analysisModules` → "Major Holders" module with holder breakdown
- *   • `quoteType`  → `marketStore` boolean (is this OTCQX etc.)
- *   • Price/volume from regular Yahoo quote
- *
- * The offExchangeShares / totalShares ratio gives the genuine
- * "dark pool / off-exchange" trading volume percentage — the same
- * metric shown on Yahoo Finance's "Major Holders" page under
- * "Trading Statistics".
- *
- * No API key required (yfinance uses public endpoints).
+ * Q-149: this header used to say Yahoo provides "`marketStore` — Finra
+ * BATS/OTCQX off-exchange %". It does not: no yahoo-finance2 module carries
+ * off-exchange volume, and the fields this route read for it did not exist, so
+ * the figure was null on every request. The route now reads only typed fields
+ * and says off-exchange volume is not published by this source.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -23,7 +17,14 @@ import { parseQuoteTime } from '@/lib/format'
 import { applyRateLimit } from '@/lib/api/rateLimit'
 import { DEGRADED_CACHE_CONTROL } from '@/lib/api/reliability'
 import { normalizeTicker, sanitizeError } from '@/lib/api/sanitize'
-import type { DarkPoolAnalysis, PricePoint } from '@/lib/darkpool'
+import { normalizedChangePercent } from '@/lib/yahooQuoteFields'
+import {
+  NO_SHORT_DATA_NOTE,
+  buildDarkPoolMetrics,
+  hasShortOrShareData,
+  type DarkPoolAnalysis,
+  type PricePoint,
+} from '@/lib/darkpool'
 
 const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] })
 
@@ -42,95 +43,32 @@ function buildAnalysis(
   ticker: string,
   quote: PricePoint,
   keyStats: Record<string, unknown>,
-  financialData: Record<string, unknown> | null,
-  // Top-level quote fields that also contain relevant metrics
-  avgDailyVolumeFromQuote: number | null
+  rawQuote: Record<string, unknown>,
 ): DarkPoolAnalysis {
-  const sharesOutstanding = safeNum(keyStats?.sharesOutstanding ?? financialData?.sharesOutstanding)
-  const sharesFloat = safeNum(keyStats?.ordinarySharesNumber ?? financialData?.sharesOutstanding)
+  const metrics = buildDarkPoolMetrics(keyStats, rawQuote)
 
-  // Phase 14 (R4-H-4): silent null fallback hid Yahoo schema drift. When
-  // the quote came back populated but sharesFloat resolved to null, the
-  // route used to return null silently — operators never saw it, so a
-  // Yahoo field rename or coverage gap could degrade the float-based
-  // ratios across the user base without detection. Emit a single
-  // structured warn so log aggregation can alert on drift. Behavior is
-  // unchanged: downstream still treats null as "unknown" and proceeds.
-  const quoteHasPrice = quote.price != null && quote.price > 0
-  if (quoteHasPrice && sharesFloat === null) {
+  // Phase 14 (R4-H-4): a populated EQUITY quote with no float is schema drift,
+  // so it is logged for alerting. Q-149: this used to fire on every request —
+  // the field it read did not exist — and an alert that is always on hides the
+  // drift it is for. ETFs carry no float, so they are not drift.
+  if (rawQuote.quoteType === 'EQUITY' && quote.price != null && metrics.sharesFloat === null) {
     console.warn(JSON.stringify({
       event: 'darkpool.shares_float_missing',
       ticker,
-      keyStatsHasOrdinaryShares: keyStats?.ordinarySharesNumber !== undefined,
-      keyStatsHasSharesOutstanding: keyStats?.sharesOutstanding !== undefined,
-      financialDataHasSharesOutstanding: financialData?.sharesOutstanding !== undefined,
+      keyStatsHasFloatShares: keyStats.floatShares !== undefined,
+      keyStatsHasSharesOutstanding: keyStats.sharesOutstanding !== undefined,
       fetchedAt: new Date().toISOString(),
     }))
   }
 
-  // Yahoo Finance does not publish per-ticker off-exchange share counts via public API.
-  // offExchangePct would require Finra ADF aggregate data which is not accessible without a
-  // dedicated data vendor (Bloomberg BVAL, Refinitiv, or Finra itself).
-  // We still try the field in case it surfaces for some tickers.
-  const offExchangeShares = safeNum(keyStats?.offExchangeShares ?? keyStats?.marketStore)
-  const totalShares = sharesOutstanding ?? sharesFloat
-
-  let offExchangePct: number | null = null
-  let onExchangePct: number | null = null
-
-  if (offExchangeShares != null && totalShares != null && totalShares > 0) {
-    // Phase 13 S2 defensive clamp: Yahoo occasionally returns inconsistent
-    // shares-outstanding vs shares-trading numbers (data error or stale
-    // float). Cap percentages to [0, 100] so UI charts don't display
-    // negative on-exchange% or > 100 % off-exchange.
-    const rawPct = (offExchangeShares / totalShares) * 100
-    offExchangePct = Math.max(0, Math.min(100, rawPct))
-    onExchangePct = 100 - offExchangePct
-  }
-
-  // Yahoo field names verified via live API inspection:
-  //   sharesShort        (defaultKeyStatistics) — shares currently sold short
-  //   averageDailyVolume10Day (top-level quote) — 10-day average daily volume
-  const sharesShorted = safeNum(keyStats?.sharesShort)
-  const avgDailyVolume = safeNum(
-    keyStats?.averageDailyVolume10Day ??
-    keyStats?.averageDailyVolume ??
-    avgDailyVolumeFromQuote
-  )
-  const shortFloatPct = safeNum(keyStats?.shortPercentOfFloat)
-  const daysToCover = safeNum(keyStats?.shortRatio)
-
-  const hasRealData =
-    offExchangePct !== null ||
-    sharesShorted !== null ||
-    shortFloatPct !== null ||
-    avgDailyVolume !== null
-
-  // Red-team L9: this used to say "not available for this security type (ETF,
-  // ADR, or OTC)" for EVERY all-letter ticker — AAPL included. The route does
-  // not know the security type, so it says only what it observed.
-  const statusNote: string | null = hasRealData
-    ? null
-    : 'Yahoo Finance reported no off-exchange trading data for this ticker.'
-
+  // Red-team L9: say only what was observed — the route does not know the
+  // security type.
   return {
     ticker,
     fetchedAt: new Date().toISOString(),
     quote,
-    metrics: {
-      offExchangePct,
-      onExchangePct,
-      offExchangeShares,
-      totalShares,
-      sharesShorted,
-      shortFloatPct,
-      daysToCover,
-      avgDailyVolume,
-      sharesOutstanding,
-      sharesFloat,
-    },
-    hasRealData,
-    statusNote,
+    metrics,
+    statusNote: hasShortOrShareData(metrics) ? null : NO_SHORT_DATA_NOTE,
   }
 }
 
@@ -156,7 +94,7 @@ export async function GET(
     const [quoteResult, summaryResult] = await Promise.allSettled([
       yahooFinance.quote(ticker),
       yahooFinance.quoteSummary(ticker, {
-        modules: ['defaultKeyStatistics', 'financialData', 'quoteType'],
+        modules: ['defaultKeyStatistics'],
       }),
     ]) as [
       PromiseSettledResult<unknown>,
@@ -187,11 +125,12 @@ export async function GET(
         ? {
             price: rawPrice,
             change: finiteOrNull(rawChange),
-            changePct: Number.isFinite(rawChangePct)
-              ? (rawChangePct as number)
-              : Number.isFinite(rawChange) && rawPrice > 0
-                ? (100 * (rawChange as number)) / rawPrice
-                : null,
+            // Red-team Q145-R5: the percent was taken raw, so a decimal-form
+            // row (0.016 meaning 1.6%) rendered +0.02%. It goes through the
+            // same normaliser as /api/prices and both streams.
+            changePct: rawChangePct != null || rawChange != null
+              ? normalizedChangePercent(rawChangePct, rawChange, rawPrice)
+              : null,
             quoteTime: parseQuoteTime(q.regularMarketTime),
           }
         : {
@@ -212,15 +151,7 @@ export async function GET(
       {}
     ) as Record<string, unknown>
 
-    const financialData = (
-      (summary.financialData as unknown as Record<string, unknown>) ??
-      null
-    ) as Record<string, unknown> | null
-
-    const avgDailyVolumeFromQuote =
-      safeNum((q as Record<string, unknown>).averageDailyVolume10Day as number) ??
-      safeNum((q as Record<string, unknown>).averageDailyVolume as number)
-    const analysis = buildAnalysis(ticker, price, keyStats, financialData, avgDailyVolumeFromQuote)
+    const analysis = buildAnalysis(ticker, price, keyStats, q)
 
     // Q-140 (I2): a FAILED fetch is not "no data for this security type". With
     // Yahoo down this used to say "Dark pool metrics are not available for this
@@ -232,8 +163,8 @@ export async function GET(
       analysis.statusNote = quoteFailed && summaryFailed
         ? 'The market-data feed failed for this ticker; try again shortly.'
         : quoteFailed
-          ? 'The price quote failed to load; the off-exchange statistics below are shown without it.'
-          : 'The off-exchange statistics failed to load; try again shortly.'
+          ? 'The price quote failed to load; the short-interest figures below are shown without it.'
+          : 'The short-interest figures failed to load; try again shortly.'
     }
 
     return NextResponse.json(analysis, {
