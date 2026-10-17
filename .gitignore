@@ -83,3 +83,6 @@ multi_agent_factor_mining/factor_library.json
 # Q-067 shadow signal log — runtime output written by /api/backtest/live.
 # Local dev runs create this; it is per-machine data, not source.
 workspace/shadow/
+
+# Q-095: the ledger-append lock; committing one would block every clone
+*.csv.lock

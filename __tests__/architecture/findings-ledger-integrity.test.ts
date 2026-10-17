@@ -12,58 +12,32 @@
  * that were supposed to be watching, and it survived several passes before being
  * spotted by column-count audit rather than by reading.
  *
- * KNOWN DEBT, asserted rather than hidden: 7 rows are malformed on `main` and
- * predate this guard. They are pinned below so the count cannot grow. Repairing
- * them is Q-095; letting new ones appear is what this test prevents.
+ * The seven rows that predated this guard (missing `line` fields, an unquoted
+ * comma, backslash "escapes" CSV does not have) were repaired under Q-095, so
+ * no malformed row is tolerated now. Append through `npm run ledger:append`
+ * (scripts/ledger-append.mjs), which validates, locks and newline-terminates.
  */
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'fs'
 import { join } from 'path'
+// ONE reader for the guard and the append script. This file used to carry its
+// own lenient copy, which read a quote left open at end of file as a valid
+// 12-column row — so a swallowed CRITICAL finding passed (red-team L1).
+import { ledgerProblems } from '../../scripts/lib/ledger.mjs'
 
 const LEDGER = join(__dirname, '../../reviews/findings-ledger.csv')
-
-/** Minimal RFC4180-ish parser: handles quoted fields containing commas/newlines. */
-function parseCsv(text: string): string[][] {
-  const rows: string[][] = []
-  let row: string[] = []
-  let field = ''
-  let inQuotes = false
-
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i]
-    if (inQuotes) {
-      if (c === '"') {
-        if (text[i + 1] === '"') { field += '"'; i++ } else { inQuotes = false }
-      } else field += c
-    } else if (c === '"') inQuotes = true
-    else if (c === ',') { row.push(field); field = '' }
-    else if (c === '\n') { row.push(field); rows.push(row); row = []; field = '' }
-    else if (c !== '\r') field += c
-  }
-  if (field !== '' || row.length) { row.push(field); rows.push(row) }
-  return rows.filter((r) => r.some((c) => c.trim() !== ''))
-}
-
-const rows = parseCsv(readFileSync(LEDGER, 'utf8'))
-const header = rows[0]
-const dataRows = rows.slice(1)
-
-/**
- * Rows malformed on `main` before this guard existed. Pinned by ID so the debt
- * is visible and cannot silently grow. Do not add to this list to make a new
- * failure pass — fix the row.
- */
-const KNOWN_MALFORMED_IDS = new Set([
-  'F4.5',   // 11 cols — status cell blank
-  'F5.4',   // 11 cols — status cell blank
-  'F5.9',   // 13 cols — unescaped comma
-  'F6.2',   // 15 cols — unescaped commas
-  'F6.3',   // 14 cols — unescaped commas
-  'F6.4',   // 16 cols — unescaped commas
-  'WSA-FG', // 11 cols — status cell blank
-])
+const TEXT = readFileSync(LEDGER, 'utf8')
+const { header: parsedHeader, rows: dataRows, problems } = ledgerProblems(TEXT)
+// null only when the file does not parse, which the first test reports by name.
+const header: string[] = parsedHeader ?? []
 
 describe('findings-ledger.csv — the risk register stays parseable', () => {
+  it('parses as strict RFC 4180 with every row at the header width', () => {
+    // An open quote, a quote mid-field, or text after a closing quote each
+    // swallow or split rows; ledgerProblems reports all three and short rows.
+    expect(problems).toEqual([])
+  })
+
   it('has the expected header', () => {
     expect(header[0]).toBe('id')
     expect(header).toContain('severity')
@@ -77,22 +51,15 @@ describe('findings-ledger.csv — the risk register stays parseable', () => {
     expect(dataRows.length).toBeGreaterThan(100)
   })
 
-  it('has no NEW rows whose column count differs from the header', () => {
+  it('every row has exactly the header\'s column count', () => {
     const offenders = dataRows
-      .filter((r) => r.length !== header.length)
-      .map((r) => `${r[0]} (${r.length} cols, expected ${header.length})`)
-      .filter((desc) => !KNOWN_MALFORMED_IDS.has(desc.split(' ')[0]))
-
+      .filter((r: string[]) => r.length !== header.length)
+      .map((r: string[]) => `${r[0]} (${r.length} cols, expected ${header.length})`)
     expect(offenders).toEqual([])
   })
 
-  it('the known-malformed debt has not grown', () => {
-    const malformed = dataRows.filter((r) => r.length !== header.length)
-    expect(malformed.length).toBeLessThanOrEqual(KNOWN_MALFORMED_IDS.size)
-  })
-
   it('every row has a non-empty id, and ids are unique', () => {
-    const ids = dataRows.map((r) => r[0]?.trim()).filter(Boolean)
+    const ids = dataRows.map((r: string[]) => r[0]?.trim()).filter(Boolean)
     expect(ids.length).toBe(dataRows.length)
     expect(new Set(ids).size).toBe(ids.length)
   })
@@ -100,21 +67,21 @@ describe('findings-ledger.csv — the risk register stays parseable', () => {
   it('no row is a glued concatenation of two rows', () => {
     // The corruption signature: roughly double the header width in one row.
     const glued = dataRows
-      .filter((r) => r.length >= 2 * header.length - 1)
-      .map((r) => r[0])
+      .filter((r: string[]) => r.length >= 2 * header.length - 1)
+      .map((r: string[]) => r[0])
 
     expect(glued).toEqual([])
   })
 
   it('the file ends with a newline so the next append cannot glue onto it', () => {
     // This is the actual root cause of the swallowed CRITICAL finding.
-    expect(readFileSync(LEDGER, 'utf8').endsWith('\n')).toBe(true)
+    expect(TEXT.endsWith('\n')).toBe(true)
   })
 
   it('retains the CRITICAL Q-088 brand-inversion finding as its own row', () => {
     // The specific row that was lost. Named explicitly: a register that can
     // drop its most severe entry is not a register.
-    const ids = dataRows.map((r) => r[0])
+    const ids = dataRows.map((r: string[]) => r[0])
     expect(ids).toContain('Q088-1')
   })
 })
