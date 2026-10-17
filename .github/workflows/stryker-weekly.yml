@@ -31,6 +31,17 @@
 # 2026-08-02, and even its low mode (74.29) clears 70 — but if this workflow
 # starts failing on that shard alone, suspect the swing before suspecting a
 # real regression. See workspace/SESSION_STATE.json → mutation_gate_verification.
+#
+# RE-SHARDED 2026-10-17 (Q-151). quant-indicators ran ~3h every week (999 of its
+# 1,816 mutants are static and take 96% of the time) and on 2026-10-11 a slower
+# runner left it at 62% when GitHub's 6-hour JOB limit cancelled it. A cancelled
+# job reads as "inconclusive" to the alerter, so the in-workflow alert said
+# nothing; only the heartbeat noticed. Two fixes:
+#   - the shard is split: indicators.ts (844 mutants) | the other three (972);
+#   - the stryker step carries its own timeout, so overrunning it FAILS the
+#     job (a step timeout is a failure; a job timeout is a cancellation).
+# The 70% break threshold applies per shard; on the 2026-10-04 figures the two
+# halves score ~90.6 and ~84.4.
 name: Stryker Weekly
 
 on:
@@ -46,7 +57,9 @@ jobs:
       matrix:
         shard:
           - name: quant-indicators
-            mutate: 'lib/quant/indicators.ts,lib/quant/btc-indicators.ts,lib/quant/technicals.ts,lib/quant/multiTimeframe.ts'
+            mutate: 'lib/quant/indicators.ts'
+          - name: quant-indicators-family
+            mutate: 'lib/quant/btc-indicators.ts,lib/quant/technicals.ts,lib/quant/multiTimeframe.ts'
           - name: quant-rest
             mutate: 'lib/quant/**/*.ts,!lib/quant/indicators.ts,!lib/quant/btc-indicators.ts,!lib/quant/technicals.ts,!lib/quant/multiTimeframe.ts'
           - name: backtest
@@ -61,7 +74,12 @@ jobs:
           node-version: '20'
           cache: 'npm'
       - run: npm ci
-      - run: npx stryker run --mutate "${{ matrix.shard.mutate }}"
+      - name: Stryker
+        # Under GitHub's 360-minute job limit, so an overrun is a FAILED step
+        # (which alerts) rather than a cancelled job (which the alerter cannot
+        # distinguish from a human pressing cancel).
+        timeout-minutes: 330
+        run: npx stryker run --mutate "${{ matrix.shard.mutate }}"
 
   # Q107-O2: a scheduled workflow that fails silently is how this repo lost a
   # fortnight of data. `always()` is load-bearing — without it this job is skipped
