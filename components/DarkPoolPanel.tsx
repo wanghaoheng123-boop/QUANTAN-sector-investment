@@ -60,32 +60,14 @@ export default function DarkPoolPanel({
   // `assert(true, …)` could never do.
   const prints = unwrapSynthetic(printsWrapped, 'DarkPoolPanel.prints')
 
-  const { metrics, hasRealData, statusNote } = apiData ?? {
-    metrics: {},
-    hasRealData: false,
-    statusNote: null,
-  }
-
-  // ── Sentiment from real data ─────────────────────────────────────────────
-  const offPct = metrics.offExchangePct
-  const shortPct = metrics.shortFloatPct
-
-  // Derive sentiment: if short interest > 10% of float → distribution signal
-  const shortSignal: 'DISTRIBUTION' | 'ACCUMULATION' | 'NEUTRAL' =
-    shortPct == null
-      ? 'NEUTRAL'
-      : shortPct > 10
-        ? 'DISTRIBUTION'
-        : shortPct > 5
-          ? 'NEUTRAL'
-          : 'ACCUMULATION'
-
-  const shortColor =
-    shortSignal === 'DISTRIBUTION'
-      ? '#ff6b7a'
-      : shortSignal === 'ACCUMULATION'
-        ? '#00d084'
-        : '#94a3b8'
+  const metrics = apiData?.metrics
+  const statusNote = apiData?.statusNote ?? null
+  const shortPct = metrics?.shortFloatPct ?? null
+  // Q-149: the sub-label names what is known, in the order a reader needs it.
+  const shortSub = [
+    metrics?.sharesShorted != null ? `${fmtShares(metrics.sharesShorted)} shares` : null,
+    metrics?.shortInterestAsOf ? `as of ${metrics.shortInterestAsOf}` : null,
+  ].filter(Boolean).join(' · ') || 'not reported'
 
   // ── Bullish print ratio (illustrative) ────────────────────────────────
   const bullishPrints = prints.filter((p) => p.sentiment === 'BULLISH')
@@ -126,65 +108,43 @@ export default function DarkPoolPanel({
             </div>
           )}
 
-          {/* Real metrics grid */}
+          {/* Q-149: this grid's first card was "Off-Exchange Vol", sub-labelled
+              "Finra BATS", for a value no field supplied — it was "—" on every
+              ticker. No data source here publishes off-exchange volume, so the
+              panel says that once, instead of rendering an empty card that
+              credits a venue. */}
+          <p className="text-xs text-slate-400 leading-relaxed">
+            Off-exchange (dark-pool) volume is not published by this data source. The figures below are
+            short interest and share counts.
+          </p>
+
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            <MetricCard
-              label="Off-Exchange Vol"
-              value={fmtPct(offPct, 2)}
-              sub={offPct != null ? `${(100 - offPct).toFixed(1)}% on-exchange` : 'Finra BATS'}
-            />
-            <MetricCard
-              label="Short Interest"
-              value={fmtPct(shortPct, 2)}
-              sub={metrics.sharesShorted != null ? `${fmtShares(metrics.sharesShorted)} shares` : 'of float'}
-            />
+            <MetricCard label="Short Interest (% of float)" value={fmtPct(shortPct, 2)} sub={shortSub} />
             <MetricCard
               label="Days to Cover"
-              value={metrics.daysToCover != null ? metrics.daysToCover.toFixed(1) : '—'}
-              sub={metrics.avgDailyVolume != null ? `Vol: ${fmtShares(metrics.avgDailyVolume)}/day` : 'avg daily vol'}
+              value={metrics?.daysToCover != null ? metrics.daysToCover.toFixed(1) : '—'}
+              sub="short interest ÷ average daily volume"
             />
+            <MetricCard label="10-Day Avg Volume" value={fmtShares(metrics?.avgDailyVolume)} sub="shares per day" />
             <MetricCard
-              label="Float / Shares Out"
-              value={
-                metrics.sharesFloat != null
-                  ? fmtShares(metrics.sharesFloat)
-                  : metrics.sharesOutstanding != null
-                    ? fmtShares(metrics.sharesOutstanding)
-                    : '—'
-              }
-              sub="Yahoo Finance"
+              label="Shares Outstanding"
+              value={fmtShares(metrics?.sharesOutstanding)}
+              sub={metrics?.sharesFloat != null ? `Float ${fmtShares(metrics.sharesFloat)}` : 'Float not reported'}
             />
           </div>
 
-          {/* Short signal banner */}
-          {hasRealData && (
-            <div
-              className="rounded-xl border p-3 flex items-center gap-3"
-              role="alert"
-              aria-label={`Short interest signal: ${shortSignal}`}
-              style={{
-                borderColor: `${shortColor}40`,
-                backgroundColor: `${shortColor}10`,
-              }}
-            >
-              <div
-                className="w-2.5 h-2.5 rounded-full shrink-0"
-                style={{ backgroundColor: shortColor }}
-              />
-              <div>
-                <div className="text-xs font-semibold" style={{ color: shortColor }}>
-                  Short Interest Signal: {shortSignal}
-                </div>
-                <div className="text-[10px] text-slate-400 mt-0.5 leading-relaxed">
-                  {shortSignal === 'DISTRIBUTION'
-                    ? 'Elevated short interest (>10% of float) may indicate bearish sentiment or institutional hedging.'
-                    : shortSignal === 'ACCUMULATION'
-                      ? 'Low short interest (<5% of float) suggests limited near-term selling pressure.'
-                      : 'Short interest is moderate — no strong directional signal from short data.'}
-                  {' Source: Finra / Yahoo Finance.'}
-                </div>
-              </div>
-            </div>
+          {/* Q-149: this was a "Short Interest Signal" banner — DISTRIBUTION above
+              10% of float, ACCUMULATION below 5% — in red and green. Short
+              interest does not say who is buying, the bands had no source, and
+              the field was read 100× too small, so every stock (GME included)
+              was labelled ACCUMULATION, and every ETF, which has no short
+              interest figure at all, was told its short interest was
+              "moderate". What the number is, stated plainly, replaces it. */}
+          {shortPct != null && (
+            <p className="text-[10px] text-slate-400 leading-relaxed">
+              Short interest is the number of shares sold short and not yet bought back, reported twice a
+              month as of a settlement date. It is not a measure of off-exchange trading.
+            </p>
           )}
 
           {/* Price */}
@@ -225,12 +185,12 @@ export default function DarkPoolPanel({
               beneath it, with nothing marking where the attribution stopped. It
               now names the metrics it actually covers and disclaims the rest. */}
           <div className="text-[10px] text-slate-400 leading-relaxed">
-            Source for the metrics above: Yahoo Finance aggregate off-exchange trading data.{' '}
+            Source for the figures above: Yahoo Finance (short interest, share counts, 10-day average
+            volume).{' '}
             {apiData.fetchedAt && (
               <>Fetched: <LocalTime value={apiData.fetchedAt} withDate />. </>
             )}
-            Off-exchange % = Finra BATS/OTCQX/OTCBB volume ÷ total volume. This source does not
-            cover the flow gauge or the block prints below.
+            The flow gauge and the block prints below are not from this source.
           </div>
         </>
       )}
@@ -359,7 +319,7 @@ export default function DarkPoolPanel({
           <span className="text-amber-400/80">
             ⚠ Illustrative block prints — not from a proprietary data feed.
           </span>
-          {' '}Individual print data requires a subscription service (e.g. Finra ADF, CBOE UQDF, or Bloomberg LP).
+          {' '}No data source for individual off-exchange prints is connected.
         </div>
       </div>
     </div>
