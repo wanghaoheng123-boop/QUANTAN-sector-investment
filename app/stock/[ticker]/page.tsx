@@ -5,6 +5,7 @@
 // (QuantLabPanel below), so it always has a ticker context. Do not add a
 // bare /quant-lab page; link to /stock/<ticker> with the quant tab instead.
 
+import { resolveTickChange } from '@/lib/quoteChange'
 import { useState, useEffect, useCallback, useMemo, use } from 'react'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
@@ -86,7 +87,8 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
   const ticker = tickerRaw.toUpperCase()
 
   const [candles, setCandles]           = useState<Candle[]>([])
-  const [quote, setQuote]               = useState<{ price: number; change: number; changePct: number; marketCap: string; quoteTime?: string | null } | null>(null)
+  // Q-145: change fields are nullable and render "—", never a measured 0.
+  const [quote, setQuote]               = useState<{ price: number; change: number | null; changePct: number | null; marketCap: string; quoteTime?: string | null } | null>(null)
   const [quoteError, setQuoteError] = useState<string | null>(null)
   const [darkPoolPrints, setDarkPoolPrints] = useState<Synthetic<DarkPoolPrint[]>>(() => markSynthetic([]))
   const [darkPoolApiData, setDarkPoolApiData] = useState<DarkPoolAnalysis | null>(null)
@@ -250,8 +252,8 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
     if (!live.quote) return
     setQuote((prev) => ({
       price: live.quote!.price,
-      change: live.quote!.change,
-      changePct: live.quote!.changePct,
+      // Q-145: a tick without a change no longer overwrites a known one with 0.
+      ...resolveTickChange(prev, live.quote!),
       marketCap: prev?.marketCap ?? '',
       // Q-101: the VENDOR's stamp, never this server's emit time. Using
       // `timestamp` here made /stock/AAPL read "live" for a Friday close on a
@@ -348,7 +350,7 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
   // today (unlike the table and gauge) — see that ticket.
   const darkPoolPrintRows = unwrapSynthetic(darkPoolPrints, 'StockPage.darkPoolAggregateTiles')
 
-  const isUp = (quote?.changePct ?? 0) >= 0
+  const isUp = quote?.changePct != null && quote.changePct >= 0
 
   return (
     <div className="min-h-screen">
@@ -379,9 +381,14 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
               {quote ? (
                 <div className="text-right">
                   <div className="text-2xl font-bold text-white font-mono">{formatCurrency(quote.price)}</div>
-                  <div className={`text-sm font-mono ${isUp ? 'text-green-400' : 'text-red-400'}`}>
-                    {isUp ? '▲' : '▼'} {formatSignedNumber(quote.change)} ({Math.abs(quote.changePct).toFixed(2)}%)
-                  </div>
+                  {quote.changePct == null ? (
+                    // Q-145: no change data is "—", not a green 0.00%.
+                    <div className="text-sm font-mono text-slate-400">— (no change data)</div>
+                  ) : (
+                    <div className={`text-sm font-mono ${isUp ? 'text-green-400' : 'text-red-400'}`}>
+                      {isUp ? '▲' : '▼'} {formatSignedNumber(quote.change)} ({Math.abs(quote.changePct).toFixed(2)}%)
+                    </div>
+                  )}
                   <div className="text-xs text-slate-400 mt-1 font-mono">Market Cap: {quote.marketCap}</div>
                   {/* Phase 14 wave 36: real-time stream status pill. */}
                   <div className="flex items-center justify-end gap-2 mt-1">
@@ -715,7 +722,7 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
                 <div className="space-y-4">
                   <div className="flex justify-between items-center border-b border-slate-800/50 pb-2">
                     <span className="text-sm text-slate-400">1d change</span>
-                    {quote ? (
+                    {quote && quote.changePct != null ? (
                       <span className={`text-sm font-mono font-medium ${quote.changePct >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                         {quote.changePct >= 0 ? '+' : ''}{quote.changePct.toFixed(2)}%
                       </span>

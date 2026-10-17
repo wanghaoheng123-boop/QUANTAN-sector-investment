@@ -8,8 +8,9 @@ import { SECTORS } from '@/lib/sectors'
 interface Quote {
   ticker: string
   price: number
-  change: number
-  changePct: number
+  // Q-145: nullable — /api/prices sends null for a field Yahoo omitted.
+  change: number | null
+  changePct: number | null
   marketCap: string
   quoteTime?: string | null
 }
@@ -101,8 +102,10 @@ export default function HeatmapPage() {
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-2">
           {sectorsWithData.map(sector => {
             const quote = sector.quote
-            const isUp = (quote?.changePct ?? 0) >= 0
-            const bgColor = quote ? getHeatmapColor(quote.changePct) : 'bg-slate-800'
+            // Q-145: no quote, or no change, is missing — neutral tile and "—".
+            const pct = quote?.changePct ?? null
+            const isUp = pct != null && pct >= 0
+            const bgColor = pct != null ? getHeatmapColor(pct) : 'bg-slate-800'
 
             return (
               <Link key={sector.slug} href={`/sector/${sector.slug}`}>
@@ -126,7 +129,7 @@ export default function HeatmapPage() {
                           {sector.name}
                         </div>
                         <div className="text-2xl font-bold text-white tracking-tight drop-shadow-md">
-                          {isUp ? '+' : ''}{quote?.changePct.toFixed(2)}%
+                          {pct != null ? `${isUp ? '+' : ''}${pct.toFixed(2)}%` : '—'}
                         </div>
                       </>
                     )}

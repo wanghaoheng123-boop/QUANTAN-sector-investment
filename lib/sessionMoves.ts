@@ -13,11 +13,9 @@
  *     "Neutral" in market breadth (I2: missing displayed as data).
  * A move here exists only when Yahoo supplied a usable quote.
  *
- * KNOWN GAP (red-team S4, 2026-10-17; Q-145): a quote that carries a price but
- * NO change arrives here as `changePct: 0`, because the producers
- * (`normalizedChangePercent`, `parseLiveQuote`) substitute 0 for a missing
- * change. It then reads as a measured FLAT. The fix is at the producers, which
- * about thirty consumers share, so it is its own package.
+ * Red-team S4 (closed by Q-145): a quote with a price but NO change used to
+ * arrive here as `changePct: 0` — the producers substituted 0 — and read as a
+ * measured FLAT. The producers now say null, and a null change is no move.
  */
 import { SECTORS } from '@/lib/sectors'
 
@@ -37,7 +35,8 @@ export interface SessionMove {
 
 export interface QuoteLike {
   price: number
-  changePct: number
+  /** null when the vendor supplied no change (Q-145) — that is no move, not FLAT. */
+  changePct: number | null
   quoteTime?: string | null
 }
 
@@ -73,7 +72,7 @@ export function formatMovePct(changePct: number): string {
 export function sessionMoveFor(etf: string, q: QuoteLike | undefined | null): SessionMove | null {
   const sector = SECTORS.find((s) => s.etf === etf)
   if (!sector || !q) return null
-  if (!Number.isFinite(q.price) || q.price <= 0 || !Number.isFinite(q.changePct)) return null
+  if (!Number.isFinite(q.price) || q.price <= 0 || q.changePct == null || !Number.isFinite(q.changePct)) return null
   return {
     sector: sector.name,
     etf,

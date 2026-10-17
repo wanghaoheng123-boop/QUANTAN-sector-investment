@@ -58,6 +58,7 @@ vi.mock('@/lib/api/reliability', async (importOriginal) => {
 
 import { GET as pricesGET } from '@/app/api/prices/route'
 import { GET as streamGET } from '@/app/api/stream/route'
+import { GET as singleStreamGET } from '@/app/api/stream/[ticker]/route'
 import { normalizedChangePercent } from '@/lib/yahooQuoteFields'
 
 /** The row Yahoo returns in DECIMAL form: a true +1.6% move reported as 0.016. */
@@ -180,5 +181,97 @@ describe('changePct: /api/prices ≡ /api/stream (DQ-5)', () => {
     )
     expect(await pricesChangePct()).toBe(expected)
     expect(await streamChangePct('10.9.5.4')).toBe(expected)
+  })
+})
+
+/** The first SPY `quote` event of the multiplex stream, as sent (null-safe). */
+async function multiStreamQuote(ip: string): Promise<{ change: number | null; changePct: number | null }> {
+  const controller = new AbortController()
+  const res = await streamGET(new Request('http://localhost/api/stream?tickers=SPY', { headers: { 'x-real-ip': ip }, signal: controller.signal }))
+  if (!res.body) { controller.abort(); throw new Error('stream route returned no body') }
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  try {
+    for (let i = 0; i < 64; i++) {
+      const { value, done } = await reader.read()
+      if (done) break
+      for (const block of decoder.decode(value).split('\n\n')) {
+        const m = /^event: (\w+)\ndata: ([\s\S]*)$/.exec(block.trim())
+        if (m && m[1] === 'quote') {
+          const d = JSON.parse(m[2]) as { ticker: string; change: number | null; changePct: number | null }
+          if (d.ticker === 'SPY') return d
+        }
+      }
+    }
+  } finally {
+    controller.abort()
+    await reader.cancel().catch(() => { /* already closed */ })
+  }
+  throw new Error('stream route emitted no SPY quote')
+}
+
+/** The first `quote` event of the single-ticker stream, then abort. */
+async function singleStreamQuote(ip: string): Promise<{ change: number | null; changePct: number | null }> {
+  const controller = new AbortController()
+  const res = await singleStreamGET(
+    new Request('http://localhost/api/stream/SPY', { headers: { 'x-real-ip': ip }, signal: controller.signal }) as never,
+    { params: Promise.resolve({ ticker: 'SPY' }) },
+  )
+  if (!res.body) { controller.abort(); throw new Error('single stream returned no body') }
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  try {
+    for (let i = 0; i < 64; i++) {
+      const { value, done } = await reader.read()
+      if (done) break
+      for (const block of decoder.decode(value).split('\n\n')) {
+        const m = /^event: (\w+)\ndata: ([\s\S]*)$/.exec(block.trim())
+        if (m && m[1] === 'quote') return JSON.parse(m[2])
+      }
+    }
+  } finally {
+    controller.abort()
+    await reader.cancel().catch(() => { /* already closed */ })
+  }
+  throw new Error('single stream emitted no quote')
+}
+
+// Q-145: the single-ticker stream took regularMarketChangePercent RAW, so a
+// decimal-form value reached the stock page 100x too small (DQ-5, which the
+// multiplex route fixed on 2026-08-14); and every producer turned a missing
+// change into a measured 0.
+describe('Q-145: every quote producer — same percent, and null (not 0) when Yahoo gave none', () => {
+  beforeEach(() => {
+    delete process.env.KV_REST_API_URL
+    delete process.env.KV_REST_API_TOKEN
+    quoteMock.mockReset()
+  })
+
+  it('/api/stream/[ticker] normalises a DECIMAL-form row like the other two routes', async () => {
+    quoteMock.mockResolvedValue(DECIMAL_FORM_ROW as never)
+    const single = await singleStreamQuote('10.9.6.1')
+    expect(single.changePct).toBeCloseTo(1.6, 10)
+    quoteMock.mockResolvedValue([DECIMAL_FORM_ROW])
+    expect(await pricesChangePct()).toBe(single.changePct)
+  })
+
+  it('a row with a price but no change is null on all three routes, never 0', async () => {
+    const noChange = { symbol: 'SPY', regularMarketPrice: 100 }
+    quoteMock.mockResolvedValue([noChange])
+    const res = await pricesGET(new NextRequest(new URL('http://localhost:3000/api/prices?tickers=SPY')))
+    const body = await res.json() as { quotes: Array<{ ticker: string; change: number | null; changePct: number | null }> }
+    expect(body.quotes[0]).toMatchObject({ ticker: 'SPY', change: null, changePct: null })
+    quoteMock.mockResolvedValue([noChange])
+    expect(await multiStreamQuote('10.9.6.2')).toMatchObject({ change: null, changePct: null })
+    quoteMock.mockResolvedValue(noChange as never)
+    expect(await singleStreamQuote('10.9.6.3')).toMatchObject({ change: null, changePct: null })
+  })
+
+  it('/api/prices drops a row with no usable price and names the ticker in `unpriced`', async () => {
+    quoteMock.mockResolvedValue([{ symbol: 'SPY', regularMarketChange: 1 }, { symbol: 'QQQ', regularMarketPrice: 0 }])
+    const res = await pricesGET(new NextRequest(new URL('http://localhost:3000/api/prices?tickers=SPY,QQQ')))
+    const body = await res.json() as { quotes: unknown[]; unpriced: string[] }
+    expect(body.quotes).toEqual([])
+    expect(body.unpriced.sort()).toEqual(['QQQ', 'SPY'])
   })
 })

@@ -11,13 +11,16 @@
  * handles small moves correctly without any magic threshold.
  *
  * We fall back to the magnitude heuristic only when price/change are unavailable.
+ *
+ * Q-145: returns null when Yahoo supplied neither a percent nor a change. It
+ * returned 0, which every consumer rendered as a measured "0.00%" (FLAT).
  */
 
 export function normalizedChangePercent(
   regularMarketChangePercent: number | undefined | null,
   regularMarketChange: number | undefined | null,
   regularMarketPrice: number | undefined | null
-): number {
+): number | null {
   const raw = regularMarketChangePercent
 
   if (
@@ -41,5 +44,5 @@ export function normalizedChangePercent(
 
   // No price/change context — fall back to raw as-is (already in percent form most of the time).
   if (raw != null && Number.isFinite(Number(raw))) return Number(raw)
-  return 0
+  return null
 }

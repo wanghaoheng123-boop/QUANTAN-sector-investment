@@ -28,15 +28,22 @@ export interface QuoteProvenance {
   ask?: FieldSource
 }
 
+/**
+ * Q-145 (I2: missing displays as MISSING). A Yahoo field it did not supply is
+ * null, not 0: `price` is always present (a row without one is not a quote and
+ * is dropped by the producer), every other number may be null and renders "—".
+ * The previous `num()` turned a missing change into a measured "0.00%" and a
+ * missing price into "$0.00".
+ */
 export type UnifiedQuote = {
   ticker: string
   price: number
-  change: number
-  changePct: number
-  volume: number
-  high52w: number
-  low52w: number
-  pe: number
+  change: number | null
+  changePct: number | null
+  volume: number | null
+  high52w: number | null
+  low52w: number | null
+  pe: number | null
   marketCap: string
   /** Vendor last trade / regular session time when available (ISO). */
   quoteTime?: string | null
