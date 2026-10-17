@@ -1,5 +1,6 @@
 'use client'
 
+import { UI_LOCALE } from '@/lib/format'
 import { useState, useMemo } from 'react'
 import type { Trade } from '@/lib/backtest/engine'
 import { ENGINE_MAX_HOLD_DAYS } from '@/lib/backtest/strategyConstants'
@@ -175,7 +176,7 @@ export default function TradeLog({ trades, sectorColors }: Props) {
                     {t.pnlPct !== null ? `${isWin ? '+' : ''}${(pnl * 100).toFixed(2)}%` : 'Open'}
                   </td>
                   <td className="px-3 py-2.5 font-mono text-slate-400">{t.shares}</td>
-                  <td className="px-3 py-2.5 font-mono text-slate-400">${t.value.toLocaleString()}</td>
+                  <td className="px-3 py-2.5 font-mono text-slate-400">${t.value.toLocaleString(UI_LOCALE)}</td>
                   <td className="px-3 py-2.5 text-[10px] text-slate-400">{t.regime}</td>
                   <td className="px-3 py-2.5 text-[10px] text-slate-400">{t.dipSignal}</td>
                   <td className="px-3 py-2.5 font-mono text-slate-400">{t.confidence}</td>

@@ -1,5 +1,6 @@
 'use client'
 
+import { LocalTime } from '@/components/LocalTime'
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { SECTORS } from '@/lib/sectors'
@@ -89,7 +90,7 @@ export default function HeatmapPage() {
             </p>
           </div>
           <div className="text-sm text-slate-400 font-mono">
-            {lastUpdate ? `Poll · ${lastUpdate.toLocaleTimeString()}` : fetchFailed ? 'Prices failed to load' : 'Connecting...'}
+            {lastUpdate ? <>Poll · <LocalTime value={lastUpdate} /></> : fetchFailed ? 'Prices failed to load' : 'Connecting...'}
             {fetchFailed && lastUpdate && (
               <div role="status" className="text-xs text-amber-400 mt-1">Latest poll failed — showing the last successful update.</div>
             )}

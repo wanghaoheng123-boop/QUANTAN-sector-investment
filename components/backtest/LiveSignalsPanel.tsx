@@ -12,6 +12,7 @@
  * is a pure move — body identical, only imports differ.
  */
 
+import { formatLocalTime, UI_LOCALE } from '@/lib/format'
 import { useCallback, useEffect, useState } from 'react'
 import { DataFreshnessIndicator } from '@/components/DataFreshnessIndicator'
 import { apiUrl } from '@/lib/apiBase'
@@ -52,7 +53,7 @@ export function LiveSignalsPanel() {
       const json = await res.json()
       if (signal?.aborted) return
       setSignals(json)
-      setLastFetched(new Date().toLocaleTimeString())
+      setLastFetched(formatLocalTime(new Date()))
     } catch (err) {
       if (signal?.aborted || (err instanceof DOMException && err.name === 'AbortError')) return
       console.warn('[backtest/LiveSignalsPanel] fetch failed', err)
@@ -158,7 +159,7 @@ export function LiveSignalsPanel() {
       if (as === '' && bs === '') return 0
       if (as === '') return 1
       if (bs === '') return -1
-      const cmp = as.localeCompare(bs)
+      const cmp = as.localeCompare(bs, UI_LOCALE)
       return sortDir === 'asc' ? cmp : -cmp
     }
     const an = typeof av === 'number' && Number.isFinite(av) ? av : null

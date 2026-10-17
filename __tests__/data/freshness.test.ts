@@ -67,7 +67,7 @@ describe('session boundaries', () => {
     const stamp = formatNySessionStamp(new Date(FRI_CLOSE))
     expect(stamp).toContain('Fri')
     expect(stamp).toContain('16:00')
-    expect(stamp).toContain('ET')
+    expect(stamp).toMatch(/\bE[DS]T$/) // EDT/EST, not "ET" (red-team R2-243-4)
   })
 })
 

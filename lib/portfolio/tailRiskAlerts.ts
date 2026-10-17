@@ -1,6 +1,7 @@
 /**
  * Tail-risk hedging alerts (Phase 15 Q-045-NEW).
  */
+import { UI_LOCALE } from '@/lib/format'
 
 export interface TailRiskInput {
   realizedSkew: number
@@ -30,7 +31,7 @@ export function evaluateTailRisk(input: TailRiskInput): TailRiskAlert[] {
     alerts.push({
       level: 'critical',
       code: 'SHORT_VEGA',
-      message: `Portfolio vega ${input.portfolioVegaUsd.toLocaleString()} USD — short vol exposure.`,
+      message: `Portfolio vega ${input.portfolioVegaUsd.toLocaleString(UI_LOCALE)} USD — short vol exposure.`,
       suggestions: ['Buy OTM puts', 'Reduce short premium positions', 'Add VIX hedge'],
     })
   }

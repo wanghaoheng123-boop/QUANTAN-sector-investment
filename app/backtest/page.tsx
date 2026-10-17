@@ -1,5 +1,6 @@
 'use client'
 
+import { LocalTime } from '@/components/LocalTime'
 import { useState, useEffect, useCallback } from 'react'
 import { DataFreshnessIndicator } from '@/components/DataFreshnessIndicator'
 import { apiUrl } from '@/lib/apiBase'
@@ -191,7 +192,7 @@ export default function BacktestPage() {
                   />
                   <div className="text-xs text-slate-400">Last computed</div>
                 </div>
-                <div className="text-sm font-mono text-slate-300">{new Date(computedAt).toLocaleString()}</div>
+                <div className="text-sm font-mono text-slate-300"><LocalTime value={computedAt} withDate /></div>
                 <div className="text-[10px] text-slate-400">{formatFreshness(computedAt)}{/* Q-114: computedAt is when WE ran the backtest, not a vendor stamp. */}</div>
               </div>
               <button
