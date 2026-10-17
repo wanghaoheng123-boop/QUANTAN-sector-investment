@@ -140,7 +140,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ tick
       spyCloses,
       spyDates,
       displayPrice,
-      q
+      q,
+      // The currency the displayed price is in, so the DCF can refuse a
+      // reporting-currency mismatch (accountant S7). From quote(), because this
+      // route does not request the quoteSummary `price` module.
+      typeof (quoteRow as { currency?: unknown } | null)?.currency === 'string'
+        ? ((quoteRow as { currency: string }).currency)
+        : null,
     )
 
     return NextResponse.json(

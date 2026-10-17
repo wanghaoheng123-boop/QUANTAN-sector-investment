@@ -143,20 +143,28 @@ export function dcfApplicability(c: { sector: string | null; industry: string | 
 }
 
 /**
- * Scenario discount-rate offsets. Modelling choices, not market estimates:
- * the bear case adds a risk premium, the bull case removes one, and the bull
- * rate never falls below terminal growth plus MIN_RATE_SPREAD (accountant S1:
- * an absolute 6% floor pinned the bull value for every input from 4% to 7%,
- * and put it BELOW base at 4-5%).
+ * Scenario discount-rate offsets: the bear case adds 1.5pp, the bull case
+ * removes 1pp. SOURCE: inherited unchanged from the pre-Q-086 implementation,
+ * kept so the default scenarios do not move. They are sensitivity offsets, not
+ * estimates of any company's risk premium, and no paper is claimed for them.
+ * What changed (accountant S1): the bull rate was floored at an absolute 6%,
+ * which pinned the bull value for every input from 4% to 7% and put the bull
+ * rate ABOVE base at 4-5%. It is now never above base and never closer to
+ * terminal growth than MIN_RATE_SPREAD.
  */
 export const BEAR_RATE_DELTA = 0.015
 export const BULL_RATE_DELTA = 0.01
-/** Bear-case terminal growth is capped here (a slower-growing perpetuity). */
+/** Bear-case terminal growth cap. SOURCE: inherited unchanged from the pre-Q-086 code. */
 export const BEAR_TERMINAL_GROWTH_CAP = 0.02
 /**
- * The smallest discount-rate-minus-growth spread a scenario may use. Near zero
- * the Gordon value diverges (accountant S2 measured 105,000/sh at 5.01% vs 5%).
- * A guard on the model, not an estimate of anything.
+ * The smallest discount-rate-minus-growth spread a scenario may use.
+ *
+ * The Gordon terminal value is FCF × (1+g) / (r − g), so its multiple of
+ * next year's cash flow is 1 / (r − g) and diverges as the spread closes
+ * (Damodaran, A. (2012). Investment Valuation, 3rd ed., ch. 12, the stable-
+ * growth model). A 2pp spread caps that multiple at 50×. The 2pp is this
+ * platform's choice of cap, not a sourced estimate; the accountant gate
+ * measured 105,000/sh at a 0.01pp spread (S2).
  */
 export const MIN_RATE_SPREAD = 0.02
 
@@ -195,7 +203,13 @@ export function buildFundamentalsPayload(
   spyCloses: number[],
   spyDates: string[],
   currentPrice: number | null,
-  q: FundamentalsQuery
+  q: FundamentalsQuery,
+  /**
+   * The currency the price is quoted in, from the route's `quote()` row. The
+   * route does not request the `price` quoteSummary module, so without this the
+   * currency refusal below could never fire in production.
+   */
+  quoteCurrencyIn?: string | null,
 ) {
   // Narrative text only. Classification (sector, industry) is read field by
   // field below, because the DCF refusal depends on it.
@@ -240,9 +254,12 @@ export function buildFundamentalsPayload(
     industry: firstString(quoteSummary.summaryProfile, quoteSummary.assetProfile, 'industry'),
   }
   const reportingCurrency = typeof financialData?.financialCurrency === 'string' ? financialData.financialCurrency : null
-  const quoteCurrency = typeof quoteSummary.price === 'object' && quoteSummary.price !== null && typeof (quoteSummary.price as AnyRec).currency === 'string'
-    ? ((quoteSummary.price as AnyRec).currency as string)
-    : null
+  const quoteCurrency =
+    typeof quoteCurrencyIn === 'string' && quoteCurrencyIn !== ''
+      ? quoteCurrencyIn
+      : typeof quoteSummary.price === 'object' && quoteSummary.price !== null && typeof (quoteSummary.price as AnyRec).currency === 'string'
+        ? ((quoteSummary.price as AnyRec).currency as string)
+        : null
   const dcfNotApplicable =
     dcfApplicability(classification) ??
     // Accountant S7: a per-share value in the reporting currency compared with
