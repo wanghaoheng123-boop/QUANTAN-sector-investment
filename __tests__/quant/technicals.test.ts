@@ -96,20 +96,22 @@ describe('technicals.ts wrapper layer (F8.1)', () => {
       expect(trendLabel(null, null, 100)).toBe('Insufficient history')
     })
 
-    it('bullish stack: price > SMA50 > SMA200', () => {
-      expect(trendLabel(110, 100, 120)).toMatch(/bullish stack/)
+    // Q153-C16: the order is the label; "bullish/bearish stack" and
+    // "golden/death cross zone" named a direction (deliberate copy migration).
+    it('price > SMA50 > SMA200', () => {
+      expect(trendLabel(110, 100, 120)).toBe('Price > SMA50 > SMA200')
     })
 
-    it('bearish stack: price < SMA50 < SMA200', () => {
-      expect(trendLabel(110, 120, 100)).toMatch(/bearish stack/)
+    it('price < SMA50 < SMA200', () => {
+      expect(trendLabel(110, 120, 100)).toBe('Price < SMA50 < SMA200')
     })
 
     it('golden cross zone: SMA50 > SMA200 (no full stack)', () => {
-      expect(trendLabel(105, 100, 102)).toMatch(/Golden cross|bullish stack/)
+      expect(trendLabel(105, 100, 102)).toBe('SMA50 above SMA200')
     })
 
     it('death cross zone: SMA50 < SMA200', () => {
-      expect(trendLabel(95, 100, 102)).toMatch(/Death cross|bearish stack/)
+      expect(trendLabel(95, 100, 102)).toBe('SMA50 below SMA200')
     })
   })
 

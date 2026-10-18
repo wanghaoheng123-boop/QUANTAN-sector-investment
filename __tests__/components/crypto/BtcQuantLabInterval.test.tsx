@@ -26,8 +26,8 @@ function renderSignals(interval?: string) {
 describe('BtcQuantLab — labels follow the candle interval', () => {
   it('on 1-hour candles: a 200-bar regime, with the calibration caution, and no daily words', () => {
     renderSignals('1h')
-    expect(screen.getByText('200-bar MA regime (1-hour bars)')).toBeInTheDocument()
-    expect(screen.getByTestId('regime-interval-caution')).toHaveTextContent('calibrated on daily candles')
+    expect(screen.getByText('200-bar average (1-hour bars)')).toBeInTheDocument()
+    expect(screen.getByTestId('regime-interval-caution')).toHaveTextContent('defined for daily candles')
     // Red-team R2-241-1: case-insensitive, and "200-day" in any form. The old
     // checks passed beside "8% above the 200-day SMA" in the explanation.
     const text = document.body.textContent ?? ''
@@ -46,19 +46,20 @@ describe('BtcQuantLab — labels follow the candle interval', () => {
     renderSignals('1h')
     const text = document.body.textContent ?? ''
     // The synthetic series rises steadily, so its 200-bar average is up.
-    expect(text).toMatch(/200-bar MA up \+\d+\.\d{2}% over 20 bars/)
+    // Q153-C11: three states with the classifier's threshold, over 20 BARS.
+    expect(text).toMatch(/200-bar MA (?:▲ rising|● flat) \+\d+\.\d{2}% \/ 20 bars/)
     expect(text).not.toMatch(/%\/bar|200-bar MA falling/)
   })
 
   it('a 1D interval is daily, not "1D bars" (R2-241-2)', () => {
     renderSignals('1D')
-    expect(screen.getByText('200-Day MA Regime')).toBeInTheDocument()
+    expect(screen.getByText('200-day average: distance and slope')).toBeInTheDocument()
     expect(screen.queryByTestId('regime-interval-caution')).not.toBeInTheDocument()
   })
 
   it('on daily candles: the 200-day wording, and no caution', () => {
     renderSignals('1d')
-    expect(screen.getByText('200-Day MA Regime')).toBeInTheDocument()
+    expect(screen.getByText('200-day average: distance and slope')).toBeInTheDocument()
     expect(screen.queryByTestId('regime-interval-caution')).not.toBeInTheDocument()
   })
 

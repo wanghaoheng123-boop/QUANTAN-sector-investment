@@ -14,6 +14,7 @@
  * mutants shift a pinned value. Integer-exact deviation boundaries (flat-100
  * SMA base) pin every `>`/`>=` edge; fp values use toBeCloseTo.
  */
+import { offending } from '../architecture/adviceWords'
 import { describe, it, expect } from 'vitest'
 import {
   generateSignals,
@@ -252,14 +253,16 @@ describe('btcRegime', () => {
 // MIGRATION NOTE — Q-153 (2026-10-17): the zone copy now DESCRIBES the
 // measurement. Labels, interpretations and dipSignalExplained were trade
 // instructions with unsourced forward returns; forwardReturnContext is gone.
-// Zone, color, riskLevel and every dipSignal are unchanged (the classification
-// mirrors lib/backtest/regimeSignal.ts), and the strings stay pinned exactly so
-// the mutation shard still kills string mutants.
+// Zone, color, riskLevel and every dipSignal are unchanged, and the strings stay
+// pinned exactly so the mutation shard still kills string mutants. (Q153-C4: an
+// earlier note said the classification "mirrors lib/backtest/regimeSignal.ts".
+// Only the null-slope arm is pinned to it, by the AL-5 parity test; the
+// known-slope arms still diverge, and regimeSignal has no riskLevel or color.)
 interface ZoneMeta {
   zone: string; label: string; color: string; riskLevel: string; interpretation: string
 }
 const ZONE_META: Record<string, ZoneMeta> = {
-  EXTREME_BULL: { zone: 'EXTREME_BULL', label: 'More than 20% above the 200-day average', color: '#ef4444', riskLevel: 'extreme', interpretation: 'Price is more than 20% above its 200-day simple moving average, a distance it rarely reaches.' },
+  EXTREME_BULL: { zone: 'EXTREME_BULL', label: 'More than 20% above the 200-day average', color: '#ef4444', riskLevel: 'extreme', interpretation: 'Price is more than 20% above its 200-day simple moving average.' },
   EXTENDED_BULL: { zone: 'EXTENDED_BULL', label: '10–20% above the 200-day average', color: '#f97316', riskLevel: 'high', interpretation: 'Price is 10–20% above its 200-day simple moving average.' },
   HEALTHY_BULL: { zone: 'HEALTHY_BULL', label: '0–10% above the 200-day average', color: '#22c55e', riskLevel: 'low', interpretation: 'Price is 0–10% above its 200-day simple moving average.' },
   FIRST_DIP: { zone: 'FIRST_DIP', label: '0–10% below the 200-day average', color: '#84cc16', riskLevel: 'low', interpretation: 'Price is 0–10% below its 200-day simple moving average.' },
@@ -406,7 +409,8 @@ describe('ma200Regime — Q-153: the copy describes, and a slow rise is not "dec
   })
 
   it('no zone, slope state or RSI produces trade instructions or forward-return claims', () => {
-    const TRADE = /\b(?:buy|sell|scale in|scaling in|average down|averaging|accumulat\w*|avoid|trim|tranche\w*|entr(?:y|ies)|knife|opportunit\w*|positioning|hold)\b|forward return|median \d|\d+M\b/i
+    // Q153-C9: the same list regime-copy.test.ts uses — two guards over the
+    // same copy carried two different lists.
     const series = {
       flat: Array.from({ length: 220 }, () => 100),
       rising: Array.from({ length: 250 }, (_, i) => 100 + i * 0.5),
@@ -417,7 +421,7 @@ describe('ma200Regime — Q-153: the copy describes, and a slow rise is not "dec
       for (const k of [1.3, 1.15, 1.05, 0.95, 0.85, 0.75, 0.6]) {
         for (const rsi of [undefined, 25, 75]) {
           const r = ma200Regime(sma * k, closes, rsi)
-          for (const text of [r.label, r.interpretation, r.dipSignalExplained]) expect(text, text).not.toMatch(TRADE)
+          for (const text of [r.label, r.interpretation, r.dipSignalExplained]) expect(offending(text), text).toBe(false)
         }
       }
     }
@@ -427,9 +431,9 @@ describe('ma200Regime — Q-153: the copy describes, and a slow rise is not "dec
 describe('trendLabel — exact branch strings', () => {
   it('pins all five outcomes', () => {
     expect(trendLabel(null, null, 100)).toBe('Insufficient history')
-    expect(trendLabel(110, 100, 120)).toBe('Price > SMA50 > SMA200 (bullish stack)')
-    expect(trendLabel(100, 120, 90)).toBe('Price < SMA50 < SMA200 (bearish stack)') // price 90 < SMA50 100 < SMA200 120
-    expect(trendLabel(105, 100, 102)).toBe('Golden cross zone (SMA50 above SMA200)')
-    expect(trendLabel(95, 100, 102)).toBe('Death cross zone (SMA50 below SMA200)')
+    expect(trendLabel(110, 100, 120)).toBe('Price > SMA50 > SMA200')
+    expect(trendLabel(100, 120, 90)).toBe('Price < SMA50 < SMA200') // price 90 < SMA50 100 < SMA200 120
+    expect(trendLabel(105, 100, 102)).toBe('SMA50 above SMA200')
+    expect(trendLabel(95, 100, 102)).toBe('SMA50 below SMA200')
   })
 })

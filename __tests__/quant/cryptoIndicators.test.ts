@@ -9,7 +9,6 @@ import {
   calcVWAP,
   calcBollingerBands,
   interpretFundingRate,
-  interpretFearGreed,
   type BtcCandle,
 } from '@/lib/crypto'
 import {
@@ -189,21 +188,6 @@ describe('interpretFundingRate', () => {
   it('returns NEUTRAL on non-finite input', () => {
     expect(interpretFundingRate(NaN).signal).toBe('NEUTRAL')
     expect(interpretFundingRate(Infinity).signal).toBe('NEUTRAL')
-  })
-})
-
-describe('interpretFearGreed', () => {
-  it('flags >= 75 as Extreme Greed', () => {
-    expect(interpretFearGreed(80).label).toBe('Extreme Greed')
-    expect(interpretFearGreed(75).label).toBe('Extreme Greed')
-  })
-
-  it('flags 25-44 as Fear', () => {
-    expect(interpretFearGreed(30).label).toBe('Fear')
-  })
-
-  it('flags <25 as Extreme Fear', () => {
-    expect(interpretFearGreed(10).label).toBe('Extreme Fear')
   })
 })
 

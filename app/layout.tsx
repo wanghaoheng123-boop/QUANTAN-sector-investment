@@ -21,8 +21,12 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   title: 'QUANTAN — Market Intelligence',
-  description: 'Institutional-grade market intelligence across all 11 GICS sectors — real-time prices, K-line charts, dark pool data, and curated signal briefs.',
-  keywords: 'stock market, sector analysis, dark pool, institutional trading, market signals',
+  // Q153-C13 / Q149-D11: this said "Institutional-grade … real-time prices …
+  // dark pool data … curated signal briefs" — marketing language CLAUDE.md
+  // forbids, "real-time" for vendor-delayed feeds, and "dark pool data" for a
+  // source that publishes none (the dark-pool prints are illustrative).
+  description: 'Research tooling for sector and single-name market data: delayed prices, charts, indicators and news briefs across the 11 GICS sectors.',
+  keywords: 'stock market, sector analysis, market data, technical indicators',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,

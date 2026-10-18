@@ -136,6 +136,12 @@ export async function GET(request: Request) {
     // FETCH failures is degraded: not module-cached, and CDN-cached for 30 s
     // only. `insufficient_data` is a short series, not a failed fetch, so it
     // does not count (red-team L1).
+    // Q-153: this claimed the zones and "forward return context" rested on a
+    // 1990–2024 historical analysis. No such analysis exists in this repo, and
+    // the forward-return text is gone. Q153-C12: the degraded answer carries the
+    // same classified rows, so it carries the disclaimer too.
+    const disclaimer =
+      'Deviation zones describe the distance of price from its 200-day simple moving average. They are not a forecast, and forward returns for them have not been measured. Not investment advice.'
     const failedRows = rows.filter((r) => 'error' in r && r.error === 'fetch_failed').length
     const degraded = failedRows * 2 > rows.length
     if (degraded) {
@@ -143,6 +149,7 @@ export async function GET(request: Request) {
         rows,
         computedAt: new Date().toISOString(),
         degraded: true,
+        disclaimer,
         error: { code: 'ma_deviation_unavailable', message: `Price data failed for ${failedRows} of ${rows.length} instruments; the board is incomplete.` },
         _cached: false,
         _cachedAt: now,
@@ -152,11 +159,7 @@ export async function GET(request: Request) {
     const payload = {
       rows,
       computedAt: new Date().toISOString(),
-      disclaimer:
-        // Q-153: this claimed the zones and "forward return context" rested on a
-        // 1990–2024 historical analysis. No such analysis exists in this repo,
-        // and the forward-return text is gone.
-        'Deviation zones describe the distance of price from its 200-day simple moving average. They are not a forecast, and forward returns for them have not been measured. Not investment advice.',
+      disclaimer,
     }
 
     _cache.set('ma-deviation', { data: payload, expiresAt: now + CACHE_TTL_MS, storedAt: now })

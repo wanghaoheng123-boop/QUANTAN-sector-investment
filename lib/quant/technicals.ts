@@ -72,10 +72,12 @@ export function sortinoRatio(dailyReturns: number[], marDaily = 0): number | nul
 
 export function trendLabel(sma50: number | null, sma200: number | null, price: number): string {
   if (sma50 == null || sma200 == null) return 'Insufficient history'
-  if (price > sma50 && sma50 > sma200) return 'Price > SMA50 > SMA200 (bullish stack)'
-  if (price < sma50 && sma50 < sma200) return 'Price < SMA50 < SMA200 (bearish stack)'
-  if (sma50 > sma200) return 'Golden cross zone (SMA50 above SMA200)'
-  return 'Death cross zone (SMA50 below SMA200)'
+  // Q153-C16: "bullish/bearish stack" and "golden/death cross zone" named a
+  // state with a direction and as if it were an event; the order is the fact.
+  if (price > sma50 && sma50 > sma200) return 'Price > SMA50 > SMA200'
+  if (price < sma50 && sma50 < sma200) return 'Price < SMA50 < SMA200'
+  if (sma50 > sma200) return 'SMA50 above SMA200'
+  return 'SMA50 below SMA200'
 }
 
 // F-6: sma200DeviationPct / sma200Slope are now defined once in ./indicators
@@ -110,6 +112,35 @@ export interface MA200Regime {
 /** The 20-day change of the 200-day average above which ma200Regime calls it rising. */
 export const MA200_RISING_THRESHOLD = 0.005
 
+export type SlopeState = 'rising' | 'flat' | 'falling'
+
+/**
+ * Q153-C11: the 20-day change of the 200-day average in THREE states, with the
+ * classifier's own threshold. "Rising" is exactly the classifier's test
+ * (above +0.5%); "falling" is its mirror; anything between is flat. The chips
+ * used to be three-state by SIGN, so an average up 0.19% read "▲ up" beside a
+ * classification that does not call it rising.
+ */
+export function slopeState(slopePct: number | null | undefined): SlopeState | null {
+  if (slopePct == null || !Number.isFinite(slopePct)) return null
+  if (slopePct > MA200_RISING_THRESHOLD) return 'rising'
+  if (slopePct < -MA200_RISING_THRESHOLD) return 'falling'
+  return 'flat'
+}
+
+/**
+ * The slope as one line, threshold included: "● flat +0.19% / 20d (within ±0.5%)".
+ * `window` names the 20 observations — "20d" on daily bars, "20 bars" otherwise.
+ */
+export function slopeText(slopePct: number | null | undefined, window = '20d'): string {
+  const state = slopeState(slopePct)
+  if (state == null || slopePct == null) return '—'
+  const glyph = state === 'rising' ? '▲' : state === 'falling' ? '▼' : '●'
+  const value = `${slopePct > 0 ? '+' : ''}${(slopePct * 100).toFixed(2)}%`
+  const band = state === 'flat' ? ` (within ±${(MA200_RISING_THRESHOLD * 100).toFixed(1)}%)` : ''
+  return `${glyph} ${state} ${value} / ${window}${band}`
+}
+
 /**
  * What ma200Regime measured, in words — no trade instruction (Q-153). The
  * slope is described by its MEASURED sign and the classifier's threshold:
@@ -126,19 +157,14 @@ export function describeRegime(dev: number, slope: number | null, slopePositive:
   return `Price is ${where}; ${slopeText}.${rsiText}`
 }
 
-/**
- * Words for each dip classification, shared by every surface that shows one
- * (Q-153). They replace "BUY THE DIP", "Strong Dip Buy", "WATCH — NO ADD" and
- * "Falling Knife": the enum values stay, because the backtest uses them.
+/*
+ * Q153-C1: there is no display label for `dipSignal` any more. The labels this
+ * file carried ("Below a rising average", "Below the average", …) were not true
+ * of the classes they named — WATCH_DIP includes prices below a FALLING average,
+ * and the band-to-class map is not a predicate — so the badge and its summary
+ * counts were removed from every surface. The enum values stay: the backtest
+ * and the public API use them (whether the API keeps them is owner-gated, Q-083).
  */
-export const DIP_SIGNAL_LABEL: Readonly<Record<MA200Regime['dipSignal'], string>> = {
-  STRONG_DIP: 'Below a rising average',
-  WATCH_DIP: 'Below the average',
-  FALLING_KNIFE: 'Below an average that is not rising',
-  OVERBOUGHT: 'Far above the average',
-  IN_TREND: 'Above the average',
-  INSUFFICIENT_DATA: 'Not enough data',
-}
 
 export function ma200Regime(
   price: number,
@@ -181,10 +207,13 @@ export function ma200Regime(
   // "highest-probability buy zone") and unsourced forward-return figures
   // ("median 18M forward return +30-50%+") — personal-recommendation copy on
   // the surface Q-083 gates, and performance claims I5 forbids without a
-  // source. The classification below is unchanged: it mirrors
-  // lib/backtest/regimeSignal.ts (AL-5), which the benchmark depends on.
+  // source. The dipSignal classification below is unchanged. Its null-slope arm
+  // is pinned to lib/backtest/regimeSignal.ts by the AL-5 parity test; the
+  // known-slope arms still diverge (AL-5 open). `riskLevel` and `color` are
+  // UI-era fields no surface renders any more and nothing in the benchmark reads
+  // (Q153-C4, C5, C6); they stay on the public payloads pending Q-083.
   const zoneData: Record<MA200Zone, { label: string; color: string; riskLevel: MA200Regime['riskLevel']; interpretation: string }> = {
-    EXTREME_BULL: { label: 'More than 20% above the 200-day average', color: '#ef4444', riskLevel: 'extreme', interpretation: 'Price is more than 20% above its 200-day simple moving average, a distance it rarely reaches.' },
+    EXTREME_BULL: { label: 'More than 20% above the 200-day average', color: '#ef4444', riskLevel: 'extreme', interpretation: 'Price is more than 20% above its 200-day simple moving average.' },
     EXTENDED_BULL: { label: '10–20% above the 200-day average', color: '#f97316', riskLevel: 'high', interpretation: 'Price is 10–20% above its 200-day simple moving average.' },
     HEALTHY_BULL: { label: '0–10% above the 200-day average', color: '#22c55e', riskLevel: 'low', interpretation: 'Price is 0–10% above its 200-day simple moving average.' },
     FIRST_DIP: { label: '0–10% below the 200-day average', color: '#84cc16', riskLevel: 'low', interpretation: 'Price is 0–10% below its 200-day simple moving average.' },

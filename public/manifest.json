@@ -1,7 +1,7 @@
 {
   "name": "QUANTAN Market Intelligence",
   "short_name": "QUANTAN",
-  "description": "Institutional-grade market analysis platform",
+  "description": "Research tooling for sector and single-name market data",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0a0a0f",
