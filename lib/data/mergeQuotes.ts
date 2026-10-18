@@ -1,4 +1,5 @@
 import type { BloombergQuoteNormalized } from './bloomberg/bridgeClient'
+import { tickChange } from '@/lib/liveQuoteState'
 
 export type FieldSource = 'bloomberg' | 'yahoo'
 
@@ -81,6 +82,31 @@ const ALL_YAHOO: QuoteProvenance = {
  * missing field, so every field merges with `??` and a genuine Bloomberg 0
  * (zero volume in a halt) is kept as Bloomberg's.
  */
+/**
+ * The session change of a merged row: ONE measurement from ONE vendor, consistent
+ * with the row's price (red-team Q145-R2-6). Merging change and percent field by
+ * field paired a Bloomberg change with a Yahoo percent ("▲ -3.00 (2.59%)"), and a
+ * Yahoo change with Bloomberg's price.
+ *
+ *   - Bloomberg supplied either half: Bloomberg's pair, completed and checked
+ *     against Bloomberg's price (tickChange).
+ *   - Neither: Yahoo's reference close (price − change, the prior session's
+ *     close) carried to Bloomberg's price; provenance 'yahoo' says the
+ *     reference came from Yahoo.
+ *   - Neither vendor has one: null, which renders "—".
+ */
+function mergedChange(bb: BloombergQuoteNormalized, y: YahooQuoteLike): { change: number | null; changePct: number | null; source: FieldSource } {
+  if (bb.change != null || bb.changePct != null) {
+    return { ...tickChange({ price: bb.price, change: bb.change, changePct: bb.changePct }), source: 'bloomberg' }
+  }
+  if (y.change != null && Number.isFinite(y.change) && Number.isFinite(y.price) && y.price - y.change > 0) {
+    const priorClose = y.price - y.change
+    const change = bb.price - priorClose
+    return { change, changePct: (change / priorClose) * 100, source: 'yahoo' }
+  }
+  return { change: null, changePct: null, source: 'yahoo' }
+}
+
 export function mergeYahooAndBloomberg(
   yahoo: YahooQuoteLike[],
   bloomberg: Map<string, BloombergQuoteNormalized> | null
@@ -96,11 +122,13 @@ export function mergeYahooAndBloomberg(
     const bb = bloomberg.get(y.ticker)
     if (bb) {
       // Per-field merge with provenance tracking. Bloomberg's price always
-      // wins; every other field falls back to Yahoo when Bloomberg has none.
+      // wins; the change pair is one measurement (mergedChange); every other
+      // field falls back to Yahoo when Bloomberg has none.
+      const sessionChange = mergedChange(bb, y)
       const provenance: QuoteProvenance = {
         price: 'bloomberg',
-        change: bb.change != null ? 'bloomberg' : 'yahoo',
-        changePct: bb.changePct != null ? 'bloomberg' : 'yahoo',
+        change: sessionChange.source,
+        changePct: sessionChange.source,
         volume: bb.volume != null ? 'bloomberg' : 'yahoo',
         high52w: bb.high52w != null ? 'bloomberg' : 'yahoo',
         low52w: bb.low52w != null ? 'bloomberg' : 'yahoo',
@@ -113,8 +141,8 @@ export function mergeYahooAndBloomberg(
       out.push({
         ticker: y.ticker,
         price: bb.price,
-        change: bb.change ?? y.change,
-        changePct: bb.changePct ?? y.changePct,
+        change: sessionChange.change,
+        changePct: sessionChange.changePct,
         volume: bb.volume ?? y.volume,
         high52w: bb.high52w ?? y.high52w,
         low52w: bb.low52w ?? y.low52w,

@@ -34,3 +34,38 @@ export function QuoteUnavailable({ reason }: { reason: string }) {
     </div>
   )
 }
+
+/**
+ * The stream status beside the price. Red-team Q145-R2-9: the stream's
+ * `degraded` event (the vendor fetch failed) was stored and read by nobody, so a
+ * failed stream's pill said CLOSED — or LIVE — over a price that had stopped
+ * updating. It says DEGRADED, with the reason in its title.
+ */
+export function StreamStatusPill({ connected, marketOpen, supported, error }: {
+  connected: boolean
+  marketOpen: boolean
+  supported: boolean
+  error: string | null
+}) {
+  const state = error ? 'degraded' : connected ? (marketOpen ? 'live' : 'closed') : 'reconnect'
+  const pillClass = {
+    live: 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30',
+    closed: 'bg-amber-500/15 text-amber-300 border border-amber-500/30',
+    degraded: 'bg-amber-500/15 text-amber-300 border border-amber-500/40',
+    reconnect: 'bg-slate-700/40 text-slate-400 border border-slate-600/40',
+  }[state]
+  const dotClass = { live: 'bg-emerald-400 animate-pulse', closed: 'bg-amber-400', degraded: 'bg-amber-400', reconnect: 'bg-slate-500' }[state]
+  const title = {
+    live: 'Live stream connected — market open',
+    closed: 'Live stream connected — market closed (snapshot)',
+    degraded: `Stream degraded: ${error ?? ''}`,
+    reconnect: supported ? 'Reconnecting…' : 'Polling (SSE unavailable)',
+  }[state]
+  const label = { live: 'LIVE', closed: 'CLOSED', degraded: 'DEGRADED', reconnect: 'RECONNECT' }[state]
+  return (
+    <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full ${pillClass}`} title={title} role="status">
+      <span className={`inline-block w-1.5 h-1.5 rounded-full ${dotClass}`} aria-hidden="true" />
+      {label}
+    </span>
+  )
+}

@@ -16,15 +16,24 @@
  *      `mergeXTick(prev, tick)` with its own parameter as `prev`. Every
  *      `next[...] = ...` on the landing page IS `mergeLandingTick(...)`. The
  *      transitions themselves are tested in __tests__/lib/liveQuoteState.test.tsx.
- *   2. No product file coalesces a change field to a number (`?? 0`, `|| 0`),
- *      casts one to `number`, or writes a numeric literal into one.
+ *   2. A TRIPWIRE, not a proof (red-team Q145-R2-2): no product file coalesces
+ *      a change field to a number or a numeric string (`?? 0`, `|| '0.00'`),
+ *      converts one with `Number(…)`, picks a numeric literal in a ternary that
+ *      tests one, casts one to `number`, or writes a numeric literal into one.
+ *      It decides by field NAME, so a local alias or a named constant passes; the
+ *      behaviour itself is pinned by the page render tests
+ *      (__tests__/components/LandingLiveTick, TickerPagesLiveTick).
  *   3. Each single-ticker page turns a MISSING boot verdict, and a failed
  *      request, into the missing state rather than an endless skeleton.
  *
  * Named residuals, each pinned below as a passing test so a green run is not
- * read as a proof: a quote built in a local and then passed by name to
- * `setQuote`; and `lib/options/chain.ts`, whose contract `change` still
- * defaults to 0 (Q-156).
+ * read as a proof: a quote built in a local and passed by name to `setQuote`; a
+ * shadowed helper or an early return on the stock and sector pages (caught by
+ * the render tests, not here); a change field read through a local alias or
+ * coalesced to a named constant; `lib/options/chain.ts`, whose contract `change`
+ * still defaults to 0 (Q-156); and the BTC price feed's `change24h` /
+ * `changePct24h`, field names outside this list, which still default to 0
+ * (Q-157).
  */
 import { execSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
@@ -135,13 +144,29 @@ const ZERO_FIELDS = new Set(['change', 'changePct', 'pe', 'high52w', 'low52w'])
 const CHANGE_FIELDS = new Set(['change', 'changePct'])
 const isNumber = (e: ts.Expression): boolean => {
   const u = unwrap(e)
-  return ts.isNumericLiteral(u) || (ts.isPrefixUnaryExpression(u) && ts.isNumericLiteral(u.operand))
+  if (ts.isNumericLiteral(u) || (ts.isPrefixUnaryExpression(u) && ts.isNumericLiteral(u.operand))) return true
+  // A numeric STRING is the same zero, rendered: `?? '0.00'` (R2-2, N11).
+  return ts.isStringLiteralLike(u) && /^[+-]?\d+(?:\.\d+)?%?$/.test(u.text)
 }
+/** The change field an expression reads, looking through calls on it: `q.changePct?.toFixed(2)` → changePct. */
 const fieldName = (e: ts.Expression): string | null => {
-  const u = unwrap(e)
+  let u = unwrap(e)
+  for (;;) {
+    if (ts.isCallExpression(u) && ts.isPropertyAccessExpression(u.expression)) { u = unwrap(u.expression.expression); continue }
+    if (ts.isNonNullExpression(u)) { u = unwrap(u.expression); continue }
+    break
+  }
   if (ts.isPropertyAccessExpression(u)) return u.name.text
   if (ts.isElementAccessExpression(u) && ts.isStringLiteralLike(u.argumentExpression)) return u.argumentExpression.text
   return null
+}
+/** Does `e` read a change field anywhere inside it? */
+const readsChangeField = (e: ts.Node): boolean => {
+  let found = false
+  walk(e, (n) => {
+    if ((ts.isPropertyAccessExpression(n) || ts.isElementAccessExpression(n)) && ZERO_FIELDS.has(fieldName(n as ts.Expression) ?? '')) found = true
+  })
+  return found
 }
 
 /** Property 2: a change field coalesced to a number, cast to number, or written as a literal. */
@@ -164,6 +189,15 @@ export function zeroOffenders(path: string, source: string): string[] {
     if (ts.isNonNullExpression(n)) {
       const f = fieldName(n.expression)
       if (f && CHANGE_FIELDS.has(f)) out.push(at(n))
+    }
+    // `Number(q.changePct)` is 0 for null (R2-2, N7/N8/N18).
+    if (ts.isCallExpression(n) && ts.isIdentifier(n.expression) && n.expression.text === 'Number' && n.arguments.length === 1) {
+      const f = fieldName(n.arguments[0])
+      if (f && ZERO_FIELDS.has(f)) out.push(at(n))
+    }
+    // `q.changePct == null ? 0 : q.changePct` (R2-2, N12).
+    if (ts.isConditionalExpression(n) && readsChangeField(n.condition) && (isNumber(n.whenTrue) || isNumber(n.whenFalse))) {
+      out.push(at(n))
     }
     if (ts.isPropertyAssignment(n) && (ts.isIdentifier(n.name) || ts.isStringLiteral(n.name)) && CHANGE_FIELDS.has(n.name.text) && isNumber(n.initializer)) {
       out.push(at(n))
@@ -262,6 +296,12 @@ describe('no product file turns a missing change into a number (property 2)', ()
       'const c = q.changePct! >= 0',
       'const row = { price: 1, change: 0, changePct: 0 }',
       'const row = { "changePct": 0.0 }',
+      // Round 2 (R2-2): the re-gate's spellings.
+      'const pct = quote ? Number(quote.changePct) : null', // N8 / N18
+      'const s = `${Number(q.change).toFixed(2)}`', // N7
+      "const s = q?.changePct?.toFixed(2) ?? '0.00'", // N11
+      'const pct = quote.changePct == null ? 0 : quote.changePct', // N12
+      "const s = q.change || '0'",
     ]
     for (const s of bad) expect(zeroOffenders('probe.ts', s), s).not.toEqual([])
     const good = [
@@ -270,6 +310,8 @@ describe('no product file turns a missing change into a number (property 2)', ()
       'const p = quotes[t]?.price ?? 0', // dropped by the price > 0 filter
       'const c = q.change ?? y.change',
       'const row = { change: null, changePct: delta }',
+      'const pct = q.changePct == null ? null : q.changePct',
+      'const v = Number(c.volume)',
     ]
     for (const s of good) expect(zeroOffenders('probe.ts', s), s).toEqual([])
   })
@@ -284,6 +326,17 @@ describe('no product file turns a missing change into a number (property 2)', ()
   it('no product file outside the named exemption does it', () => {
     const offenders = productFiles.filter((p) => !ZERO_EXEMPT.has(p)).flatMap((p) => zeroOffenders(p, read(p)))
     expect(offenders).toEqual([])
+  })
+
+  it('RESIDUAL: a local alias or a named constant passes (the render tests pin the behaviour)', () => {
+    expect(zeroOffenders('probe.ts', 'const raw = q?.changePct; const pct = q ? (raw ?? 0) : null')).toEqual([])
+    expect(zeroOffenders('probe.ts', 'const FLAT_PCT = 0; const x = quotes[t]?.changePct ?? FLAT_PCT')).toEqual([])
+  })
+
+  it('RESIDUAL (Q-157): the BTC price feed still defaults change24h / changePct24h to 0', () => {
+    const src = read('components/crypto/hooks/useBtcPriceWs.ts')
+    expect(src).toMatch(/change24h: d\.change24h \?\? 0/)
+    expect(zeroOffenders('components/crypto/hooks/useBtcPriceWs.ts', src)).toEqual([]) // invisible to this list, by name
   })
 
   it('RESIDUAL (Q-156): the options chain still defaults a contract change to 0', () => {

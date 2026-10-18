@@ -217,10 +217,25 @@ describe('mergeYahooAndBloomberg', () => {
     })
 
     it('a bridge row with no change does not overwrite Yahoo\'s real change with 0.00% (Q145-R3)', () => {
-      const y = yahoo({ change: 5, changePct: 1.02 })
-      const out = mergeYahooAndBloomberg([y], new Map([['AAPL', bb({ price: 500, change: null, changePct: null })]]))
-      expect(out[0]).toMatchObject({ price: 500, change: 5, changePct: 1.02, dataSource: 'bloomberg' })
+      // Yahoo: 200, +2 → prior close 198. Bloomberg prices 201 and supplies no change:
+      // the change is Bloomberg's price against Yahoo's reference close (R2-6).
+      const y = yahoo({ price: 200, change: 2, changePct: 1.0101 })
+      const out = mergeYahooAndBloomberg([y], new Map([['AAPL', bb({ price: 201, change: null, changePct: null })]]))
+      expect(out[0]).toMatchObject({ price: 201, dataSource: 'bloomberg' })
+      expect(out[0].change).toBeCloseTo(3, 10)
+      expect(out[0].changePct).toBeCloseTo((3 / 198) * 100, 10)
       expect(out[0].provenance).toMatchObject({ price: 'bloomberg', change: 'yahoo', changePct: 'yahoo' })
+    })
+
+    it('the change pair comes from ONE vendor: a Bloomberg change is never paired with a Yahoo percent (Q145-R2-6)', () => {
+      const y = yahoo({ price: 200, change: 5, changePct: 2.59 })
+      const out = mergeYahooAndBloomberg([y], new Map([['AAPL', bb({ price: 201, change: -3, changePct: null })]]))
+      expect(out[0].change).toBe(-3)
+      expect(out[0].changePct).toBeCloseTo((-3 / 204) * 100, 10)
+      expect(out[0].provenance).toMatchObject({ change: 'bloomberg', changePct: 'bloomberg' })
+      // Neither vendor has a change: "—", not 0.
+      const none = mergeYahooAndBloomberg([yahoo({ change: null, changePct: null })], new Map([['AAPL', bb({ change: null, changePct: null })]]))
+      expect(none[0]).toMatchObject({ change: null, changePct: null })
     })
 
     it('a Bloomberg-only row with no change has a null change, not 0', () => {

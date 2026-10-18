@@ -180,6 +180,9 @@ export function useLiveQuote(ticker: string | null): UseLiveQuoteResult {
             setQuote(data)
             setMarketOpen(data.marketOpen)
             setLastMessageAt(data.timestamp)
+            // Red-team Q145-R2-9: a fresh quote supersedes an earlier
+            // `degraded` notice, which the pages now show.
+            setError(null)
           }
         } catch (err) {
           // Malformed payload — log but don't drop the connection.

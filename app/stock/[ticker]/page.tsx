@@ -6,7 +6,7 @@
 // bare /quant-lab page; link to /stock/<ticker> with the quant tab instead.
 
 import { bootQuoteFrom, FAILED_REASON, mergeStockTick, type StockQuoteState } from '@/lib/liveQuoteState'
-import { QuoteChangeLine, QuoteUnavailable } from '@/components/QuoteHeadline'
+import { QuoteChangeLine, QuoteUnavailable, StreamStatusPill } from '@/components/QuoteHeadline'
 import { useState, useEffect, useCallback, useMemo, use } from 'react'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
@@ -387,37 +387,7 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
                   <div className="text-xs text-slate-400 mt-1 font-mono">Market Cap: {quote.marketCap}</div>
                   {/* Phase 14 wave 36: real-time stream status pill. */}
                   <div className="flex items-center justify-end gap-2 mt-1">
-                    <span
-                      className={`inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
-                        live.connected
-                          ? live.marketOpen
-                            ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
-                            : 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
-                          : 'bg-slate-700/40 text-slate-400 border border-slate-600/40'
-                      }`}
-                      title={
-                        live.connected
-                          ? live.marketOpen
-                            ? 'Live stream connected — market open'
-                            : 'Live stream connected — market closed (snapshot)'
-                          : live.supported
-                            ? 'Reconnecting…'
-                            : 'Polling (SSE unavailable)'
-                      }
-                      role="status"
-                    >
-                      <span
-                        className={`inline-block w-1.5 h-1.5 rounded-full ${
-                          live.connected && live.marketOpen
-                            ? 'bg-emerald-400 animate-pulse'
-                            : live.connected
-                              ? 'bg-amber-400'
-                              : 'bg-slate-500'
-                        }`}
-                        aria-hidden="true"
-                      />
-                      {live.connected ? (live.marketOpen ? 'LIVE' : 'CLOSED') : 'RECONNECT'}
-                    </span>
+                    <StreamStatusPill connected={live.connected} marketOpen={live.marketOpen} supported={live.supported} error={live.error} />
                     <span className="text-[10px] text-slate-400">{formatFreshness(quote.quoteTime, { stamp: 'vendor', calendar: 'us-equity' })}</span>
                   </div>
                 </div>

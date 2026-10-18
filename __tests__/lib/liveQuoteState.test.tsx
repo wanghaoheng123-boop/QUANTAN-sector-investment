@@ -75,8 +75,10 @@ describe('tickChange', () => {
     expect(tickChange({ price: 100, change: 5, changePct: -3 })).toEqual(none) // opposite signs
     expect(tickChange({ price: 0, change: 1, changePct: 1 })).toEqual(none)
     expect(tickChange({ price: Number.NaN, change: 1, changePct: 1 })).toEqual(none)
-    // A zero on either side is not a contradiction.
+    // Both zero is a measured flat; one zero beside a move is a contradiction (R2-10).
     expect(tickChange({ price: 100, change: 0, changePct: 0 })).toEqual({ change: 0, changePct: 0 })
+    expect(tickChange({ price: 100, change: 0, changePct: 2 })).toEqual(none)
+    expect(tickChange({ price: 100, change: 2, changePct: 0 })).toEqual(none)
   })
 })
 

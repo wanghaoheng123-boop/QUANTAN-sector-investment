@@ -37,7 +37,9 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); ControlledEventSource.last =
 const count = (stats: HTMLElement, label: string) => within(stats).getByText(label).previousElementSibling?.textContent ?? ''
 
 describe('landing page — a live tick with no change', () => {
-  it('renders the sector as having no change data, never its previous change or 0.00%', async () => {
+  // Red-team Q145-R2-8: both market states, so a "keep the old change while the
+  // market is closed" variant cannot pass.
+  it.each([true, false])('renders the sector as having no change data, never its previous change or 0.00% (market open: %s)', async (marketOpen) => {
     vi.stubGlobal('EventSource', ControlledEventSource)
     // Synthetic quotes: XLK and XLE have a change; the other nine have no quote.
     vi.stubGlobal('fetch', vi.fn((url: string) => Promise.resolve(String(url).startsWith('/api/prices')
@@ -52,7 +54,7 @@ describe('landing page — a live tick with no change', () => {
     await waitFor(() => expect(ControlledEventSource.last).not.toBeNull())
     act(() => {
       ControlledEventSource.last!.emit('quote', {
-        ticker: 'XLK', price: 252, change: null, changePct: null, marketOpen: true,
+        ticker: 'XLK', price: 252, change: null, changePct: null, marketOpen,
         timestamp: '2026-10-19T15:00:00.000Z', quoteTime: '2026-10-19T14:59:58.000Z',
       })
     })

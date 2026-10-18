@@ -10,6 +10,8 @@
  * checks on the parse tree that each page's updater RETURNS one of them.
  */
 
+import { normalizeTicker } from '@/lib/api/sanitize'
+
 export interface TickLike {
   price: number
   change: number | null
@@ -33,15 +35,16 @@ const finite = (v: number | null | undefined): v is number => typeof v === 'numb
  *     which is a measured FLAT.
  *   - One half of the pair implies the other through the tick's own price:
  *     prior close = price − change = price / (1 + pct/100).
- *   - An impossible pair is no change (red-team Q145-R6): a prior close at or
- *     below 0, a percent at or below −100, or a change and a percent of
- *     opposite sign.
+ *   - An impossible pair is no change (red-team Q145-R6, R2-10): a prior close
+ *     at or below 0, a percent at or below −100, a change and a percent of
+ *     opposite sign, or one of them zero while the other is not.
  *
  * The first version also derived a missing change from the PREVIOUS quote's
  * prior close when both were stamped on the same New York date. That is exact
- * for US equities only — crypto rolls its day at 00:00 UTC and CME energy at
- * 18:00 ET (red-team Q145-R4) — and a missing change is rare, so it was
- * removed rather than given a per-instrument calendar.
+ * only when the instrument's reference close is the NYSE session's; crypto
+ * pairs and futures roll theirs at other times (red-team Q145-R4), and a
+ * missing change is rare, so it was removed rather than given a per-instrument
+ * calendar.
  */
 export function tickChange(tick: TickLike): SessionChange {
   if (!finite(tick.price) || tick.price <= 0) return NO_CHANGE
@@ -50,7 +53,8 @@ export function tickChange(tick: TickLike): SessionChange {
   if (change != null && tick.price - change <= 0) return NO_CHANGE
   if (changePct != null && changePct <= -100) return NO_CHANGE
   if (change != null && changePct != null) {
-    return Math.sign(change) * Math.sign(changePct) < 0 ? NO_CHANGE : { change, changePct }
+    const consistent = Math.sign(change) === Math.sign(changePct)
+    return consistent ? { change, changePct } : NO_CHANGE
   }
   if (change != null) return { change, changePct: (change / (tick.price - change)) * 100 }
   if (changePct != null) return { change: tick.price - tick.price / (1 + changePct / 100), changePct }
@@ -129,9 +133,13 @@ export const FAILED_REASON = 'The quote failed to load; try again shortly.'
 
 export function bootQuoteFrom<T extends { ticker: string }>(payload: unknown, ticker: string): BootQuote<T> {
   const body = (payload ?? {}) as { quotes?: unknown; unpriced?: unknown }
+  // Red-team Q145-R2-3: the route canonicalises the symbol it was asked for —
+  // /stock/vix asks for `VIX` and is answered as `^VIX` — so the page matches on
+  // the SAME canonical form, not on the raw path segment.
+  const names = new Set([ticker, normalizeTicker(ticker) ?? ticker])
   const quotes = Array.isArray(body.quotes) ? (body.quotes as T[]) : []
-  const quote = quotes.find((q) => q != null && q.ticker === ticker)
+  const quote = quotes.find((q) => q != null && names.has(q.ticker))
   if (quote) return { kind: 'priced', quote }
-  const unpriced = Array.isArray(body.unpriced) ? body.unpriced : []
-  return { kind: 'missing', reason: unpriced.includes(ticker) ? UNPRICED_REASON : ABSENT_REASON }
+  const unpriced: unknown[] = Array.isArray(body.unpriced) ? body.unpriced : []
+  return { kind: 'missing', reason: unpriced.some((t) => typeof t === 'string' && names.has(t)) ? UNPRICED_REASON : ABSENT_REASON }
 }

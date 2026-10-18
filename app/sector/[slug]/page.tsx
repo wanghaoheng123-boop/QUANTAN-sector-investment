@@ -1,7 +1,7 @@
 'use client'
 
 import { bootQuoteFrom, FAILED_REASON, mergeSectorTick, type SectorQuoteState } from '@/lib/liveQuoteState'
-import { QuoteChangeLine, QuoteUnavailable } from '@/components/QuoteHeadline'
+import { QuoteChangeLine, QuoteUnavailable, StreamStatusPill } from '@/components/QuoteHeadline'
 import { useState, useEffect, useMemo, useCallback, use } from 'react'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
@@ -283,37 +283,7 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
                   <div className="text-xs text-slate-400 mt-1 font-mono">ETF: {sector.etf}</div>
                   {/* Phase 14 wave 37: real-time SSE stream status pill. */}
                   <div className="flex items-center justify-end gap-2 mt-1">
-                    <span
-                      className={`inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
-                        live.connected
-                          ? live.marketOpen
-                            ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
-                            : 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
-                          : 'bg-slate-700/40 text-slate-400 border border-slate-600/40'
-                      }`}
-                      title={
-                        live.connected
-                          ? live.marketOpen
-                            ? 'Live stream connected — market open'
-                            : 'Live stream connected — market closed (snapshot)'
-                          : live.supported
-                            ? 'Reconnecting…'
-                            : 'Polling (SSE unavailable)'
-                      }
-                      role="status"
-                    >
-                      <span
-                        className={`inline-block w-1.5 h-1.5 rounded-full ${
-                          live.connected && live.marketOpen
-                            ? 'bg-emerald-400 animate-pulse'
-                            : live.connected
-                              ? 'bg-amber-400'
-                              : 'bg-slate-500'
-                        }`}
-                        aria-hidden="true"
-                      />
-                      {live.connected ? (live.marketOpen ? 'LIVE' : 'CLOSED') : 'RECONNECT'}
-                    </span>
+                    <StreamStatusPill connected={live.connected} marketOpen={live.marketOpen} supported={live.supported} error={live.error} />
                     <span className="text-[10px] text-slate-400">{formatFreshness(quote.quoteTime, { stamp: 'vendor', calendar: 'us-equity' })}</span>
                   </div>
                 </div>
