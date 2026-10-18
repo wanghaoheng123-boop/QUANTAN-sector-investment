@@ -41,6 +41,65 @@ export const WINDOW_START = '2021-08-17'
 /** A bar is identified by its date; the OHLCV is the value that must not change. */
 const KEY = (c) => String(c.time ?? c.date ?? '')
 
+/** A bar key as a calendar date for messages: keys are epoch seconds. */
+export const keyDate = (key) => {
+  const n = Number(key)
+  return Number.isFinite(n) && String(key).trim() !== '' ? new Date(n * 1000).toISOString().slice(0, 10) : String(key)
+}
+
+/** Seconds in a daily bar's period. */
+export const DAY_SECONDS = 86_400
+
+/**
+ * Q-144: is a daily bar FINISHED at `nowSec`?
+ *
+ * A daily bar's timestamp is the START of its period, and it is final only once
+ * a whole day has passed. The weekly refresh asked Yahoo for daily bars through
+ * "now", so the last BTC bar — BTC trades through the weekend and its daily bar
+ * spans the UTC day — was a day still in progress: all 12 committed BTC vintages
+ * stored a tail fetched 22.3-23.2 h into its own day (data-integrity Q144-D1).
+ * The next run then found that bar "restated" in every field, refused it, and
+ * BTC was frozen from 2026-09-06. Equity tails were complete Friday sessions on
+ * a Sunday run; for an equity bar stamped at the 13:30 UTC open the rule is
+ * conservative and waits until the next open, so a mid-session dispatch never
+ * stores today's partial bar either.
+ */
+export function isBarComplete(bar, nowSec) {
+  const t = Number(bar?.time)
+  return Number.isFinite(t) && Number.isFinite(nowSec) && t + DAY_SECONDS <= nowSec
+}
+
+/**
+ * Drop the unfinished bars from the END of a series. Only the tail can be
+ * unfinished; a non-finite time is treated as unfinished rather than stored.
+ */
+export function dropUnfinishedBars(candles, nowSec) {
+  const out = [...(candles ?? [])]
+  let dropped = 0
+  while (out.length > 0 && !isBarComplete(out[out.length - 1], nowSec)) {
+    out.pop()
+    dropped++
+  }
+  return { candles: out, dropped }
+}
+
+/**
+ * Keys of the bars ON DISK that were unfinished when that file was written —
+ * judged from the file's own `fetchedAt`, not from today.
+ *
+ * Such a bar was never a value of the finished bar: it was a 22-hour snapshot
+ * of a 24-hour bar. Comparing the finished bar against it calls the bar
+ * completing a "restatement". So a provisional bar is REPLACED by the vendor's
+ * finished bar and reported as superseded, never compared. A file with no
+ * readable `fetchedAt` has no provisional bars, which keeps the strict check.
+ */
+export function provisionalKeys(existing, fetchedAtIso) {
+  const fetchedMs = typeof fetchedAtIso === 'string' ? Date.parse(fetchedAtIso) : NaN
+  if (!Number.isFinite(fetchedMs)) return new Set()
+  const fetchedSec = fetchedMs / 1000
+  return new Set((existing ?? []).filter((c) => !isBarComplete(c, fetchedSec)).map(KEY))
+}
+
 /** Round to the precision the vendor actually delivers, to avoid float noise. */
 const near = (a, b) => {
   if (typeof a !== 'number' || typeof b !== 'number') return a === b
@@ -97,7 +156,19 @@ const drift = (was, now) => {
   return Math.abs(now - was) / Math.abs(was)
 }
 
-export function diffSeries(existing, incoming) {
+/**
+ * Every moved field of a bar and the largest relative move among them.
+ * Q144-D3: the guard used to stop at the FIRST moved price field, so a bar whose
+ * open moved 1.9e-5 was reported as that, while the same bar's low had moved
+ * 2.4e-3 and its volume 5.2e-2.
+ */
+function movedFields(was, now) {
+  const fields = ['open', 'high', 'low', 'close', 'volume'].filter((f) => !near(now[f], was[f]))
+  const maxRelativeChange = fields.reduce((m, f) => Math.max(m, drift(was[f], now[f])), 0)
+  return { fields, maxRelativeChange }
+}
+
+export function diffSeries(existing, incoming, { provisional = new Set() } = {}) {
   const prev = new Map((existing ?? []).map((c) => [KEY(c), c]))
   const next = new Map((incoming ?? []).map((c) => [KEY(c), c]))
 
@@ -105,6 +176,7 @@ export function diffSeries(existing, incoming) {
   const restated = []
   const missing = []
   const finalized = []
+  const superseded = []
 
   // Recency is measured against the series ON DISK, by key order. A bar's age in
   // sessions is what distinguishes "the tape is still settling" from "the vendor
@@ -116,21 +188,29 @@ export function diffSeries(existing, incoming) {
   for (const k of next.keys()) if (!prev.has(k)) appended.push(k)
   for (const [k, was] of prev) {
     const now = next.get(k)
+    // Q-144: a bar that was unfinished when it was stored is replaced, not
+    // compared (see provisionalKeys) — and if the refresh no longer carries it
+    // (still unfinished), it was never history, so its absence is not a loss.
+    if (!now && provisional.has(k)) {
+      superseded.push({ key: k, fields: [], maxRelativeChange: 0, dropped: true })
+      continue
+    }
     if (!now) {
       missing.push(k)
       continue
     }
+    if (provisional.has(k)) {
+      const m = movedFields(was, now)
+      if (m.fields.length > 0) superseded.push({ key: k, ...m })
+      continue
+    }
     // PRICE first, and at any age. A moved open/high/low/close is the event I4
     // exists to catch, and it is never finalization.
-    let priceMoved = false
-    for (const field of ['open', 'high', 'low', 'close']) {
-      if (!near(now[field], was[field])) {
-        restated.push({ key: k, field, was: was[field], now: now[field] })
-        priceMoved = true
-        break
-      }
+    const field = ['open', 'high', 'low', 'close'].find((f) => !near(now[f], was[f]))
+    if (field) {
+      restated.push({ key: k, field, was: was[field], now: now[field], ...movedFields(was, now) })
+      continue
     }
-    if (priceMoved) continue
 
     if (near(now.volume, was.volume)) continue
 
@@ -139,77 +219,10 @@ export function diffSeries(existing, incoming) {
     if (recent && small) {
       finalized.push({ key: k, field: 'volume', was: was.volume, now: now.volume })
     } else {
-      restated.push({ key: k, field: 'volume', was: was.volume, now: now.volume })
+      restated.push({ key: k, field: 'volume', was: was.volume, now: now.volume, ...movedFields(was, now) })
     }
   }
-  return { appended, restated, missing, finalized }
-}
-
-/**
- * Q-144 — the largest relative change a restated bar may carry and still be
- * kept at its FIRST vintage rather than quarantined.
- *
- * Measured before it was set: the restatement that froze BTC for six weeks
- * (2026-09-06 onward) was a 1.9e-5 relative move in one daily open — vendor
- * rounding, not a revision. A split restates every bar by its ratio (a 3:2
- * split moves each price 33%), so 0.1% can never admit one, and it sits ~50x
- * above the observed noise.
- */
-export const MAX_KEEPABLE_RESTATEMENT = 1e-3
-
-/**
- * At most this many restated bars may be kept per refresh. A systematic
- * revision (an adjustment applied to a whole stretch of history) touches many
- * bars at once and must reach a human, however small each change is.
- */
-export const MAX_KEEPABLE_RESTATED_BARS = 3
-
-const PRICE_FIELDS = new Set(['open', 'high', 'low', 'close'])
-
-/**
- * Whether a restatement can be resolved by keeping the bars already on disk.
- *
- * I4 (point-in-time): the value first ingested is the one that existed at the
- * time, so keeping it is the point-in-time answer and the later vintage is the
- * revision. Only for MINOR restatements, and never when a bar went missing.
- */
-export function keepableRestatement(d) {
-  if (d.missing.length > 0 || d.restated.length === 0) return false
-  const keys = new Set(d.restated.map((r) => r.key))
-  if (keys.size > MAX_KEEPABLE_RESTATED_BARS) return false
-  // PRICE fields only. Volume has its own, deliberately narrower rule
-  // (FINALIZATION_SESSIONS): a volume revision outside the settling window is
-  // a data event a human must see, and keeping it here would quietly overrule
-  // that decision. Vendor rounding of a price — the BTC case — is what this is for.
-  return d.restated.every((r) => PRICE_FIELDS.has(r.field) && drift(r.was, r.now) <= MAX_KEEPABLE_RESTATEMENT)
-}
-
-/**
- * The series to write when a restatement is kept at its first vintage: every
- * restated bar is the bar ALREADY ON DISK, whole; everything else is the
- * incoming series (so appends and volume finalizations still land).
- */
-export function mergeKeepingFirstVintage(existing, incoming, restatedKeys) {
-  const keep = new Set(restatedKeys)
-  const prev = new Map((existing ?? []).map((c) => [KEY(c), c]))
-  return (incoming ?? []).map((c) => (keep.has(KEY(c)) && prev.has(KEY(c)) ? prev.get(KEY(c)) : c))
-}
-
-/** How many kept-restatement records a fixture carries (newest kept). */
-export const MAX_RECORDED_RESTATEMENTS = 50
-
-/**
- * The fixture's restatement record after a refresh: prior records, plus the
- * newly kept ones not already recorded. The vendor keeps serving a revised
- * value, so the same restatement is detected every week; it is recorded once,
- * by date and field. Carries no vendor values — only key, field, relative size
- * and when it was first seen.
- */
-export function recordKeptRestatements(prior, kept, detectedAt) {
-  const base = Array.isArray(prior) ? prior : []
-  const seen = new Set(base.map((r) => `${r.key}|${r.field}`))
-  const fresh = (kept ?? []).filter((r) => !seen.has(`${r.key}|${r.field}`)).map((r) => ({ key: r.key, field: r.field, relativeChange: r.relativeChange, detectedAt }))
-  return { records: [...base, ...fresh].slice(-MAX_RECORDED_RESTATEMENTS), fresh }
+  return { appended, restated, missing, finalized, superseded }
 }
 
 /**
@@ -218,26 +231,20 @@ export function recordKeptRestatements(prior, kept, detectedAt) {
  * Appends are always fine. A restatement or a disappearing bar is a DATA event
  * that a human must see, so it fails closed (I2) rather than being absorbed
  * into the next benchmark run as signal drift.
- *
- * Q-144 exception: a MINOR restatement (keepableRestatement) is resolved by
- * keeping the bars on disk — their first vintage — and is RECORDED, not
- * absorbed: the caller writes `keptRestatements` into the fixture. Refusing it
- * froze BTC's history for six weeks over a 1.9e-5 move in one open, while the
- * weekly run went red every Sunday and stopped meaning anything.
  */
-export function assessRefresh(existing, incoming) {
-  const d = diffSeries(existing, incoming)
+export function assessRefresh(existing, incoming, { existingFetchedAt } = {}) {
+  const d = diffSeries(existing, incoming, { provisional: provisionalKeys(existing, existingFetchedAt) })
   // `finalized` deliberately does NOT block. It is reported so a human can see it
   // happening, which is the whole difference between absorbing a change silently
   // and accepting a known, named vendor behaviour.
-  // Q-144: a MINOR restatement keeps the first vintage instead of refusing.
-  const keepFirstVintage = keepableRestatement(d)
-  const ok = (d.restated.length === 0 || keepFirstVintage) && d.missing.length === 0
+  const ok = d.restated.length === 0 && d.missing.length === 0
   const reasons = []
-  if (d.restated.length > 0 && !keepFirstVintage) {
+  if (d.restated.length > 0) {
+    // Q144-D9 (I8): this printed raw `was -> now` vendor values into a PUBLIC
+    // repository's workflow logs. It prints which fields moved and how far.
     const sample = d.restated
       .slice(0, 3)
-      .map((r) => `${r.key} ${r.field} ${r.was} -> ${r.now}`)
+      .map((r) => `${keyDate(r.key)} ${r.fields.join('/')} moved up to ${r.maxRelativeChange.toExponential(1)}`)
       .join('; ')
     reasons.push(
       `VENDOR RESTATEMENT: ${d.restated.length} existing bar(s) changed value (${sample}). ` +
@@ -256,13 +263,9 @@ export function assessRefresh(existing, incoming) {
     restated: d.restated.length,
     missing: d.missing.length,
     finalized: d.finalized.length,
+    superseded: d.superseded.length,
+    supersededBars: d.superseded,
     reasons,
-    /** True when the restated bars are kept at their first vintage (Q-144). */
-    keepFirstVintage,
-    /** The kept restatements, by date, field and relative size — no vendor values. */
-    keptRestatements: keepFirstVintage
-      ? d.restated.map((r) => ({ key: r.key, field: r.field, relativeChange: Number(drift(r.was, r.now).toPrecision(3)) }))
-      : [],
   }
 }
 

@@ -1,6 +1,18 @@
 import { describe, it, expect } from 'vitest'
 // Plain .mjs so the fetch script can import it without a TS build step.
-import { diffSeries, assessRefresh, seriesFingerprint, WINDOW_START, FINALIZATION_SESSIONS, FINALIZATION_MAX_VOLUME_DRIFT, mergeKeepingFirstVintage, MAX_KEEPABLE_RESTATEMENT, MAX_KEEPABLE_RESTATED_BARS, recordKeptRestatements } from '../../scripts/lib/dataVintage.mjs'
+import {
+  diffSeries,
+  assessRefresh,
+  seriesFingerprint,
+  WINDOW_START,
+  FINALIZATION_SESSIONS,
+  FINALIZATION_MAX_VOLUME_DRIFT,
+  DAY_SECONDS,
+  isBarComplete,
+  dropUnfinishedBars,
+  provisionalKeys,
+  keyDate,
+} from '../../scripts/lib/dataVintage.mjs'
 
 const bar = (time: number, close: number, extra: Record<string, number> = {}) => ({
   time, open: close, high: close + 1, low: close - 1, close, volume: 100, ...extra,
@@ -211,87 +223,132 @@ describe('volume finalization is not a restatement — the defect that deadlocke
   })
 })
 
-// Q-144 — BTC was quarantined every week from 2026-09-06 for a 1.9e-5 move in
-// ONE daily open, so its history froze for six weeks and the weekly run went
-// red every Sunday. A MINOR restatement now keeps the first vintage (I4: the
-// value that existed at the time) and is recorded; anything larger, wider, or
-// with a lost bar still fails closed.
-describe('Q-144: a minor restatement keeps its first vintage; a real one still refuses', () => {
-  const day = (i: number) => 1_700_000_000 + i * 86_400
-  const bar = (i: number, o = 100 + i) => ({ time: day(i), open: o, high: o + 2, low: o - 2, close: o + 1, volume: 1_000 })
-  const disk = Array.from({ length: 30 }, (_, i) => bar(i))
-
-  it('keeps the exact BTC-shaped revision (one open, 1.9e-5) and records it without values', () => {
-    const fresh = [...disk.map((c) => ({ ...c })), bar(30), bar(31)]
-    fresh[10] = { ...fresh[10], open: fresh[10].open * (1 + 1.9e-5) }
-    const v = assessRefresh(disk, fresh)
-    expect(v.ok).toBe(true)
-    expect(v.keepFirstVintage).toBe(true)
-    expect(v.keptRestatements).toEqual([{ key: String(day(10)), field: 'open', relativeChange: 1.9e-5 }])
-    const merged = mergeKeepingFirstVintage(disk, fresh, v.keptRestatements.map((r) => r.key))
-    expect(merged[10]).toEqual(disk[10])           // the bar on disk, whole
-    expect(merged).toHaveLength(32)                 // the appends still land
-    expect(merged[31]).toEqual(bar(31))
-    expect(JSON.stringify(v.keptRestatements)).not.toMatch(/"(?:was|now)"/) // no vendor values recorded
+/**
+ * Q-144 — the bar BTC was frozen on was its own unfinished tail.
+ *
+ * Data-integrity review of #250 (Q144-D1..D9): the refresh fetched daily bars
+ * through "now", so every BTC vintage stored a tail 22.3-23.2 h into its UTC
+ * day. The next week the finished bar differed in EVERY field and the guard
+ * called it a restatement; BTC was quarantined from 2026-09-06. The first fix
+ * tolerated small "restatements", which froze the partial bar permanently and
+ * failed again by week 4. The cause fix: never store an unfinished bar, and
+ * replace — not compare — a stored bar that was unfinished when it was written.
+ * Bar shapes below are synthetic; the relative sizes are the measured ones.
+ */
+describe('Q-144 — an unfinished bar is neither stored nor compared', () => {
+  const DAY = DAY_SECONDS
+  const T0 = 1_786_838_400 - 9 * DAY // daily bars at 00:00 UTC, the BTC shape
+  const daily = (n: number) =>
+    Array.from({ length: n }, (_, i) => ({ time: T0 + i * DAY, open: 100, high: 101, low: 99, close: 100, volume: 1_000 }))
+  const iso = (sec: number) => new Date(sec * 1000).toISOString()
+  /** The finished version of a bar stored 22.3 h in: every field moved (Evidence 3 sizes). */
+  const finished = (c: ReturnType<typeof daily>[number]) => ({
+    ...c, open: c.open * (1 + 1.9e-5), high: c.high * (1 + 3.3e-4), low: c.low * (1 - 2.4e-3), close: c.close * (1 + 3.7e-4), volume: c.volume * (1 + 5.2e-2),
   })
 
-  it('still refuses a split: every bar moves by the ratio', () => {
-    const split = disk.map((c) => ({ ...c, open: c.open / 2, high: c.high / 2, low: c.low / 2, close: c.close / 2 }))
-    const v = assessRefresh(disk, split)
+  it('isBarComplete: a daily bar is final exactly one day after it begins', () => {
+    const bar = { time: T0 }
+    expect(isBarComplete(bar, T0 + DAY)).toBe(true)
+    expect(isBarComplete(bar, T0 + DAY - 1)).toBe(false)
+    expect(isBarComplete(bar, T0 + Math.round(22.3 * 3600))).toBe(false) // the BTC fetch
+    expect(isBarComplete({ time: Number.NaN }, T0 + 10 * DAY)).toBe(false)
+    // An equity bar stamped at the 13:30 UTC open, seen on the Sunday run (59.5 h later), is final.
+    expect(isBarComplete({ time: T0 + 13.5 * 3600 }, T0 + 13.5 * 3600 + Math.round(59.5 * 3600))).toBe(true)
+  })
+
+  it('dropUnfinishedBars drops only the unfinished TAIL', () => {
+    const s = daily(10)
+    const now = s[9].time + Math.round(22.3 * 3600)
+    const r = dropUnfinishedBars(s, now)
+    expect(r.dropped).toBe(1)
+    expect(r.candles).toHaveLength(9)
+    expect(r.candles[8].time).toBe(s[8].time)
+    expect(dropUnfinishedBars(s, s[9].time + DAY).dropped).toBe(0)
+    expect(dropUnfinishedBars([], now)).toEqual({ candles: [], dropped: 0 })
+  })
+
+  it('provisionalKeys reads the FILE\'s fetchedAt, and none without one', () => {
+    const s = daily(10)
+    expect([...provisionalKeys(s, iso(s[9].time + Math.round(22.3 * 3600)))]).toEqual([String(s[9].time)])
+    expect(provisionalKeys(s, iso(s[9].time + DAY)).size).toBe(0)
+    expect(provisionalKeys(s, undefined).size).toBe(0)
+    expect(provisionalKeys(s, 'not a date').size).toBe(0)
+  })
+
+  it('the real BTC shape: a stored partial tail is REPLACED by the finished bar, every field, and the run is ok', () => {
+    const disk = daily(10)
+    const fetchedAt = iso(disk[9].time + Math.round(22.3 * 3600))
+    const incoming = [...disk.slice(0, 9), finished(disk[9]), { ...disk[9], time: disk[9].time + DAY }]
+    const v = assessRefresh(disk, incoming, { existingFetchedAt: fetchedAt })
+    expect(v).toMatchObject({ ok: true, restated: 0, missing: 0, superseded: 1, appended: 1 })
+    expect(v.supersededBars[0].fields).toEqual(['open', 'high', 'low', 'close', 'volume'])
+    expect(v.supersededBars[0].maxRelativeChange).toBeCloseTo(5.2e-2, 6)
+  })
+
+  it('the same bar stored AFTER its day ended is a restatement — refused, every field named, no vendor values (D3, D9)', () => {
+    const disk = daily(10)
+    const incoming = [...disk.slice(0, 9), finished(disk[9])]
+    const v = assessRefresh(disk, incoming, { existingFetchedAt: iso(disk[9].time + DAY + 60) })
     expect(v.ok).toBe(false)
-    expect(v.keepFirstVintage).toBe(false)
-    expect(v.reasons.join()).toMatch(/VENDOR RESTATEMENT/)
+    expect(v.restated).toBe(1)
+    expect(v.reasons[0]).toContain('open/high/low/close/volume moved up to 5.2e-2')
+    expect(v.reasons[0]).toContain(keyDate(String(disk[9].time)))
+    // The old message printed `was -> now`, i.e. raw vendor prices, into public logs.
+    expect(v.reasons[0]).not.toMatch(/->|99\.7|100\.0/)
   })
 
-  it('still refuses a restatement above the size bound', () => {
-    const fresh = disk.map((c) => ({ ...c }))
-    fresh[5] = { ...fresh[5], close: fresh[5].close * (1 + 2 * MAX_KEEPABLE_RESTATEMENT) }
-    expect(assessRefresh(disk, fresh).ok).toBe(false)
-    fresh[5] = { ...disk[5], close: disk[5].close * (1 + MAX_KEEPABLE_RESTATEMENT * 0.99) }
-    expect(assessRefresh(disk, fresh).ok).toBe(true)
+  it('a stored partial tail does not exempt any OTHER bar', () => {
+    const disk = daily(10)
+    const incoming = [...disk.slice(0, 9).map((c, i) => (i === 3 ? { ...c, close: 100.01 } : c)), finished(disk[9])]
+    const v = assessRefresh(disk, incoming, { existingFetchedAt: iso(disk[9].time + 3600) })
+    expect(v).toMatchObject({ ok: false, restated: 1, superseded: 1 })
   })
 
-  it('still refuses more than MAX_KEEPABLE_RESTATED_BARS small revisions (a systematic adjustment)', () => {
-    const fresh = disk.map((c) => ({ ...c }))
-    for (let i = 0; i <= MAX_KEEPABLE_RESTATED_BARS; i++) fresh[i] = { ...fresh[i], close: fresh[i].close * (1 + 1e-5) }
-    expect(assessRefresh(disk, fresh).ok).toBe(false)
-    const fewer = disk.map((c) => ({ ...c }))
-    for (let i = 0; i < MAX_KEEPABLE_RESTATED_BARS; i++) fewer[i] = { ...fewer[i], close: fewer[i].close * (1 + 1e-5) }
-    expect(assessRefresh(disk, fewer).ok).toBe(true)
+  it('a stored partial tail the refresh no longer serves is not HISTORY LOSS', () => {
+    const disk = daily(10)
+    const v = assessRefresh(disk, disk.slice(0, 9), { existingFetchedAt: iso(disk[9].time + 3600) })
+    expect(v).toMatchObject({ ok: true, missing: 0, superseded: 1 })
+    expect(v.supersededBars[0]).toMatchObject({ dropped: true })
   })
 
-  it('is for PRICE rounding only: a small old-bar VOLUME revision still refuses (the Q-102 rule)', () => {
-    const fresh = disk.map((c) => ({ ...c }))
-    fresh[2] = { ...fresh[2], volume: fresh[2].volume * (1 + 1e-5) }
-    expect(assessRefresh(disk, fresh).ok).toBe(false)
+  it('D2 replay: twelve weekly runs from the frozen state stay green with zero restatements', () => {
+    // Week 0 is the state on disk: a series whose tail was stored 22.3 h in.
+    let disk = daily(10)
+    let fetchedAt = iso(disk[9].time + Math.round(22.3 * 3600))
+    const vendor = (throughSec: number) => {
+      const n = Math.floor((throughSec - T0) / DAY) + 1 // includes the day in progress
+      return daily(n).map((c, i) => (i === 9 ? finished(c) : c))
+    }
+    const results: Array<[number, boolean, number, number]> = []
+    for (let week = 1; week <= 12; week++) {
+      const now = disk[9].time + week * 7 * DAY + Math.round(22.3 * 3600)
+      const incoming = dropUnfinishedBars(vendor(now), now).candles
+      const v = assessRefresh(disk, incoming, { existingFetchedAt: fetchedAt })
+      results.push([week, v.ok, v.restated, v.superseded])
+      if (v.ok) { disk = incoming; fetchedAt = iso(now) }
+    }
+    expect(results.every(([, ok, restated]) => ok && restated === 0)).toBe(true)
+    expect(results.map(([, , , sup]) => sup)).toEqual([1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+    // And nothing unfinished was ever stored.
+    expect(provisionalKeys(disk, fetchedAt).size).toBe(0)
   })
+})
 
-  it('a kept restatement never excuses a lost bar', () => {
-    const fresh = disk.slice(1).map((c) => ({ ...c }))
-    fresh[5] = { ...fresh[5], open: fresh[5].open * (1 + 1e-5) }
-    const v = assessRefresh(disk, fresh)
-    expect(v.ok).toBe(false)
-    expect(v.keepFirstVintage).toBe(false)
-    expect(v.reasons.join()).toMatch(/HISTORY LOSS/)
-  })
-
-  it('records a kept restatement once, not every week the vendor re-serves it', () => {
-    const kept = [{ key: '1700864000', field: 'open', relativeChange: 1.9e-5 }]
-    const week1 = recordKeptRestatements([], kept, '2026-10-18T00:00:00Z')
-    expect(week1.fresh).toHaveLength(1)
-    const week2 = recordKeptRestatements(week1.records, kept, '2026-10-25T00:00:00Z')
-    expect(week2.fresh).toHaveLength(0)
-    expect(week2.records).toEqual(week1.records)
-    expect(week2.records[0].detectedAt).toBe('2026-10-18T00:00:00Z')
-    expect(recordKeptRestatements(undefined, kept, 'x').records).toHaveLength(1)
-  })
-
-  it('the fetch script writes the merged series and the record, not the incoming series', async () => {
-    const { readFileSync } = await import('node:fs')
-    const { join } = await import('node:path')
+describe('Q-144 — the fetch script stores finished bars only and tells the guard when the file was written', () => {
+  // Source-text, comments stripped, like the window-anchor test above. Both
+  // wirings fail CLOSED if removed (BTC is refused again the next week), so this
+  // pins them for review rather than being the only thing between a regression
+  // and a silent write.
+  it('both fetchers drop unfinished bars and saveResult passes the disk fetchedAt', async () => {
+    const { readFileSync } = await import('fs')
+    const { join } = await import('path')
     const src = readFileSync(join(__dirname, '../../scripts/fetchBacktestData.mjs'), 'utf8')
-    expect(src).toMatch(/candles = mergeKeepingFirstVintage\(prev\.candles, candles,/)
-    expect(src).toMatch(/vintage: \{ \.\.\.vintage, keptRestatements \}/)
-    expect(src).toMatch(/recordKeptRestatements\(prior, verdict\.keptRestatements,/)
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/(^|[^:])\/\/.*$/gm, '$1')
+    expect(src.match(/saveResult\([^)]*finishedBarsOnly\(candles, /g)).toHaveLength(2)
+    expect(src).toMatch(/assessRefresh\(prev\.candles, candles, \{ existingFetchedAt: prev\.fetchedAt \}\)/)
+    expect(src).not.toMatch(/clampPartialFinalBar/)
+    // I8: the refusal path prints relative sizes, never raw vendor values.
+    expect(src).not.toMatch(/\$\{r\.was\}|\$\{b\.was\}/)
   })
 })

@@ -2,7 +2,7 @@ import { writeFileSync, mkdirSync, readFileSync, existsSync, appendFileSync } fr
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
-import { WINDOW_START, assessRefresh, mergeKeepingFirstVintage, recordKeptRestatements, seriesFingerprint } from './lib/dataVintage.mjs';
+import { WINDOW_START, assessRefresh, dropUnfinishedBars, keyDate, seriesFingerprint } from './lib/dataVintage.mjs';
 import { TICKERS } from './lib/universe.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -71,9 +71,7 @@ function saveResult(ticker, sector, candles) {
   // revising a 2023 close was absorbed silently and surfaced later as a moved
   // win rate. Appends are normal and pass; a changed or vanished historical bar
   // fails closed (I2) so a human sees it before it reaches a benchmark.
-  let vintage = { appended: candles.length, restated: 0, missing: 0, finalized: 0 };
-  /** Q-144: minor restatements kept at their first vintage, carried forward across refreshes. */
-  let keptRestatements = [];
+  let vintage = { appended: candles.length, restated: 0, missing: 0, finalized: 0, superseded: 0 };
   if (existsSync(filePath)) {
     try {
       const prev = JSON.parse(readFileSync(filePath, 'utf8'));
@@ -88,27 +86,29 @@ function saveResult(ticker, sector, candles) {
             'proven to be append-only. Repair or delete the fixture deliberately.',
         );
       }
-      const verdict = assessRefresh(prev.candles, candles);
-      vintage = { appended: verdict.appended, restated: verdict.restated, missing: verdict.missing, finalized: verdict.finalized };
+      // Q-144: the file's own fetchedAt says which of its bars were unfinished
+      // when it was written; those are replaced by the finished bars, not
+      // compared against them.
+      const verdict = assessRefresh(prev.candles, candles, { existingFetchedAt: prev.fetchedAt });
+      vintage = {
+        appended: verdict.appended,
+        restated: verdict.restated,
+        missing: verdict.missing,
+        finalized: verdict.finalized,
+        superseded: verdict.superseded,
+      };
       if (!verdict.ok) {
         throw new Error(`REFUSED to save ${ticker}: ${verdict.reasons.join(' | ')}`);
       }
-      const prior = Array.isArray(prev.vintage?.keptRestatements) ? prev.vintage.keptRestatements : [];
-      if (verdict.keepFirstVintage) {
-        // Keep the bars already on disk (their first vintage, I4) and record
-        // the revision — date, field and relative size, never the vendor values.
-        candles = mergeKeepingFirstVintage(prev.candles, candles, verdict.keptRestatements.map((r) => r.key));
-        const { records, fresh } = recordKeptRestatements(prior, verdict.keptRestatements, new Date().toISOString());
-        if (fresh.length > 0) {
-          console.log(`::notice title=Restatement kept at first vintage ${ticker}::${fresh.map((r) => `${r.key} ${r.field} ${r.relativeChange}`).join('; ')}`);
-        }
-        keptRestatements = records;
-      } else {
-        keptRestatements = prior;
-      }
-      if (verdict.appended > 0 || verdict.finalized > 0) {
+      if (verdict.appended > 0 || verdict.finalized > 0 || verdict.superseded > 0) {
         const fin = verdict.finalized > 0 ? `, ${verdict.finalized} volume finalization(s)` : '';
-        console.log(`[${ticker}] +${verdict.appended} new bar(s), 0 restated${fin}`);
+        const sup = verdict.superseded > 0 ? `, ${verdict.superseded} unfinished bar(s) replaced by the finished bar` : '';
+        console.log(`[${ticker}] +${verdict.appended} new bar(s), 0 restated${fin}${sup}`);
+      }
+      // Relative sizes only — never vendor values (I8; this log is public).
+      for (const b of verdict.supersededBars) {
+        const what = b.dropped ? 'no longer served (still unfinished)' : `${b.fields.join('/')} moved up to ${b.maxRelativeChange.toExponential(1)}`;
+        console.log(`::notice title=${ticker} unfinished bar replaced::${keyDate(b.key)} was stored before its day ended; ${what}`);
       }
     } catch (e) {
       if (e instanceof Error && e.message.startsWith('REFUSED')) throw e;
@@ -134,7 +134,7 @@ function saveResult(ticker, sector, candles) {
     windowStart: WINDOW_START,
     fingerprint: seriesFingerprint(candles),
     rows: candles.length,
-    vintage: { ...vintage, keptRestatements },
+    vintage,
     candles,
   };
   writeFileSync(filePath, JSON.stringify(output, null, 2), 'utf8');
@@ -156,23 +156,17 @@ function isFiniteRow(q) {
   );
 }
 
-// 2026-07-11 (data-integrity, Patterson lens): the LAST bar of a fetch can be
-// a still-forming intraday bar whose running close drifts outside the recorded
-// high/low (seen live: BTC 2026-07-05 close 63682 > high 63632). Downstream
-// intrabar logic (evaluateStopHit) relies on low ≤ open,close ≤ high, so an
-// inconsistent partial bar can imply impossible fills. Clamp ONLY the final
-// bar — a historical bar violating the invariant should fail loudly instead
-// (scripts/verify-data-integrity.mjs).
-function clampPartialFinalBar(candles, ticker) {
-  if (candles.length === 0) return candles;
-  const last = candles[candles.length - 1];
-  const high = Math.max(last.high, last.open, last.close);
-  const low = Math.min(last.low, last.open, last.close);
-  if (high !== last.high || low !== last.low) {
-    console.warn(`[${ticker}] clamped partial final bar: high ${last.high}→${high}, low ${last.low}→${low}`);
-    candles[candles.length - 1] = { ...last, high, low };
-  }
-  return candles;
+/**
+ * Q-144: keep only FINISHED daily bars. The last bar of a fetch through "now"
+ * can be a day still in progress — BTC's always was — and a stored partial bar
+ * is later "restated" by its own completion. This replaces
+ * `clampPartialFinalBar`, which patched the symptom (a running close outside the
+ * recorded high/low, seen on BTC 2026-07-05) and kept the partial bar.
+ */
+function finishedBarsOnly(candles, ticker) {
+  const { candles: kept, dropped } = dropUnfinishedBars(candles, Math.floor(Date.now() / 1000));
+  if (dropped > 0) console.log(`[${ticker}] held back ${dropped} unfinished bar(s); they are fetched once their day has ended`);
+  return kept;
 }
 
 async function fetchYahoo(ticker, sector) {
@@ -207,7 +201,7 @@ async function fetchYahoo(ticker, sector) {
     };
   });
 
-  saveResult(ticker, sector, clampPartialFinalBar(candles, ticker));
+  saveResult(ticker, sector, finishedBarsOnly(candles, ticker));
   const dropped = rawRows.length - candles.length;
   console.log(`[${ticker}] Saved ${candles.length} candles${dropped > 0 ? ` (dropped ${dropped} non-finite rows)` : ''}${divByDay.size > 0 ? ` (+${divByDay.size} dividend bars)` : ''}`);
 }
@@ -229,7 +223,7 @@ async function fetchBTC(sector = 'Crypto') {
     volume: Number.isFinite(q.volume) ? q.volume : 0,
   }));
 
-  saveResult('BTC', sector, clampPartialFinalBar(candles, 'BTC'));
+  saveResult('BTC', sector, finishedBarsOnly(candles, 'BTC'));
   const dropped = rawRows.length - candles.length;
   console.log(`[BTC] Saved ${candles.length} candles${dropped > 0 ? ` (dropped ${dropped} non-finite rows)` : ''}`);
 }
