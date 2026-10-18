@@ -6,14 +6,20 @@
  *
  * Q-149: what this source actually carries. The route used to read
  * `offExchangeShares`, `marketStore`, `ordinarySharesNumber` and
- * `financialData.sharesOutstanding`, none of which yahoo-finance2 3.13.2 types
- * on those modules, so off-exchange share, float and the shares-out fallback
- * were null on every request while the panel credited "Finra BATS" for them.
- * Yahoo publishes no off-exchange volume at all. What it does publish, on
- * `defaultKeyStatistics` for equities, is short interest and share counts —
- * and for ETFs it publishes none of them (probe 2026-10-17: 0 of these fields
- * on all 11 sector ETFs).
+ * `financialData.sharesOutstanding`. None of them is a declared property of the
+ * yahoo-finance2 3.13.2 interfaces it read them from — those interfaces carry a
+ * string index signature, so the reads compiled — and off-exchange share, float
+ * and the shares-out fallback were null on every request while the panel
+ * credited "Finra BATS" for them. Yahoo publishes no off-exchange volume at all.
+ * What it does publish is short interest and share counts on
+ * `defaultKeyStatistics` for equities, and a share count on the quote for most
+ * ETFs. The field lists below are the only names the builder can read, and
+ * `__tests__/architecture/darkpool-vendor-fields.test.ts` checks each against the
+ * vendor's declared interfaces.
  */
+
+/** Why a float the vendor reported is not shown as the float. */
+export type FloatWithheldReason = 'exceeds-shares-out' | 'inconsistent-with-short-interest'
 
 export interface DarkPoolMetric {
   sharesShorted: number | null
@@ -21,11 +27,17 @@ export interface DarkPoolMetric {
   shortFloatPct: number | null
   /** Settlement date the short interest figure is as of (YYYY-MM-DD), or null. */
   shortInterestAsOf: string | null
+  /** Whole days from that settlement date to the fetch, or null. */
+  shortInterestAgeDays: number | null
+  /** True when the settlement date is older than a missed reporting cycle. */
+  shortInterestStale: boolean
   daysToCover: number | null
   /** 10-day average daily volume, from the quote. */
   avgDailyVolume: number | null
   sharesOutstanding: number | null
   sharesFloat: number | null
+  /** Set when the vendor reported a float and it was withheld (Q149-D2). */
+  floatWithheld: FloatWithheldReason | null
 }
 
 /**
@@ -46,24 +58,73 @@ export interface DarkPoolAnalysis {
   quote: PricePoint
   metrics: DarkPoolMetric
   /**
-   * Human-readable diagnostic when Yahoo reported no short-interest or
-   * share-count figure (`hasShortOrShareData`), or why the fetch failed.
-   * Q-149: the `hasRealData` flag that used to sit beside this had no reader
-   * once the signal banner went, so it is not on the wire.
+   * Why a figure is absent: Yahoo has no quote for the ticker, it reports no
+   * short interest for it, or a fetch failed. Q-149: the `hasRealData` flag that
+   * used to sit beside this had no reader once the signal banner went, so it is
+   * not on the wire.
    */
   statusNote: string | null
   /** Q-140: set when a Yahoo FETCH failed — distinct from "no data exists". */
   degraded?: boolean
 }
 
+/** The `defaultKeyStatistics` fields the builder reads — and the only ones it can. */
+export const KEY_STATISTICS_FIELDS = [
+  'sharesOutstanding',
+  'floatShares',
+  'shortPercentOfFloat',
+  'sharesShort',
+  'shortRatio',
+  'dateShortInterest',
+] as const
+
+/** The quote fields the builder reads — and the only ones it can. */
+export const QUOTE_FIELDS = ['sharesOutstanding', 'averageDailyVolume10Day'] as const
+
+type KeyStatisticsField = (typeof KEY_STATISTICS_FIELDS)[number]
+type QuoteField = (typeof QUOTE_FIELDS)[number]
+
 /**
  * Yahoo's `shortPercentOfFloat` is a FRACTION (0.0071 means 0.71%). Measured
- * 2026-10-17: for AAPL and GME it equals `sharesShort / floatShares` to within
- * 1% as a fraction. The panel printed it with a `%` sign unscaled, so every
- * stock's short interest read 100 times too small — GME's as a fraction of a
- * percent.
+ * 2026-10-17: a fraction on every one of 128 equities that carried it, and for
+ * single-class names equal to `sharesShort / floatShares` to within about 1%.
+ * The panel printed it with a `%` sign unscaled, so every stock's short
+ * interest read 100 times too small. The scale is unconditional; a vendor
+ * switch to percent form would make every figure 100 times too large, and
+ * nothing here would notice (Q149-D14, logged).
  */
 export const SHORT_PERCENT_OF_FLOAT_SCALE = 100
+
+/**
+ * How far the identity short % = short count / float may fail before the float
+ * is taken to be in different units from the short count. The builder computes
+ * `sharesShort / float / shortFraction`: measured 2026-10-17 it was about 1.0 for
+ * single-class names and about 1000 for a dual-class name whose float is in
+ * other-class-equivalent units. A factor of 2 drops the latter. It is not a clean
+ * separation everywhere: a single-class small cap sat just past it (2.1), and two
+ * names were kept at 1.5 and 1.7 — the bound catches unit errors, not every
+ * inconsistency in the vendor's figures.
+ */
+export const FLOAT_IDENTITY_TOLERANCE = 2
+
+/**
+ * How far a float may exceed shares outstanding and still be shown. The float is
+ * a subset of the shares, so a float above them is in other units — but the two
+ * fields can carry different as-of dates, and two names overshot by 0.2% and 0.6%
+ * while their short-interest identity held within 12% (2026-10-17). No name in
+ * that sample fell between 0.6% and 5.9%, so the 1% boundary rests on a thin gap.
+ */
+export const FLOAT_SHARES_OUT_SLACK = 0.01
+
+/**
+ * The age past which a short-interest figure is STALE. Short interest is
+ * reported twice a month as of a settlement date and published roughly a week
+ * and a half later, so in a healthy feed the newest figure is under about 30
+ * days old. 35 days means at least one reporting cycle was missed.
+ */
+export const SHORT_INTEREST_STALE_DAYS = 35
+
+const DAY_MS = 86_400_000
 
 const finite = (v: unknown): number | null =>
   typeof v === 'number' && Number.isFinite(v) ? v : null
@@ -74,6 +135,12 @@ const positive = (v: unknown): number | null => {
   return n != null && n > 0 ? n : null
 }
 
+/** Zero or above, or null. */
+const nonNegative = (v: unknown): number | null => {
+  const n = finite(v)
+  return n != null && n >= 0 ? n : null
+}
+
 /** A vendor Date (or ISO string) as its UTC calendar date, or null. */
 export function isoDateOrNull(v: unknown): string | null {
   const d = v instanceof Date ? v : typeof v === 'string' ? new Date(v) : null
@@ -82,74 +149,76 @@ export function isoDateOrNull(v: unknown): string | null {
 }
 
 /**
- * How far `sharesShort / floatShares` may sit from `shortPercentOfFloat` before
- * the float is taken to be in different units from the short count. Measured
- * 2026-10-17: the ratio of the two was 1.00 (AAPL) and 0.99 (GME), and about
- * 0.001 for BRK-B, whose float Yahoo reports in Class-A-equivalent units
- * against a Class-B short count. A factor of 2 separates those by three orders
- * of magnitude either way.
- */
-export const FLOAT_IDENTITY_TOLERANCE = 2
-
-/**
  * The metrics this route can stand behind, from `defaultKeyStatistics` and the
- * quote. Pure: the route's only job is to fetch.
+ * quote, as of `nowMs`. Pure: the route's only job is to fetch.
  *
- * The float is dropped when it cannot be the float of the shares it sits
- * beside:
- *   - it exceeds shares outstanding (the float is a subset of them; BRK-A
- *     reports about 1.2M against 0.49M out, 2026-10-17), or
- *   - with all three of short count, float and short % present, the identity
- *     short % = short count / float fails by more than FLOAT_IDENTITY_TOLERANCE
- *     (BRK-B). Yahoo computes the % against its own float, so the % stands.
+ * Shares outstanding come from the key statistics, else from the quote, which
+ * carries a share count for most ETFs (Q149-D1).
+ *
+ * The float is withheld — and says so — when it cannot be the float of the
+ * shares it sits beside: it exceeds shares outstanding by more than
+ * FLOAT_SHARES_OUT_SLACK, or, with short count, float and short % all present,
+ * the identity fails by more than FLOAT_IDENTITY_TOLERANCE. The short % is the
+ * vendor's own figure on its own denominator, which for dual-class names tracks
+ * shares outstanding rather than a float, so it is shown either way.
  */
 export function buildDarkPoolMetrics(
   keyStats: Record<string, unknown>,
   quote: Record<string, unknown>,
+  nowMs: number,
 ): DarkPoolMetric {
-  const sharesOutstanding = positive(keyStats.sharesOutstanding)
-  const rawFloat = positive(keyStats.floatShares)
-  const rawShortFraction = finite(keyStats.shortPercentOfFloat)
-  const shortFraction = rawShortFraction != null && rawShortFraction >= 0 ? rawShortFraction : null
-  const rawShorted = finite(keyStats.sharesShort)
-  const sharesShorted = rawShorted != null && rawShorted >= 0 ? rawShorted : null
-  const daysToCover = finite(keyStats.shortRatio)
+  const ks = (f: KeyStatisticsField) => keyStats[f]
+  const q = (f: QuoteField) => quote[f]
+  const sharesOutstanding = positive(ks('sharesOutstanding')) ?? positive(q('sharesOutstanding'))
+  const shortFraction = nonNegative(ks('shortPercentOfFloat'))
+  const sharesShorted = nonNegative(ks('sharesShort'))
+  const asOf = isoDateOrNull(ks('dateShortInterest'))
+  const ageDays = asOf != null && Number.isFinite(nowMs) ? Math.floor((nowMs - Date.parse(asOf)) / DAY_MS) : null
+  const float = judgeFloat(positive(ks('floatShares')), sharesOutstanding, sharesShorted, shortFraction)
   return {
     sharesShorted,
     shortFloatPct: shortFraction != null ? shortFraction * SHORT_PERCENT_OF_FLOAT_SCALE : null,
-    shortInterestAsOf: isoDateOrNull(keyStats.dateShortInterest),
-    daysToCover: daysToCover != null && daysToCover >= 0 ? daysToCover : null,
-    avgDailyVolume: positive(quote.averageDailyVolume10Day),
+    shortInterestAsOf: asOf,
+    shortInterestAgeDays: ageDays,
+    shortInterestStale: ageDays != null && ageDays > SHORT_INTEREST_STALE_DAYS,
+    daysToCover: nonNegative(ks('shortRatio')),
+    avgDailyVolume: positive(q('averageDailyVolume10Day')),
     sharesOutstanding,
-    sharesFloat: floatIfConsistent(rawFloat, sharesOutstanding, sharesShorted, shortFraction),
+    sharesFloat: float.value,
+    floatWithheld: float.withheld,
   }
 }
 
-function floatIfConsistent(
+function judgeFloat(
   float: number | null,
   sharesOutstanding: number | null,
   sharesShorted: number | null,
   shortFraction: number | null,
-): number | null {
-  if (float == null) return null
-  if (sharesOutstanding != null && float > sharesOutstanding) return null
+): { value: number | null; withheld: FloatWithheldReason | null } {
+  if (float == null) return { value: null, withheld: null }
+  if (sharesOutstanding != null && float > sharesOutstanding * (1 + FLOAT_SHARES_OUT_SLACK)) {
+    return { value: null, withheld: 'exceeds-shares-out' }
+  }
   if (sharesShorted != null && sharesShorted > 0 && shortFraction != null && shortFraction > 0) {
     const ratio = sharesShorted / float / shortFraction
-    if (ratio > FLOAT_IDENTITY_TOLERANCE || ratio < 1 / FLOAT_IDENTITY_TOLERANCE) return null
+    if (ratio > FLOAT_IDENTITY_TOLERANCE || ratio < 1 / FLOAT_IDENTITY_TOLERANCE) {
+      return { value: null, withheld: 'inconsistent-with-short-interest' }
+    }
   }
-  return float
+  return { value: float, withheld: null }
 }
 
-/** True when Yahoo reported any short-interest or share-count figure. */
-export function hasShortOrShareData(m: DarkPoolMetric): boolean {
-  return (
-    m.sharesShorted !== null ||
-    m.shortFloatPct !== null ||
-    m.daysToCover !== null ||
-    m.sharesOutstanding !== null ||
-    m.sharesFloat !== null
-  )
+/** True when Yahoo reported any short-interest figure. A share count alone is not one. */
+export function hasShortInterestData(m: DarkPoolMetric): boolean {
+  return m.sharesShorted !== null || m.shortFloatPct !== null || m.daysToCover !== null
 }
 
-export const NO_SHORT_DATA_NOTE =
-  'Yahoo Finance reports no short-interest or share-count figures for this ticker.'
+/**
+ * Security types for which Yahoo publishes no short interest, so a failed key
+ * statistics fetch is an absence, not an outage (Q149-D5: BTC-USD and EURUSD=X
+ * were told to "try again shortly").
+ */
+export const NO_SHORT_INTEREST_TYPES = new Set(['CRYPTOCURRENCY', 'CURRENCY', 'INDEX', 'MUTUALFUND', 'FUTURE'])
+
+export const NO_SHORT_INTEREST_NOTE = 'Yahoo Finance reports no short-interest figures for this ticker.'
+export const NO_QUOTE_NOTE = 'Yahoo Finance has no quote for this ticker.'

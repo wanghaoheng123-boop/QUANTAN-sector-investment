@@ -4,6 +4,7 @@
  * SOME failure signal is present.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { NO_QUOTE_NOTE, NO_SHORT_INTEREST_NOTE } from '@/lib/darkpool'
 import { DEGRADED_CACHE_CONTROL } from '@/lib/api/reliability'
 import { NextRequest } from 'next/server'
 
@@ -89,40 +90,44 @@ describe('/api/darkpool — a fetch failure is not explained as a coverage gap',
     // Red-team L9: the old note guessed "ETF, ADR, or OTC" for every all-letter
     // ticker (AAPL included) and this test pinned the guess. It now says what
     // was observed and nothing about the security type.
-    expect(body.statusNote).toBe('Yahoo Finance reports no short-interest or share-count figures for this ticker.')
+    expect(body.statusNote).toBe(NO_SHORT_INTEREST_NOTE)
   })
 
   // Q-149: a 10-day volume comes from the QUOTE, which every ETF has, so it
-  // made all 11 sector ETFs report data they did not have.
-  it('an ETF with only a quote volume reports no data, and logs no float drift', async () => {
+  // made all 11 sector ETFs report data they did not have. Q149-D1: the ETF
+  // quote DOES carry a share count (9 of 11 sector ETFs), which the route now
+  // shows — the fixture carries it, so the note cannot claim there is none.
+  it('an ETF: shares outstanding from the quote, no short interest, no float drift logged', async () => {
     const { GET } = await import('@/app/api/darkpool/[ticker]/route')
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    quoteMock.mockResolvedValue({ quoteType: 'ETF', regularMarketPrice: 300, regularMarketChange: 1, averageDailyVolume10Day: 6_000_000 })
+    quoteMock.mockResolvedValue({ quoteType: 'ETF', regularMarketPrice: 300, regularMarketChange: 1, averageDailyVolume10Day: 6_000_000, sharesOutstanding: 300_000_000 })
     summaryMock.mockResolvedValue({ defaultKeyStatistics: {} })
     const body = await (await GET(req('/api/darkpool/XLK'), { params: Promise.resolve({ ticker: 'XLK' }) })).json()
     expect(body).not.toHaveProperty('hasRealData')
-    expect(body.metrics.avgDailyVolume).toBe(6_000_000)
-    expect(body.statusNote).toBe('Yahoo Finance reports no short-interest or share-count figures for this ticker.')
+    expect(body.metrics).toMatchObject({ avgDailyVolume: 6_000_000, sharesOutstanding: 300_000_000, sharesShorted: null, shortFloatPct: null })
+    expect(body.statusNote).toBe(NO_SHORT_INTEREST_NOTE)
+    expect(body.statusNote).not.toMatch(/share-count/)
     expect(warn).not.toHaveBeenCalled()
     warn.mockRestore()
   })
 
   // Q-149: Yahoo's shortPercentOfFloat is a fraction; the panel printed it as a
-  // percent, 100x too small.
-  it('an equity reads the typed fields, in percent units, with the settlement date', async () => {
+  // percent, 100x too small. Invented figures throughout (I8).
+  it('an equity reads the declared fields, in percent units, with the settlement date', async () => {
     const { GET } = await import('@/app/api/darkpool/[ticker]/route')
     quoteMock.mockResolvedValue({ quoteType: 'EQUITY', regularMarketPrice: 25, regularMarketChange: 1, averageDailyVolume10Day: 9_000_000 })
     summaryMock.mockResolvedValue({ defaultKeyStatistics: {
       sharesOutstanding: 450_000_000, floatShares: 400_000_000, sharesShort: 60_000_000, // 60M / 400M = 0.15
       shortPercentOfFloat: 0.15, shortRatio: 6.5, dateShortInterest: new Date('2026-09-30T00:00:00Z'),
     } })
-    const body = await (await GET(req('/api/darkpool/GME'), { params: Promise.resolve({ ticker: 'GME' }) })).json()
+    const body = await (await GET(req('/api/darkpool/ABCD'), { params: Promise.resolve({ ticker: 'ABCD' }) })).json()
     expect(body.statusNote).toBeNull()
-    expect(body.metrics).toEqual({
+    expect(body.metrics).toMatchObject({
       sharesShorted: 60_000_000, shortFloatPct: 15, shortInterestAsOf: '2026-09-30', daysToCover: 6.5,
-      avgDailyVolume: 9_000_000, sharesOutstanding: 450_000_000, sharesFloat: 400_000_000,
+      avgDailyVolume: 9_000_000, sharesOutstanding: 450_000_000, sharesFloat: 400_000_000, floatWithheld: null,
     })
-    expect(summaryMock).toHaveBeenCalledWith('GME', { modules: ['defaultKeyStatistics'] })
+    expect(typeof body.metrics.shortInterestAgeDays).toBe('number')
+    expect(summaryMock).toHaveBeenCalledWith('ABCD', { modules: ['defaultKeyStatistics'] })
   })
 
   // Red-team Q145-R5: a decimal-form percent was rendered 100x too small.
@@ -130,27 +135,89 @@ describe('/api/darkpool — a fetch failure is not explained as a coverage gap',
     const { GET } = await import('@/app/api/darkpool/[ticker]/route')
     quoteMock.mockResolvedValue({ quoteType: 'EQUITY', regularMarketPrice: 101.6, regularMarketChange: 1.6, regularMarketChangePercent: 0.016 })
     summaryMock.mockResolvedValue({ defaultKeyStatistics: {} })
-    const body = await (await GET(req('/api/darkpool/AAPL'), { params: Promise.resolve({ ticker: 'AAPL' }) })).json()
+    const body = await (await GET(req('/api/darkpool/ABCD'), { params: Promise.resolve({ ticker: 'ABCD' }) })).json()
     expect(body.quote.changePct).toBeCloseTo(1.6, 10)
   })
 
-  it('a quote with neither change field has a null percent, not 0', async () => {
+  it('a quote with neither change field has a null percent, not 0; with only a change, the percent is implied', async () => {
     const { GET } = await import('@/app/api/darkpool/[ticker]/route')
     quoteMock.mockResolvedValue({ quoteType: 'ETF', regularMarketPrice: 300 })
     summaryMock.mockResolvedValue({ defaultKeyStatistics: {} })
     const body = await (await GET(req('/api/darkpool/XLK'), { params: Promise.resolve({ ticker: 'XLK' }) })).json()
     expect(body.quote).toMatchObject({ price: 300, change: null, changePct: null })
+    quoteMock.mockResolvedValue({ quoteType: 'ETF', regularMarketPrice: 300, regularMarketChange: 3 })
+    const implied = await (await GET(req('/api/darkpool/XLK'), { params: Promise.resolve({ ticker: 'XLK' }) })).json()
+    expect(implied.quote.changePct).not.toBeNull() // Q149-D10 M12: the middle case is pinned
   })
 
-  it('an equity with no float is logged as schema drift', async () => {
+  it('an equity with NO float field is logged as schema drift', async () => {
     const { GET } = await import('@/app/api/darkpool/[ticker]/route')
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     quoteMock.mockResolvedValue({ quoteType: 'EQUITY', regularMarketPrice: 25, regularMarketChange: 1 })
     summaryMock.mockResolvedValue({ defaultKeyStatistics: { sharesOutstanding: 450_000_000 } })
-    await GET(req('/api/darkpool/GME'), { params: Promise.resolve({ ticker: 'GME' }) })
+    await GET(req('/api/darkpool/ABCD'), { params: Promise.resolve({ ticker: 'ABCD' }) })
     expect(warn).toHaveBeenCalledTimes(1)
     expect(String(warn.mock.calls[0][0])).toContain('darkpool.shares_float_missing')
     warn.mockRestore()
+  })
+
+  // Q149-D3: a float the builder WITHHELD is not drift; the response says why instead.
+  it('a withheld float, an index, or a missing price logs no drift', async () => {
+    const { GET } = await import('@/app/api/darkpool/[ticker]/route')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    quoteMock.mockResolvedValue({ quoteType: 'EQUITY', regularMarketPrice: 25, regularMarketChange: 1 })
+    summaryMock.mockResolvedValue({ defaultKeyStatistics: { sharesOutstanding: 1e9, floatShares: 2.5e9 } })
+    const withheld = await (await GET(req('/api/darkpool/ABCD'), { params: Promise.resolve({ ticker: 'ABCD' }) })).json()
+    expect(withheld.metrics).toMatchObject({ sharesFloat: null, floatWithheld: 'exceeds-shares-out' })
+    quoteMock.mockResolvedValue({ quoteType: 'INDEX', regularMarketPrice: 5000, regularMarketChange: 1 })
+    summaryMock.mockResolvedValue({ defaultKeyStatistics: {} })
+    await GET(req('/api/darkpool/^GSPC'), { params: Promise.resolve({ ticker: '^GSPC' }) })
+    quoteMock.mockResolvedValue({ quoteType: 'EQUITY' })
+    summaryMock.mockResolvedValue({ defaultKeyStatistics: {} })
+    await GET(req('/api/darkpool/ABCD'), { params: Promise.resolve({ ticker: 'ABCD' }) })
+    expect(warn).not.toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
+  // Q149-D10 (M14/M15): the two partial-failure notes are pinned, so the old
+  // "off-exchange statistics" wording cannot come back green.
+  it('one of the two calls fails: each note names what failed', async () => {
+    const { GET } = await import('@/app/api/darkpool/[ticker]/route')
+    quoteMock.mockRejectedValue(new Error('yahoo down'))
+    summaryMock.mockResolvedValue({ defaultKeyStatistics: { sharesShort: 1e6 } })
+    const noQuote = await (await GET(req('/api/darkpool/ABCD'), { params: Promise.resolve({ ticker: 'ABCD' }) })).json()
+    expect(noQuote).toMatchObject({ degraded: true, statusNote: 'The price quote failed to load; the short-interest figures below are shown without it.' })
+    quoteMock.mockResolvedValue({ quoteType: 'EQUITY', regularMarketPrice: 25 })
+    summaryMock.mockRejectedValue(new Error('yahoo down'))
+    const noStats = await (await GET(req('/api/darkpool/ABCD'), { params: Promise.resolve({ ticker: 'ABCD' }) })).json()
+    expect(noStats).toMatchObject({ degraded: true, statusNote: 'The short-interest figures failed to load; try again shortly.' })
+  })
+
+  // Q149-D4: quote() RESOLVES to undefined for a symbol Yahoo does not know.
+  // The route dereferenced it, threw, and answered 502 "failed".
+  it('a ticker Yahoo has no quote for is "no quote", 200, not a 502 outage', async () => {
+    const { GET } = await import('@/app/api/darkpool/[ticker]/route')
+    quoteMock.mockResolvedValue(undefined)
+    summaryMock.mockRejectedValue(new Error('Quote not found'))
+    const res = await GET(req('/api/darkpool/ZZZZZZ'), { params: Promise.resolve({ ticker: 'ZZZZZZ' }) })
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.statusNote).toBe(NO_QUOTE_NOTE)
+    expect(body.degraded).toBeUndefined()
+    expect(body.quote).toEqual({ price: null, change: null, changePct: null, quoteTime: null })
+  })
+
+  // Q149-D5: Yahoo has no key statistics for a crypto pair or a currency and
+  // rejects the request — a permanent absence, not "try again shortly".
+  it('a crypto pair or currency without key statistics is not an outage', async () => {
+    const { GET } = await import('@/app/api/darkpool/[ticker]/route')
+    for (const quoteType of ['CRYPTOCURRENCY', 'CURRENCY']) {
+      quoteMock.mockResolvedValue({ quoteType, regularMarketPrice: 60_000, regularMarketChange: 100 })
+      summaryMock.mockRejectedValue(new Error('No fundamentals data found'))
+      const body = await (await GET(req('/api/darkpool/BTC-USD'), { params: Promise.resolve({ ticker: 'BTC-USD' }) })).json()
+      expect(body.degraded, quoteType).toBeUndefined()
+      expect(body.statusNote, quoteType).toBe(NO_SHORT_INTEREST_NOTE)
+    }
   })
 })
 

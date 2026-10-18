@@ -29,34 +29,41 @@ import { markSynthetic } from '@/lib/synthetic'
 // data cannot be assigned to it. A fixture is synthetic by definition, so it
 // goes through the sanctioned constructor rather than a cast.
 const PRINTS = markSynthetic<DarkPoolPrint[]>([
-  { time: '14:58:00', ticker: 'AAPL', size: 334_000, price: 100.07, premium: 0.54, type: 'BLOCK', sentiment: 'BULLISH' },
-  { time: '14:30:00', ticker: 'AAPL', size: 114_000, price: 100.59, premium: 0.63, type: 'SWEEP', sentiment: 'BEARISH' },
+  { time: '14:58:00', ticker: 'ABCD', size: 334_000, price: 100.07, premium: 0.54, type: 'BLOCK', sentiment: 'BULLISH' },
+  { time: '14:30:00', ticker: 'ABCD', size: 114_000, price: 100.59, premium: 0.63, type: 'SWEEP', sentiment: 'BEARISH' },
 ])
 
+// Invented figures (Q149-D6, I8): the earlier fixture carried vendor-looking
+// magnitudes for a real issuer.
 const METRICS: DarkPoolMetric = {
-  sharesShorted: 141_610_000,
-  shortFloatPct: 0.97,
+  sharesShorted: 120_000_000,
+  shortFloatPct: 1.25,
   shortInterestAsOf: '2026-07-31',
-  daysToCover: 2.6,
-  avgDailyVolume: 54_000_000,
-  sharesOutstanding: 14_900_000_000,
-  sharesFloat: 14_590_000_000,
+  shortInterestAgeDays: 15,
+  shortInterestStale: false,
+  daysToCover: 2.5,
+  avgDailyVolume: 40_000_000,
+  sharesOutstanding: 10_000_000_000,
+  sharesFloat: 9_600_000_000,
+  floatWithheld: null,
 }
 
-/** `hasData` stands for the route's hasShortOrShareData — it sets statusNote. */
+const NO_SHORT_INTEREST = 'Yahoo Finance reports no short-interest figures for this ticker.'
+
+/** `hasData` stands for the route's hasShortInterestData — it sets statusNote. */
 function analysis(hasData: boolean): DarkPoolAnalysis {
   return {
-    ticker: 'AAPL',
+    ticker: 'ABCD',
     fetchedAt: '2026-08-15T00:39:59.000Z',
-    quote: { price: 305.4, change: 1.2, changePct: 0.39, quoteTime: '2026-08-14T20:00:00.000Z' },
+    quote: { price: 250, change: 1.2, changePct: 0.48, quoteTime: '2026-08-14T20:00:00.000Z' },
     metrics: METRICS,
-    statusNote: hasData ? null : 'Yahoo Finance reports no short-interest or share-count figures for this ticker.',
+    statusNote: hasData ? null : NO_SHORT_INTEREST,
   }
 }
 
 const render = (apiData: DarkPoolAnalysis | null) =>
   renderToStaticMarkup(
-    <DarkPoolPanel prints={PRINTS} ticker="AAPL" color="#3b82f6" apiData={apiData} />,
+    <DarkPoolPanel prints={PRINTS} ticker="ABCD" color="#3b82f6" apiData={apiData} />,
   )
 
 /**
@@ -126,10 +133,12 @@ describe('DarkPoolPanel — the Yahoo attribution is scoped to the metrics', () 
   it('still reports the real metrics it does cover', () => {
     const html = render(analysis(true))
     expect(html).toContain('Short Interest (% of float)')
-    expect(html).toContain('0.97%')
-    expect(html).toContain('141.61M shares · as of 2026-07-31')
-    expect(html).toContain('14.90B')
-    expect(html).toContain('Float 14.59B')
+    expect(html).toContain('1.25%')
+    expect(html).toContain('120.00M shares · as of 2026-07-31')
+    expect(html).not.toContain('STALE')
+    expect(html).toContain('10.00B')
+    expect(html).toContain('Float 9.60B')
+    expect(html).toContain('as reported by Yahoo; not computed from the volume shown')
   })
 })
 
@@ -158,14 +167,37 @@ describe('DarkPoolPanel — says what this source does not publish (Q-149)', () 
     const etf: DarkPoolAnalysis = {
       ...analysis(false),
       ticker: 'XLK',
-      metrics: { sharesShorted: null, shortFloatPct: null, shortInterestAsOf: null, daysToCover: null, avgDailyVolume: 6_000_000, sharesOutstanding: null, sharesFloat: null },
-      statusNote: 'Yahoo Finance reports no short-interest or share-count figures for this ticker.',
+      metrics: {
+        sharesShorted: null, shortFloatPct: null, shortInterestAsOf: null, shortInterestAgeDays: null, shortInterestStale: false,
+        daysToCover: null, avgDailyVolume: 6_000_000, sharesOutstanding: 300_000_000, sharesFloat: null, floatWithheld: null,
+      },
+      statusNote: NO_SHORT_INTEREST,
     }
     const html = render(etf)
     expect(html).not.toMatch(/moderate/i)
-    expect(html).toContain('Yahoo Finance reports no short-interest or share-count figures for this ticker.')
+    expect(html).toContain(NO_SHORT_INTEREST)
+    expect(html).toContain('300.00M') // Q149-D1: the ETF's share count, from its quote
     expect(html).toContain('Float not reported')
     // The definition line describes a number; with no number it does not render.
     expect(html).not.toContain('reported twice a month')
+  })
+
+  it('a float the route WITHHELD says so, with the reason — not "not reported" (Q149-D2)', () => {
+    const withheld = (floatWithheld: DarkPoolMetric['floatWithheld']) =>
+      render({ ...analysis(true), metrics: { ...METRICS, sharesFloat: null, floatWithheld } })
+    expect(withheld('exceeds-shares-out')).toContain('Float withheld: larger than shares outstanding')
+    expect(withheld('inconsistent-with-short-interest')).toContain('Float withheld: inconsistent with the short-interest figures')
+    expect(withheld('exceeds-shares-out')).not.toContain('Float not reported')
+  })
+
+  it('a settlement date past a missed cycle reads STALE with its age (Q149-D12)', () => {
+    const html = render({ ...analysis(true), metrics: { ...METRICS, shortInterestAsOf: '2026-06-30', shortInterestAgeDays: 46, shortInterestStale: true } })
+    expect(html).toContain('as of 2026-06-30 · STALE (46 days)')
+  })
+
+  it('the screen-reader caption says the prints are illustrative, not trades (Q149-D13)', () => {
+    const html = render(analysis(true))
+    expect(html).toContain('Illustrative dark pool prints — generated examples, not real trades')
+    expect(html).not.toContain('recent off-exchange block trades')
   })
 })

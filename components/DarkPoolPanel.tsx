@@ -21,7 +21,7 @@ interface DarkPoolPanelProps {
   prints: Synthetic<DarkPoolPrint[]>
   ticker: string
   color: string
-  /** Real off-exchange analytics loaded from /api/darkpool/[ticker] */
+  /** Short interest and share counts loaded from /api/darkpool/[ticker] */
   apiData?: DarkPoolAnalysis | null
   /** True while fetching apiData */
   apiLoading?: boolean
@@ -64,10 +64,22 @@ export default function DarkPoolPanel({
   const statusNote = apiData?.statusNote ?? null
   const shortPct = metrics?.shortFloatPct ?? null
   // Q-149: the sub-label names what is known, in the order a reader needs it.
+  // A settlement date older than a missed reporting cycle says STALE with its
+  // age (I2), rather than printing an old date as if it were current.
   const shortSub = [
     metrics?.sharesShorted != null ? `${fmtShares(metrics.sharesShorted)} shares` : null,
     metrics?.shortInterestAsOf ? `as of ${metrics.shortInterestAsOf}` : null,
+    metrics?.shortInterestStale && metrics.shortInterestAgeDays != null ? `STALE (${metrics.shortInterestAgeDays} days)` : null,
   ].filter(Boolean).join(' · ') || 'not reported'
+  // Q149-D2: a float the vendor reported and the route withheld is not "not reported".
+  const floatSub =
+    metrics?.sharesFloat != null
+      ? `Float ${fmtShares(metrics.sharesFloat)}`
+      : metrics?.floatWithheld === 'exceeds-shares-out'
+        ? 'Float withheld: larger than shares outstanding'
+        : metrics?.floatWithheld === 'inconsistent-with-short-interest'
+          ? 'Float withheld: inconsistent with the short-interest figures'
+          : 'Float not reported'
 
   // ── Bullish print ratio (illustrative) ────────────────────────────────
   const bullishPrints = prints.filter((p) => p.sentiment === 'BULLISH')
@@ -78,7 +90,7 @@ export default function DarkPoolPanel({
 
   return (
     <div className="space-y-4">
-      {/* ── Real off-exchange metrics ──────────────────────────────── */}
+      {/* ── Short interest and share counts (Yahoo) ───────────────────── */}
       {apiLoading && !apiData && (
         <div className="rounded-xl border border-amber-500/20 bg-amber-950/10 p-4 space-y-2 animate-pulse">
           <div className="h-4 bg-slate-800 rounded w-2/3" />
@@ -123,13 +135,13 @@ export default function DarkPoolPanel({
             <MetricCard
               label="Days to Cover"
               value={metrics?.daysToCover != null ? metrics.daysToCover.toFixed(1) : '—'}
-              sub="short interest ÷ average daily volume"
+              sub="as reported by Yahoo; not computed from the volume shown"
             />
             <MetricCard label="10-Day Avg Volume" value={fmtShares(metrics?.avgDailyVolume)} sub="shares per day" />
             <MetricCard
               label="Shares Outstanding"
               value={fmtShares(metrics?.sharesOutstanding)}
-              sub={metrics?.sharesFloat != null ? `Float ${fmtShares(metrics.sharesFloat)}` : 'Float not reported'}
+              sub={floatSub}
             />
           </div>
 
@@ -198,7 +210,7 @@ export default function DarkPoolPanel({
       {/* ── Off-exchange flow gauge (ILLUSTRATIVE) ────────────────────
           UX-6: `bullishPct` is derived from `prints`, which are always
           synthetic, so this gauge is synthetic too — it was gated on the
-          tautology `(hasRealData || true)`, i.e. always rendered, immediately
+          tautology `(hasRealData || true)` (a flag since removed), i.e. always rendered, immediately
           under the real Yahoo provenance line and with no label of its own. The
           dead conditional is gone and the badge is now part of the header. */}
       <div className="bg-slate-900/60 rounded-xl p-4 border border-slate-800" role="region" aria-label="Off-exchange flow sentiment (illustrative)">
@@ -235,11 +247,11 @@ export default function DarkPoolPanel({
           </span>
           <div className="flex items-center gap-2 text-xs text-slate-400">
             {/* UX-6: unconditional. `prints` come from lib/mockData.ts's
-                mulberry32 generator on EVERY render path — `hasRealData`
-                describes the Yahoo METRICS above, not this table, so gating the
-                badge on `!hasRealData` hid the label exactly on the liquid
-                tickers a professional trades (AAPL: fabricated prints at ≈$100
-                while the real quote was $305.40, badge absent). */}
+                mulberry32 generator on EVERY render path. The badge used to be
+                gated on a flag (`hasRealData`, since removed) that described the
+                Yahoo figures above, not this table, so it vanished exactly on the
+                liquid tickers a professional trades — fabricated prints near $100
+                beside a real quote three times higher, with no badge. */}
             <span className="px-2 py-0.5 rounded bg-amber-900/30 text-amber-400 border border-amber-500/30 text-[10px]">
               ILLUSTRATIVE
             </span>
@@ -250,7 +262,7 @@ export default function DarkPoolPanel({
 
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
-            <caption className="sr-only">Dark pool prints — recent off-exchange block trades</caption>
+            <caption className="sr-only">Illustrative dark pool prints — generated examples, not real trades</caption>
             <thead>
               <tr className="text-slate-400 border-b border-slate-800">
                 <th scope="col" className="text-left px-4 py-2 font-medium">Time</th>

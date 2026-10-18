@@ -7,8 +7,9 @@
  * Q-149: this header used to say Yahoo provides "`marketStore` — Finra
  * BATS/OTCQX off-exchange %". It does not: no yahoo-finance2 module carries
  * off-exchange volume, and the fields this route read for it did not exist, so
- * the figure was null on every request. The route now reads only typed fields
- * and says off-exchange volume is not published by this source.
+ * the figure was null on every request. The route now reads only fields the
+ * vendor interfaces declare (lib/darkpool.ts) and says off-exchange volume is
+ * not published by this source.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -19,9 +20,11 @@ import { DEGRADED_CACHE_CONTROL } from '@/lib/api/reliability'
 import { normalizeTicker, sanitizeError } from '@/lib/api/sanitize'
 import { normalizedChangePercent } from '@/lib/yahooQuoteFields'
 import {
-  NO_SHORT_DATA_NOTE,
+  NO_QUOTE_NOTE,
+  NO_SHORT_INTEREST_NOTE,
+  NO_SHORT_INTEREST_TYPES,
   buildDarkPoolMetrics,
-  hasShortOrShareData,
+  hasShortInterestData,
   type DarkPoolAnalysis,
   type PricePoint,
 } from '@/lib/darkpool'
@@ -45,19 +48,20 @@ function buildAnalysis(
   keyStats: Record<string, unknown>,
   rawQuote: Record<string, unknown>,
 ): DarkPoolAnalysis {
-  const metrics = buildDarkPoolMetrics(keyStats, rawQuote)
+  const now = Date.now()
+  const metrics = buildDarkPoolMetrics(keyStats, rawQuote, now)
 
-  // Phase 14 (R4-H-4): a populated EQUITY quote with no float is schema drift,
-  // so it is logged for alerting. Q-149: this used to fire on every request —
-  // the field it read did not exist — and an alert that is always on hides the
-  // drift it is for. ETFs carry no float, so they are not drift.
-  if (rawQuote.quoteType === 'EQUITY' && quote.price != null && metrics.sharesFloat === null) {
+  // Phase 14 (R4-H-4): a populated EQUITY quote with NO float field is schema
+  // drift, so it is logged for alerting. Q-149: this fired on every request (the
+  // field it read did not exist), and then on every float the builder WITHHELD
+  // (Q149-D3) — an alert that is always on hides the drift it is for. A withheld
+  // float is visible in the response as `floatWithheld`; it is not drift.
+  if (rawQuote.quoteType === 'EQUITY' && quote.price != null && keyStats.floatShares === undefined) {
     console.warn(JSON.stringify({
       event: 'darkpool.shares_float_missing',
       ticker,
-      keyStatsHasFloatShares: keyStats.floatShares !== undefined,
       keyStatsHasSharesOutstanding: keyStats.sharesOutstanding !== undefined,
-      fetchedAt: new Date().toISOString(),
+      fetchedAt: new Date(now).toISOString(),
     }))
   }
 
@@ -65,10 +69,10 @@ function buildAnalysis(
   // security type.
   return {
     ticker,
-    fetchedAt: new Date().toISOString(),
+    fetchedAt: new Date(now).toISOString(),
     quote,
     metrics,
-    statusNote: hasShortOrShareData(metrics) ? null : NO_SHORT_DATA_NOTE,
+    statusNote: hasShortInterestData(metrics) ? null : NO_SHORT_INTEREST_NOTE,
   }
 }
 
@@ -102,10 +106,12 @@ export async function GET(
     ]
 
     // ── Price ────────────────────────────────────────────
-    const q =
-      quoteResult.status === 'fulfilled'
-        ? (quoteResult.value as Record<string, unknown>)
-        : {}
+    // Q149-D4: for a symbol Yahoo does not know, quote() RESOLVES to undefined.
+    // Dereferencing it threw, and the catch answered 502 "failed" for a ticker
+    // that simply has no quote.
+    const quoteValue = quoteResult.status === 'fulfilled' ? quoteResult.value : null
+    const q = (quoteValue && typeof quoteValue === 'object' ? quoteValue : {}) as Record<string, unknown>
+    const noQuote = quoteResult.status === 'fulfilled' && Object.keys(q).length === 0
 
     const rawPrice = safeNum(q.regularMarketPrice ?? q.currentPrice)
     const rawChange = safeNum(q.regularMarketChange)
@@ -157,8 +163,13 @@ export async function GET(
     // Yahoo down this used to say "Dark pool metrics are not available for this
     // security type (ETF, ADR, or OTC)" — a wrong explanation for an outage.
     const quoteFailed = quoteResult.status === 'rejected'
-    const summaryFailed = summaryResult.status === 'rejected'
-    if (quoteFailed || summaryFailed) {
+    // Q149-D5: Yahoo has no key statistics for a crypto pair, a currency, an
+    // index or a fund, and rejects the request. That is an absence, not an outage
+    // to "try again shortly".
+    const summaryFailed = summaryResult.status === 'rejected' && !NO_SHORT_INTEREST_TYPES.has(String(q.quoteType))
+    if (noQuote) {
+      analysis.statusNote = NO_QUOTE_NOTE
+    } else if (quoteFailed || summaryFailed) {
       analysis.degraded = true
       analysis.statusNote = quoteFailed && summaryFailed
         ? 'The market-data feed failed for this ticker; try again shortly.'
