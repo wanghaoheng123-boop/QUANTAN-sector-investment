@@ -274,11 +274,18 @@ describe('Q-128/Q-129 — malformed bridge data cannot replace a valid price', (
     expect(q?.quoteTime).toBe('2026-09-10T14:00:00.000Z')
   })
 
-  it('a malformed secondary field degrades to 0 (read as absent), not to a prefix', async () => {
+  it('a malformed secondary field is null (absent), not a prefix', async () => {
     ok([{ symbol: 'AAPL', last: 201.5, volume: '1,000,000' }])
     const q = (await fetchBloombergQuotesViaBridge(['AAPL']))?.get('AAPL')
     expect(q?.price).toBe(201.5)
-    expect(q?.volume).toBe(0)   // was 1
+    expect(q?.volume).toBeNull()   // was 1, then 0
+  })
+
+  // Q145-R3: every field the bridge did not supply is null, not a measured 0.
+  it('a row with only a price has null change, percent, volume, range and P/E', async () => {
+    ok([{ symbol: 'SPY', last: 500 }])
+    const q = (await fetchBloombergQuotesViaBridge(['SPY']))?.get('SPY')
+    expect(q).toMatchObject({ price: 500, change: null, changePct: null, volume: null, high52w: null, low52w: null, pe: null })
   })
 
   it('carries null when the bridge supplies no timestamp', async () => {

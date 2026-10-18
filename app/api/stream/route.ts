@@ -138,7 +138,9 @@ async function fetchQuotes(symbols: readonly string[]): Promise<QuoteEvent[]> {
       if (!row) continue
       const symbol = typeof row.symbol === 'string' && row.symbol.length > 0 ? row.symbol : null
       const price = finite(row.regularMarketPrice)
-      if (!symbol || price == null) continue
+      // Red-team Q145-R8: a price of 0 or below is not a quote — the same rule
+      // as /api/prices and the single-ticker stream.
+      if (!symbol || price == null || price <= 0) continue
       out.push({
         ticker: symbol,
         price,

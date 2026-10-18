@@ -38,6 +38,7 @@ import { SECTORS } from '@/lib/sectors'
 import { parseQuoteTime } from '@/lib/format'
 import { isSafeHttpUrl } from '@/lib/security/urlValidation'
 import { newsPublishTime } from '@/lib/news/publishTime'
+import { normalizedChangePercent } from '@/lib/yahooQuoteFields'
 
 export interface BriefSignal {
   key: string
@@ -236,8 +237,11 @@ export async function buildSectorBrief(
   const rawPrice = safeNum(q?.regularMarketPrice ?? q?.currentPrice)
   const price = rawPrice != null && rawPrice > 0 ? rawPrice : null
   const change = price != null ? safeNum(q?.regularMarketChange) : null
-  const rawChangePct = safeNum((q as Record<string, unknown>)?.regularMarketChangePercent as number)
-  const changePct = rawChangePct ?? (price != null && change != null ? (100 * change) / price : null)
+  // Red-team Q145-R5: the percent was taken raw, so a decimal-form row (0.016
+  // meaning 1.6%) rendered +0.02% on /briefs. Same normaliser as /api/prices.
+  const changePct = price != null
+    ? normalizedChangePercent(safeNum(q?.regularMarketChangePercent), change, price)
+    : null
   const quoteTime = parseQuoteTime(q?.regularMarketTime)
   // A4-1: yahoo-finance2 Quote exposes regularMarketVolume (quote.d.ts:234) and
   // averageDailyVolume3Month (:275) — the prior `regularVolume`/`averageDailyVolume`
@@ -276,9 +280,14 @@ export async function buildSectorBrief(
       ticker,
       weight: '—',
       price: safeNum(qh?.regularMarketPrice ?? qh?.currentPrice) ?? 0,
-      // Q-140: a missing change is unknown, not "unchanged".
+      // Q-140: a missing change is unknown, not "unchanged". Q145-R5: the
+      // percent goes through the same normaliser as every quote producer.
       change: safeNum(qh?.regularMarketChange),
-      changePct: safeNum((qh as Record<string, unknown>)?.regularMarketChangePercent as number),
+      changePct: normalizedChangePercent(
+        safeNum(qh?.regularMarketChangePercent),
+        safeNum(qh?.regularMarketChange),
+        safeNum(qh?.regularMarketPrice ?? qh?.currentPrice),
+      ),
     }
   }).filter(h => h.price > 0) // a holding with no price is dropped, not shown at $0
 

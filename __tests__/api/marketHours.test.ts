@@ -91,25 +91,34 @@ describe('SSE quote events carry the vendor stamp, not the emit time', () => {
     },
   )
 
+  // Q-145: the pages hand the whole tick to a merge helper (pinned on the parse
+  // tree by __tests__/architecture/live-quote-merge.test.ts); the helper is
+  // where the stamp is chosen, so that is where it is checked.
   it.each([
-    'app/stock/[ticker]/page.tsx',
-    'app/sector/[slug]/page.tsx',
-  ])('%s reads the vendor stamp, never the emit time', (path) => {
+    ['app/stock/[ticker]/page.tsx', 'mergeStockTick'],
+    ['app/sector/[slug]/page.tsx', 'mergeSectorTick'],
+  ])('%s hands the live tick to %s and never stamps it with the emit time', (path, helper) => {
     const src = read(path)
-    expect(src).toMatch(/quoteTime:\s*live\.quote!\.quoteTime/)
-    expect(src).not.toMatch(/quoteTime:\s*live\.quote!\.timestamp/)
+    expect(src).toMatch(/const tick = live\.quote\b/)
+    expect(src).toContain(`${helper}(prev, tick)`)
+    expect(src).not.toMatch(/quoteTime:\s*live\.quote!?\.timestamp/)
   })
 
-  it('app/page.tsx carries the VENDOR stamp, never the emit time, and the stamp has a reader', () => {
-    // Q-101 review deleted the homepage's quoteTime because nothing read it (a
-    // dead flag). Q-145 gave it a reader: resolveTickChange derives a tick's
-    // missing change from the prior close only within one New York session,
-    // which needs both quotes' vendor stamps. The property that never changes:
-    // it is the vendor's time, not this server's emit time.
+  it('lib/liveQuoteState.ts stamps both page states with the tick\'s VENDOR time', () => {
+    const src = read('lib/liveQuoteState.ts')
+    expect(src.match(/quoteTime:\s*tick\.quoteTime/g)).toHaveLength(2)
+    expect(src).not.toMatch(/\.timestamp\b/)
+  })
+
+  it('app/page.tsx carries no quote age at all, and certainly not the emit time', () => {
+    // Q-101 review. The first version of this test asserted the homepage READ
+    // the vendor stamp — but nothing on that page renders an age (SectorCard
+    // does not take it; the hero pill keys off marketOpen && streamConnected),
+    // so the assignment was a dead flag: the exact shape this package removes.
+    // It was deleted, and the property is now the absence of the substitution.
     const src = read('app/page.tsx').replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1')
     expect(src).not.toMatch(/quoteTime:\s*q\.timestamp/)
-    expect(src).toMatch(/quoteTime:\s*q\.quoteTime/)
-    expect(src).toMatch(/resolveTickChange\(old, q\)/)
+    expect(src).not.toMatch(/quoteTime:\s*q\.quoteTime/)
   })
 
   it('the comment-stripper above is not what makes that pass', () => {

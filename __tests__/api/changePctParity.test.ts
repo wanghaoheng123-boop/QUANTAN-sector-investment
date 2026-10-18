@@ -61,7 +61,12 @@ import { GET as streamGET } from '@/app/api/stream/route'
 import { GET as singleStreamGET } from '@/app/api/stream/[ticker]/route'
 import { normalizedChangePercent } from '@/lib/yahooQuoteFields'
 
-/** The row Yahoo returns in DECIMAL form: a true +1.6% move reported as 0.016. */
+/**
+ * The row Yahoo returns in DECIMAL form: a 1.6% move reported as 0.016. (Strictly
+ * a change of 1.6 on a price of 100 is 1.626% of the prior close; the
+ * normaliser's implied value divides by the current price, which is close
+ * enough to choose the scale — red-team Q145-R7, logged.)
+ */
 const DECIMAL_FORM_ROW: MockQuoteRow = {
   symbol: 'SPY',
   regularMarketPrice: 100,
@@ -267,11 +272,78 @@ describe('Q-145: every quote producer — same percent, and null (not 0) when Ya
     expect(await singleStreamQuote('10.9.6.3')).toMatchObject({ change: null, changePct: null })
   })
 
+  // Red-team Q145-R8: the multiplex stream accepted a price of 0 (finite only),
+  // while /api/prices and the single stream require > 0.
+  it('/api/stream emits no quote for a row priced at 0, like the other two routes', async () => {
+    quoteMock.mockResolvedValue([{ symbol: 'SPY', regularMarketPrice: 0, regularMarketChange: 1 }, { symbol: 'QQQ', regularMarketPrice: 400, regularMarketChange: 2 }])
+    const controller = new AbortController()
+    const res = await streamGET(new Request('http://localhost/api/stream?tickers=SPY,QQQ', { headers: { 'x-real-ip': '10.9.6.4' }, signal: controller.signal }))
+    const reader = res.body!.getReader()
+    const decoder = new TextDecoder()
+    const quoted: string[] = []
+    try {
+      for (let i = 0; i < 64; i++) {
+        const { value, done } = await reader.read()
+        if (done) break
+        let sawMarketState = false
+        for (const block of decoder.decode(value).split('\n\n')) {
+          const m = /^event: (\w+)\ndata: ([\s\S]*)$/.exec(block.trim())
+          if (!m) continue
+          if (m[1] === 'market_state') sawMarketState = true
+          if (m[1] === 'quote') quoted.push((JSON.parse(m[2]) as { ticker: string }).ticker)
+        }
+        if (sawMarketState) break
+      }
+    } finally {
+      controller.abort()
+      await reader.cancel().catch(() => { /* already closed */ })
+    }
+    expect(quoted).toEqual(['QQQ'])
+  })
+
   it('/api/prices drops a row with no usable price and names the ticker in `unpriced`', async () => {
     quoteMock.mockResolvedValue([{ symbol: 'SPY', regularMarketChange: 1 }, { symbol: 'QQQ', regularMarketPrice: 0 }])
     const res = await pricesGET(new NextRequest(new URL('http://localhost:3000/api/prices?tickers=SPY,QQQ')))
     const body = await res.json() as { quotes: unknown[]; unpriced: string[] }
     expect(body.quotes).toEqual([])
     expect(body.unpriced.sort()).toEqual(['QQQ', 'SPY'])
+  })
+})
+
+/**
+ * Red-team Q145-R5: the briefs producer took `regularMarketChangePercent` raw, so
+ * a decimal-form row rendered +0.02% on /briefs while every quote route said
+ * +1.6%. It goes through the same normaliser now — for the ETF and each holding.
+ */
+describe('changePct: the sector-brief producer ≡ /api/prices', () => {
+  it('the ETF and every holding normalise a DECIMAL-form row like the quote routes', async () => {
+    const { buildSectorBrief } = await import('@/lib/briefs/sectorBrief')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const row = { ...DECIMAL_FORM_ROW, regularMarketTime: new Date('2026-10-16T20:00:00Z') }
+    const brief = await buildSectorBrief('technology', {
+      quote: vi.fn(async () => row),
+      quoteSummary: vi.fn(async () => ({ defaultKeyStatistics: {} })),
+      search: vi.fn(async () => ({ news: [] })),
+    })
+    warn.mockRestore()
+    expect(brief).not.toBeNull()
+    const expected = normalizedChangePercent(row.regularMarketChangePercent, row.regularMarketChange, row.regularMarketPrice)
+    expect(expected).toBeCloseTo(1.6, 10)
+    expect(brief!.changePct).toBe(expected)
+    expect(brief!.holdings.length).toBeGreaterThan(0)
+    for (const h of brief!.holdings) expect(h.changePct).toBe(expected)
+  })
+
+  it('a row with neither change field has a null percent, not 0', async () => {
+    const { buildSectorBrief } = await import('@/lib/briefs/sectorBrief')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const brief = await buildSectorBrief('technology', {
+      quote: vi.fn(async () => ({ symbol: 'XLK', regularMarketPrice: 250 })),
+      quoteSummary: vi.fn(async () => ({ defaultKeyStatistics: {} })),
+      search: vi.fn(async () => ({ news: [] })),
+    })
+    warn.mockRestore()
+    expect(brief!.changePct).toBeNull()
+    for (const h of brief!.holdings) expect(h.changePct).toBeNull()
   })
 })

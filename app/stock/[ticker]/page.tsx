@@ -5,7 +5,8 @@
 // (QuantLabPanel below), so it always has a ticker context. Do not add a
 // bare /quant-lab page; link to /stock/<ticker> with the quant tab instead.
 
-import { resolveTickChange } from '@/lib/quoteChange'
+import { bootQuoteFrom, FAILED_REASON, mergeStockTick, type StockQuoteState } from '@/lib/liveQuoteState'
+import { QuoteChangeLine, QuoteUnavailable } from '@/components/QuoteHeadline'
 import { useState, useEffect, useCallback, useMemo, use } from 'react'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
@@ -53,7 +54,7 @@ import { PanelSpinner } from '@/components/PanelSpinner'
 import type { EnrichedChain } from '@/lib/options/chain'
 import type { GexResult } from '@/lib/options/gex'
 import type { UnusualFlowItem, FlowSentimentLabel } from '@/lib/options/flow'
-import { formatCompactNumber, formatCurrency, formatFreshness, formatSignedNumber } from '@/lib/format'
+import { formatCompactNumber, formatCurrency, formatFreshness } from '@/lib/format'
 
 type VisKey = ChartEmaKey | 'vwap' | 'bollingerBands' | 'fibonacci' | 'volSma'
 
@@ -88,8 +89,10 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
 
   const [candles, setCandles]           = useState<Candle[]>([])
   // Q-145: change fields are nullable and render "—", never a measured 0.
-  const [quote, setQuote]               = useState<{ price: number; change: number | null; changePct: number | null; marketCap: string; quoteTime?: string | null } | null>(null)
+  const [quote, setQuote]               = useState<StockQuoteState | null>(null)
   const [quoteError, setQuoteError] = useState<string | null>(null)
+  // Q-145 (red-team R2): why there is no price, when the boot fetch says so.
+  const [quoteMissing, setQuoteMissing] = useState<string | null>(null)
   const [darkPoolPrints, setDarkPoolPrints] = useState<Synthetic<DarkPoolPrint[]>>(() => markSynthetic([]))
   const [darkPoolApiData, setDarkPoolApiData] = useState<DarkPoolAnalysis | null>(null)
   const [darkPoolApiLoading, setDarkPoolApiLoading] = useState(false)
@@ -190,15 +193,19 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
       })
       .then((data) => {
         if (signal?.aborted) return
-        const q = data.quotes?.find((q: { ticker: string }) => q.ticker === ticker)
-        if (q) {
-          setQuote(q)
+        const boot = bootQuoteFrom<StockQuoteState & { ticker: string }>(data, ticker)
+        if (boot.kind === 'priced') {
+          setQuote(boot.quote)
           setQuoteError(null)
+          setQuoteMissing(null)
+        } else {
+          setQuoteMissing(boot.reason)
         }
       })
       .catch((e) => {
         if (signal?.aborted || (e instanceof DOMException && e.name === 'AbortError')) return
         setQuoteError(e instanceof Error ? e.message : 'Quote unavailable')
+        setQuoteMissing(FAILED_REASON)
       })
   }, [ticker])
 
@@ -249,18 +256,14 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
   // Merge live quote into the page's quote state. Preserves the marketCap
   // field from the initial REST fetch (SSE payloads don't include it).
   useEffect(() => {
-    if (!live.quote) return
-    setQuote((prev) => ({
-      price: live.quote!.price,
-      // Q-145: a tick without a change no longer overwrites a known one with 0.
-      ...resolveTickChange(prev, live.quote!),
-      marketCap: prev?.marketCap ?? '',
-      // Q-101: the VENDOR's stamp, never this server's emit time. Using
-      // `timestamp` here made /stock/AAPL read "live" for a Friday close on a
-      // Sunday. null when the vendor gave none — unknown must read as unknown.
-      quoteTime: live.quote!.quoteTime,
-    }))
+    const tick = live.quote
+    if (!tick) return
+    // Q-145: the whole transition is mergeStockTick — a tick without a change
+    // is "—", never 0 and never the previous change; the quote time is the
+    // VENDOR's stamp (Q-101), never this server's emit time.
+    setQuote((prev) => mergeStockTick(prev, tick))
     setQuoteError(null)
+    setQuoteMissing(null)
   }, [live.quote])
 
   // Dark pool prints generation
@@ -350,7 +353,6 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
   // today (unlike the table and gauge) — see that ticket.
   const darkPoolPrintRows = unwrapSynthetic(darkPoolPrints, 'StockPage.darkPoolAggregateTiles')
 
-  const isUp = quote?.changePct != null && quote.changePct >= 0
 
   return (
     <div className="min-h-screen">
@@ -381,14 +383,7 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
               {quote ? (
                 <div className="text-right">
                   <div className="text-2xl font-bold text-white font-mono">{formatCurrency(quote.price)}</div>
-                  {quote.changePct == null ? (
-                    // Q-145: no change data is "—", not a green 0.00%.
-                    <div className="text-sm font-mono text-slate-400">— (no change data)</div>
-                  ) : (
-                    <div className={`text-sm font-mono ${isUp ? 'text-green-400' : 'text-red-400'}`}>
-                      {isUp ? '▲' : '▼'} {formatSignedNumber(quote.change)} ({Math.abs(quote.changePct).toFixed(2)}%)
-                    </div>
-                  )}
+                  <QuoteChangeLine change={quote.change} changePct={quote.changePct} />
                   <div className="text-xs text-slate-400 mt-1 font-mono">Market Cap: {quote.marketCap}</div>
                   {/* Phase 14 wave 36: real-time stream status pill. */}
                   <div className="flex items-center justify-end gap-2 mt-1">
@@ -426,6 +421,8 @@ export default function StockPage({ params }: { params: Promise<{ ticker: string
                     <span className="text-[10px] text-slate-400">{formatFreshness(quote.quoteTime, { stamp: 'vendor', calendar: 'us-equity' })}</span>
                   </div>
                 </div>
+              ) : quoteMissing ? (
+                <QuoteUnavailable reason={quoteMissing} />
               ) : (
                 <div className="space-y-2 text-right w-32">
                   <div className="h-7 bg-slate-800 rounded animate-pulse" />

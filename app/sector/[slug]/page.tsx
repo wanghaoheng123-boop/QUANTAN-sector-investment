@@ -1,6 +1,7 @@
 'use client'
 
-import { resolveTickChange } from '@/lib/quoteChange'
+import { bootQuoteFrom, FAILED_REASON, mergeSectorTick, type SectorQuoteState } from '@/lib/liveQuoteState'
+import { QuoteChangeLine, QuoteUnavailable } from '@/components/QuoteHeadline'
 import { useState, useEffect, useMemo, useCallback, use } from 'react'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
@@ -24,7 +25,7 @@ import type { DarkPoolAnalysis } from '@/lib/darkpool'
 import { sessionMoveFor } from '@/lib/sessionMoves'
 import { tradingDefaultEmaFlags } from '@/lib/chartEma'
 import { STOCK_CHART_RANGES, isStockIntradayPollRange, chartBarKindLabel } from '@/lib/chartYahoo'
-import { formatCompactNumber, formatCurrency, formatFreshness, formatSignedNumber } from '@/lib/format'
+import { formatCompactNumber, formatCurrency, formatFreshness } from '@/lib/format'
 import { ChartErrorBoundary } from '@/components/ChartErrorBoundary'
 import { DashboardGuide } from '@/components/DashboardGuide'
 import { MetricTooltip } from '@/components/MetricTooltip'
@@ -53,16 +54,9 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
 
   const [candles, setCandles] = useState<Candle[]>([])
   // Q-145: every field Yahoo may omit is nullable and renders "—", never 0.
-  const [quote, setQuote] = useState<{
-    price: number
-    change: number | null
-    changePct: number | null
-    volume: number | null
-    high52w: number | null
-    low52w: number | null
-    pe: number | null
-    quoteTime?: string | null
-  } | null>(null)
+  const [quote, setQuote] = useState<SectorQuoteState | null>(null)
+  // Q-145 (red-team R2): why there is no price, when the boot fetch says so.
+  const [quoteMissing, setQuoteMissing] = useState<string | null>(null)
   const [darkPoolPrints, setDarkPoolPrints] = useState<Synthetic<DarkPoolPrint[]>>(() => markSynthetic([]))
 
   // The aggregate tiles below read the synthetic prints directly, so they
@@ -173,15 +167,19 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
       })
       .then((data) => {
         if (controller.signal.aborted) return
-        const q = data.quotes?.find((x: { ticker: string }) => x.ticker === sector.etf)
-        if (q) {
-          setQuote(q)
+        const boot = bootQuoteFrom<SectorQuoteState & { ticker: string }>(data, sector.etf)
+        if (boot.kind === 'priced') {
+          setQuote(boot.quote)
           setQuoteError(null)
+          setQuoteMissing(null)
+        } else {
+          setQuoteMissing(boot.reason)
         }
       })
       .catch((e) => {
         if (controller.signal.aborted || (e instanceof DOMException && e.name === 'AbortError')) return
         setQuoteError(e instanceof Error ? e.message : 'Quote unavailable')
+        setQuoteMissing(FAILED_REASON)
       })
     return () => controller.abort()
   }, [sector.etf])
@@ -193,21 +191,14 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
   // 52w / pe fields from the boot REST fetch (SSE payloads carry just
   // price / change / volume / marketOpen).
   useEffect(() => {
-    if (!live.quote) return
-    setQuote((prev) => ({
-      price: live.quote!.price,
-      // Q-145: a tick without a change no longer overwrites a known one with 0.
-      ...resolveTickChange(prev, live.quote!),
-      volume: live.quote!.volume ?? prev?.volume ?? null,
-      high52w: prev?.high52w ?? null,
-      low52w: prev?.low52w ?? null,
-      pe: prev?.pe ?? null,
-      // Q-101: the VENDOR's stamp, never this server's emit time. Using
-      // `timestamp` here made /stock/AAPL read "live" for a Friday close on a
-      // Sunday. null when the vendor gave none — unknown must read as unknown.
-      quoteTime: live.quote!.quoteTime,
-    }))
+    const tick = live.quote
+    if (!tick) return
+    // Q-145: the whole transition is mergeSectorTick — a tick without a change
+    // is "—", never 0 and never the previous change; the quote time is the
+    // VENDOR's stamp (Q-101), never this server's emit time.
+    setQuote((prev) => mergeSectorTick(prev, tick))
     setQuoteError(null)
+    setQuoteMissing(null)
   }, [live.quote])
 
   useEffect(() => {
@@ -256,7 +247,6 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
 
   // newsMarkers removed — live news headlines now shown in NewsFeed panel below chart
 
-  const isUp = quote?.changePct != null && quote.changePct >= 0
 
   return (
     <div className="min-h-screen">
@@ -289,14 +279,7 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
               {quote ? (
                 <div className="text-right">
                   <div className="text-2xl font-bold text-white font-mono">{formatCurrency(quote.price)}</div>
-                  {quote.changePct == null ? (
-                    // Q-145: no change data is "—", not a green 0.00%.
-                    <div className="text-sm font-mono text-slate-400">— (no change data)</div>
-                  ) : (
-                    <div className={`text-sm font-mono ${isUp ? 'text-green-400' : 'text-red-400'}`}>
-                      {isUp ? '▲' : '▼'} {formatSignedNumber(quote.change)} ({Math.abs(quote.changePct).toFixed(2)}%)
-                    </div>
-                  )}
+                  <QuoteChangeLine change={quote.change} changePct={quote.changePct} />
                   <div className="text-xs text-slate-400 mt-1 font-mono">ETF: {sector.etf}</div>
                   {/* Phase 14 wave 37: real-time SSE stream status pill. */}
                   <div className="flex items-center justify-end gap-2 mt-1">
@@ -334,6 +317,8 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
                     <span className="text-[10px] text-slate-400">{formatFreshness(quote.quoteTime, { stamp: 'vendor', calendar: 'us-equity' })}</span>
                   </div>
                 </div>
+              ) : quoteMissing ? (
+                <QuoteUnavailable reason={quoteMissing} />
               ) : (
                 <div className="space-y-2 text-right w-32">
                   <div className="h-7 bg-slate-800 rounded animate-pulse" />

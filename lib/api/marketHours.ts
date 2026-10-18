@@ -156,11 +156,6 @@ const SESSION_OPEN_MINUTES = 9 * 60 + 30
  * `Date.UTC`, which manipulates a date *label* and never an instant, so the
  * walk is immune to DST — the bug this file's header was written about.
  */
-/** The New York calendar date of an instant, as YYYYMMDD — comparable as an integer. */
-export function nyDateYmd(d: Date): number {
-  return nyDateTime(d).ymd
-}
-
 export function lastSessionDateYmd(now: Date = new Date()): number {
   const t = nyDateTime(now)
   const startedToday = t.weekday !== 'Sat' && t.weekday !== 'Sun' && t.minutes >= SESSION_OPEN_MINUTES

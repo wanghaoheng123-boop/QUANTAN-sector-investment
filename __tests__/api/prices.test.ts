@@ -29,6 +29,7 @@ vi.mock('@/lib/api/reliability', async (importOriginal) => {
 })
 
 import { GET } from '@/app/api/prices/route'
+import { fetchBloombergQuotesViaBridge, isBloombergBridgeConfigured } from '@/lib/data/bloomberg/bridgeClient'
 
 function request(url: string) {
   return new NextRequest(new URL(url, 'http://localhost:3000'))
@@ -96,5 +97,23 @@ describe('GET /api/prices', () => {
       message: 'Failed to fetch live prices',
     })
     expect(body.error).not.toHaveProperty('stack')
+  })
+
+  // Red-team Q145-R2 (M11): `unpriced` is computed from the MERGED rows. A
+  // ticker Yahoo could not price but the Bloomberg bridge did is priced, and a
+  // bridge row without a change carries null, not 0.
+  it('a ticker priced only by the Bloomberg bridge is not reported unpriced', async () => {
+    vi.mocked(isBloombergBridgeConfigured).mockReturnValueOnce(true)
+    vi.mocked(fetchBloombergQuotesViaBridge).mockResolvedValueOnce(new Map([
+      ['SPY', { ticker: 'SPY', quoteTime: null, price: 500, change: null, changePct: null, volume: null, high52w: null, low52w: null, pe: null, marketCap: 'N/A', dataSource: 'bloomberg' as const }],
+    ]))
+    quoteMock.mockResolvedValue([
+      { symbol: 'SPY' },
+      { symbol: 'QQQ', regularMarketPrice: 400, regularMarketChange: 2, regularMarketChangePercent: 0.5 },
+    ])
+    const body = await (await GET(request('/api/prices?tickers=SPY,QQQ'))).json()
+    expect(body.unpriced).toEqual([])
+    const spy = body.quotes.find((q: { ticker: string }) => q.ticker === 'SPY')
+    expect(spy).toMatchObject({ price: 500, change: null, changePct: null, dataSource: 'bloomberg' })
   })
 })

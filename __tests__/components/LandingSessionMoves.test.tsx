@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 /**
  * Q-135 — the landing page shows session moves as measurements: no BUY / SELL
- * / HOLD filter, no "Avg Confidence", and a sector without a quote is counted
- * as "No quote" rather than as a flat 0% move.
+ * / HOLD filter, no "Avg Confidence", and a sector without change data is
+ * counted as such rather than as a flat 0% move. (Q145-R8: the label was "No
+ * quote", but a sector with a price and no change is counted there too.)
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
@@ -24,7 +25,7 @@ const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
 describe('landing page — session moves', () => {
-  it('counts sectors without a quote as "No quote", not as flat', async () => {
+  it('counts sectors without change data as "No change data", not as flat', async () => {
     vi.stubGlobal('EventSource', SilentEventSource)
     // Synthetic quotes for two sectors only; the other nine have none.
     vi.stubGlobal('fetch', vi.fn((url: string) => Promise.resolve(String(url).startsWith('/api/prices')
@@ -33,7 +34,7 @@ describe('landing page — session moves', () => {
     const { default: Page } = await import('@/app/page')
     render(<Page />)
     const stats = await screen.findByLabelText('Market overview stats')
-    await waitFor(() => expect(within(stats).getByText('No quote').previousElementSibling?.textContent).toMatch(/^9\//))
+    await waitFor(() => expect(within(stats).getByText('No change data').previousElementSibling?.textContent).toMatch(/^9\//))
     expect(within(stats).getByText('Flat (0.00%)').previousElementSibling?.textContent).toMatch(/^0\//)
     expect(within(stats).getByText('Sectors up today').previousElementSibling?.textContent).toMatch(/^1\//)
     expect(screen.queryByText(/Avg Confidence/)).not.toBeInTheDocument()
