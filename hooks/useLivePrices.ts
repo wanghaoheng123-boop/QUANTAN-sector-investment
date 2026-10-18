@@ -29,12 +29,13 @@ import { useMemo } from 'react'
 export interface LivePriceQuote {
   ticker: string
   price: number
-  change: number
-  changePct: number
-  volume?: number
-  high52w?: number
-  low52w?: number
-  pe?: number
+  /** Q-145: null when Yahoo supplied none; render "—", never 0. */
+  change: number | null
+  changePct: number | null
+  volume?: number | null
+  high52w?: number | null
+  low52w?: number | null
+  pe?: number | null
   marketCap?: string
   quoteTime?: string | null
   /** Source attribution attached by mergeYahooAndBloomberg */

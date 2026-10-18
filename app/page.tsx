@@ -12,6 +12,7 @@ import { formatMovePct, sessionMovesFromQuotes, type SessionMove } from '@/lib/s
 import { useErrorToast } from '@/hooks/useErrorToast'
 import { ErrorToastList } from '@/components/ErrorToastList'
 import { useLiveQuotes } from '@/hooks/useLiveQuotes'
+import { mergeLandingTick, type LandingQuote } from '@/lib/liveQuoteState'
 
 // Real news brief from Yahoo Finance API
 interface NewsBrief {
@@ -29,15 +30,11 @@ interface NewsBrief {
   tickers: string[]
 }
 
-interface Quote {
-  ticker: string
-  price: number
-  change: number
-  changePct: number
-  // No `quoteTime`. See the note at the assignment site: it was written and read
-  // by nobody, and a declared-but-unread data-state field is the shape Q-101
-  // exists to remove. Re-add it together with a consumer, never before one.
-}
+// Q-145: change fields are null when the vendor supplied none; "—", never 0.00%.
+// No `quoteTime`. See the note at the merge site: it was written and read by
+// nobody, and a declared-but-unread data-state field is the shape Q-101 exists
+// to remove. Re-add it together with a consumer, never before one.
+type Quote = LandingQuote
 
 function formatUtcDateTime(ts: string): string {
   const d = new Date(ts)
@@ -145,22 +142,15 @@ export default function HomePage() {
         ) {
           continue
         }
-        next[ticker] = {
-          ticker,
-          price: q.price,
-          change: q.change,
-          changePct: q.changePct,
-          // Q-101 review: `quoteTime` is NOT carried here, deliberately.
-          //
-          // It was assigned and read by nobody — SectorCard does not take it,
-          // and the hero pill keys off `live.marketOpen && streamConnected`,
-          // not off age. Shipping an assignment whose only consumer is nothing
-          // is the exact shape this package exists to remove, so carrying a
-          // *correct* value there would still have been the defect. If a
-          // homepage surface ever needs the age, take `q.quoteTime` (the vendor
-          // stamp) and pass `calendar="us-equity"` — never `q.timestamp`, which
-          // is this server's emit time.
-        }
+        // Q-145: the whole transition is mergeLandingTick — a tick with no
+        // change is "—", never 0 and never the previous change.
+        //
+        // Q-101 review: `quoteTime` is NOT carried, deliberately. Nothing on
+        // this page renders an age (SectorCard does not take it; the hero pill
+        // keys off `live.marketOpen && streamConnected`). If a surface ever
+        // needs it, take `q.quoteTime` (the vendor stamp) with
+        // `calendar="us-equity"` — never `q.timestamp`, the emit time.
+        next[ticker] = mergeLandingTick(ticker, q)
         touched = true
       }
       if (touched) setLastUpdate(new Date())
@@ -215,7 +205,10 @@ export default function HomePage() {
   const upMoves = useMemo(() => moves.filter((m) => m.direction === 'UP'), [moves])
   const downMoves = useMemo(() => moves.filter((m) => m.direction === 'DOWN'), [moves])
   const flatMoves = useMemo(() => moves.filter((m) => m.direction === 'FLAT'), [moves])
-  const noQuote = SECTORS.length - moves.length
+  // Red-team Q145-R8: this was "No quote", but a sector with a price and no
+  // change has no move either, and its card shows the price. What the count
+  // measures is sectors without change data.
+  const noChangeData = SECTORS.length - moves.length
 
   // Spread before sort: sort mutates, and these arrays are memoised.
   const largestMoves = useMemo(() => [
@@ -234,7 +227,8 @@ export default function HomePage() {
     ticker: s.etf,
     name: s.name,
     price: quotes[s.etf]?.price ?? 0,
-    changePct: quotes[s.etf]?.changePct ?? 0,
+    // Q-145: null stays null (the tape shows "—"); `?? 0` turned it into 0.00%.
+    changePct: quotes[s.etf]?.changePct ?? null,
   })).filter(t => t.price > 0), [quotes])
 
   const filteredSectors = useMemo(() => activeFilter === 'ALL'
@@ -360,7 +354,7 @@ export default function HomePage() {
             { label: 'Sectors up today', value: upMoves.length, of: SECTORS.length, color: '#00d084' },
             { label: 'Sectors down today', value: downMoves.length, of: SECTORS.length, color: '#ff6b7a' },
             { label: 'Flat (0.00%)', value: flatMoves.length, of: SECTORS.length, color: '#94a3b8' },
-            { label: 'No quote', value: noQuote, of: SECTORS.length, color: noQuote > 0 ? '#f59e0b' : '#64748b' },
+            { label: 'No change data', value: noChangeData, of: SECTORS.length, color: noChangeData > 0 ? '#f59e0b' : '#64748b' },
           ].map((stat, i) => (
             <div key={i} className="rounded-xl border border-slate-800 p-4 bg-slate-900/60 hover:border-slate-700/80 transition-colors">
               <div className="text-2xl font-bold font-mono" style={{ color: stat.color }}>
@@ -390,7 +384,7 @@ export default function HomePage() {
               </div>
               <div className="flex items-center gap-1.5">
                 <div className="w-2 h-2 rounded-full bg-amber-400" />
-                <span className="text-slate-400">Flat {flatMoves.length}{noQuote > 0 ? ` · no quote ${noQuote}` : ''}</span>
+                <span className="text-slate-400">Flat {flatMoves.length}{noChangeData > 0 ? ` · no change data ${noChangeData}` : ''}</span>
               </div>
             </div>
           </div>

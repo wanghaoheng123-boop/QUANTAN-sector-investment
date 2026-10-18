@@ -3499,5 +3499,44 @@
       "git status --short"
     ],
     "notes_2026_10_17": "Q-112's investigation (2026-10-17)."
+  },
+  {
+    "id": "Q-156",
+    "title": "Options chain defaults a missing contract change to 0 (Number(raw.change ?? 0)), a measured-looking zero",
+    "domain": "Data/Integrity",
+    "priority": "P2",
+    "status": "pending",
+    "files": [
+      "lib/options/chain.ts"
+    ],
+    "acceptance_criteria": [
+      "OptionContract.change is number | null; a missing vendor change renders '—', never 0.00",
+      "Remove lib/options/chain.ts from ZERO_EXEMPT in __tests__/architecture/live-quote-merge.test.ts and flip its RESIDUAL test"
+    ],
+    "verify_commands": [
+      "npm run test"
+    ],
+    "notes_2026_10_18": "Named residual of Q-145 (#248): the zero tripwire found it and pinned it; red-team Q145-R2-4 noted the id was cited before it was filed."
+  },
+  {
+    "id": "Q-157",
+    "title": "BTC price feed turns a missing 24h change into 0 (useBtcPriceWs, /api/crypto/btc/quote, BtcHeader)",
+    "domain": "Data/Integrity",
+    "priority": "P2",
+    "status": "pending",
+    "files": [
+      "components/crypto/hooks/useBtcPriceWs.ts",
+      "app/api/crypto/btc/quote/route.ts",
+      "components/crypto/BtcHeader.tsx"
+    ],
+    "acceptance_criteria": [
+      "change24h / changePct24h are number | null end to end; the CoinGecko fallback, which supplies no absolute change, sends null, not 0",
+      "BtcHeader renders '—' for a missing change instead of '▲ 0.00%'",
+      "Flip the Q-157 RESIDUAL test in __tests__/architecture/live-quote-merge.test.ts"
+    ],
+    "verify_commands": [
+      "npm run test"
+    ],
+    "notes_2026_10_18": "Found by the #248 re-gate (Q145-R2-2): the same defect as Q-145 on field names outside the guard's list (useBtcPriceWs.ts:104-105, 124-125, :53; btc/quote route :35,38; BtcHeader :13,63). Pre-existing; Q-145 is scoped to the Yahoo quote producers."
   }
 ]

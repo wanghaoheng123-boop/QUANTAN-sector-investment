@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { mergeYahooAndBloomberg, type YahooQuoteLike } from '@/lib/data/mergeQuotes'
 import type { BloombergQuoteNormalized } from '@/lib/data/bloomberg/bridgeClient'
 
@@ -103,7 +103,7 @@ describe('mergeYahooAndBloomberg', () => {
 
   it('falls back to yahoo for missing bloomberg fields (volume, 52w, pe, marketCap)', () => {
     const bbMap = new Map([
-      ['AAPL', bb({ volume: 0, high52w: 0, low52w: 0, pe: 0, marketCap: 'N/A' })],
+      ['AAPL', bb({ volume: null, high52w: null, low52w: null, pe: null, marketCap: 'N/A' })],
     ])
     const out = mergeYahooAndBloomberg([yahoo()], bbMap)
     // Bloomberg primary numeric fields override price/change/changePct,
@@ -153,12 +153,12 @@ describe('mergeYahooAndBloomberg', () => {
 
     it('mixed provenance — bb price/change but yahoo fallback for missing volume', () => {
       const bbMap = new Map([
-        ['AAPL', bb({ volume: 0, high52w: 0, marketCap: 'N/A' })],
+        ['AAPL', bb({ volume: null, high52w: null, marketCap: 'N/A' })],
       ])
       const out = mergeYahooAndBloomberg([yahoo()], bbMap)
       expect(out[0].provenance!.price).toBe('bloomberg')
       expect(out[0].provenance!.change).toBe('bloomberg')
-      expect(out[0].provenance!.volume).toBe('yahoo')   // bb 0 → yahoo
+      expect(out[0].provenance!.volume).toBe('yahoo')   // bb null → yahoo
       expect(out[0].provenance!.high52w).toBe('yahoo')
       expect(out[0].provenance!.marketCap).toBe('yahoo')
       expect(out[0].provenance!.pe).toBe('bloomberg')   // bb non-zero
@@ -192,25 +192,58 @@ describe('mergeYahooAndBloomberg', () => {
    * This test pins the contract so a future "tighten to ?? semantics"
    * change has to be made deliberately, not accidentally.
    */
-  describe('Bloomberg-zero fallback semantics (documented)', () => {
-    it('bb.volume = 0 falls through to yahoo.volume AND provenance.volume = yahoo', () => {
+  // Q145-R3: the bridge used to turn every missing field into 0, so these
+  // tests pinned "0 means absent". It now says null, so null falls through and
+  // a genuine Bloomberg 0 (zero volume in a halt) is Bloomberg's.
+  describe('Bloomberg null vs zero', () => {
+    it('bb.volume = null falls through to yahoo.volume AND provenance.volume = yahoo', () => {
       const y = yahoo({ volume: 5_000_000 })
-      const bbMap = new Map([['AAPL', bb({ volume: 0 })]])
-      const out = mergeYahooAndBloomberg([y], bbMap)
-      expect(out[0].volume).toBe(5_000_000)         // fell through to yahoo
-      expect(out[0].provenance!.volume).toBe('yahoo') // provenance agrees
+      const out = mergeYahooAndBloomberg([y], new Map([['AAPL', bb({ volume: null })]]))
+      expect(out[0].volume).toBe(5_000_000)
+      expect(out[0].provenance!.volume).toBe('yahoo')
     })
 
-    it('bb.high52w = 0 → uses yahoo.high52w; same for low52w, pe', () => {
+    it('a genuine bb.volume = 0 is kept, and attributed to Bloomberg', () => {
+      const out = mergeYahooAndBloomberg([yahoo({ volume: 5_000_000 })], new Map([['AAPL', bb({ volume: 0 })]]))
+      expect(out[0].volume).toBe(0)
+      expect(out[0].provenance!.volume).toBe('bloomberg')
+    })
+
+    it('bb.high52w = null → uses yahoo.high52w; same for low52w, pe', () => {
       const y = yahoo({ high52w: 200, low52w: 100, pe: 25 })
-      const bbMap = new Map([['AAPL', bb({ high52w: 0, low52w: 0, pe: 0 })]])
-      const out = mergeYahooAndBloomberg([y], bbMap)
-      expect(out[0].high52w).toBe(200)
-      expect(out[0].low52w).toBe(100)
-      expect(out[0].pe).toBe(25)
-      expect(out[0].provenance!.high52w).toBe('yahoo')
-      expect(out[0].provenance!.low52w).toBe('yahoo')
-      expect(out[0].provenance!.pe).toBe('yahoo')
+      const out = mergeYahooAndBloomberg([y], new Map([['AAPL', bb({ high52w: null, low52w: null, pe: null })]]))
+      expect(out[0]).toMatchObject({ high52w: 200, low52w: 100, pe: 25 })
+      expect(out[0].provenance).toMatchObject({ high52w: 'yahoo', low52w: 'yahoo', pe: 'yahoo' })
+    })
+
+    it('a bridge row with no change does not overwrite Yahoo\'s real change with 0.00% (Q145-R3)', () => {
+      // Yahoo: 200, +2 → prior close 198. Bloomberg prices 201 and supplies no change:
+      // the change is Bloomberg's price against Yahoo's reference close (R2-6).
+      const y = yahoo({ price: 200, change: 2, changePct: 1.0101 })
+      const out = mergeYahooAndBloomberg([y], new Map([['AAPL', bb({ price: 201, change: null, changePct: null })]]))
+      expect(out[0]).toMatchObject({ price: 201, dataSource: 'bloomberg' })
+      expect(out[0].change).toBeCloseTo(3, 10)
+      expect(out[0].changePct).toBeCloseTo((3 / 198) * 100, 10)
+      expect(out[0].provenance).toMatchObject({ price: 'bloomberg', change: 'yahoo', changePct: 'yahoo' })
+    })
+
+    it('the change pair comes from ONE vendor: a Bloomberg change is never paired with a Yahoo percent (Q145-R2-6)', () => {
+      const y = yahoo({ price: 200, change: 5, changePct: 2.59 })
+      const out = mergeYahooAndBloomberg([y], new Map([['AAPL', bb({ price: 201, change: -3, changePct: null })]]))
+      expect(out[0].change).toBe(-3)
+      expect(out[0].changePct).toBeCloseTo((-3 / 204) * 100, 10)
+      expect(out[0].provenance).toMatchObject({ change: 'bloomberg', changePct: 'bloomberg' })
+      // Neither vendor has a change: "—", not 0.
+      const none = mergeYahooAndBloomberg([yahoo({ change: null, changePct: null })], new Map([['AAPL', bb({ change: null, changePct: null })]]))
+      expect(none[0]).toMatchObject({ change: null, changePct: null })
+    })
+
+    it('a Bloomberg-only row with no change has a null change, not 0', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const out = mergeYahooAndBloomberg([], new Map([['MSFT', bb({ ticker: 'MSFT', change: null, changePct: null })]]))
+      expect(out[0]).toMatchObject({ ticker: 'MSFT', change: null, changePct: null })
+      expect(String(warn.mock.calls[0]?.[0])).toContain('"change"')
+      warn.mockRestore()
     })
 
     it("bb.marketCap = 'N/A' falls through; non-'N/A' stays even if empty-string", () => {
@@ -224,8 +257,7 @@ describe('mergeYahooAndBloomberg', () => {
     })
 
     it('bb.price = 0 PRESERVED — price is the primary field, no fallback', () => {
-      // Unlike secondary fields (volume/52w/pe), the price/change/changePct
-      // primary trio is NOT subject to truthy-fallback because the row-level
+      // Unlike every other field, the price never falls back: the row-level
       // dataSource = 'bloomberg' claim depends on bloomberg actually providing
       // the price. A bb.price = 0 is honored (extreme but legal in some
       // illiquid contracts).

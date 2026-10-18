@@ -91,13 +91,23 @@ describe('SSE quote events carry the vendor stamp, not the emit time', () => {
     },
   )
 
+  // Q-145: the pages hand the whole tick to a merge helper (pinned on the parse
+  // tree by __tests__/architecture/live-quote-merge.test.ts); the helper is
+  // where the stamp is chosen, so that is where it is checked.
   it.each([
-    'app/stock/[ticker]/page.tsx',
-    'app/sector/[slug]/page.tsx',
-  ])('%s reads the vendor stamp, never the emit time', (path) => {
+    ['app/stock/[ticker]/page.tsx', 'mergeStockTick'],
+    ['app/sector/[slug]/page.tsx', 'mergeSectorTick'],
+  ])('%s hands the live tick to %s and never stamps it with the emit time', (path, helper) => {
     const src = read(path)
-    expect(src).toMatch(/quoteTime:\s*live\.quote!\.quoteTime/)
-    expect(src).not.toMatch(/quoteTime:\s*live\.quote!\.timestamp/)
+    expect(src).toMatch(/const tick = live\.quote\b/)
+    expect(src).toContain(`${helper}(prev, tick)`)
+    expect(src).not.toMatch(/quoteTime:\s*live\.quote!?\.timestamp/)
+  })
+
+  it('lib/liveQuoteState.ts stamps both page states with the tick\'s VENDOR time', () => {
+    const src = read('lib/liveQuoteState.ts')
+    expect(src.match(/quoteTime:\s*tick\.quoteTime/g)).toHaveLength(2)
+    expect(src).not.toMatch(/\.timestamp\b/)
   })
 
   it('app/page.tsx carries no quote age at all, and certainly not the emit time', () => {

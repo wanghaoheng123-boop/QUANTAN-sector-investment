@@ -1,5 +1,7 @@
 'use client'
 
+import { bootQuoteFrom, FAILED_REASON, mergeSectorTick, type SectorQuoteState } from '@/lib/liveQuoteState'
+import { QuoteChangeLine, QuoteUnavailable, StreamStatusPill } from '@/components/QuoteHeadline'
 import { useState, useEffect, useMemo, useCallback, use } from 'react'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
@@ -23,7 +25,7 @@ import type { DarkPoolAnalysis } from '@/lib/darkpool'
 import { sessionMoveFor } from '@/lib/sessionMoves'
 import { tradingDefaultEmaFlags } from '@/lib/chartEma'
 import { STOCK_CHART_RANGES, isStockIntradayPollRange, chartBarKindLabel } from '@/lib/chartYahoo'
-import { formatCompactNumber, formatCurrency, formatFreshness, formatSignedNumber } from '@/lib/format'
+import { formatCompactNumber, formatCurrency, formatFreshness } from '@/lib/format'
 import { ChartErrorBoundary } from '@/components/ChartErrorBoundary'
 import { DashboardGuide } from '@/components/DashboardGuide'
 import { MetricTooltip } from '@/components/MetricTooltip'
@@ -51,16 +53,10 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
   if (!sector) notFound()
 
   const [candles, setCandles] = useState<Candle[]>([])
-  const [quote, setQuote] = useState<{
-    price: number
-    change: number
-    changePct: number
-    volume: number
-    high52w: number
-    low52w: number
-    pe: number
-    quoteTime?: string | null
-  } | null>(null)
+  // Q-145: every field Yahoo may omit is nullable and renders "—", never 0.
+  const [quote, setQuote] = useState<SectorQuoteState | null>(null)
+  // Q-145 (red-team R2): why there is no price, when the boot fetch says so.
+  const [quoteMissing, setQuoteMissing] = useState<string | null>(null)
   const [darkPoolPrints, setDarkPoolPrints] = useState<Synthetic<DarkPoolPrint[]>>(() => markSynthetic([]))
 
   // The aggregate tiles below read the synthetic prints directly, so they
@@ -171,15 +167,19 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
       })
       .then((data) => {
         if (controller.signal.aborted) return
-        const q = data.quotes?.find((x: { ticker: string }) => x.ticker === sector.etf)
-        if (q) {
-          setQuote(q)
+        const boot = bootQuoteFrom<SectorQuoteState & { ticker: string }>(data, sector.etf)
+        if (boot.kind === 'priced') {
+          setQuote(boot.quote)
           setQuoteError(null)
+          setQuoteMissing(null)
+        } else {
+          setQuoteMissing(boot.reason)
         }
       })
       .catch((e) => {
         if (controller.signal.aborted || (e instanceof DOMException && e.name === 'AbortError')) return
         setQuoteError(e instanceof Error ? e.message : 'Quote unavailable')
+        setQuoteMissing(FAILED_REASON)
       })
     return () => controller.abort()
   }, [sector.etf])
@@ -191,21 +191,14 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
   // 52w / pe fields from the boot REST fetch (SSE payloads carry just
   // price / change / volume / marketOpen).
   useEffect(() => {
-    if (!live.quote) return
-    setQuote((prev) => ({
-      price: live.quote!.price,
-      change: live.quote!.change,
-      changePct: live.quote!.changePct,
-      volume: live.quote!.volume ?? prev?.volume ?? 0,
-      high52w: prev?.high52w ?? 0,
-      low52w: prev?.low52w ?? 0,
-      pe: prev?.pe ?? 0,
-      // Q-101: the VENDOR's stamp, never this server's emit time. Using
-      // `timestamp` here made /stock/AAPL read "live" for a Friday close on a
-      // Sunday. null when the vendor gave none — unknown must read as unknown.
-      quoteTime: live.quote!.quoteTime,
-    }))
+    const tick = live.quote
+    if (!tick) return
+    // Q-145: the whole transition is mergeSectorTick — a tick without a change
+    // is "—", never 0 and never the previous change; the quote time is the
+    // VENDOR's stamp (Q-101), never this server's emit time.
+    setQuote((prev) => mergeSectorTick(prev, tick))
     setQuoteError(null)
+    setQuoteMissing(null)
   }, [live.quote])
 
   useEffect(() => {
@@ -254,7 +247,6 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
 
   // newsMarkers removed — live news headlines now shown in NewsFeed panel below chart
 
-  const isUp = (quote?.changePct ?? 0) >= 0
 
   return (
     <div className="min-h-screen">
@@ -287,46 +279,16 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
               {quote ? (
                 <div className="text-right">
                   <div className="text-2xl font-bold text-white font-mono">{formatCurrency(quote.price)}</div>
-                  <div className={`text-sm font-mono ${isUp ? 'text-green-400' : 'text-red-400'}`}>
-                    {isUp ? '▲' : '▼'} {formatSignedNumber(quote.change)} ({Math.abs(quote.changePct).toFixed(2)}%)
-                  </div>
+                  <QuoteChangeLine change={quote.change} changePct={quote.changePct} />
                   <div className="text-xs text-slate-400 mt-1 font-mono">ETF: {sector.etf}</div>
                   {/* Phase 14 wave 37: real-time SSE stream status pill. */}
                   <div className="flex items-center justify-end gap-2 mt-1">
-                    <span
-                      className={`inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
-                        live.connected
-                          ? live.marketOpen
-                            ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
-                            : 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
-                          : 'bg-slate-700/40 text-slate-400 border border-slate-600/40'
-                      }`}
-                      title={
-                        live.connected
-                          ? live.marketOpen
-                            ? 'Live stream connected — market open'
-                            : 'Live stream connected — market closed (snapshot)'
-                          : live.supported
-                            ? 'Reconnecting…'
-                            : 'Polling (SSE unavailable)'
-                      }
-                      role="status"
-                    >
-                      <span
-                        className={`inline-block w-1.5 h-1.5 rounded-full ${
-                          live.connected && live.marketOpen
-                            ? 'bg-emerald-400 animate-pulse'
-                            : live.connected
-                              ? 'bg-amber-400'
-                              : 'bg-slate-500'
-                        }`}
-                        aria-hidden="true"
-                      />
-                      {live.connected ? (live.marketOpen ? 'LIVE' : 'CLOSED') : 'RECONNECT'}
-                    </span>
+                    <StreamStatusPill connected={live.connected} marketOpen={live.marketOpen} supported={live.supported} error={live.error} />
                     <span className="text-[10px] text-slate-400">{formatFreshness(quote.quoteTime, { stamp: 'vendor', calendar: 'us-equity' })}</span>
                   </div>
                 </div>
+              ) : quoteMissing ? (
+                <QuoteUnavailable reason={quoteMissing} />
               ) : (
                 <div className="space-y-2 text-right w-32">
                   <div className="h-7 bg-slate-800 rounded animate-pulse" />
@@ -348,7 +310,7 @@ export default function SectorPage({ params }: { params: Promise<{ slug: string 
                 <MetricTooltip label="52-week low" content="Lowest price over the past 52 weeks. Bouncing off 52W low with rising volume = potential capitulation reversal. Breaking below = often a long-term downtrend continuation." compact />
               </span>
               <span className="flex items-center">
-                P/E: <span className="text-white font-mono ml-1">{quote.pe.toFixed(1)}×</span>
+                P/E: <span className="text-white font-mono ml-1">{quote.pe != null ? `${quote.pe.toFixed(1)}×` : '—'}</span>
                 <MetricTooltip label="Price/Earnings" content="Price divided by trailing earnings. Sector P/E < 15× = relatively cheap, > 25× = expensive. Compare across sectors and to the sector's own 5Y average, not just absolute level." compact />
               </span>
               <span className="flex items-center">

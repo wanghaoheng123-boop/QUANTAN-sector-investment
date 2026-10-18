@@ -20,6 +20,7 @@ import { applyRateLimit } from '@/lib/api/rateLimit'
 import YahooFinance from 'yahoo-finance2'
 import { withRetry } from '@/lib/api/reliability'
 import { parseQuoteTime } from '@/lib/format'
+import { normalizedChangePercent } from '@/lib/yahooQuoteFields'
 import { STREAM_AUTO_CLOSE_MS, STREAM_CLOSE_WARN_LEAD_MS } from '@/lib/api/streamBudget'
 
 const yahooFinance = new YahooFinance()
@@ -48,8 +49,9 @@ const HEARTBEAT_INTERVAL_MS = 30_000 // 30 s
 interface QuoteEvent {
   ticker: string
   price: number
-  change: number
-  changePct: number
+  /** Q-145: null when Yahoo supplied none — never a measured 0. */
+  change: number | null
+  changePct: number | null
   volume?: number
   marketOpen: boolean
   timestamp: string
@@ -76,12 +78,19 @@ async function fetchQuote(symbol: string): Promise<QuoteEvent | null> {
       () => yahooFinance.quote(symbol, undefined, { validateResult: false }),
       { attempts: 2, timeoutMs: 6000, retryLabel: 'stream quote' }
     )
-    if (!q || q.regularMarketPrice == null) return null
+    const price = typeof q?.regularMarketPrice === 'number' && Number.isFinite(q.regularMarketPrice) && q.regularMarketPrice > 0 ? q.regularMarketPrice : null
+    if (!q || price == null) return null
+    const change = typeof q.regularMarketChange === 'number' && Number.isFinite(q.regularMarketChange) ? q.regularMarketChange : null
     return {
       ticker: symbol,
-      price: q.regularMarketPrice,
-      change: q.regularMarketChange ?? 0,
-      changePct: q.regularMarketChangePercent ?? 0,
+      price,
+      // Q-145: null, not 0, when Yahoo gave none. And the SAME percent
+      // derivation as /api/prices and the multiplex stream: this route took
+      // regularMarketChangePercent raw, so a decimal-form value (0.016 meaning
+      // 1.6%) reached the stock page 100x too small — the DQ-5 defect the
+      // multiplex route fixed on 2026-08-14 and this one kept.
+      change,
+      changePct: normalizedChangePercent(q.regularMarketChangePercent ?? null, change, price),
       volume: q.regularMarketVolume ?? undefined,
       marketOpen: isMarketOpen(),
       timestamp: new Date().toISOString(),

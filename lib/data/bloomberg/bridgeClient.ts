@@ -37,12 +37,12 @@ export type BloombergQuoteNormalized = {
    */
   quoteTime: string | null
   price: number
-  change: number
-  changePct: number
-  volume: number
-  high52w: number
-  low52w: number
-  pe: number
+  change: number | null
+  changePct: number | null
+  volume: number | null
+  high52w: number | null
+  low52w: number | null
+  pe: number | null
   marketCap: string
   bid?: number
   ask?: number
@@ -178,15 +178,15 @@ export async function fetchBloombergQuotesViaBridge(
       const price = pickNumber(row.last, row.LAST_PRICE, row.pxLast, row.PX_LAST, row.regularMarketPrice)
       if (price === null || price <= 0) continue
 
-      // Secondary fields degrade to 0, which the merge already reads as
-      // "absent" and attributes to Yahoo — see QuoteProvenance below.
-      const change = pickNumber(row.change, row.CHANGE, row.NET_CHANGE, row.regularMarketChange) ?? 0
+      // Q145-R3: a field the bridge did not supply is null, not 0 — a 0 change
+      // read as a measured FLAT and outranked Yahoo's real change in the merge.
+      const change = pickNumber(row.change, row.CHANGE, row.NET_CHANGE, row.regularMarketChange)
       const changePct =
-        pickNumber(row.changePct, row.pctChange, row.PCT_CHG, row.CHANGE_PCT, row.regularMarketChangePercent) ?? 0
-      const vol = pickNumber(row.volume, row.VOLUME, row.regularMarketVolume) ?? 0
-      const hi = pickNumber(row.high52w, row.HIGH_52WEEK, row.fiftyTwoWeekHigh) ?? 0
-      const lo = pickNumber(row.low52w, row.LOW_52WEEK, row.fiftyTwoWeekLow) ?? 0
-      const pe = pickNumber(row.pe, row.PE_RATIO, row.trailingPE) ?? 0
+        pickNumber(row.changePct, row.pctChange, row.PCT_CHG, row.CHANGE_PCT, row.regularMarketChangePercent)
+      const vol = pickNumber(row.volume, row.VOLUME, row.regularMarketVolume)
+      const hi = pickNumber(row.high52w, row.HIGH_52WEEK, row.fiftyTwoWeekHigh)
+      const lo = pickNumber(row.low52w, row.LOW_52WEEK, row.fiftyTwoWeekLow)
+      const pe = pickNumber(row.pe, row.PE_RATIO, row.trailingPE)
       const mcap = row.marketCap ?? row.MARKET_CAP ?? row.CUR_MKT_CAP
       // Phase 13 S2 fix (F4.7): use formatCompactNumber for proper T/B/M
       // formatting. Previously hardcoded 'B' suffix made AAPL render as

@@ -1,4 +1,5 @@
 import type { BloombergQuoteNormalized } from './bloomberg/bridgeClient'
+import { tickChange } from '@/lib/liveQuoteState'
 
 export type FieldSource = 'bloomberg' | 'yahoo'
 
@@ -28,15 +29,22 @@ export interface QuoteProvenance {
   ask?: FieldSource
 }
 
+/**
+ * Q-145 (I2: missing displays as MISSING). A Yahoo field it did not supply is
+ * null, not 0: `price` is always present (a row without one is not a quote and
+ * is dropped by the producer), every other number may be null and renders "—".
+ * The previous `num()` turned a missing change into a measured "0.00%" and a
+ * missing price into "$0.00".
+ */
 export type UnifiedQuote = {
   ticker: string
   price: number
-  change: number
-  changePct: number
-  volume: number
-  high52w: number
-  low52w: number
-  pe: number
+  change: number | null
+  changePct: number | null
+  volume: number | null
+  high52w: number | null
+  low52w: number | null
+  pe: number | null
   marketCap: string
   /** Vendor last trade / regular session time when available (ISO). */
   quoteTime?: string | null
@@ -62,29 +70,43 @@ const ALL_YAHOO: QuoteProvenance = {
 }
 
 /**
- * Prefer Bloomberg for overlapping tickers; fall back to Yahoo per-field
- * when Bloomberg returns 0 / 'N/A'. Per-field provenance is recorded so
- * downstream audit code can verify which feed produced each value.
+ * Prefer Bloomberg for overlapping tickers; fall back to Yahoo per field when
+ * Bloomberg did not supply one (null, or the 'N/A' market-cap sentinel).
+ * Per-field provenance records which feed produced each value.
  *
- * Phase 13 S2 audit (mergeQuotes correctness):
- *   The `||` fallback DOES treat Bloomberg-reported 0 as "missing" and
- *   falls through to Yahoo. This is the conservative choice given the
- *   bridge-client's `num()` helper (lib/data/bloomberg/bridgeClient.ts:27)
- *   coerces ALL missing/invalid values to 0 — making Bloomberg's 0
- *   ambiguous between "halted/no trades" and "field absent from upstream".
- *
- *   Genuine zero-volume during a halt → Yahoo override → minor cost
- *   (Yahoo has the same halt). Genuine missing-field zero → Yahoo
- *   override → critical recovery. The conservative choice is correct.
- *
- *   If the bridge protocol is ever extended to distinguish missing from
- *   zero (e.g. by emitting `volume: null`), the type & this fallback
- *   can be tightened to use nullish-coalescing semantics.
- *
- *   The provenance tracker mirrors the same truthy-check so the
- *   reported `provenance.volume = 'yahoo'` is consistent with the
- *   value's actual source.
+ * Q145-R3: the bridge used to turn every missing field into 0, so this merge
+ * read 0 as "absent" with `||` for the secondary fields — but took Bloomberg's
+ * change and percent unconditionally. A bridge row with no change therefore
+ * emitted a measured "0.00%" FLAT, overwrote Yahoo's real change, and
+ * attributed it to Bloomberg in `provenance`. The bridge now says null for a
+ * missing field, so every field merges with `??` and a genuine Bloomberg 0
+ * (zero volume in a halt) is kept as Bloomberg's.
  */
+/**
+ * The session change of a merged row: ONE measurement from ONE vendor, consistent
+ * with the row's price (red-team Q145-R2-6). Merging change and percent field by
+ * field paired a Bloomberg change with a Yahoo percent ("▲ -3.00 (2.59%)"), and a
+ * Yahoo change with Bloomberg's price.
+ *
+ *   - Bloomberg supplied either half: Bloomberg's pair, completed and checked
+ *     against Bloomberg's price (tickChange).
+ *   - Neither: Yahoo's reference close (price − change, the prior session's
+ *     close) carried to Bloomberg's price; provenance 'yahoo' says the
+ *     reference came from Yahoo.
+ *   - Neither vendor has one: null, which renders "—".
+ */
+function mergedChange(bb: BloombergQuoteNormalized, y: YahooQuoteLike): { change: number | null; changePct: number | null; source: FieldSource } {
+  if (bb.change != null || bb.changePct != null) {
+    return { ...tickChange({ price: bb.price, change: bb.change, changePct: bb.changePct }), source: 'bloomberg' }
+  }
+  if (y.change != null && Number.isFinite(y.change) && Number.isFinite(y.price) && y.price - y.change > 0) {
+    const priorClose = y.price - y.change
+    const change = bb.price - priorClose
+    return { change, changePct: (change / priorClose) * 100, source: 'yahoo' }
+  }
+  return { change: null, changePct: null, source: 'yahoo' }
+}
+
 export function mergeYahooAndBloomberg(
   yahoo: YahooQuoteLike[],
   bloomberg: Map<string, BloombergQuoteNormalized> | null
@@ -99,17 +121,18 @@ export function mergeYahooAndBloomberg(
   for (const y of yahoo) {
     const bb = bloomberg.get(y.ticker)
     if (bb) {
-      // Per-field merge with provenance tracking. Bloomberg primary fields
-      // (price/change/changePct) always win; quantitative fields fall back
-      // to yahoo when bloomberg reports 0 or sentinel values.
+      // Per-field merge with provenance tracking. Bloomberg's price always
+      // wins; the change pair is one measurement (mergedChange); every other
+      // field falls back to Yahoo when Bloomberg has none.
+      const sessionChange = mergedChange(bb, y)
       const provenance: QuoteProvenance = {
         price: 'bloomberg',
-        change: 'bloomberg',
-        changePct: 'bloomberg',
-        volume: bb.volume ? 'bloomberg' : 'yahoo',
-        high52w: bb.high52w ? 'bloomberg' : 'yahoo',
-        low52w: bb.low52w ? 'bloomberg' : 'yahoo',
-        pe: bb.pe ? 'bloomberg' : 'yahoo',
+        change: sessionChange.source,
+        changePct: sessionChange.source,
+        volume: bb.volume != null ? 'bloomberg' : 'yahoo',
+        high52w: bb.high52w != null ? 'bloomberg' : 'yahoo',
+        low52w: bb.low52w != null ? 'bloomberg' : 'yahoo',
+        pe: bb.pe != null ? 'bloomberg' : 'yahoo',
         marketCap: bb.marketCap !== 'N/A' ? 'bloomberg' : 'yahoo',
         bid: bb.bid != null ? 'bloomberg' : undefined,
         ask: bb.ask != null ? 'bloomberg' : undefined,
@@ -118,12 +141,12 @@ export function mergeYahooAndBloomberg(
       out.push({
         ticker: y.ticker,
         price: bb.price,
-        change: bb.change,
-        changePct: bb.changePct,
-        volume: bb.volume || y.volume,
-        high52w: bb.high52w || y.high52w,
-        low52w: bb.low52w || y.low52w,
-        pe: bb.pe || y.pe,
+        change: sessionChange.change,
+        changePct: sessionChange.changePct,
+        volume: bb.volume ?? y.volume,
+        high52w: bb.high52w ?? y.high52w,
+        low52w: bb.low52w ?? y.low52w,
+        pe: bb.pe ?? y.pe,
         marketCap: bb.marketCap !== 'N/A' ? bb.marketCap : y.marketCap,
         // Q-129: the price on this row is Bloomberg's, so the timestamp must be
         // Bloomberg's too. It previously carried `y.quoteTime` — Yahoo's clock
@@ -149,21 +172,17 @@ export function mergeYahooAndBloomberg(
 
   for (const [t, bb] of bloomberg) {
     if (seen.has(t)) continue
-    // Phase 14 wave 7: apply the same truthy-checks as the Yahoo-overlap branch
-    // above. Previously every field's provenance was hard-coded to 'bloomberg'
-    // even when bb.volume was 0 or bb.marketCap was the 'N/A' sentinel — an
-    // audit reading `provenance.volume === 'bloomberg'` would falsely conclude
-    // Bloomberg supplied volume when in fact the value was missing.
-    //
-    // For consistency with the dual-source path, we still mark these as
-    // 'bloomberg' for primary (price/change/changePct) — Bloomberg is the
-    // only source available in this branch — but emit a structured warn so
-    // operators can detect the Bloomberg-only sentinel pattern.
+    // Phase 14 wave 7: Bloomberg is the only source in this branch, so every
+    // field's provenance is 'bloomberg' — and a field it did not supply is
+    // null (Q145-R3), which renders "—". The structured warn lets operators
+    // see which fields a Bloomberg-only row is missing.
     const sentinelFields: string[] = []
-    if (!bb.volume) sentinelFields.push('volume')
-    if (!bb.high52w) sentinelFields.push('high52w')
-    if (!bb.low52w) sentinelFields.push('low52w')
-    if (!bb.pe) sentinelFields.push('pe')
+    if (bb.change == null) sentinelFields.push('change')
+    if (bb.changePct == null) sentinelFields.push('changePct')
+    if (bb.volume == null) sentinelFields.push('volume')
+    if (bb.high52w == null) sentinelFields.push('high52w')
+    if (bb.low52w == null) sentinelFields.push('low52w')
+    if (bb.pe == null) sentinelFields.push('pe')
     if (bb.marketCap === 'N/A') sentinelFields.push('marketCap')
     if (sentinelFields.length > 0) {
       console.warn(JSON.stringify({

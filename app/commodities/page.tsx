@@ -10,9 +10,10 @@ import WatchlistButton from '@/components/WatchlistButton'
 interface Quote {
   ticker: string
   price: number
-  change: number
-  changePct: number
-  volume: number
+  // Q-145: nullable — /api/prices sends null for a field Yahoo omitted.
+  change: number | null
+  changePct: number | null
+  volume: number | null
 }
 
 const CATEGORY_ORDER: CommodityCategory[] = ['broad', 'energy', 'metals', 'agriculture', 'volatility']
@@ -136,7 +137,8 @@ export default function CommoditiesPage() {
             <tbody>
               {rows.map((c) => {
                 const q = quotes[c.ticker]
-                const up = (q?.changePct ?? 0) >= 0
+                const pct = q?.changePct ?? null
+                const up = pct != null && pct >= 0
                 return (
                   <tr key={c.ticker} className="border-b border-slate-800/80 hover:bg-slate-900/40">
                     <td className="px-4 py-3">
@@ -153,9 +155,9 @@ export default function CommoditiesPage() {
                       {q ? q.price.toFixed(2) : '—'}
                     </td>
                     <td
-                      className={`px-4 py-3 text-right font-mono ${q ? (up ? 'text-emerald-400' : 'text-red-400') : 'text-slate-400'}`}
+                      className={`px-4 py-3 text-right font-mono ${pct != null ? (up ? 'text-emerald-400' : 'text-red-400') : 'text-slate-400'}`}
                     >
-                      {q ? `${up ? '+' : ''}${q.changePct.toFixed(2)}%` : '—'}
+                      {pct != null ? `${up ? '+' : ''}${pct.toFixed(2)}%` : '—'}
                     </td>
                     <td className="px-4 py-3 text-right font-mono text-slate-400 hidden sm:table-cell">
                       {q && q.volume ? `${(q.volume / 1e6).toFixed(2)}M` : '—'}

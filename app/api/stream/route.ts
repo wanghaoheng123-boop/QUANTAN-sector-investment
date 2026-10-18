@@ -71,8 +71,9 @@ const HEARTBEAT_INTERVAL_MS = 30_000 // 30 s
 interface QuoteEvent {
   ticker: string
   price: number
-  change: number
-  changePct: number
+  /** Q-145: null when Yahoo supplied none — never a measured 0. */
+  change: number | null
+  changePct: number | null
   volume?: number
   marketOpen: boolean
   timestamp: string
@@ -137,11 +138,13 @@ async function fetchQuotes(symbols: readonly string[]): Promise<QuoteEvent[]> {
       if (!row) continue
       const symbol = typeof row.symbol === 'string' && row.symbol.length > 0 ? row.symbol : null
       const price = finite(row.regularMarketPrice)
-      if (!symbol || price == null) continue
+      // Red-team Q145-R8: a price of 0 or below is not a quote — the same rule
+      // as /api/prices and the single-ticker stream.
+      if (!symbol || price == null || price <= 0) continue
       out.push({
         ticker: symbol,
         price,
-        change: finite(row.regularMarketChange) ?? 0,
+        change: finite(row.regularMarketChange),
         // SAME derivation as /api/prices (route.ts:146-150) — both surfaces
         // render this number on the same dashboard, so it must be the same
         // number. Yahoo occasionally serves the percent change in DECIMAL form
