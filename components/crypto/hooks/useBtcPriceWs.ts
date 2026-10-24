@@ -6,6 +6,7 @@ import {
   snapshotFromCoinbaseTicker,
   snapshotFromCoinGecko,
   snapshotFromQuoteRoute,
+  hasFreshVendorPrice,
   type BtcPriceFeed,
   type BtcPriceSnapshot,
 } from '@/lib/btcSnapshot'
@@ -21,7 +22,7 @@ export function useBtcPriceWs() {
   const priceWsRef = useRef<WebSocket | null>(null)
   const priceReconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const parseWarnedRef = useRef(false)
-  const lastWsMessageRef = useRef(Date.now())
+  const lastFreshWsPriceRef = useRef(Date.now())
 
   const connectPriceWs = useCallback(() => {
     if (priceReconnectTimerRef.current) {
@@ -48,9 +49,13 @@ export function useBtcPriceWs() {
         if (d.type === 'ticker' && d.product_id === 'BTC-USD') {
           const snapshot = snapshotFromCoinbaseTicker(d)
           if (!snapshot) return
-          lastWsMessageRef.current = Date.now()
+          const receivedAt = Date.now()
+          const nextFeed: BtcPriceFeed = { source: 'coinbase', receivedAt, quoteTime: snapshot.quoteTime }
+          // Transport activity is not a fresh quote: replayed or undated ticks
+          // must not suppress the fallback forever while the badge says STALE.
+          if (hasFreshVendorPrice(nextFeed, receivedAt)) lastFreshWsPriceRef.current = receivedAt
           setBtcPrice(snapshot)
-          setFeed({ source: 'coinbase', receivedAt: lastWsMessageRef.current })
+          setFeed(nextFeed)
         }
       } catch (err) {
         if (!parseWarnedRef.current) {
@@ -73,8 +78,8 @@ export function useBtcPriceWs() {
   useEffect(() => {
     let cancelled = false
     // Red-team F1: the fallback runs whenever the socket has been silent for
-    // 120 s — it used to be switched off for good by the first socket tick, so
-    // a feed that died later froze the price.
+    // 120 s without a fresh vendor-dated price — it used to be switched off
+    // for good by the first socket tick, so a feed that died froze the price.
     const loadRestQuote = async () => {
       if (cancelled) return
       try {
@@ -88,7 +93,7 @@ export function useBtcPriceWs() {
           if (cancelled) return
           if (snapshot) {
             setBtcPrice(snapshot)
-            setFeed({ source: 'quote-route', receivedAt: Date.now() })
+            setFeed({ source: 'quote-route', receivedAt: Date.now(), quoteTime: snapshot.quoteTime })
           }
           return
         }
@@ -102,7 +107,7 @@ export function useBtcPriceWs() {
         if (cancelled) return
         if (snapshot) {
           setBtcPrice(snapshot)
-          setFeed({ source: 'coingecko', receivedAt: Date.now() })
+          setFeed({ source: 'coingecko', receivedAt: Date.now(), quoteTime: snapshot.quoteTime })
         }
       } catch (err) {
         if (cancelled) return
@@ -110,10 +115,10 @@ export function useBtcPriceWs() {
       }
     }
     const t = setTimeout(() => {
-      if (Date.now() - lastWsMessageRef.current > 120_000) loadRestQuote()
+      if (Date.now() - lastFreshWsPriceRef.current > 120_000) loadRestQuote()
     }, 120_000)
     const iv = setInterval(() => {
-      if (Date.now() - lastWsMessageRef.current > 120_000) loadRestQuote()
+      if (Date.now() - lastFreshWsPriceRef.current > 120_000) loadRestQuote()
     }, 60_000)
     return () => {
       cancelled = true

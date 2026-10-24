@@ -14,6 +14,17 @@ vi.mock('next/link', () => ({ default: ({ children }: { children: React.ReactNod
 const NONE = { change24h: null, changePct24h: null }
 
 describe('snapshotFromCoinbaseTicker', () => {
+  it('keeps the vendor timestamp, including Coinbase sub-millisecond ISO precision', () => {
+    expect(snapshotFromCoinbaseTicker({ price: '110', time: '2026-10-25T00:00:00.123456Z' })?.quoteTime)
+      .toBe(Date.UTC(2026, 9, 25, 0, 0, 0, 123))
+  })
+
+  it.each([undefined, null, '', 'not-a-time', '2026-10-25', '2026-10-25T00:00:00', '2026-02-30T00:00:00Z', true, 1_800_000_000_000])(
+    'a missing or malformed vendor time (%j) stays unknown', (time) => {
+      expect(snapshotFromCoinbaseTicker({ price: '110', time })?.quoteTime).toBeNull()
+    },
+  )
+
   it('derives the change from open_24h', () => {
     const s = snapshotFromCoinbaseTicker({ price: '110', open_24h: '100', high_24h: '112', low_24h: '99', volume_24h: '5' })
     expect(s).toMatchObject({ price: 110, change24h: 10, high24h: 112, low24h: 99, volume24h: 5 })
@@ -61,7 +72,7 @@ describe('snapshotFromCoinGecko', () => {
 describe('snapshotFromQuoteRoute', () => {
   it('keeps nulls null', () => {
     expect(snapshotFromQuoteRoute({ price: 110, change24h: null, changePct24h: null, high24h: null, low24h: null, volume24h: null }))
-      .toEqual({ price: 110, change24h: null, changePct24h: null, high24h: null, low24h: null, volume24h: null })
+      .toEqual({ price: 110, quoteTime: null, change24h: null, changePct24h: null, high24h: null, low24h: null, volume24h: null })
   })
 
   it('refuses a contradictory pair', () => {
@@ -70,7 +81,7 @@ describe('snapshotFromQuoteRoute', () => {
 })
 
 describe('BtcHeader', () => {
-  const base = { price: 110, change24h: null, changePct24h: null, high24h: null, low24h: null, volume24h: null }
+  const base = { price: 110, quoteTime: null, change24h: null, changePct24h: null, high24h: null, low24h: null, volume24h: null }
 
   it('renders "—" for a missing change and missing high/low, never ▲ 0.00% or the price as the high', () => {
     const html = renderToStaticMarkup(<BtcHeader btcPrice={base} feed={null} />)
@@ -81,7 +92,7 @@ describe('BtcHeader', () => {
   })
 
   it('renders a measured change and range', () => {
-    const html = renderToStaticMarkup(<BtcHeader btcPrice={{ ...base, change24h: -2, changePct24h: -1.5, high24h: 112, low24h: 99 }} feed={{ source: 'coinbase', receivedAt: Date.now() }} />)
+    const html = renderToStaticMarkup(<BtcHeader btcPrice={{ ...base, change24h: -2, changePct24h: -1.5, high24h: 112, low24h: 99 }} feed={{ source: 'coinbase', receivedAt: Date.now(), quoteTime: Date.now() }} />)
     expect(html).toContain('▼ 1.50%')
     expect(html).toContain('H $112 · L $99')
   })
@@ -133,23 +144,39 @@ describe('priceFeedBadge — the header badge follows the price feed (red-team F
   })
   it('a Coinbase tick is LIVE up to LIVE_MAX_AGE_MS, then STALE with its age', () => {
     expect(LIVE_MAX_AGE_MS).toBe(30_000)
-    expect(priceFeedBadge({ source: 'coinbase', receivedAt: T }, T + LIVE_MAX_AGE_MS)).toMatchObject({ state: 'live', label: 'LIVE' })
-    const stale = priceFeedBadge({ source: 'coinbase', receivedAt: T }, T + LIVE_MAX_AGE_MS + 1)
+    expect(priceFeedBadge({ source: 'coinbase', receivedAt: T, quoteTime: T }, T + LIVE_MAX_AGE_MS)).toMatchObject({ state: 'live', label: 'LIVE' })
+    const stale = priceFeedBadge({ source: 'coinbase', receivedAt: T, quoteTime: T }, T + LIVE_MAX_AGE_MS + 1)
     expect(stale).toMatchObject({ state: 'stale', label: 'STALE · 30s' })
     expect(stale.title).toContain('may be out of date')
-    expect(priceFeedBadge({ source: 'coinbase', receivedAt: T }, T + 30 * 60_000).label).toBe('STALE · 30m')
+    expect(priceFeedBadge({ source: 'coinbase', receivedAt: T, quoteTime: T }, T + 30 * 60_000).label).toBe('STALE · 30m')
+  })
+  it('a newly received four-hour-old Coinbase ticker is STALE, not LIVE at receipt time', () => {
+    const badge = priceFeedBadge({ source: 'coinbase', quoteTime: T - 4 * 60 * 60_000, receivedAt: T }, T)
+    expect(badge).toMatchObject({ state: 'stale', label: 'STALE · 4h' })
+    expect(badge.title).toContain('vendor price 4h old; received 0s ago')
+  })
+  it.each([null, NaN, Infinity, 0, -1, T + 1])('an absent or invalid vendor time %s cannot give LIVE', (quoteTime) => {
+    const badge = priceFeedBadge({ source: 'coinbase', quoteTime, receivedAt: T }, T)
+    expect(badge).toMatchObject({ state: 'stale', label: 'STALE · time unknown' })
+    expect(badge.title).toContain('price freshness is unknown')
+  })
+  it('a timestamp that was future-dated at receipt never becomes LIVE merely by waiting', () => {
+    expect(priceFeedBadge({ source: 'coinbase', quoteTime: T + 1_000, receivedAt: T }, T + 2_000))
+      .toMatchObject({ state: 'stale', label: 'STALE · time unknown' })
   })
   it('a REST snapshot is DELAYED, never LIVE, up to DELAYED_MAX_AGE_MS, then STALE', () => {
     for (const source of ['quote-route', 'coingecko'] as const) {
-      const fresh = priceFeedBadge({ source, receivedAt: T }, T)
+      const fresh = priceFeedBadge({ source, receivedAt: T, quoteTime: null }, T)
       expect(fresh).toMatchObject({ state: 'delayed', label: 'DELAYED' })
       expect(fresh.title).toContain('The live ticker is not connected.')
-      expect(priceFeedBadge({ source, receivedAt: T }, T + DELAYED_MAX_AGE_MS).state).toBe('delayed')
-      expect(priceFeedBadge({ source, receivedAt: T }, T + DELAYED_MAX_AGE_MS + 1).label).toBe('STALE · 5m')
+      expect(fresh.title).toContain('received 0s ago')
+      expect(fresh.title).toContain('Vendor price time is unknown.')
+      expect(priceFeedBadge({ source, receivedAt: T, quoteTime: null }, T + DELAYED_MAX_AGE_MS).state).toBe('delayed')
+      expect(priceFeedBadge({ source, receivedAt: T, quoteTime: null }, T + DELAYED_MAX_AGE_MS + 1).label).toBe('STALE · 5m')
     }
   })
   it('the header renders the badge as a status with its reason', () => {
-    const html = renderToStaticMarkup(<BtcHeader btcPrice={{ price: 110, change24h: null, changePct24h: null, high24h: null, low24h: null, volume24h: null }} feed={{ source: 'coingecko', receivedAt: Date.now() }} />)
+    const html = renderToStaticMarkup(<BtcHeader btcPrice={{ price: 110, quoteTime: null, change24h: null, changePct24h: null, high24h: null, low24h: null, volume24h: null }} feed={{ source: 'coingecko', receivedAt: Date.now(), quoteTime: null }} />)
     expect(html).toContain('role="status"')
     expect(html).toContain('>DELAYED<')
     expect(html).not.toContain('>LIVE<')
