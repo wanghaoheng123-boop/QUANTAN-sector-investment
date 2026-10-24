@@ -2,17 +2,16 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { apiUrl } from '@/lib/apiBase'
+import {
+  snapshotFromCoinbaseTicker,
+  snapshotFromCoinGecko,
+  snapshotFromQuoteRoute,
+  type BtcPriceSnapshot,
+} from '@/lib/btcSnapshot'
+
+export type { BtcPriceSnapshot }
 
 const COINBASE_WS = 'wss://ws-feed.exchange.coinbase.com'
-
-export type BtcPriceSnapshot = {
-  price: number
-  change24h: number
-  changePct24h: number
-  high24h: number
-  low24h: number
-  volume24h: number
-}
 
 export function useBtcPriceWs() {
   const [btcPrice, setBtcPrice] = useState<BtcPriceSnapshot | null>(null)
@@ -45,21 +44,11 @@ export function useBtcPriceWs() {
       try {
         const d = JSON.parse(event.data) as Record<string, unknown>
         if (d.type === 'ticker' && d.product_id === 'BTC-USD') {
-          const price = parseFloat(String(d.price))
-          if (!Number.isFinite(price) || price <= 0) return
+          const snapshot = snapshotFromCoinbaseTicker(d)
+          if (!snapshot) return
           priceFromBinanceWsRef.current = true
           lastWsMessageRef.current = Date.now()
-          const open24 = parseFloat(String(d.open_24h ?? '0'))
-          const chg = open24 > 0 ? price - open24 : 0
-          const chgPct = open24 > 0 ? ((price - open24) / open24) * 100 : 0
-          setBtcPrice({
-            price,
-            change24h: chg,
-            changePct24h: chgPct,
-            high24h: parseFloat(String(d.high_24h)) || price,
-            low24h: parseFloat(String(d.low_24h)) || price,
-            volume24h: parseFloat(String(d.volume_24h)) || 0,
-          })
+          setBtcPrice(snapshot)
         }
       } catch (err) {
         if (!priceFromBinanceWsRef.current) {
@@ -89,24 +78,9 @@ export function useBtcPriceWs() {
         })
         if (cancelled) return
         if (r.ok) {
-          const d = (await r.json()) as {
-            price?: number
-            change24h?: number
-            changePct24h?: number
-            high24h?: number
-            low24h?: number
-            volume24h?: number
-          }
+          const snapshot = snapshotFromQuoteRoute(await r.json())
           if (cancelled) return
-          if (!d.price || !Number.isFinite(d.price)) return
-          setBtcPrice({
-            price: d.price,
-            change24h: d.change24h ?? 0,
-            changePct24h: d.changePct24h ?? 0,
-            high24h: d.high24h ?? d.price,
-            low24h: d.low24h ?? d.price,
-            volume24h: d.volume24h ?? 0,
-          })
+          if (snapshot) setBtcPrice(snapshot)
           return
         }
         const cg = await fetch(
@@ -115,18 +89,9 @@ export function useBtcPriceWs() {
         )
         if (cancelled) return
         if (!cg.ok) return
-        const q = (await cg.json()) as { bitcoin?: { usd?: number; usd_24h_change?: number; usd_24h_vol?: number } }
+        const snapshot = snapshotFromCoinGecko(await cg.json())
         if (cancelled) return
-        const p = Number(q.bitcoin?.usd)
-        if (!Number.isFinite(p) || p <= 0) return
-        setBtcPrice({
-          price: p,
-          change24h: 0,
-          changePct24h: Number(q.bitcoin?.usd_24h_change) || 0,
-          high24h: p,
-          low24h: p,
-          volume24h: Number(q.bitcoin?.usd_24h_vol) || 0,
-        })
+        if (snapshot) setBtcPrice(snapshot)
       } catch (err) {
         if (cancelled) return
         console.warn('[btc] REST quote fallback failed', err)

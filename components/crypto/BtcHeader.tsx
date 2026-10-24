@@ -9,8 +9,11 @@ export interface BtcHeaderProps {
   wsConnected: boolean
 }
 
+const fmtWhole = (v: number | null) => (v == null ? '—' : `$${v.toLocaleString('en-US', { maximumFractionDigits: 0 })}`)
+
 function BtcHeader({ btcPrice, wsConnected }: BtcHeaderProps) {
-  const isUp = (btcPrice?.changePct24h ?? 0) >= 0
+  // Q-157: a missing 24h change is "—", never a measured "▲ 0.00%".
+  const pct = btcPrice?.changePct24h ?? null
 
   return (
     <div
@@ -59,12 +62,15 @@ function BtcHeader({ btcPrice, wsConnected }: BtcHeaderProps) {
                 <div className="text-2xl font-bold text-white font-mono">
                   ${btcPrice.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
-                <div className={`text-sm font-mono ${isUp ? 'text-green-400' : 'text-red-400'}`}>
-                  {isUp ? '▲' : '▼'} {Math.abs(btcPrice.changePct24h).toFixed(2)}%
-                </div>
+                {pct == null ? (
+                  <div className="text-sm font-mono text-slate-400">— (no change data)</div>
+                ) : (
+                  <div className={`text-sm font-mono ${pct >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {pct >= 0 ? '▲' : '▼'} {Math.abs(pct).toFixed(2)}%
+                  </div>
+                )}
                 <div className="text-[10px] text-slate-400 mt-1 font-mono">
-                  H${btcPrice.high24h.toLocaleString('en-US', { maximumFractionDigits: 0 })} · L$
-                  {btcPrice.low24h.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                  H {fmtWhole(btcPrice.high24h)} · L {fmtWhole(btcPrice.low24h)}
                 </div>
               </div>
             ) : (

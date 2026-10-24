@@ -16,7 +16,8 @@ export interface CallOrPut {
   strike: number
   currency?: string
   lastPrice: number
-  change: number
+  /** Q-156: null when the vendor gives none — never a measured-looking 0. */
+  change: number | null
   percentChange?: number
   volume?: number
   openInterest?: number
@@ -62,6 +63,13 @@ const yahooFinance = new YahooFinance()
 // BACKTEST_RFR_ANNUAL) — identical pre-Q-052 behaviour.
 import { getRiskFreeRateSync } from '@/lib/quant/riskFreeRate'
 
+/** A finite number, or null for a missing or non-numeric vendor field. */
+function finiteOrNull(v: unknown): number | null {
+  if (v == null || v === '') return null
+  const n = Number(v)
+  return Number.isFinite(n) ? n : null
+}
+
 function toDate(d: unknown): Date {
   if (d instanceof Date) return d
   return new Date(d as string | number)
@@ -89,8 +97,8 @@ function normaliseContract(raw: Record<string, unknown>): CallOrPut {
     strike: Number(raw.strike ?? 0),
     currency: raw.currency != null ? String(raw.currency) : undefined,
     lastPrice: Number(raw.lastPrice ?? 0),
-    change: Number(raw.change ?? 0),
-    percentChange: raw.percentChange != null ? Number(raw.percentChange) : undefined,
+    change: finiteOrNull(raw.change),
+    percentChange: finiteOrNull(raw.percentChange) ?? undefined,
     volume: raw.volume != null ? Number(raw.volume) : undefined,
     openInterest: raw.openInterest != null ? Number(raw.openInterest) : undefined,
     bid: raw.bid != null ? Number(raw.bid) : undefined,
