@@ -145,7 +145,9 @@ export async function GET(
     const q = (quoteValue && typeof quoteValue === 'object' ? quoteValue : {}) as Record<string, unknown>
     const noQuote = quoteResult.status === 'fulfilled' && Object.keys(q).length === 0
 
-    const rawPrice = safeNum(q.regularMarketPrice ?? q.currentPrice)
+    // Q149-R2-5: `currentPrice` is not a declared quote member (the guard in
+    // __tests__/architecture/darkpool-vendor-fields.test.ts reads every vendor read).
+    const rawPrice = safeNum(q.regularMarketPrice)
     const rawChange = safeNum(q.regularMarketChange)
     const rawChangePct = safeNum(
       (q as Record<string, unknown>).regularMarketChangePercent
