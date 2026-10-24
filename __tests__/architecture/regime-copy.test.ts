@@ -15,18 +15,26 @@
  *      sizing, return and FORBIDDEN-vocabulary words in every string the
  *      surfaces can render. It recognises restored copy and that vocabulary; it is
  *      not a classifier, and the "CANNOT do" block below says what it misses.
- *   2. STRUCTURE — three rules over the parse tree that the word lists cannot
+ *   2. STRUCTURE — four rules over the parse tree that the word lists cannot
  *      express: no UI surface reads the classifier's dipSignal / riskLevel /
  *      color (C1, C5, C6); none names a dip class (C1, C2); none holds a bare
- *      percentage as a string literal (the removed return table).
- *   3. REMOVED COPY — every string this package removed is frozen
- *      (q153RemovedCopy.json from main, q153Round1Copy.json from round 1) and
- *      matched as an exact literal.
- *   4. SCOPE — the surfaces are the import closure of the files that import the
- *      regime module (regimeUiRules.importClosure), so copy imported INTO a
- *      surface is read too.
- * Every capability is exercised by a regression planted into the REAL file's
- * text, one plant per test, each asserted to add its OWN text.
+ *      percentage as a string literal (the removed return table); none scales
+ *      the 20-day slope to a percentage itself (R2-14).
+ *   3. REMOVED COPY — the strings this package removed are frozen in two
+ *      fixtures. The advice entries of q153RemovedCopy.json are positive controls
+ *      for the decider. Refused if rendered, as exact whole literals: its 26
+ *      figures and the label and claim entries of q153Round1Copy.json. Refused
+ *      inside any rendered literal: the six traffic-light circles. The fixtures'
+ *      neutral and code entries and round 1's fragments are recorded and NOT
+ *      asserted.
+ *   4. SCOPE — the surfaces are the import closure of the regime module and of
+ *      the files that import it (regimeUiRules.importClosure), so copy imported
+ *      INTO a surface is read too.
+ * The regressions named in PLANTS are planted into the REAL file's text, one plant
+ * per test, each asserted to add its OWN text. The remaining forms of each rule
+ * (an alias, a computed key, a ternary receiver, destructuring assignment, a
+ * template piece …) have no real-file plant and are covered by controls on
+ * synthetic source.
  *
  * ── MUTATIONS RUN AGAINST THIS GUARD (2026-10-24, on 070c676) ──────────────────
  * 82 edits. A harness applied each to the SINGLE occurrence of its target (it
@@ -38,8 +46,10 @@
  * __tests__/quant/mutationHardening.q078w4.test.ts; tree edits T1-T6b, T11, T12 ran
  * this file; T7, T8 ran the three BtcQuantLab component tests; T9a-d, T9f ran
  * slopeState, technicals and mutationHardening.q078w4; T9e ran those and this
- * file. The round-2 review's mutants map as: M1 (empty rendered-attribute
- * set) = M1, M1b, M1c, whose allow-list no longer exists to be emptied; M2 = M2.
+ * file. The round-2 review's M1 (an empty rendered-attribute allow-list) has no
+ * counterpart now that the list is a deny-list; M1, M1b (the old six-name
+ * allow-list restored) and M1c (an empty deny-list) are the mapped mutants. The
+ * review's M2 (no no-substitution templates) is M2.
  * "N failing" counts failing tests; the names are the first that failed.
  *
  *   M1-every-attribute-is-code                           adviceWords    KILLED (12 failing) plant N1; plant N2; the visitor: what counts as rendered text reads an attribute
@@ -125,9 +135,9 @@
  *   Rd2-slope-operand-never-recognised                   regimeUiRules  KILLED (2 failing) plant P9; the slope is formatted by formatSlopePct the rule sees a slo
  *   Rd3-only-multiplication-by-100                       regimeUiRules  KILLED (1 failing) the slope is formatted by formatSlopePct the rule sees a slo
  *
- * Mutations were not run against: the decider's word lists beyond the entries
- * changed here (a word removed from the lists that no test names survives), the
- * JSON fixtures' individual entries, or lib/ code outside the files named above.
+ * Mutations were NOT run against: word-list entries other than the ones named
+ * above, individual entries of the two JSON fixtures, or lib/ code outside the
+ * files named above.
  */
 import { execSync } from 'node:child_process'
 import { existsSync, readFileSync, statSync } from 'node:fs'
@@ -161,7 +171,7 @@ const IMPORTERS = productFiles.filter((p) => {
 const { files: SURFACES, opaque: OPAQUE_IMPORTS } = importClosure([REGIME_MODULE, ...IMPORTERS], readIfFile)
 /** The `.tsx` files among them: the rendered surfaces and the components they mount. */
 const UI = SURFACES.filter((f) => f.endsWith('.tsx'))
-/** Files whose copy is the point of this package; each must yield copy to the visitor. */
+/** Files that must be in the closure and must yield copy to the visitor (lib/crypto.ts and btc-indicators.ts are reached only by import). */
 const CORE = ['lib/quant/technicals.ts', 'lib/crypto.ts', 'lib/quant/btc-indicators.ts', 'components/crypto/BtcQuantLab.tsx',
   'components/stock/quantlab/tabs/TechnicalsTab.tsx', 'app/ma-deviation/page.tsx', 'app/api/ma-deviation/route.ts', 'lib/quant/buildFundamentalsPayload.ts']
 
@@ -224,7 +234,7 @@ const KNOWN_FALSE_POSITIVES: Record<string, Pin[]> = {
 
 // ─── Positive controls for the decider ───
 
-/** Q153-C9: 28 paraphrases. The first guard caught one. */
+/** Q153-C9: the reviewer's 28 paraphrases (the first guard caught one), then the two the package added. */
 const PARAPHRASES = [
   'Consider adding on weakness.',
   'A good entry point for long-term investors.',
@@ -262,7 +272,7 @@ const PARAPHRASES = [
 /** Q153-R2-7: the old TRADE regex in mutationHardening.q078w4 caught each of these; the shared list had dropped them. */
 const OLD_TRADE_COVERAGE = ['Avoid', 'Avoid adding here.', 'Avoid this sector.', 'Averaging is not advised.', '12M', '3M: +3.6%', '6M outcome', 'Forward 12M']
 
-/** Q153-R2-9: CLAUDE.md's FORBIDDEN section ("beats the market", "guaranteed", "proven") and its siblings. */
+/** Q153-R2-9: CLAUDE.md's FORBIDDEN section ("beats the market", "guaranteed", "proven") and the review's "outperform*". */
 const FORBIDDEN_VOCABULARY = [
   'Proven to work across cycles.', 'Guaranteed to revert.', 'Beat the S&P in 7 of 10 years.', 'Beats the market.',
   'Outperformed the market by 4% a year.', 'A strategy that outperforms.', 'Beating the market since 2010.',
@@ -343,7 +353,7 @@ const PLANTS: Plant[] = [
   { id: 'V7', file: TECH, anchor: TECH_ROOT, placement: 'after', insert: "{x === 'STRONG_DIP' ? 'BUY' : null}", expect: [{ rule: 'advice', own: ['BUY'] }, { rule: 'dip-literal', own: ['STRONG_DIP'] }] },
   { id: 'V8', file: PAGE, anchor: PAGE_H2, insert: `<p>${'The gauge describes the distance from the average. '.repeat(9)}Buy the dip.</p>`, expect: [{ rule: 'advice', own: ['Buy the dip.'] }] },
 
-  // ── Round 2's N1-N8: copy in a rendered prop the first visitor classed as code (Q153-R2-4) ──
+  // ── The round-2 review's N1-N8: copy in a rendered prop the first visitor classed as code (Q153-R2-4) ──
   { id: 'N1', file: BTC, anchor: BTC_TAB, insert: '<MetricCard label="Funding" value="—" sub="Negative funding: a good time to go long" />', expect: [{ rule: 'advice', own: ['Negative funding: a good time to go long'] }] },
   { id: 'N2', file: BTC, anchor: BTC_TAB, insert: '<MetricCard label="Funding" value="Accumulate" />', expect: [{ rule: 'advice', own: ['Accumulate'] }] },
   { id: 'N3', file: PAGE, anchor: PAGE_H2, insert: "<Legend items={[{ name: 'Buy the dip below a rising average' }]} />", expect: [{ rule: 'advice', own: ['Buy the dip below a rising average'] }] },
@@ -515,7 +525,11 @@ describe('regime copy describes, and quotes no unmeasured returns (Q-153)', () =
     })
 
     it('still reads a string inside an ELEMENT nested in a code attribute', () => {
-      expect(texts('const a = <Row key={<b>Buy</b>} />')).toContain('Buy')
+      expect(texts("const a = <Row key={<b>{'Buy'}</b>} />")).toContain('Buy')
+    })
+
+    it('reads a .json file the same way, property names included', () => {
+      expect(renderedText('copy.json', '{ "title": "Buy the dip", "n": 3 }').map((t) => t.text)).toEqual(['title', 'Buy the dip', 'n'])
     })
 
     it('reads no-substitution template literals and ignores literal TYPES and imports', () => {
@@ -613,6 +627,8 @@ describe('regime copy describes, and quotes no unmeasured returns (Q-153)', () =
         ['nested destructuring in a parameter', 'rows.map(({ regime: { riskLevel } }) => riskLevel)', ['riskLevel']],
         ['destructuring assignment', 'let c; ({ color: c } = regime)', ['color: c']],
         ['alias', 'const r = regime; const a = r.color', ['r.color']],
+        ['alias of an alias', 'const r = regime; const s = r; const a = s.color', ['s.color']],
+        ['alias declared after its use', 'const t = s; const s = regime; const a = t.color', ['t.color']],
         ['alias through a binding', 'const { regime: rg } = row; const a = rg.color', ['rg.color']],
         ['parameter typed as the regime', 'const f = (r: MA200Regime) => r.color', ['r.color']],
         ['destructured parameter typed as the regime', 'const f = ({ color }: MA200Regime) => color', ['color']],

@@ -15,7 +15,8 @@
  * and the vocabulary listed below. It is not a classifier of advice: a fresh
  * paraphrase with none of these words passes, and `regime-copy.test.ts` asserts
  * that in its "CANNOT do" block. Do not answer a missed paraphrase by adding its
- * spelling here — the first guard died of exactly that.
+ * spelling here: the round-2 review found this list had been fitted to the
+ * round-1 paraphrases that way, and 0 of 36 fresh ones were caught.
  */
 import ts from 'typescript'
 
@@ -105,9 +106,10 @@ export function offending(text: string): boolean {
  * treated every other attribute as code, so `<MetricCard sub="…" />`,
  * `<input value="…" />` and `data-tooltip` were invisible, and emptying the set
  * broke no test. Now an attribute that is not listed here is SCANNED, so a new
- * prop that carries copy fails closed. The list was checked against every
- * attribute that holds a string on the closure's `.tsx` files; `skey` and
- * `color` are project props (a sort key, a Tailwind class).
+ * prop that carries copy fails closed. Each attribute that holds a string on
+ * the closure's `.tsx` files was classified (`skey` and `color` are project
+ * props: a sort key and a Tailwind class); the other names are the standard
+ * HTML, SVG and ARIA attributes that carry code or state, not text.
  */
 const CODE_ATTRIBUTES = new Set([
   'className', 'class', 'key', 'ref', 'href', 'src', 'srcSet', 'id', 'htmlFor', 'type', 'role', 'style', 'scope',

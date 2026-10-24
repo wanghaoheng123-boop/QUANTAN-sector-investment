@@ -1,8 +1,8 @@
 /**
- * Q-153 (compliance Q153-R2-2, R2-5, R2-8) — the structural rules behind
- * `regime-copy.test.ts`. Every function is pure over (path, source) so the test
- * can run it on the real files, on the real files with a regression planted into
- * their text, and on synthetic sources.
+ * Q-153 (compliance Q153-R2-2, R2-5, R2-8, R2-14) — the structural rules and the
+ * scope derivation behind `regime-copy.test.ts`. Every function is pure over
+ * (path, source) so the test can run it on the real files, on the real files with
+ * a regression planted into their text, and on synthetic sources.
  *
  * Why these exist. Round 1's BLOCKING and HIGH findings (C1 the class badge, C2
  * the legend's classification column, C5 "Risk: low", C6 the traffic-light
@@ -11,8 +11,10 @@
  * advice decider because its labels ("Below a rising average") are honest words
  * and its colour lives in a `className` expression. What the removed things had
  * in common is not vocabulary but STRUCTURE — they read the classifier's
- * `dipSignal`, `riskLevel` and `color`, or they named its classes. Two rules
- * ban the structure, and both have zero hits on the committed surfaces.
+ * `dipSignal`, `riskLevel` and `color`, or they named its classes. Rules (a) and
+ * (b) ban that structure; rule (c) bans the removed return table's figures as
+ * literals; rule (d) bans a surface rounding the slope itself. All four have zero
+ * hits on the committed surfaces. `importClosure` derives which files those are.
  */
 import { posix } from 'node:path'
 import ts from 'typescript'
@@ -45,7 +47,8 @@ const unwrap = (e: ts.Expression): ts.Expression => {
  * and a non-literal key on the regime, which cannot be resolved so it fails
  * closed), object destructuring (`const { color: zc } = regime`, nested
  * `{ regime: { color } }`, a parameter typed `MA200Regime`), destructuring
- * assignment, and one level of aliasing (`const r = regime; r.color`).
+ * assignment, a `??` / `||` / ternary fallback, and aliasing followed to a
+ * fixpoint (`const r = regime; const s = r; s.color`).
  *
  * Property NAMES are matched exactly: `dipSignalExplained` is the measured
  * sentence and is allowed.
