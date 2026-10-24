@@ -351,8 +351,8 @@ describe('/api/darkpool — a fetch failure is not explained as a coverage gap',
     })
 
     it('symbols with no dot are fetched once: indices, pairs, futures', async () => {
-      for (const s of ['^GSPC', 'BTC-USD', 'EURUSD=X', 'ES=F', 'AAPL']) await darkpool(s)
-      expect(symbolsQuoted()).toEqual(['^GSPC', 'BTC-USD', 'EURUSD=X', 'ES=F', 'AAPL'])
+      for (const s of ['^GSPC', 'BTC-USD', 'EURUSD=X', 'ES=F', 'ABCD']) await darkpool(s)
+      expect(symbolsQuoted()).toEqual(['^GSPC', 'BTC-USD', 'EURUSD=X', 'ES=F', 'ABCD'])
     })
 
     it('if the typed symbol failed and the hyphen spelling also has no quote, the typed symbol\'s own answer stands', async () => {

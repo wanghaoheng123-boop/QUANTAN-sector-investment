@@ -56,7 +56,7 @@ describe('hyphenShareClassCandidate — a spelling to TRY, not a replacement (Q1
   })
 
   it('offers nothing for a symbol not typed with a dot: the hyphen form is already Yahoo\'s', () => {
-    for (const s of ['BRK-B', 'BF-B', 'BTC-USD', 'EURUSD=X', '^GSPC', 'AAPL', '']) {
+    for (const s of ['BRK-B', 'BF-B', 'BTC-USD', 'EURUSD=X', '^GSPC', 'ABCD', '']) {
       expect(hyphenShareClassCandidate(s), s).toBeNull()
     }
   })
