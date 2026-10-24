@@ -13,6 +13,7 @@
  * clock value, so they cannot disagree.
  */
 import { WINDOW_START, assessRefresh, dropUnfinishedBars, keyDate, seriesFingerprint } from './dataVintage.mjs'
+import { matchRecordedRevisions, unmatchedRowNote } from './recordedRevisions.mjs'
 
 /**
  * Fixture integrity floors (R2 mitigation). The benchmark needs >= 252 rows per
@@ -35,8 +36,9 @@ const MIN_PLAUSIBLE_NOW_MS = Date.parse(`${WINDOW_START}T00:00:00Z`)
 
 /**
  * @typedef {{ time: number, open: number, high: number, low: number, close: number, volume: number, dividend?: number }} Bar
- * @typedef {{ appended: number, restated: number, missing: number, finalized: number, superseded: number }} Vintage
- * @typedef {{ ticker: string, sector: string, fetchedAt: string, windowStart: string, fingerprint: string, rows: number, vintage: Vintage, candles: Bar[] }} FixtureDoc
+ * @typedef {{ appended: number, restated: number, missing: number, finalized: number, superseded: number, accepted: number }} Vintage
+ * @typedef {{ date: string, fields: string[], relativeChange: Record<string, number>, decidedAt: string, adoptedAt: string }} AdoptedRevision
+ * @typedef {{ ticker: string, sector: string, fetchedAt: string, windowStart: string, fingerprint: string, rows: number, vintage: Vintage, adoptedRevisions?: AdoptedRevision[], candles: Bar[] }} FixtureDoc
  */
 
 /** @returns {{ ok: false, reason: string }} */
@@ -49,11 +51,12 @@ const refuse = (ticker, why) => ({ ok: false, reason: `REFUSED to save ${ticker}
  * @param {unknown} args.prev    the parsed fixture on disk, or undefined when there is none
  * @param {Bar[]} args.candles   every finite bar the vendor returned
  * @param {number} args.nowMs    the clock, in milliseconds
+ * @param {unknown[]} [args.acceptances]  recorded revisions (scripts/lib/acceptedRevisions.json; see recordedRevisions.mjs)
  * @returns {{ ok: true, doc: FixtureDoc, log: string[] } | { ok: false, reason: string }}
  *   On success, `doc` is the fixture to write and `log` the lines to print
  *   (relative sizes and dates only: the workflow log is public, I8).
  */
-export function planSave({ ticker, sector, prev, candles, nowMs }) {
+export function planSave({ ticker, sector, prev, candles, nowMs, acceptances = [] }) {
   if (!Number.isFinite(nowMs) || nowMs < MIN_PLAUSIBLE_NOW_MS) {
     throw new Error(`planSave(${ticker}): clock ${nowMs} is not milliseconds since the epoch after ${WINDOW_START}`)
   }
@@ -67,7 +70,9 @@ export function planSave({ ticker, sector, prev, candles, nowMs }) {
     return refuse(ticker, `${kept.length} rows < absolute floor ${MIN_ABSOLUTE_ROWS} (degraded fetch — keeping existing fixture)`)
   }
 
-  let vintage = { appended: kept.length, restated: 0, missing: 0, finalized: 0, superseded: 0 }
+  let vintage = { appended: kept.length, restated: 0, missing: 0, finalized: 0, superseded: 0, accepted: 0 }
+  /** @type {AdoptedRevision[]} */
+  let adoptedRevisions = []
   if (prev !== undefined) {
     // Valid JSON of the WRONG SHAPE is the residual fail-open: assessRefresh
     // called with `undefined` reports every incoming bar as an append and
@@ -91,18 +96,38 @@ export function planSave({ ticker, sector, prev, candles, nowMs }) {
     // own fetchedAt says which of its bars was unfinished when it was written;
     // that bar is replaced by the finished bar, not compared against it.
     const verdict = assessRefresh(prevCandles, kept, { existingFetchedAt: prev.fetchedAt })
-    if (!verdict.ok) return refuse(ticker, verdict.reasons.join(' | '))
+    const accepted = verdict.ok ? [] : matchRecordedRevisions({ ticker, prevFetchedAt: prev.fetchedAt, nowMs, verdict, acceptances })
+    if (accepted === null) {
+      const note = unmatchedRowNote({ ticker, nowMs, acceptances })
+      return refuse(ticker, verdict.reasons.join(' | ') + (note ? ` | ${note}` : ''))
+    }
     vintage = {
       appended: verdict.appended,
       restated: verdict.restated,
       missing: verdict.missing,
       finalized: verdict.finalized,
       superseded: verdict.superseded,
+      accepted: accepted.length,
     }
-    if (verdict.appended > 0 || verdict.finalized > 0 || verdict.superseded > 0) {
+    // Q-144 exit-path review E-7: the adoption is carried forward in the
+    // fixture, so it survives the next write (the vintage counts do not).
+    const carried = Array.isArray(prev.adoptedRevisions) ? prev.adoptedRevisions : []
+    const restatedByDate = new Map(verdict.restatedBars.map((b) => [keyDate(b.key), b]))
+    const fresh = accepted.map((row) => {
+      const bar = restatedByDate.get(row.date)
+      const relativeChange = Object.fromEntries(Object.keys(row.changes).map((f) => [f, Math.round(bar.signedChanges[f] * 1e4) / 1e4]))
+      const sizes = Object.entries(relativeChange)
+        .map(([f, c]) => `${f} ${c >= 0 ? '+' : ''}${(c * 100).toFixed(2)}% (band [${row.changes[f].join(', ')}])`)
+        .join(', ')
+      log.push(`::notice title=${ticker} recorded revision adopted::${row.date} ${sizes}, adopted under the row decided ${row.decidedAt}`)
+      return { date: row.date, fields: Object.keys(row.changes), relativeChange, decidedAt: row.decidedAt, adoptedAt: new Date(nowMs).toISOString() }
+    })
+    adoptedRevisions = [...carried, ...fresh]
+    if (verdict.appended > 0 || verdict.finalized > 0 || verdict.superseded > 0 || accepted.length > 0) {
       const fin = verdict.finalized > 0 ? `, ${verdict.finalized} volume finalization(s)` : ''
       const sup = verdict.superseded > 0 ? `, ${verdict.superseded} unfinished bar(s) replaced by the finished bar` : ''
-      log.push(`[${ticker}] +${verdict.appended} new bar(s), 0 restated${fin}${sup}`)
+      const acc = accepted.length > 0 ? ' (adopted under a recorded acceptance)' : ''
+      log.push(`[${ticker}] +${verdict.appended} new bar(s), ${verdict.restated} restated${acc}${fin}${sup}`)
     }
     for (const b of verdict.supersededBars) {
       const what = b.dropped
@@ -126,6 +151,7 @@ export function planSave({ ticker, sector, prev, candles, nowMs }) {
       fingerprint: seriesFingerprint(kept),
       rows: kept.length,
       vintage,
+      ...(adoptedRevisions.length > 0 ? { adoptedRevisions } : {}),
       candles: kept,
     },
   }
