@@ -3,19 +3,19 @@
  * UX-6 — the ILLUSTRATIVE badge on the dark-pool block prints.
  *
  * `prints` are ALWAYS synthetic: every consumer feeds them from
- * `lib/mockData.ts` → `generateDarkPoolPrints()`, a mulberry32 PRNG seeded on
- * the ticker's char codes, anchored to a hardcoded 2026-03-23 timestamp and
- * priced from a small seed table (unknown tickers fall back to ≈$100). But the
- * badge was gated on `!hasRealData`, and `hasRealData` describes the Yahoo
- * off-exchange METRICS from /api/darkpool/[ticker] — a different dataset
- * entirely. So the label disappeared exactly when the real metrics loaded, i.e.
- * on every liquid instrument a professional actually trades. Captured live on
- * /stock/AAPL: fabricated prints at ≈$100 against a real $305.40 quote, no
- * badge, directly beneath "Source: Yahoo Finance".
+ * `lib/mockData.ts` -> `generateDarkPoolPrints()`, a mulberry32 PRNG seeded on
+ * the ticker's char codes and priced from a small seed table (unknown tickers
+ * fall back to about $100). The badge used to be gated on a flag that described
+ * the Yahoo metrics loaded from /api/darkpool/[ticker], which are a different
+ * dataset from the prints. So the label disappeared exactly when those metrics
+ * loaded, i.e. on every liquid instrument, and fabricated prints sat beside a
+ * real quote at a very different price with no badge.
  *
  * These tests pin the disclosure to the DATA, not to an unrelated call's
- * success: the badge, the footnote and the flow-gauge label must survive
- * `hasRealData: true`.
+ * success: the badge, the footnote and the flow-gauge label render in every
+ * state of the metrics request, loaded or not.
+ *
+ * Every figure in this file is invented (design invariant I8).
  */
 
 import { describe, it, expect } from 'vitest'
@@ -33,18 +33,18 @@ const PRINTS = markSynthetic<DarkPoolPrint[]>([
   { time: '14:30:00', ticker: 'ABCD', size: 114_000, price: 100.59, premium: 0.63, type: 'SWEEP', sentiment: 'BEARISH' },
 ])
 
-// Invented figures (Q149-D6, I8): the earlier fixture carried vendor-looking
-// magnitudes for a real issuer.
+// Invented figures (Q149-D6, I8): digit runs that no issuer reports, so none can
+// be read as, or derived from, a vendor figure.
 const METRICS: DarkPoolMetric = {
-  sharesShorted: 120_000_000,
+  sharesShorted: 123_456_789,
   shortFloatPct: 1.25,
   shortInterestAsOf: '2026-07-31',
   shortInterestAgeDays: 15,
   shortInterestStale: false,
   daysToCover: 2.5,
   avgDailyVolume: 40_000_000,
-  sharesOutstanding: 10_000_000_000,
-  sharesFloat: 9_600_000_000,
+  sharesOutstanding: 9_876_543_210,
+  sharesFloat: 8_765_432_100,
   floatWithheld: null,
 }
 
@@ -114,7 +114,7 @@ describe('DarkPoolPanel — the synthetic flow gauge carries its own label', () 
   })
 
   it('renders the gauge without a dead always-true conditional', () => {
-    // The gauge used to be gated on `(hasRealData || true)`. Its presence in
+    // The gauge used to be gated on an always-true conditional. Its presence in
     // both branches is what that tautology was silently doing.
     expect(render(analysis(true))).toContain('Off-Exchange Flow')
     expect(render(analysis(false))).toContain('Off-Exchange Flow')
@@ -134,10 +134,10 @@ describe('DarkPoolPanel — the Yahoo attribution is scoped to the metrics', () 
     const html = render(analysis(true))
     expect(html).toContain('Short Interest (% of float)')
     expect(html).toContain('1.25%')
-    expect(html).toContain('120.00M shares · as of 2026-07-31')
+    expect(html).toContain('123.46M shares · as of 2026-07-31')
     expect(html).not.toContain('STALE')
-    expect(html).toContain('10.00B')
-    expect(html).toContain('Float 9.60B')
+    expect(html).toContain('9.88B')
+    expect(html).toContain('Float 8.77B')
     expect(html).toContain('as reported by Yahoo; not computed from the volume shown')
   })
 })
