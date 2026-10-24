@@ -26,6 +26,23 @@ const PERIOD_DAYS = 1825; // 5 years — descriptive now, not the anchor
 mkdirSync(OUTPUT_DIR, { recursive: true });
 
 /**
+ * Q-144: recorded, reviewed acceptances of vendor revisions (see
+ * matchRecordedRevisions in scripts/lib/planSave.mjs). An unreadable file means
+ * NO acceptances — every revision is refused as before — never "accept".
+ */
+const ACCEPTED_REVISIONS = (() => {
+  const file = path.resolve(__dirname, 'lib', 'acceptedRevisions.json');
+  try {
+    const rows = JSON.parse(readFileSync(file, 'utf8')).rows;
+    if (!Array.isArray(rows)) throw new Error('no rows array');
+    return rows;
+  } catch (e) {
+    console.warn(`::warning title=Recorded revisions unreadable::${e.message}; no revision will be adopted this run`);
+    return [];
+  }
+})();
+
+/**
  * Persist a fixture, refusing to overwrite a good file with a degraded fetch, a
  * restated history, or a fixture the vintage check cannot read. Every decision
  * is in `planSave` (scripts/lib/planSave.mjs), which is pure and tested; this
@@ -48,7 +65,7 @@ function saveResult(ticker, sector, candles) {
       );
     }
   }
-  const plan = planSave({ ticker, sector, prev, candles, nowMs: Date.now() });
+  const plan = planSave({ ticker, sector, prev, candles, nowMs: Date.now(), acceptances: ACCEPTED_REVISIONS });
   if (!plan.ok) throw new Error(plan.reason);
   for (const line of plan.log) console.log(line);
   writeFileSync(filePath, JSON.stringify(plan.doc, null, 2), 'utf8');

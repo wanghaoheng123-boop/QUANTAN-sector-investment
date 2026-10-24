@@ -1,0 +1,16 @@
+{
+  "about": "Recorded, reviewed acceptances of vendor revisions to bars already stored in scripts/backtestData/. Read by scripts/fetchBacktestData.mjs; matched by matchRecordedRevisions in scripts/lib/planSave.mjs, which adopts the vendor's bar only when the revision is exactly the one recorded here and the fixture on disk is the version the reviewer saw (fixtureFetchedAt). A row therefore fires at most once. No vendor values: dates, fields and signed relative bounds only (design invariant I8). Add a row by pull request, with a data-integrity review; checked by __tests__/data/acceptedRevisions.test.ts.",
+  "rows": [
+    {
+      "ticker": "CAT",
+      "date": "2026-10-09",
+      "fixtureFetchedAt": "2026-10-12T00:57:59.894Z",
+      "changes": { "volume": [0.2, 0.24] },
+      "decision": "adopt",
+      "reason": "Volume-only revision of a bar whose open, high, low and close are unchanged. The stored figure was fetched about 2.5 days after the Friday session and the vendor completed that session's volume afterwards (+21.84% when measured on 2026-10-24); the revised figure is 0.97 of CAT's trailing 20-session median, the stored one 0.79. Adopting the later, more complete figure is the judgement Q-102's volume finalization makes, at a size outside its 5% cap. To reverse: delete this row before the run that adopts it, or revert that run's change to scripts/backtestData/CAT.json.",
+      "evidence": "refresh-data.yml run 39178415183 (2026-10-18) quarantined CAT on this bar; reviews/q144-data-integrity-regate-2026-10-18.md, finding Q144-R2-1 (null: 605 measured tail-bar volume revisions, p99 3.9e-3); dry run of the fetch script on 2026-10-24.",
+      "decidedAt": "2026-10-24",
+      "decidedBy": "Lead engineer (Claude Code), under the owner's 2026-10-24 instruction to resolve the open issues; data-integrity review before merge."
+    }
+  ]
+}

@@ -191,8 +191,15 @@ const drift = (was, now) => {
   return Math.abs(now - was) / Math.abs(was)
 }
 
+/** Signed fractional change, NaN where it is undefined (a zero or non-numeric value). */
+const signedChange = (was, now) =>
+  typeof was === 'number' && typeof now === 'number' && Number.isFinite(was) && Number.isFinite(now) && was !== 0
+    ? (now - was) / Math.abs(was)
+    : Number.NaN
+
 /**
- * Every moved field of a bar and the largest relative move among them.
+ * Every moved field of a bar, the largest relative move among them, and each
+ * field's signed relative change (what a recorded acceptance is matched on).
  * Q144-D3: the guard used to stop at the FIRST moved price field, so a bar whose
  * open moved 1.9e-5 was reported as that, while the same bar's low had moved
  * 2.4e-3 and its volume 5.2e-2.
@@ -200,7 +207,8 @@ const drift = (was, now) => {
 function movedFields(was, now) {
   const fields = ['open', 'high', 'low', 'close', 'volume'].filter((f) => !near(now[f], was[f]))
   const maxRelativeChange = fields.reduce((m, f) => Math.max(m, drift(was[f], now[f])), 0)
-  return { fields, maxRelativeChange }
+  const signedChanges = Object.fromEntries(fields.map((f) => [f, signedChange(was[f], now[f])]))
+  return { fields, maxRelativeChange, signedChanges }
 }
 
 export function diffSeries(existing, incoming, { provisional = new Set() } = {}) {
@@ -300,6 +308,7 @@ export function assessRefresh(existing, incoming, { existingFetchedAt } = {}) {
     finalized: d.finalized.length,
     superseded: d.superseded.length,
     supersededBars: d.superseded,
+    restatedBars: d.restated,
     reasons,
   }
 }
