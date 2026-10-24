@@ -72,12 +72,17 @@ describe('buildDarkPoolMetrics', () => {
   })
 
   it('a float above shares outstanding beyond the slack is WITHHELD, and says so (Q149-D2, D15)', () => {
-    expect(FLOAT_SHARES_OUT_SLACK).toBe(0.01)
+    expect(FLOAT_SHARES_OUT_SLACK).toBe(0.05)
     const f = (ratio: number) => build({ floatShares: 1e9 * ratio, sharesOutstanding: 1e9 })
     expect(f(1)).toMatchObject({ sharesFloat: 1e9, floatWithheld: null })
     expect(f(1.002)).toMatchObject({ sharesFloat: 1.002e9, floatWithheld: null }) // a different as-of date
-    expect(f(1.009).floatWithheld).toBeNull()
+    // Q149-R2-1: a correct float sat at 1.01-1.02 of shares outstanding one week
+    // and was withheld at the 1% bound the next. 1.02 and 1.05 are kept.
+    expect(f(1.02)).toMatchObject({ sharesFloat: 1.02e9, floatWithheld: null })
+    expect(f(1.05)).toMatchObject({ sharesFloat: 1.05e9, floatWithheld: null })
+    // The smallest ratio measured for a float in other units was 1.06.
     expect(f(1.06)).toMatchObject({ sharesFloat: null, floatWithheld: 'exceeds-shares-out' })
+    expect(f(1.1)).toMatchObject({ sharesFloat: null, floatWithheld: 'exceeds-shares-out' })
     expect(f(2.5)).toMatchObject({ sharesFloat: null, floatWithheld: 'exceeds-shares-out' })
     expect(build({ floatShares: 1.2e6 }).sharesFloat).toBe(1.2e6) // no shares-out to compare against
     expect(build({ floatShares: 0, sharesOutstanding: 0 })).toMatchObject({ sharesFloat: null, sharesOutstanding: null, floatWithheld: null })

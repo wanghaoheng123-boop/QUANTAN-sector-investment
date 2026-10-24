@@ -86,12 +86,15 @@ type QuoteField = (typeof QUOTE_FIELDS)[number]
 
 /**
  * Yahoo's `shortPercentOfFloat` is a FRACTION (0.0071 means 0.71%). Measured
- * 2026-10-17: a fraction on every one of 128 equities that carried it, and for
- * single-class names equal to `sharesShort / floatShares` to within about 1%.
- * The panel printed it with a `%` sign unscaled, so every stock's short
- * interest read 100 times too small. The scale is unconditional; a vendor
- * switch to percent form would make every figure 100 times too large, and
- * nothing here would notice (Q149-D14, logged).
+ * 2026-10-17: a fraction on every one of 128 equities that carried it. Where the
+ * float is kept it is typically within 5-15% of `sharesShort / floatShares`, not
+ * equal to it: measured 2026-10-24 over the 102 kept floats whose identity could
+ * be checked, 31 were within 1%, 51 within 5% and 73 within 10%, with a median
+ * deviation of 4.6% and a 90th percentile of 15%. The panel printed it with a
+ * `%` sign unscaled, so every stock's short interest read 100 times too small.
+ * The scale is unconditional; a vendor switch to percent form would make every
+ * figure 100 times too large, and nothing here would notice (Q149-D14, to be
+ * logged).
  */
 export const SHORT_PERCENT_OF_FLOAT_SCALE = 100
 
@@ -110,11 +113,22 @@ export const FLOAT_IDENTITY_TOLERANCE = 2
 /**
  * How far a float may exceed shares outstanding and still be shown. The float is
  * a subset of the shares, so a float above them is in other units — but the two
- * fields can carry different as-of dates, and two names overshot by 0.2% and 0.6%
- * while their short-interest identity held within 12% (2026-10-17). No name in
- * that sample fell between 0.6% and 5.9%, so the 1% boundary rests on a thin gap.
+ * fields can carry different as-of dates, and buybacks move the share count
+ * between them, so a correct float can overshoot by a few percent and the
+ * overshoot drifts from week to week.
+ *
+ * Why 5% and not 1%. At 1% the rule held on 2026-10-17 and did not a week
+ * later. Measured 2026-10-24 over 131 equities: two single-class US large caps
+ * (float / shares outstanding of 1.02 and 1.01), whose short-interest identity
+ * held, were withheld six days after being kept; a single-class ADR at 1.01 was
+ * kept. The next ratios above 1.02 were 1.06, 1.08, 1.10 and 1.14 (three ADRs
+ * and one dual-class name), each a float in other units that must stay withheld.
+ *
+ * That makes 5% the width of ONE sample's gap, between 1.02 and 1.06, not a
+ * derived constant. It is expected to need revisiting; the measurement to repeat
+ * is the distribution of float / shares outstanding over the kept names.
  */
-export const FLOAT_SHARES_OUT_SLACK = 0.01
+export const FLOAT_SHARES_OUT_SLACK = 0.05
 
 /**
  * The age past which a short-interest figure is STALE. Short interest is
