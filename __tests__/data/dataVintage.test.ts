@@ -326,6 +326,11 @@ describe('Q-144 — an unfinished bar is neither stored nor compared', () => {
     expect(provisionalKeys([...s, { ...s[299], time: s[299].time + 60 }], iso(s[299].time + 3_600)).size).toBe(0)
     // A last bar that is not the newest (unsorted file): strict.
     expect(provisionalKeys([...s.slice(0, 298), s[299], s[298]], iso(s[299].time + 3_600)).size).toBe(0)
+    expect(provisionalKeys([...s.slice(0, 298), s[299], s[298]], iso(s[298].time + 3_600)).size).toBe(0)
+    // A bar that began AFTER the file says it was written (a weekend gap, then a
+    // bar from the stamp's future): the stamp is wrong, so nothing is exempt.
+    const gapped = [...s.slice(0, 299), { ...s[298], time: s[298].time + 2 * DAY }]
+    expect(provisionalKeys(gapped, iso(s[298].time + Math.round(1.5 * DAY))).size).toBe(0)
   })
 
   it('the re-gate reproducer: a wrecked refresh is refused whatever the fetchedAt says (R2-2)', () => {
