@@ -41,6 +41,100 @@ export const WINDOW_START = '2021-08-17'
 /** A bar is identified by its date; the OHLCV is the value that must not change. */
 const KEY = (c) => String(c.time ?? c.date ?? '')
 
+/** A bar key as a calendar date for messages: keys are epoch seconds. */
+export const keyDate = (key) => {
+  const n = Number(key)
+  return Number.isFinite(n) && String(key).trim() !== '' ? new Date(n * 1000).toISOString().slice(0, 10) : String(key)
+}
+
+/** Seconds in a daily bar's period. */
+export const DAY_SECONDS = 86_400
+
+/**
+ * How long after a daily bar's day has ENDED before it is stored.
+ *
+ * Q144-R2-4, measured 2026-10-18: the vendor's row for the just-finished BTC day
+ * was all-null at every poll from 3.4 h to 5.0 h after the day ended, and
+ * populated by 7.4 h. Whether the first published values equal the final ones
+ * was not measured, and the same vendor has been seen changing every field of a
+ * 22-hour-old bar, so the first hours after publication are not treated as
+ * final. Twelve hours is above the measured publish delay with margin. At a
+ * weekly cadence it costs one bar at most: the Sunday run (scheduled 22:00 UTC,
+ * created 23:28-00:57 UTC over the last six runs) still stores the Friday
+ * session and BTC's Saturday bar, and holds BTC's Sunday bar for a week.
+ */
+export const SETTLE_SECONDS = 12 * 3_600
+
+/**
+ * Q-144: is a daily bar FINISHED, and settled, at `nowSec`?
+ *
+ * A daily bar's timestamp is the START of its period. It is final only once a
+ * whole day has passed, and stored only once SETTLE_SECONDS more have passed.
+ * The weekly refresh asked Yahoo for daily bars through "now", so the last BTC
+ * bar — BTC trades through the weekend and its daily bar spans the UTC day — was
+ * a day still in progress: all 12 committed BTC vintages stored a tail fetched
+ * 22.3-23.2 h into its own day (data-integrity Q144-D1). The next run found that
+ * bar "restated" in every field and refused it, and BTC was refused in every
+ * scheduled run from 2026-08-23 on; its fixture has not been written since
+ * 2026-08-16. For an equity bar stamped at the 13:30 UTC open the rule is
+ * conservative and waits until the evening of the next day, so a mid-week
+ * dispatch never stores a session still in progress either.
+ */
+export function isBarComplete(bar, nowSec) {
+  const t = Number(bar?.time)
+  return Number.isFinite(t) && Number.isFinite(nowSec) && t + DAY_SECONDS + SETTLE_SECONDS <= nowSec
+}
+
+/**
+ * Drop every bar that is not finished and settled at `nowSec`, wherever it sits
+ * (Q144-R2-9: trimming only the tail kept an unfinished bar from an unsorted
+ * response). A non-finite time is treated as unfinished rather than stored.
+ */
+export function dropUnfinishedBars(candles, nowSec) {
+  const all = candles ?? []
+  const kept = all.filter((c) => isBarComplete(c, nowSec))
+  return { candles: kept, dropped: all.length - kept.length }
+}
+
+/** An ISO-8601 UTC timestamp as `new Date().toISOString()` writes it. */
+const ISO_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/
+
+/**
+ * Keys of the bars ON DISK that were unfinished when that file was written —
+ * judged from the file's own `fetchedAt`, not from today.
+ *
+ * Such a bar was never a value of the finished bar: it was a 22-hour snapshot
+ * of a 24-hour bar. Comparing the finished bar against it calls the bar
+ * completing a "restatement". So a provisional bar is REPLACED by the vendor's
+ * finished bar and reported as superseded, never compared.
+ *
+ * Q144-R2-2: this EXEMPTS bars from the restatement check, so it needs positive
+ * evidence and fails to the strict check on anything else. A bar is provisional
+ * only if it began at or before the write and its day had not ended at the
+ * write, and only the LAST bar on disk can be: a file is written from one fetch,
+ * and only its newest day can have been in progress. A `fetchedAt` that is not
+ * an ISO timestamp, that makes a bar other than the last qualify, or that makes
+ * no bar qualify, yields no provisional bars. The first version used
+ * `!isBarComplete`, which also answers true for a bar it cannot evaluate: a
+ * `fetchedAt` of "2026" or the epoch, or disk times in milliseconds, exempted
+ * every bar on disk and let a refresh that doubled every price through.
+ */
+export function provisionalKeys(existing, fetchedAtIso) {
+  const fetchedMs = typeof fetchedAtIso === 'string' && ISO_UTC.test(fetchedAtIso) ? Date.parse(fetchedAtIso) : NaN
+  if (!Number.isFinite(fetchedMs)) return new Set()
+  const fetchedSec = fetchedMs / 1000
+  const bars = existing ?? []
+  const unfinishedAtWrite = (c) => {
+    const t = Number(c?.time)
+    return Number.isFinite(t) && t <= fetchedSec && fetchedSec < t + DAY_SECONDS
+  }
+  const qualifying = bars.filter(unfinishedAtWrite)
+  const last = bars[bars.length - 1]
+  const lastIsNewest = last != null && bars.every((c) => Number(c?.time) <= Number(last.time))
+  if (qualifying.length !== 1 || qualifying[0] !== last || !lastIsNewest) return new Set()
+  return new Set([KEY(last)])
+}
+
 /** Round to the precision the vendor actually delivers, to avoid float noise. */
 const near = (a, b) => {
   if (typeof a !== 'number' || typeof b !== 'number') return a === b
@@ -97,7 +191,19 @@ const drift = (was, now) => {
   return Math.abs(now - was) / Math.abs(was)
 }
 
-export function diffSeries(existing, incoming) {
+/**
+ * Every moved field of a bar and the largest relative move among them.
+ * Q144-D3: the guard used to stop at the FIRST moved price field, so a bar whose
+ * open moved 1.9e-5 was reported as that, while the same bar's low had moved
+ * 2.4e-3 and its volume 5.2e-2.
+ */
+function movedFields(was, now) {
+  const fields = ['open', 'high', 'low', 'close', 'volume'].filter((f) => !near(now[f], was[f]))
+  const maxRelativeChange = fields.reduce((m, f) => Math.max(m, drift(was[f], now[f])), 0)
+  return { fields, maxRelativeChange }
+}
+
+export function diffSeries(existing, incoming, { provisional = new Set() } = {}) {
   const prev = new Map((existing ?? []).map((c) => [KEY(c), c]))
   const next = new Map((incoming ?? []).map((c) => [KEY(c), c]))
 
@@ -105,6 +211,7 @@ export function diffSeries(existing, incoming) {
   const restated = []
   const missing = []
   const finalized = []
+  const superseded = []
 
   // Recency is measured against the series ON DISK, by key order. A bar's age in
   // sessions is what distinguishes "the tape is still settling" from "the vendor
@@ -116,21 +223,29 @@ export function diffSeries(existing, incoming) {
   for (const k of next.keys()) if (!prev.has(k)) appended.push(k)
   for (const [k, was] of prev) {
     const now = next.get(k)
+    // Q-144: a bar that was unfinished when it was stored is replaced, not
+    // compared (see provisionalKeys) — and if the refresh no longer carries it
+    // (still unfinished), it was never history, so its absence is not a loss.
+    if (!now && provisional.has(k)) {
+      superseded.push({ key: k, fields: [], maxRelativeChange: 0, dropped: true })
+      continue
+    }
     if (!now) {
       missing.push(k)
       continue
     }
+    if (provisional.has(k)) {
+      const m = movedFields(was, now)
+      if (m.fields.length > 0) superseded.push({ key: k, ...m })
+      continue
+    }
     // PRICE first, and at any age. A moved open/high/low/close is the event I4
     // exists to catch, and it is never finalization.
-    let priceMoved = false
-    for (const field of ['open', 'high', 'low', 'close']) {
-      if (!near(now[field], was[field])) {
-        restated.push({ key: k, field, was: was[field], now: now[field] })
-        priceMoved = true
-        break
-      }
+    const field = ['open', 'high', 'low', 'close'].find((f) => !near(now[f], was[f]))
+    if (field) {
+      restated.push({ key: k, field, was: was[field], now: now[field], ...movedFields(was, now) })
+      continue
     }
-    if (priceMoved) continue
 
     if (near(now.volume, was.volume)) continue
 
@@ -139,10 +254,10 @@ export function diffSeries(existing, incoming) {
     if (recent && small) {
       finalized.push({ key: k, field: 'volume', was: was.volume, now: now.volume })
     } else {
-      restated.push({ key: k, field: 'volume', was: was.volume, now: now.volume })
+      restated.push({ key: k, field: 'volume', was: was.volume, now: now.volume, ...movedFields(was, now) })
     }
   }
-  return { appended, restated, missing, finalized }
+  return { appended, restated, missing, finalized, superseded }
 }
 
 /**
@@ -152,17 +267,19 @@ export function diffSeries(existing, incoming) {
  * that a human must see, so it fails closed (I2) rather than being absorbed
  * into the next benchmark run as signal drift.
  */
-export function assessRefresh(existing, incoming) {
-  const d = diffSeries(existing, incoming)
+export function assessRefresh(existing, incoming, { existingFetchedAt } = {}) {
+  const d = diffSeries(existing, incoming, { provisional: provisionalKeys(existing, existingFetchedAt) })
   // `finalized` deliberately does NOT block. It is reported so a human can see it
   // happening, which is the whole difference between absorbing a change silently
   // and accepting a known, named vendor behaviour.
   const ok = d.restated.length === 0 && d.missing.length === 0
   const reasons = []
   if (d.restated.length > 0) {
+    // Q144-D9 (I8): this printed raw `was -> now` vendor values into a PUBLIC
+    // repository's workflow logs. It prints which fields moved and how far.
     const sample = d.restated
       .slice(0, 3)
-      .map((r) => `${r.key} ${r.field} ${r.was} -> ${r.now}`)
+      .map((r) => `${keyDate(r.key)} ${r.fields.join('/')} moved up to ${r.maxRelativeChange.toExponential(1)}`)
       .join('; ')
     reasons.push(
       `VENDOR RESTATEMENT: ${d.restated.length} existing bar(s) changed value (${sample}). ` +
@@ -172,7 +289,7 @@ export function assessRefresh(existing, incoming) {
   if (d.missing.length > 0) {
     reasons.push(
       `HISTORY LOSS: ${d.missing.length} bar(s) present on disk are absent from the refresh ` +
-        `(oldest ${d.missing[0]}). A pinned window should only ever append.`,
+        `(oldest ${keyDate(d.missing[0])}). A pinned window should only ever append.`,
     )
   }
   return {
@@ -181,6 +298,8 @@ export function assessRefresh(existing, incoming) {
     restated: d.restated.length,
     missing: d.missing.length,
     finalized: d.finalized.length,
+    superseded: d.superseded.length,
+    supersededBars: d.superseded,
     reasons,
   }
 }
