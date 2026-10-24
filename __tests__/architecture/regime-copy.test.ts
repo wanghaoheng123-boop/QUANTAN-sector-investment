@@ -28,10 +28,106 @@
  * Every capability is exercised by a regression planted into the REAL file's
  * text, one plant per test, each asserted to add its OWN text.
  *
- * ── Mutations run against this guard (2026-10-24). Each: the edit, the file,
- * and what failed. Each target string was asserted to occur exactly once before
- * mutating, and the file was restored from a backup and re-hashed.
- * (filled in below the tests, after the run)
+ * ── MUTATIONS RUN AGAINST THIS GUARD (2026-10-24, on 070c676) ──────────────────
+ * 82 edits. A harness applied each to the SINGLE occurrence of its target (it
+ * refused any other count, so no edit "survived" by never being applied), ran the
+ * suites below, restored the file from a backup copy, and re-checked its hash.
+ * 81 made a test fail. 1 passed on purpose: T6b is a control (an honest phrase,
+ * "Above their 200-day average", must NOT be banned). Nothing else survived.
+ * Suites run: guard edits (adviceWords, regimeUiRules) ran this file and
+ * __tests__/quant/mutationHardening.q078w4.test.ts; tree edits T1-T6b, T11, T12 ran
+ * this file; T7, T8 ran the three BtcQuantLab component tests; T9a-d, T9f ran
+ * slopeState, technicals and mutationHardening.q078w4; T9e ran those and this
+ * file. The round-2 review's mutants map as: M1 (empty rendered-attribute
+ * set) = M1, M1b, M1c, whose allow-list no longer exists to be emptied; M2 = M2.
+ * "N failing" counts failing tests; the names are the first that failed.
+ *
+ *   M1-every-attribute-is-code                           adviceWords    KILLED (12 failing) plant N1; plant N2; the visitor: what counts as rendered text reads an attribute
+ *   M1b-old-six-name-allowlist                           adviceWords    KILLED (9 failing) plant N1; plant N2; the visitor: what counts as rendered text reads an attribute
+ *   M1c-empty-deny-list                                  adviceWords    KILLED (6 failing) plant NEG-code-attributes; the visitor: what counts as rendered text does not read the 
+ *   M1d-no-handler-pattern                               adviceWords    KILLED (3 failing) plant NEG-code-attributes; the visitor: what counts as rendered text does not read the 
+ *   M1e-skey-color-not-denied                            adviceWords    KILLED (3 failing) plant NEG-code-attributes; the visitor: what counts as rendered text does not read the 
+ *   M1f-data-testid-not-denied                           adviceWords    KILLED (4 failing) plant NEG-code-attributes; the visitor: what counts as rendered text does not read the 
+ *   M2-no-NoSubstitutionTemplateLiteral                  adviceWords    KILLED (3 failing) plant B1; plant B2; the visitor: what counts as rendered text reads no-substitut
+ *   M3-no-JSX-text                                       adviceWords    KILLED (9 failing) plant V4; plant V5; the visitor: what counts as rendered text still reads a stri
+ *   M3b-no-template-expression                           adviceWords    KILLED (1 failing) what the surfaces say today no surface gives trade instructi
+ *   M4-single-token-literals-ignored                     adviceWords    KILLED (1 failing) the decider catches every advice string this package removed
+ *   M5-no-approval-mark                                  adviceWords    KILLED (1 failing) the decider catches every advice string this package removed
+ *   M6-no-horizon-label                                  adviceWords    KILLED (3 failing) plant P5-headers; the decider keeps what the old TRADE regex caught , without 
+ *   M6b-horizon-case-insensitive                         adviceWords    KILLED (2 failing) the decider keeps what the old TRADE regex caught , without ; what the surfaces say today no surface gives trade instructi
+ *   M7-avoid-narrowed-back                               adviceWords    KILLED (1 failing) the decider keeps what the old TRADE regex caught , without 
+ *   M7b-averaging-narrowed-back                          adviceWords    KILLED (1 failing) the decider keeps what the old TRADE regex caught , without 
+ *   M8-no-before-trading                                 adviceWords    KILLED (1 failing) the decider catches every advice string this package removed
+ *   M9a-no-proven                                        adviceWords    KILLED (1 failing) the decider flags CLAUDE.md's FORBIDDEN vocabulary
+ *   M9b-no-guaranteed                                    adviceWords    KILLED (1 failing) the decider flags CLAUDE.md's FORBIDDEN vocabulary
+ *   M9c-no-beat-the-market                               adviceWords    KILLED (1 failing) the decider flags CLAUDE.md's FORBIDDEN vocabulary
+ *   M9d-no-outperform                                    adviceWords    KILLED (1 failing) the decider flags CLAUDE.md's FORBIDDEN vocabulary
+ *   M10-disclaimer-not-anchored                          adviceWords    KILLED (2 failing) the decider catches every paraphrase the reviewer wrote (pos; the decider disclaimers pass only as whole sentences
+ *   Ra1-riskLevel-not-banned                             regimeUiRules  KILLED (6 failing) plant P2; no UI surface reads or names the classifier rule (a) on synt
+ *   Ra1b-dipSignal-not-banned                            regimeUiRules  KILLED (4 failing) plant P1; no UI surface reads or names the classifier rule (a) on synt
+ *   Ra2-color-not-banned                                 regimeUiRules  KILLED (21 failing) plant P3; plant P3-element; no UI surface reads or names the classifier rule (a) on synt
+ *   Ra3-no-property-access-arm                           regimeUiRules  KILLED (17 failing) plant P1; plant P2; no UI surface reads or names the classifier rule (a) on synt
+ *   Ra4-no-element-access-arm                            regimeUiRules  KILLED (5 failing) plant P3-element; no UI surface reads or names the classifier rule (a) on synt
+ *   Ra5-no-destructuring-arm                             regimeUiRules  KILLED (9 failing) plant P3; plant P3-nested; no UI surface reads or names the classifier rule (a) on synt
+ *   Ra6-no-alias-through-declaration                     regimeUiRules  KILLED (2 failing) plant P3-alias; no UI surface reads or names the classifier rule (a) on synt
+ *   Ra6b-no-alias-through-binding                        regimeUiRules  KILLED (1 failing) no UI surface reads or names the classifier rule (a) on synt
+ *   Ra7-no-nested-pattern                                regimeUiRules  KILLED (2 failing) plant P3-nested; no UI surface reads or names the classifier rule (a) on synt
+ *   Ra8-type-annotation-ignored                          regimeUiRules  KILLED (3 failing) plant P3-typed; no UI surface reads or names the classifier rule (a) on synt
+ *   Ra9-call-result-not-regime                           regimeUiRules  KILLED (1 failing) no UI surface reads or names the classifier rule (a) on synt
+ *   Ra10-computed-key-allowed                            regimeUiRules  KILLED (1 failing) no UI surface reads or names the classifier rule (a) on synt
+ *   Ra11-no-destructuring-assignment                     regimeUiRules  KILLED (1 failing) no UI surface reads or names the classifier rule (a) on synt
+ *   Ra12-no-unwrap                                       regimeUiRules  KILLED (3 failing) no UI surface reads or names the classifier rule (a) on synt; no UI surface reads or names the classifier rule (a) on synt
+ *   Ra13-prefix-match-not-exact                          regimeUiRules  KILLED (3 failing) plant NEG-allowed-reads; no UI surface reads or names the classifier reads no dipSign
+ *   Ra14-no-fallback-receiver                            regimeUiRules  KILLED (1 failing) no UI surface reads or names the classifier rule (a) on synt
+ *   Ra15-no-ternary-receiver                             regimeUiRules  KILLED (1 failing) no UI surface reads or names the classifier rule (a) on synt
+ *   Rb1-identifier-keys-ignored                          regimeUiRules  KILLED (2 failing) plant P4-keys; no UI surface reads or names the classifier rule (b) on synt
+ *   Rb2-type-nodes-not-skipped                           regimeUiRules  KILLED (1 failing) no UI surface reads or names the classifier rule (b) on synt
+ *   Rb2b-interfaces-not-skipped                          regimeUiRules  KILLED (1 failing) no UI surface reads or names the classifier rule (b) on synt
+ *   Rb3-template-pieces-ignored                          regimeUiRules  KILLED (1 failing) no UI surface reads or names the classifier rule (b) on synt
+ *   Rb4-jsx-text-ignored                                 regimeUiRules  KILLED (1 failing) no UI surface reads or names the classifier rule (b) on synt
+ *   Rb5-FALLING_KNIFE-dropped                            regimeUiRules  KILLED (4 failing) plant P1; plant P4-keys; no UI surface reads or names the classifier rule (b) on synt
+ *   Rb5b-IN_TREND-dropped                                regimeUiRules  KILLED (2 failing) no UI surface reads or names the classifier rule (b) on synt; no UI surface reads or names the classifier rule (b) on synt
+ *   Rb5c-WATCH_DIP-dropped                               regimeUiRules  KILLED (3 failing) plant P4-class; no UI surface reads or names the classifier rule (b) on synt
+ *   Rc1-no-signed-percent                                regimeUiRules  KILLED (3 failing) plant P5; plant P5-fresh; the removed return table, its labels and its traffic light d
+ *   Rc1b-no-unsigned-percent                             regimeUiRules  KILLED (2 failing) plant P5; the removed return table, its labels and its traffic light d
+ *   Rc2-no-backtick-figures                              regimeUiRules  KILLED (1 failing) the removed return table, its labels and its traffic light d
+ *   Rc3-code-attributes-scanned-for-figures              regimeUiRules  KILLED (2 failing) the removed return table, its labels and its traffic light d; the removed return table, its labels and its traffic light d
+ *   Rs1-no-reexport-edges                                regimeUiRules  KILLED (4 failing) scope: the import closure of the surfaces visits every file ; scope: the import closure of the surfaces reaches copy that 
+ *   Rs2-not-transitive                                   regimeUiRules  KILLED (4 failing) scope: the import closure of the surfaces visits every file ; scope: the import closure of the surfaces reaches copy that 
+ *   Rs3-opaque-ignored                                   regimeUiRules  KILLED (2 failing) scope: the import closure of the surfaces importClosure foll; what this guard CANNOT do (each is a passing test: a green r
+ *   Rs4-type-only-imports-followed                       regimeUiRules  KILLED (1 failing) scope: the import closure of the surfaces importClosure foll
+ *   Rs5-dynamic-import-literal-ignored                   regimeUiRules  KILLED (2 failing) scope: the import closure of the surfaces importClosure foll; what this guard CANNOT do (each is a passing test: a green r
+ *   Rs6-json-not-resolved                                regimeUiRules  KILLED (1 failing) scope: the import closure of the surfaces importClosure foll
+ *   T1-restore-riskLevel-colour (rule a)                 components/stock/quantlab/tabs/TechnicalsTab.tsx KILLED (1 failing) no UI surface reads or names the classifier reads no dipSign
+ *   T1b-restore-regime-colour-by-element-access (rule a) app/ma-deviation/page.tsx KILLED (1 failing) no UI surface reads or names the classifier reads no dipSign
+ *   T2-restore-legend-class (rule b)                     app/ma-deviation/page.tsx KILLED (1 failing) no UI surface reads or names the classifier names no dip cla
+ *   T3-restore-a-figure (rule c + frozen figures)        app/ma-deviation/page.tsx KILLED (2 failing) the removed return table, its labels and its traffic light d; the removed return table, its labels and its traffic light d
+ *   T3b-fresh-figure (rule c only)                       app/ma-deviation/page.tsx KILLED (1 failing) the removed return table, its labels and its traffic light d
+ *   T4-copy-in-a-file-the-old-scope-never-read           lib/quant/btc-indicators.ts KILLED (1 failing) what the surfaces say today no surface gives trade instructi
+ *   T4b-copy-two-hops-in (lib/apiBase.ts)                lib/apiBase.ts KILLED (1 failing) what the surfaces say today no surface gives trade instructi
+ *   T4c-opaque-dynamic-import                            lib/apiBase.ts KILLED (1 failing) scope: the import closure of the surfaces the rendered files
+ *   T5-restore-a-traffic-light                           app/ma-deviation/page.tsx KILLED (1 failing) the removed return table, its labels and its traffic light d
+ *   T6-restore-a-round-1-label                           app/ma-deviation/page.tsx KILLED (1 failing) the removed return table, its labels and its traffic light d
+ *   T6b-honest-phrase-is-not-banned                      app/ma-deviation/page.tsx SURVIVED (0 failing) 
+ *   T11-new-advice-in-a-pinned-file                      lib/quant/researchScore.ts KILLED (1 failing) what the surfaces say today no surface gives trade instructi
+ *   T12-stale-pin                                        lib/quant/priceBands.ts KILLED (1 failing) what the surfaces say today no surface gives trade instructi
+ *   T7a-restore-funding-grid-colour                      components/crypto/BtcQuantLab.tsx KILLED (2 failing) BtcQuantLab — funding is described, not colour-coded crowded; BtcQuantLab — funding is described, not colour-coded crowded
+ *   T7b-restore-funding-card-colour                      components/crypto/BtcQuantLab.tsx KILLED (2 failing) BtcQuantLab — funding is described, not colour-coded crowded; BtcQuantLab — funding is described, not colour-coded crowded
+ *   T8a-intraday-slope-gets-the-daily-band               components/crypto/BtcQuantLab.tsx KILLED (1 failing) BtcQuantLab — labels follow the candle interval the 200-bar 
+ *   T8b-intraday-slope-gets-the-daily-colour             components/crypto/BtcQuantLab.tsx KILLED (1 failing) BtcQuantLab — labels follow the candle interval off daily ba
+ *   T9a-no-extra-decimals                                lib/quant/technicals.ts KILLED (4 failing) formatSlopePct — a value is never printed AS the threshold f; formatSlopePct — a value is never printed AS the threshold f
+ *   T9b-exact-threshold-gets-extra-decimals              lib/quant/technicals.ts KILLED (2 failing) formatSlopePct — a value is never printed AS the threshold f; formatSlopePct — a value is never printed AS the threshold f
+ *   T9c-describeRegime-keeps-its-own-rounding            lib/quant/technicals.ts KILLED (1 failing) formatSlopePct — a value is never printed AS the threshold f
+ *   T9d-slopeText-keeps-its-own-rounding                 lib/quant/technicals.ts KILLED (2 failing) formatSlopePct — a value is never printed AS the threshold f; formatSlopePct — a value is never printed AS the threshold f
+ *   T9e-board-quick-stats-keeps-its-own-rounding         app/ma-deviation/page.tsx KILLED (1 failing) the slope is formatted by formatSlopePct no UI surface scale
+ *   T9f-cap-removed                                      lib/quant/technicals.ts KILLED (1 failing) formatSlopePct — a value is never printed AS the threshold f
+ *   Rd1-slope-times-100-one-direction-only               regimeUiRules  KILLED (1 failing) the slope is formatted by formatSlopePct the rule sees a slo
+ *   Rd2-slope-operand-never-recognised                   regimeUiRules  KILLED (2 failing) plant P9; the slope is formatted by formatSlopePct the rule sees a slo
+ *   Rd3-only-multiplication-by-100                       regimeUiRules  KILLED (1 failing) the slope is formatted by formatSlopePct the rule sees a slo
+ *
+ * Mutations were not run against: the decider's word lists beyond the entries
+ * changed here (a word removed from the lists that no test names survives), the
+ * JSON fixtures' individual entries, or lib/ code outside the files named above.
  */
 import { execSync } from 'node:child_process'
 import { existsSync, readFileSync, statSync } from 'node:fs'
