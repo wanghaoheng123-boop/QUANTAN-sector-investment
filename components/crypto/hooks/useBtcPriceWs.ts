@@ -6,19 +6,21 @@ import {
   snapshotFromCoinbaseTicker,
   snapshotFromCoinGecko,
   snapshotFromQuoteRoute,
+  type BtcPriceFeed,
   type BtcPriceSnapshot,
 } from '@/lib/btcSnapshot'
 
-export type { BtcPriceSnapshot }
+export type { BtcPriceFeed, BtcPriceSnapshot }
 
 const COINBASE_WS = 'wss://ws-feed.exchange.coinbase.com'
 
 export function useBtcPriceWs() {
   const [btcPrice, setBtcPrice] = useState<BtcPriceSnapshot | null>(null)
+  const [feed, setFeed] = useState<BtcPriceFeed | null>(null)
 
   const priceWsRef = useRef<WebSocket | null>(null)
   const priceReconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const priceFromBinanceWsRef = useRef(false)
+  const parseWarnedRef = useRef(false)
   const lastWsMessageRef = useRef(Date.now())
 
   const connectPriceWs = useCallback(() => {
@@ -46,12 +48,13 @@ export function useBtcPriceWs() {
         if (d.type === 'ticker' && d.product_id === 'BTC-USD') {
           const snapshot = snapshotFromCoinbaseTicker(d)
           if (!snapshot) return
-          priceFromBinanceWsRef.current = true
           lastWsMessageRef.current = Date.now()
           setBtcPrice(snapshot)
+          setFeed({ source: 'coinbase', receivedAt: lastWsMessageRef.current })
         }
       } catch (err) {
-        if (!priceFromBinanceWsRef.current) {
+        if (!parseWarnedRef.current) {
+          parseWarnedRef.current = true
           console.warn('[btc/price-ws] message parse failed', err)
         }
       }
@@ -69,8 +72,11 @@ export function useBtcPriceWs() {
 
   useEffect(() => {
     let cancelled = false
+    // Red-team F1: the fallback runs whenever the socket has been silent for
+    // 120 s — it used to be switched off for good by the first socket tick, so
+    // a feed that died later froze the price.
     const loadRestQuote = async () => {
-      if (priceFromBinanceWsRef.current || cancelled) return
+      if (cancelled) return
       try {
         const r = await fetch(apiUrl('/api/crypto/btc/quote'), {
           cache: 'no-store',
@@ -80,7 +86,10 @@ export function useBtcPriceWs() {
         if (r.ok) {
           const snapshot = snapshotFromQuoteRoute(await r.json())
           if (cancelled) return
-          if (snapshot) setBtcPrice(snapshot)
+          if (snapshot) {
+            setBtcPrice(snapshot)
+            setFeed({ source: 'quote-route', receivedAt: Date.now() })
+          }
           return
         }
         const cg = await fetch(
@@ -91,7 +100,10 @@ export function useBtcPriceWs() {
         if (!cg.ok) return
         const snapshot = snapshotFromCoinGecko(await cg.json())
         if (cancelled) return
-        if (snapshot) setBtcPrice(snapshot)
+        if (snapshot) {
+          setBtcPrice(snapshot)
+          setFeed({ source: 'coingecko', receivedAt: Date.now() })
+        }
       } catch (err) {
         if (cancelled) return
         console.warn('[btc] REST quote fallback failed', err)
@@ -123,5 +135,5 @@ export function useBtcPriceWs() {
     }
   }, [connectPriceWs])
 
-  return { btcPrice }
+  return { btcPrice, feed }
 }

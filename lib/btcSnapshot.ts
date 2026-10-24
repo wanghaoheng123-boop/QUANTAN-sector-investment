@@ -15,6 +15,7 @@
  * Pure and framework-free, so the client hook and the server route share it.
  */
 import { tickChange } from '@/lib/liveQuoteState'
+import { finiteNumber } from '@/lib/vendorNumber'
 
 export interface BtcPriceSnapshot {
   price: number
@@ -26,13 +27,7 @@ export interface BtcPriceSnapshot {
   volume24h: number | null
 }
 
-/** A finite number from a number or a numeric string, else null. */
-const num = (v: unknown): number | null => {
-  if (typeof v === 'number') return Number.isFinite(v) ? v : null
-  if (typeof v !== 'string' || v.trim() === '') return null
-  const n = Number(v)
-  return Number.isFinite(n) ? n : null
-}
+const num = finiteNumber
 
 const positive = (v: unknown): number | null => {
   const n = num(v)
@@ -87,4 +82,64 @@ export function snapshotFromQuoteRoute(body: unknown): BtcPriceSnapshot | null {
     low24h: positive(d.low24h),
     volume24h: nonNegative(d.volume24h),
   }
+}
+
+/**
+ * Which source delivered the header's price, and when it arrived (this
+ * browser's clock: the age of the last update, not a vendor timestamp).
+ *
+ * Red-team F1 (Q-156/Q-157, design invariant I2): the header's LIVE badge
+ * followed the Kraken CANDLE socket, not the price, and after one Coinbase tick
+ * the REST fallback was switched off for good — so a dead price feed froze the
+ * header beside a pulsing LIVE. The badge now follows the price feed itself.
+ */
+export type BtcPriceSource = 'coinbase' | 'quote-route' | 'coingecko'
+export interface BtcPriceFeed {
+  source: BtcPriceSource
+  receivedAt: number
+}
+
+/**
+ * How long the Coinbase ticker may be silent before its price is STALE. BTC
+ * trades continuously and the ticker channel sends a message per trade, so a
+ * healthy socket is silent for seconds at most.
+ */
+export const LIVE_MAX_AGE_MS = 30_000
+
+/**
+ * How old a REST snapshot may be before it is STALE. The fallback polls every
+ * 60 s once the socket has been silent for 120 s, so a working fallback is
+ * never more than about two polls old.
+ */
+export const DELAYED_MAX_AGE_MS = 5 * 60_000
+
+export interface FeedBadge {
+  state: 'connecting' | 'live' | 'delayed' | 'stale'
+  label: string
+  title: string
+}
+
+const age = (ms: number): string => {
+  const s = Math.max(0, Math.round(ms / 1000))
+  if (s < 60) return `${s}s`
+  if (s < 3600) return `${Math.floor(s / 60)}m`
+  return `${Math.floor(s / 3600)}h`
+}
+
+const SOURCE_NAME: Record<BtcPriceSource, string> = {
+  coinbase: 'Coinbase ticker',
+  'quote-route': 'CoinGecko snapshot (via this site)',
+  coingecko: 'CoinGecko snapshot (direct)',
+}
+
+/** The header's feed badge at `nowMs`. */
+export function priceFeedBadge(feed: BtcPriceFeed | null, nowMs: number): FeedBadge {
+  if (feed == null) return { state: 'connecting', label: 'CONNECTING', title: 'No BTC price has been received yet.' }
+  const ms = nowMs - feed.receivedAt
+  const from = `${SOURCE_NAME[feed.source]}, updated ${age(ms)} ago`
+  if (feed.source === 'coinbase' && ms <= LIVE_MAX_AGE_MS) return { state: 'live', label: 'LIVE', title: from }
+  if (feed.source !== 'coinbase' && ms <= DELAYED_MAX_AGE_MS) {
+    return { state: 'delayed', label: 'DELAYED', title: `${from}. The live ticker is not connected.` }
+  }
+  return { state: 'stale', label: `STALE · ${age(ms)}`, title: `${from}. No newer price has arrived; the figure shown may be out of date.` }
 }

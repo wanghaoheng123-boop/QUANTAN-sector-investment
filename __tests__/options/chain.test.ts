@@ -583,6 +583,16 @@ describe('Q-156 — a missing contract change is null, not a measured 0', () => 
     expiration: new Date(Date.now() + oneYearMs), lastTradeDate: new Date(), impliedVolatility: 0.25, inTheMoney: false, ...extra,
   })
 
+  it('a blank, a boolean, an array or hex is null, not the 0 or 1 Number() makes of it (red-team F5)', async () => {
+    optionsMock.mockResolvedValue(makeRawChain({
+      spot: 100, expirationMs: Date.now() + oneYearMs,
+      calls: [' ', false, true, [], '0x10'].map((change) => contract({ change, percentChange: change })),
+    }))
+    const chain = await fetchOptionsChain('X')
+    expect(chain.calls.map((c) => c.change)).toEqual([null, null, null, null, null])
+    expect(chain.calls.map((c) => c.percentChange)).toEqual([undefined, undefined, undefined, undefined, undefined])
+  })
+
   it('no change, a null change or a non-numeric change is null; a real 0 stays 0', async () => {
     optionsMock.mockResolvedValue(makeRawChain({
       spot: 100, expirationMs: Date.now() + oneYearMs,

@@ -5,7 +5,8 @@
  */
 import { describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { snapshotFromCoinbaseTicker, snapshotFromCoinGecko, snapshotFromQuoteRoute } from '@/lib/btcSnapshot'
+import { DELAYED_MAX_AGE_MS, LIVE_MAX_AGE_MS, priceFeedBadge, snapshotFromCoinbaseTicker, snapshotFromCoinGecko, snapshotFromQuoteRoute } from '@/lib/btcSnapshot'
+import { finiteNumber } from '@/lib/vendorNumber'
 import BtcHeader from '@/components/crypto/BtcHeader'
 
 vi.mock('next/link', () => ({ default: ({ children }: { children: React.ReactNode }) => children }))
@@ -72,7 +73,7 @@ describe('BtcHeader', () => {
   const base = { price: 110, change24h: null, changePct24h: null, high24h: null, low24h: null, volume24h: null }
 
   it('renders "—" for a missing change and missing high/low, never ▲ 0.00% or the price as the high', () => {
-    const html = renderToStaticMarkup(<BtcHeader btcPrice={base} wsConnected={false} />)
+    const html = renderToStaticMarkup(<BtcHeader btcPrice={base} feed={null} />)
     expect(html).toContain('— (no change data)')
     expect(html).not.toMatch(/0\.00%/)
     expect(html).toContain('H — · L —')
@@ -80,7 +81,7 @@ describe('BtcHeader', () => {
   })
 
   it('renders a measured change and range', () => {
-    const html = renderToStaticMarkup(<BtcHeader btcPrice={{ ...base, change24h: -2, changePct24h: -1.5, high24h: 112, low24h: 99 }} wsConnected />)
+    const html = renderToStaticMarkup(<BtcHeader btcPrice={{ ...base, change24h: -2, changePct24h: -1.5, high24h: 112, low24h: 99 }} feed={{ source: 'coinbase', receivedAt: Date.now() }} />)
     expect(html).toContain('▼ 1.50%')
     expect(html).toContain('H $112 · L $99')
   })
@@ -109,5 +110,48 @@ describe('/api/crypto/btc/quote — the fallback sends null, not 0 (Q-157)', () 
     } finally {
       vi.unstubAllGlobals()
     }
+  })
+})
+
+describe('finiteNumber — one parser for vendor numbers (red-team F5)', () => {
+  it('accepts finite numbers and plain decimal strings', () => {
+    for (const [v, n] of [[5, 5], [-0.4, -0.4], ['110', 110], [' 1.5 ', 1.5], ['-2e3', -2000], ['.5', 0.5], [0, 0], ['0', 0]] as const) {
+      expect(finiteNumber(v), String(v)).toBe(n)
+    }
+  })
+  it('rejects what Number() turns into 0 or 1, hex, and non-finite values', () => {
+    for (const v of [' ', '', false, true, [], [5], '0x10', '0x6E', 'NaN', 'Infinity', NaN, Infinity, null, undefined, {}, '1,000', '12px']) {
+      expect(finiteNumber(v), JSON.stringify(v) ?? String(v)).toBeNull()
+    }
+  })
+})
+
+describe('priceFeedBadge — the header badge follows the price feed (red-team F1, I2)', () => {
+  const T = 1_800_000_000_000
+  it('no price yet is CONNECTING', () => {
+    expect(priceFeedBadge(null, T)).toMatchObject({ state: 'connecting', label: 'CONNECTING' })
+  })
+  it('a Coinbase tick is LIVE up to LIVE_MAX_AGE_MS, then STALE with its age', () => {
+    expect(LIVE_MAX_AGE_MS).toBe(30_000)
+    expect(priceFeedBadge({ source: 'coinbase', receivedAt: T }, T + LIVE_MAX_AGE_MS)).toMatchObject({ state: 'live', label: 'LIVE' })
+    const stale = priceFeedBadge({ source: 'coinbase', receivedAt: T }, T + LIVE_MAX_AGE_MS + 1)
+    expect(stale).toMatchObject({ state: 'stale', label: 'STALE · 30s' })
+    expect(stale.title).toContain('may be out of date')
+    expect(priceFeedBadge({ source: 'coinbase', receivedAt: T }, T + 30 * 60_000).label).toBe('STALE · 30m')
+  })
+  it('a REST snapshot is DELAYED, never LIVE, up to DELAYED_MAX_AGE_MS, then STALE', () => {
+    for (const source of ['quote-route', 'coingecko'] as const) {
+      const fresh = priceFeedBadge({ source, receivedAt: T }, T)
+      expect(fresh).toMatchObject({ state: 'delayed', label: 'DELAYED' })
+      expect(fresh.title).toContain('The live ticker is not connected.')
+      expect(priceFeedBadge({ source, receivedAt: T }, T + DELAYED_MAX_AGE_MS).state).toBe('delayed')
+      expect(priceFeedBadge({ source, receivedAt: T }, T + DELAYED_MAX_AGE_MS + 1).label).toBe('STALE · 5m')
+    }
+  })
+  it('the header renders the badge as a status with its reason', () => {
+    const html = renderToStaticMarkup(<BtcHeader btcPrice={{ price: 110, change24h: null, changePct24h: null, high24h: null, low24h: null, volume24h: null }} feed={{ source: 'coingecko', receivedAt: Date.now() }} />)
+    expect(html).toContain('role="status"')
+    expect(html).toContain('>DELAYED<')
+    expect(html).not.toContain('>LIVE<')
   })
 })

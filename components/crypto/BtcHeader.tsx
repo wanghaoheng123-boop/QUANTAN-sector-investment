@@ -1,17 +1,36 @@
 'use client'
 
-import { memo } from 'react'
+import { memo, useEffect, useState } from 'react'
 import Link from 'next/link'
-import type { BtcPriceSnapshot } from '@/components/crypto/hooks/useBtcPriceWs'
+import { priceFeedBadge, type BtcPriceFeed, type BtcPriceSnapshot, type FeedBadge } from '@/lib/btcSnapshot'
 
 export interface BtcHeaderProps {
   btcPrice: BtcPriceSnapshot | null
-  wsConnected: boolean
+  /** Which source delivered the price and when (useBtcPriceWs), not the candle socket. */
+  feed: BtcPriceFeed | null
+}
+
+/** How often the badge re-reads the clock, so an age and a STALE state appear without a new price. */
+const BADGE_TICK_MS = 5_000
+
+const BADGE_STYLE: Record<FeedBadge['state'], { box: string; dot: string; text: string }> = {
+  live: { box: 'bg-green-500/10 border-green-500/20', dot: 'bg-green-400 animate-pulse', text: 'text-green-400' },
+  delayed: { box: 'bg-amber-500/10 border-amber-500/20', dot: 'bg-amber-400', text: 'text-amber-300' },
+  stale: { box: 'bg-red-500/10 border-red-500/30', dot: 'bg-red-400', text: 'text-red-300' },
+  connecting: { box: 'bg-slate-800/50 border-slate-700', dot: 'bg-slate-500', text: 'text-slate-400' },
 }
 
 const fmtWhole = (v: number | null) => (v == null ? '—' : `$${v.toLocaleString('en-US', { maximumFractionDigits: 0 })}`)
 
-function BtcHeader({ btcPrice, wsConnected }: BtcHeaderProps) {
+function BtcHeader({ btcPrice, feed }: BtcHeaderProps) {
+  const [nowMs, setNowMs] = useState(() => Date.now())
+  useEffect(() => {
+    setNowMs(Date.now())
+    const id = setInterval(() => setNowMs(Date.now()), BADGE_TICK_MS)
+    return () => clearInterval(id)
+  }, [feed])
+  const badge = priceFeedBadge(feed, nowMs)
+  const style = BADGE_STYLE[badge.state]
   // Q-157: a missing 24h change is "—", never a measured "▲ 0.00%".
   const pct = btcPrice?.changePct24h ?? null
 
@@ -42,18 +61,10 @@ function BtcHeader({ btcPrice, wsConnected }: BtcHeaderProps) {
           </div>
 
           <div className="flex items-center gap-3">
-            {wsConnected && (
-              <div className="flex items-center gap-1.5 bg-green-500/10 px-2 py-1 rounded-md border border-green-500/20">
-                <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-                <span className="text-[10px] text-green-400 font-medium">LIVE</span>
-              </div>
-            )}
-            {!wsConnected && (
-              <div className="flex items-center gap-1.5 bg-slate-800/50 px-2 py-1 rounded-md border border-slate-700">
-                <span className="w-1.5 h-1.5 rounded-full bg-slate-500" />
-                <span className="text-[10px] text-slate-400 font-medium">RECONNECTING</span>
-              </div>
-            )}
+            <div role="status" title={badge.title} aria-label={`Price feed: ${badge.label}. ${badge.title}`} className={`flex items-center gap-1.5 px-2 py-1 rounded-md border ${style.box}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${style.dot}`} aria-hidden="true" />
+              <span className={`text-[10px] font-medium ${style.text}`}>{badge.label}</span>
+            </div>
           </div>
 
           <div className="flex items-start gap-4 flex-wrap">

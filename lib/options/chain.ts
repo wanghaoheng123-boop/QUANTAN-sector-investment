@@ -62,13 +62,7 @@ const yahooFinance = new YahooFinance()
 // fallback (5.25% for ≤90d via OPTIONS_RFR_ANNUAL, 4.5% otherwise via
 // BACKTEST_RFR_ANNUAL) — identical pre-Q-052 behaviour.
 import { getRiskFreeRateSync } from '@/lib/quant/riskFreeRate'
-
-/** A finite number, or null for a missing or non-numeric vendor field. */
-function finiteOrNull(v: unknown): number | null {
-  if (v == null || v === '') return null
-  const n = Number(v)
-  return Number.isFinite(n) ? n : null
-}
+import { finiteNumber } from '@/lib/vendorNumber'
 
 function toDate(d: unknown): Date {
   if (d instanceof Date) return d
@@ -97,8 +91,8 @@ function normaliseContract(raw: Record<string, unknown>): CallOrPut {
     strike: Number(raw.strike ?? 0),
     currency: raw.currency != null ? String(raw.currency) : undefined,
     lastPrice: Number(raw.lastPrice ?? 0),
-    change: finiteOrNull(raw.change),
-    percentChange: finiteOrNull(raw.percentChange) ?? undefined,
+    change: finiteNumber(raw.change),
+    percentChange: finiteNumber(raw.percentChange) ?? undefined,
     volume: raw.volume != null ? Number(raw.volume) : undefined,
     openInterest: raw.openInterest != null ? Number(raw.openInterest) : undefined,
     bid: raw.bid != null ? Number(raw.bid) : undefined,

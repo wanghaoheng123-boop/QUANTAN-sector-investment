@@ -32,7 +32,11 @@
  * the render tests, not here); a change field read through a local alias or
  * coalesced to a named constant; and a zero produced from a field whose name is
  * not on the list (the BTC feed's Coinbase `open_24h` and CoinGecko
- * `usd_24h_change`, pinned instead by __tests__/lib/btcSnapshot.test.ts).
+ * `usd_24h_change`). __tests__/lib/btcSnapshot.test.tsx pins those PARSERS, and
+ * __tests__/hooks/useBtcPriceWs.test.ts pins the hook's three call sites (the
+ * socket, the quote route and direct CoinGecko); this guard pins neither.
+ * `lib/options/chain.ts` still turns a missing strike, last price, implied
+ * volatility or spot into 0 on fields this list does not name (Q-160).
  *
  * Q-156 and Q-157 (2026-10-24) removed the two exemptions this guard shipped
  * with: the options contract `change` and the BTC feed's `change24h` /
@@ -143,7 +147,7 @@ export function bootMissingProblems(path: string, source: string): string[] {
   return problems
 }
 
-const ZERO_FIELDS = new Set(['change', 'changePct', 'pe', 'high52w', 'low52w', 'change24h', 'changePct24h', 'percentChange'])
+const ZERO_FIELDS = new Set(['change', 'changePct', 'pe', 'high52w', 'low52w', 'change24h', 'changePct24h', 'percentChange', 'high24h', 'low24h', 'volume24h'])
 const CHANGE_FIELDS = new Set(['change', 'changePct', 'change24h', 'changePct24h', 'percentChange'])
 const isNumber = (e: ts.Expression): boolean => {
   const u = unwrap(e)
@@ -202,8 +206,14 @@ export function zeroOffenders(path: string, source: string): string[] {
     if (ts.isConditionalExpression(n) && readsChangeField(n.condition) && (isNumber(n.whenTrue) || isNumber(n.whenFalse))) {
       out.push(at(n))
     }
-    if (ts.isPropertyAssignment(n) && (ts.isIdentifier(n.name) || ts.isStringLiteral(n.name)) && CHANGE_FIELDS.has(n.name.text) && isNumber(n.initializer)) {
-      out.push(at(n))
+    if (ts.isPropertyAssignment(n) && (ts.isIdentifier(n.name) || ts.isStringLiteral(n.name)) && ZERO_FIELDS.has(n.name.text)) {
+      // `change: 0`, and `changePct24h: Number(x) || 0` / `high24h: x ?? 0`
+      // whatever x reads (red-team F3 on Q-156/Q-157: only the bare literal was caught).
+      const init = unwrap(n.initializer)
+      const coalescedToNumber = ts.isBinaryExpression(init)
+        && (init.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken || init.operatorToken.kind === ts.SyntaxKind.BarBarToken)
+        && isNumber(init.right)
+      if ((CHANGE_FIELDS.has(n.name.text) && isNumber(n.initializer)) || coalescedToNumber) out.push(at(n))
     }
   })
   return out
@@ -346,8 +356,18 @@ describe('no product file turns a missing change into a number (property 2)', ()
     ]) expect(zeroOffenders('probe.ts', bad), bad).not.toEqual([])
   })
 
-  it('RESIDUAL: a zero produced from a field name not on the list passes (btcSnapshot.test.ts pins the BTC sources)', () => {
+  it('a listed field initialised from ANY expression coalesced to a number is caught (red-team F3)', () => {
+    for (const bad of [
+      'const s = { changePct24h: Number(q.bitcoin?.usd_24h_change) || 0 }',
+      'const s = { high24h: parseFloat(d.high_24h) ?? 0 }',
+      'const s = { volume24h: v || 0 }',
+    ]) expect(zeroOffenders('probe.ts', bad), bad).not.toEqual([])
+    expect(zeroOffenders('probe.ts', 'const s = { high24h: positive(d.high_24h) }')).toEqual([])
+  })
+
+  it('RESIDUAL: a zero produced into a local from a field name not on the list passes (the parser and hook tests pin the BTC sources)', () => {
     expect(zeroOffenders('probe.ts', 'const chg = open24 > 0 ? price - open24 : 0')).toEqual([])
     expect(zeroOffenders('probe.ts', 'const pct = Number(q.bitcoin?.usd_24h_change) || 0')).toEqual([])
+    expect(zeroOffenders('probe.ts', 'const c = { lastPrice: Number(raw.lastPrice ?? 0) }')).toEqual([]) // Q-160
   })
 })
