@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { applyRateLimit } from '@/lib/api/rateLimit'
 import { sanitizeError } from '@/lib/api/sanitize'
+import { snapshotFromCoinGecko } from '@/lib/btcSnapshot'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,27 +26,14 @@ export async function GET(request: Request) {
     if (!res.ok) {
       return NextResponse.json({ error: 'coingecko_http', status: res.status }, { status: 502 })
     }
-    const data = (await res.json()) as {
-      bitcoin?: { usd?: number; usd_24h_change?: number; usd_24h_vol?: number }
-    }
-    const b = data.bitcoin
-    if (!b?.usd || !Number.isFinite(b.usd)) {
+    // Q-157: a missing percent or volume is null, not 0; CoinGecko gives no
+    // absolute change, so change24h is derived from the percent (tickChange).
+    const snapshot = snapshotFromCoinGecko(await res.json())
+    if (!snapshot) {
       return NextResponse.json({ error: 'invalid_payload' }, { status: 502 })
     }
-    const changePct24h = typeof b.usd_24h_change === 'number' ? b.usd_24h_change : 0
-    const price = b.usd
-    const pct = changePct24h / 100
-    const change24h = pct === 0 ? 0 : price - price / (1 + pct)
     return NextResponse.json(
-      {
-        price,
-        changePct24h,
-        change24h,
-        high24h: null,
-        low24h: null,
-        volume24h: typeof b.usd_24h_vol === 'number' ? b.usd_24h_vol : 0,
-        source: 'CoinGecko simple (REST)',
-      },
+      { ...snapshot, source: 'CoinGecko simple (REST)' },
       { headers: { 'Cache-Control': 'no-store' } }
     )
   } catch (e) {
