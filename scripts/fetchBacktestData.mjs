@@ -2,7 +2,8 @@ import { writeFileSync, mkdirSync, readFileSync, existsSync, appendFileSync } fr
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
-import { WINDOW_START, assessRefresh, dropUnfinishedBars, keyDate, seriesFingerprint } from './lib/dataVintage.mjs';
+import { WINDOW_START } from './lib/dataVintage.mjs';
+import { planSave } from './lib/planSave.mjs';
 import { TICKERS } from './lib/universe.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -22,151 +23,59 @@ const OUTPUT_DIR = path.resolve(__dirname, 'backtestData');
 // append-only in practice — new bars arrive, old bars never vanish.
 const PERIOD_DAYS = 1825; // 5 years — descriptive now, not the anchor
 
-// ── Fixture integrity floors (R2 mitigation) ──────────────────────────────
-// The benchmark needs >= 252 rows per instrument (200-bar warmup + signal
-// window). A degraded Yahoo response (rate-limit, partial outage, holiday
-// gaps) can return a short series; without a guard, saveResult() would
-// silently overwrite a good 5Y fixture with the truncated one, the
-// benchmark's `>= 252` filter would drop the instrument, and the WR floor
-// would mask the loss as "signal drift" instead of "data corruption".
-const MIN_ABSOLUTE_ROWS = 252; // hard floor: unusable below this
-const MAX_SHRINK_PCT = 0.05; // refuse a >5% drop vs the existing fixture
-
 mkdirSync(OUTPUT_DIR, { recursive: true });
 
 /**
- * Persist a fixture, refusing to overwrite a good file with a degraded fetch.
- * Throws on a floor violation; the caller counts the failure and main() exits
- * non-zero so the data-refresh workflow goes RED (not a silent green commit).
+ * Persist a fixture, refusing to overwrite a good file with a degraded fetch, a
+ * restated history, or a fixture the vintage check cannot read. Every decision
+ * is in `planSave` (scripts/lib/planSave.mjs), which is pure and tested; this
+ * function only does the I/O. Throws `REFUSED …`; main() quarantines the ticker
+ * and the data-refresh workflow goes RED (not a silent green commit).
  */
 function saveResult(ticker, sector, candles) {
   const filePath = path.join(OUTPUT_DIR, `${ticker}.json`);
-
-  if (candles.length < MIN_ABSOLUTE_ROWS) {
-    throw new Error(
-      `REFUSED to save ${ticker}: ${candles.length} rows < absolute floor ${MIN_ABSOLUTE_ROWS} (degraded fetch — keeping existing fixture)`,
-    );
-  }
-
+  let prev;
   if (existsSync(filePath)) {
     try {
-      const prev = JSON.parse(readFileSync(filePath, 'utf8'));
-      const prevCount = Array.isArray(prev.candles) ? prev.candles.length : 0;
-      if (prevCount > 0 && candles.length < prevCount * (1 - MAX_SHRINK_PCT)) {
-        throw new Error(
-          `REFUSED to save ${ticker}: ${candles.length} rows is >${MAX_SHRINK_PCT * 100}% below existing ${prevCount} (likely a degraded fetch — keeping existing fixture)`,
-        );
-      }
+      prev = JSON.parse(readFileSync(filePath, 'utf8'));
     } catch (e) {
-      // A genuine floor violation re-throws; a corrupt/unreadable existing
-      // file should NOT block a healthy new fetch (>= MIN_ABSOLUTE_ROWS).
-      if (e instanceof Error && e.message.startsWith('REFUSED')) throw e;
-      console.warn(`[${ticker}] existing fixture unreadable (${e.message}); proceeding with fresh ${candles.length}-row save`);
-    }
-  }
-
-  // ── Q-102: a restatement is a DATA EVENT, not signal drift ───────────────
-  //
-  // The previous save overwrote the whole series unconditionally, so a vendor
-  // revising a 2023 close was absorbed silently and surfaced later as a moved
-  // win rate. Appends are normal and pass; a changed or vanished historical bar
-  // fails closed (I2) so a human sees it before it reaches a benchmark.
-  let vintage = { appended: candles.length, restated: 0, missing: 0, finalized: 0, superseded: 0 };
-  if (existsSync(filePath)) {
-    try {
-      const prev = JSON.parse(readFileSync(filePath, 'utf8'));
-      // Valid JSON of the WRONG SHAPE is the residual fail-open: assessRefresh
-      // called with `undefined` reports every incoming bar as an append and
-      // returns ok, so a fixture whose `candles` key was lost would be silently
-      // overwritten by a guard that believes it checked something. Found by
-      // probing the function directly rather than by reading it.
-      if (!Array.isArray(prev.candles) || prev.candles.length === 0) {
-        throw new Error(
-          `REFUSED to save ${ticker}: existing fixture has no usable candles array, so a refresh cannot be ` +
-            'proven to be append-only. Repair or delete the fixture deliberately.',
-        );
-      }
-      // Q-144: the file's own fetchedAt says which of its bars were unfinished
-      // when it was written; those are replaced by the finished bars, not
-      // compared against them.
-      const verdict = assessRefresh(prev.candles, candles, { existingFetchedAt: prev.fetchedAt });
-      vintage = {
-        appended: verdict.appended,
-        restated: verdict.restated,
-        missing: verdict.missing,
-        finalized: verdict.finalized,
-        superseded: verdict.superseded,
-      };
-      if (!verdict.ok) {
-        throw new Error(`REFUSED to save ${ticker}: ${verdict.reasons.join(' | ')}`);
-      }
-      if (verdict.appended > 0 || verdict.finalized > 0 || verdict.superseded > 0) {
-        const fin = verdict.finalized > 0 ? `, ${verdict.finalized} volume finalization(s)` : '';
-        const sup = verdict.superseded > 0 ? `, ${verdict.superseded} unfinished bar(s) replaced by the finished bar` : '';
-        console.log(`[${ticker}] +${verdict.appended} new bar(s), 0 restated${fin}${sup}`);
-      }
-      // Relative sizes only — never vendor values (I8; this log is public).
-      for (const b of verdict.supersededBars) {
-        const what = b.dropped ? 'no longer served (still unfinished)' : `${b.fields.join('/')} moved up to ${b.maxRelativeChange.toExponential(1)}`;
-        console.log(`::notice title=${ticker} unfinished bar replaced::${keyDate(b.key)} was stored before its day ended; ${what}`);
-      }
-    } catch (e) {
-      if (e instanceof Error && e.message.startsWith('REFUSED')) throw e;
-      // FAIL CLOSED. This used to warn and continue, which meant an unreadable
-      // fixture SKIPPED the restatement check entirely and the fresh series
-      // overwrote it unverified — a guard whose whole purpose is I2 fail-closed,
-      // failing open on the one input it cannot evaluate. If the vintage cannot
-      // be established, that is exactly when overwriting is least safe.
+      // FAIL CLOSED. An unreadable fixture used to SKIP the restatement check
+      // and be overwritten unverified. If the vintage cannot be established,
+      // that is exactly when overwriting is least safe.
       throw new Error(
         `REFUSED to save ${ticker}: existing fixture could not be read for the vintage check (${e.message}). ` +
           'Cannot prove this refresh only appends. Repair or delete the fixture deliberately.',
       );
     }
   }
-
-  const output = {
-    ticker,
-    sector,
-    fetchedAt: new Date().toISOString(),
-    // Vintage identity: the window this series claims to cover and a
-    // fingerprint of its contents. Without these a "reproducible" run is a
-    // claim nobody can check.
-    windowStart: WINDOW_START,
-    fingerprint: seriesFingerprint(candles),
-    rows: candles.length,
-    vintage,
-    candles,
-  };
-  writeFileSync(filePath, JSON.stringify(output, null, 2), 'utf8');
+  const plan = planSave({ ticker, sector, prev, candles, nowMs: Date.now() });
+  if (!plan.ok) throw new Error(plan.reason);
+  for (const line of plan.log) console.log(line);
+  writeFileSync(filePath, JSON.stringify(plan.doc, null, 2), 'utf8');
+  return plan.doc.rows;
 }
 
 /**
  * Phase 14 wave 22: filter out illiquid / missing-data rows so the saved JSON
- * files contain only finite-OHLC entries. Yahoo returns nulls for holiday
+ * files contain only finite-OHLCV entries. Yahoo returns nulls for holiday
  * rows and brief outage minutes; saving them propagates NaN downstream
  * through any consumer that doesn't apply the exact filter that
  * `optimize-grid.ts:79–82` does.
+ *
+ * Q144-R2-4: volume is required too. A null volume used to be stored as 0, and
+ * a later fill of that bar is then an infinite relative change, refused every
+ * week. 0 of 72,941 stored bars had volume 0 (2026-10-18), so no stored bar
+ * came from that path; a row the vendor has not finished publishing is now not
+ * stored at all, and is appended once it is.
  */
 function isFiniteRow(q) {
   return (
     Number.isFinite(q.open) &&
     Number.isFinite(q.high) &&
     Number.isFinite(q.low) &&
-    Number.isFinite(q.close)
+    Number.isFinite(q.close) &&
+    Number.isFinite(q.volume)
   );
-}
-
-/**
- * Q-144: keep only FINISHED daily bars. The last bar of a fetch through "now"
- * can be a day still in progress — BTC's always was — and a stored partial bar
- * is later "restated" by its own completion. This replaces
- * `clampPartialFinalBar`, which patched the symptom (a running close outside the
- * recorded high/low, seen on BTC 2026-07-05) and kept the partial bar.
- */
-function finishedBarsOnly(candles, ticker) {
-  const { candles: kept, dropped } = dropUnfinishedBars(candles, Math.floor(Date.now() / 1000));
-  if (dropped > 0) console.log(`[${ticker}] held back ${dropped} unfinished bar(s); they are fetched once their day has ended`);
-  return kept;
 }
 
 async function fetchYahoo(ticker, sector) {
@@ -196,14 +105,14 @@ async function fetchYahoo(ticker, sector) {
       high:   q.high,
       low:    q.low,
       close:  q.close,
-      volume: Number.isFinite(q.volume) ? q.volume : 0,
+      volume: q.volume,
       ...(dividend ? { dividend } : {}),
     };
   });
 
-  saveResult(ticker, sector, finishedBarsOnly(candles, ticker));
+  const rows = saveResult(ticker, sector, candles);
   const dropped = rawRows.length - candles.length;
-  console.log(`[${ticker}] Saved ${candles.length} candles${dropped > 0 ? ` (dropped ${dropped} non-finite rows)` : ''}${divByDay.size > 0 ? ` (+${divByDay.size} dividend bars)` : ''}`);
+  console.log(`[${ticker}] Saved ${rows} candles${dropped > 0 ? ` (dropped ${dropped} non-finite rows)` : ''}${divByDay.size > 0 ? ` (+${divByDay.size} dividend bars)` : ''}`);
 }
 
 async function fetchBTC(sector = 'Crypto') {
@@ -220,12 +129,12 @@ async function fetchBTC(sector = 'Crypto') {
     high:   q.high,
     low:    q.low,
     close:  q.close,
-    volume: Number.isFinite(q.volume) ? q.volume : 0,
+    volume: q.volume,
   }));
 
-  saveResult('BTC', sector, finishedBarsOnly(candles, 'BTC'));
+  const rows = saveResult('BTC', sector, candles);
   const dropped = rawRows.length - candles.length;
-  console.log(`[BTC] Saved ${candles.length} candles${dropped > 0 ? ` (dropped ${dropped} non-finite rows)` : ''}`);
+  console.log(`[BTC] Saved ${rows} candles${dropped > 0 ? ` (dropped ${dropped} non-finite rows)` : ''}`);
 }
 
 async function main() {

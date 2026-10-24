@@ -51,37 +51,53 @@ export const keyDate = (key) => {
 export const DAY_SECONDS = 86_400
 
 /**
- * Q-144: is a daily bar FINISHED at `nowSec`?
+ * How long after a daily bar's day has ENDED before it is stored.
  *
- * A daily bar's timestamp is the START of its period, and it is final only once
- * a whole day has passed. The weekly refresh asked Yahoo for daily bars through
- * "now", so the last BTC bar — BTC trades through the weekend and its daily bar
- * spans the UTC day — was a day still in progress: all 12 committed BTC vintages
- * stored a tail fetched 22.3-23.2 h into its own day (data-integrity Q144-D1).
- * The next run then found that bar "restated" in every field, refused it, and
- * BTC was frozen from 2026-09-06. Equity tails were complete Friday sessions on
- * a Sunday run; for an equity bar stamped at the 13:30 UTC open the rule is
- * conservative and waits until the next open, so a mid-session dispatch never
- * stores today's partial bar either.
+ * Q144-R2-4, measured 2026-10-18: the vendor's row for the just-finished BTC day
+ * was all-null at every poll from 3.4 h to 5.0 h after the day ended, and
+ * populated by 7.4 h. Whether the first published values equal the final ones
+ * was not measured, and the same vendor has been seen changing every field of a
+ * 22-hour-old bar, so the first hours after publication are not treated as
+ * final. Twelve hours is above the measured publish delay with margin. At a
+ * weekly cadence it costs one bar at most: the Sunday run (scheduled 22:00 UTC,
+ * created 23:28-00:57 UTC over the last six runs) still stores the Friday
+ * session and BTC's Saturday bar, and holds BTC's Sunday bar for a week.
+ */
+export const SETTLE_SECONDS = 12 * 3_600
+
+/**
+ * Q-144: is a daily bar FINISHED, and settled, at `nowSec`?
+ *
+ * A daily bar's timestamp is the START of its period. It is final only once a
+ * whole day has passed, and stored only once SETTLE_SECONDS more have passed.
+ * The weekly refresh asked Yahoo for daily bars through "now", so the last BTC
+ * bar — BTC trades through the weekend and its daily bar spans the UTC day — was
+ * a day still in progress: all 12 committed BTC vintages stored a tail fetched
+ * 22.3-23.2 h into its own day (data-integrity Q144-D1). The next run found that
+ * bar "restated" in every field and refused it, and BTC was refused in every
+ * scheduled run from 2026-08-23 on; its fixture has not been written since
+ * 2026-08-16. For an equity bar stamped at the 13:30 UTC open the rule is
+ * conservative and waits until the evening of the next day, so a mid-week
+ * dispatch never stores a session still in progress either.
  */
 export function isBarComplete(bar, nowSec) {
   const t = Number(bar?.time)
-  return Number.isFinite(t) && Number.isFinite(nowSec) && t + DAY_SECONDS <= nowSec
+  return Number.isFinite(t) && Number.isFinite(nowSec) && t + DAY_SECONDS + SETTLE_SECONDS <= nowSec
 }
 
 /**
- * Drop the unfinished bars from the END of a series. Only the tail can be
- * unfinished; a non-finite time is treated as unfinished rather than stored.
+ * Drop every bar that is not finished and settled at `nowSec`, wherever it sits
+ * (Q144-R2-9: trimming only the tail kept an unfinished bar from an unsorted
+ * response). A non-finite time is treated as unfinished rather than stored.
  */
 export function dropUnfinishedBars(candles, nowSec) {
-  const out = [...(candles ?? [])]
-  let dropped = 0
-  while (out.length > 0 && !isBarComplete(out[out.length - 1], nowSec)) {
-    out.pop()
-    dropped++
-  }
-  return { candles: out, dropped }
+  const all = candles ?? []
+  const kept = all.filter((c) => isBarComplete(c, nowSec))
+  return { candles: kept, dropped: all.length - kept.length }
 }
+
+/** An ISO-8601 UTC timestamp as `new Date().toISOString()` writes it. */
+const ISO_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/
 
 /**
  * Keys of the bars ON DISK that were unfinished when that file was written —
@@ -90,14 +106,33 @@ export function dropUnfinishedBars(candles, nowSec) {
  * Such a bar was never a value of the finished bar: it was a 22-hour snapshot
  * of a 24-hour bar. Comparing the finished bar against it calls the bar
  * completing a "restatement". So a provisional bar is REPLACED by the vendor's
- * finished bar and reported as superseded, never compared. A file with no
- * readable `fetchedAt` has no provisional bars, which keeps the strict check.
+ * finished bar and reported as superseded, never compared.
+ *
+ * Q144-R2-2: this EXEMPTS bars from the restatement check, so it needs positive
+ * evidence and fails to the strict check on anything else. A bar is provisional
+ * only if it began at or before the write and its day had not ended at the
+ * write, and only the LAST bar on disk can be: a file is written from one fetch,
+ * and only its newest day can have been in progress. A `fetchedAt` that is not
+ * an ISO timestamp, that makes a bar other than the last qualify, or that makes
+ * no bar qualify, yields no provisional bars. The first version used
+ * `!isBarComplete`, which also answers true for a bar it cannot evaluate: a
+ * `fetchedAt` of "2026" or the epoch, or disk times in milliseconds, exempted
+ * every bar on disk and let a refresh that doubled every price through.
  */
 export function provisionalKeys(existing, fetchedAtIso) {
-  const fetchedMs = typeof fetchedAtIso === 'string' ? Date.parse(fetchedAtIso) : NaN
+  const fetchedMs = typeof fetchedAtIso === 'string' && ISO_UTC.test(fetchedAtIso) ? Date.parse(fetchedAtIso) : NaN
   if (!Number.isFinite(fetchedMs)) return new Set()
   const fetchedSec = fetchedMs / 1000
-  return new Set((existing ?? []).filter((c) => !isBarComplete(c, fetchedSec)).map(KEY))
+  const bars = existing ?? []
+  const unfinishedAtWrite = (c) => {
+    const t = Number(c?.time)
+    return Number.isFinite(t) && t <= fetchedSec && fetchedSec < t + DAY_SECONDS
+  }
+  const qualifying = bars.filter(unfinishedAtWrite)
+  const last = bars[bars.length - 1]
+  const lastIsNewest = last != null && bars.every((c) => Number(c?.time) <= Number(last.time))
+  if (qualifying.length !== 1 || qualifying[0] !== last || !lastIsNewest) return new Set()
+  return new Set([KEY(last)])
 }
 
 /** Round to the precision the vendor actually delivers, to avoid float noise. */
@@ -254,7 +289,7 @@ export function assessRefresh(existing, incoming, { existingFetchedAt } = {}) {
   if (d.missing.length > 0) {
     reasons.push(
       `HISTORY LOSS: ${d.missing.length} bar(s) present on disk are absent from the refresh ` +
-        `(oldest ${d.missing[0]}). A pinned window should only ever append.`,
+        `(oldest ${keyDate(d.missing[0])}). A pinned window should only ever append.`,
     )
   }
   return {
