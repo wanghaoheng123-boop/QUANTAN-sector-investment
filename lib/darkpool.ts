@@ -246,16 +246,18 @@ export function hasShortInterestData(m: DarkPoolMetric): boolean {
 }
 
 /**
- * True when the card will show any figure at all: short interest, a share count
- * or a volume. With no quote the volume and the quote's share count are absent,
- * so a figure here came from the key statistics.
+ * True when the card will show any figure at all: short interest, a share count,
+ * a float or a volume. With no quote the volume and the quote's share count are
+ * absent, so a figure here came from the key statistics. A WITHHELD float needs no
+ * term of its own: judgeFloat withholds only against a share count
+ * (`exceeds-shares-out`) or a short count (`inconsistent-with-short-interest`), and
+ * either is already a figure here.
  */
 export function hasAnyFigure(m: DarkPoolMetric): boolean {
   return (
     hasShortInterestData(m) ||
     m.sharesOutstanding !== null ||
     m.sharesFloat !== null ||
-    m.floatWithheld !== null ||
     m.avgDailyVolume !== null
   )
 }
