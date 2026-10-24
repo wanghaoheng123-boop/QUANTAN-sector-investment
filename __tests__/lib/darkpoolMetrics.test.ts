@@ -19,6 +19,7 @@ import {
   hasShortInterestData,
   isoDateOrNull,
 } from '@/lib/darkpool'
+import { getMetric } from '@/lib/metricGlossary'
 
 const NOW = Date.parse('2026-10-17T12:00:00Z')
 const build = (ks: Record<string, unknown>, q: Record<string, unknown> = {}, now = NOW) => buildDarkPoolMetrics(ks, q, now)
@@ -169,5 +170,24 @@ describe('buildDarkPoolMetrics', () => {
 
   it('refuses negative counts and ratios', () => {
     expect(build({ sharesShort: -1, shortRatio: -2 }, { averageDailyVolume10Day: -3 })).toMatchObject({ sharesShorted: null, daysToCover: null, avgDailyVolume: null })
+  })
+})
+
+// Q149-R2-2: the glossary entry has no consumer today, so nothing renders it and
+// nothing else would notice it drifting back to a denominator the data does not guarantee.
+describe('the short-percent glossary entry states the vendor\'s denominator (Q149-R2-2)', () => {
+  const entry = getMetric('shortFloatPct')
+
+  it('says it is the vendor\'s own percent and that the denominator is not always the float', () => {
+    expect(entry).not.toBeNull()
+    expect(entry?.definition).toContain("as the vendor's own percent")
+    expect(entry?.definition).toContain('Its denominator is not always the float published beside it')
+    expect(entry?.definition).toContain('for some dual-class and ADR names it tracks shares outstanding')
+  })
+
+  it('does not claim the float as the denominator, in the label or the definition', () => {
+    expect(entry?.label).not.toMatch(/float/i)
+    expect(entry?.definition).not.toContain("percent of the vendor's float figure")
+    expect(entry?.definition).not.toMatch(/of (the )?(vendor's )?float/i)
   })
 })
