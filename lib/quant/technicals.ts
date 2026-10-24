@@ -128,6 +128,31 @@ export function slopeState(slopePct: number | null | undefined): SlopeState | nu
   return 'flat'
 }
 
+/** Most decimals `formatSlopePct` will add to tell a value from the threshold it rounds onto. */
+const SLOPE_MAX_DECIMALS = 6
+
+/**
+ * The 20-day change of the 200-day average as a signed percent, e.g. "+0.78%".
+ *
+ * Two decimals, except for a value that two decimals would print AS the
+ * threshold while sitting on one side of it: 0.00504 ("rising") and 0.00496
+ * ("flat") both print "+0.50%", so two rows could show the same number with
+ * different states (Q153-R2-14). Decimals are added, up to six, until the
+ * printed value is not the threshold. A value exactly at the threshold keeps two
+ * decimals — it is flat, and "+0.50%" is true. `vsThreshold` is false where no
+ * threshold is shown (intraday bars, `slopeSignText`).
+ */
+export function formatSlopePct(slopePct: number, vsThreshold = true): string {
+  const pct = slopePct * 100
+  const edge = MA200_RISING_THRESHOLD * 100
+  const magnitude = Math.abs(pct)
+  let text = magnitude.toFixed(2)
+  for (let dp = 3; vsThreshold && dp <= SLOPE_MAX_DECIMALS && Number(text) === edge && Math.abs(slopePct) !== MA200_RISING_THRESHOLD; dp++) {
+    text = magnitude.toFixed(dp)
+  }
+  return `${pct > 0 ? '+' : pct < 0 ? '-' : ''}${text}%`
+}
+
 /**
  * The slope as one line, threshold included: "● flat +0.19% / 20d (within ±0.5%)".
  * `window` names the 20 observations — "20d" on daily bars, "20 bars" otherwise.
@@ -136,9 +161,20 @@ export function slopeText(slopePct: number | null | undefined, window = '20d'): 
   const state = slopeState(slopePct)
   if (state == null || slopePct == null) return '—'
   const glyph = state === 'rising' ? '▲' : state === 'falling' ? '▼' : '●'
-  const value = `${slopePct > 0 ? '+' : ''}${(slopePct * 100).toFixed(2)}%`
   const band = state === 'flat' ? ` (within ±${(MA200_RISING_THRESHOLD * 100).toFixed(1)}%)` : ''
-  return `${glyph} ${state} ${value} / ${window}${band}`
+  return `${glyph} ${state} ${formatSlopePct(slopePct)} / ${window}${band}`
+}
+
+/**
+ * The slope for bars that are NOT daily: its sign and value, with no state word
+ * and no band — "▲ +0.30% / 20 bars". The ±0.5% band is calibrated on 20 DAYS of
+ * a 200-DAY average; applied to 20 hourly bars it would call a 200-hour average
+ * "flat" by a standard that was never defined for it (Q153-R2-11).
+ */
+export function slopeSignText(slopePct: number | null | undefined, window: string): string {
+  if (slopePct == null || !Number.isFinite(slopePct)) return '—'
+  const glyph = slopePct > 0 ? '▲ ' : slopePct < 0 ? '▼ ' : ''
+  return `${glyph}${formatSlopePct(slopePct, false)} / ${window}`
 }
 
 /**
@@ -152,7 +188,7 @@ export function describeRegime(dev: number, slope: number | null, slopePositive:
   const where = `${Math.abs(dev).toFixed(1)}% ${dev >= 0 ? 'above' : 'below'} the 200-day average`
   const slopeText = slope == null
     ? 'its 20-day slope cannot be computed yet (fewer than 221 closes)'
-    : `the average moved ${slope >= 0 ? '+' : ''}${(slope * 100).toFixed(2)}% over 20 days (${slopePositive ? 'rising' : 'not rising'} by the +${(MA200_RISING_THRESHOLD * 100).toFixed(1)}% threshold)`
+    : `the average moved ${formatSlopePct(slope)} over 20 days (${slopePositive ? 'rising' : 'not rising'} by the +${(MA200_RISING_THRESHOLD * 100).toFixed(1)}% threshold)`
   const rsiText = rsi14 != null && Number.isFinite(rsi14) ? ` RSI(14) is ${rsi14.toFixed(0)}.` : ''
   return `Price is ${where}; ${slopeText}.${rsiText}`
 }

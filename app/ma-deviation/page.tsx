@@ -1,6 +1,6 @@
 'use client'
 
-import { slopeState, slopeText } from '@/lib/quant/technicals'
+import { formatSlopePct, slopeState, slopeText } from '@/lib/quant/technicals'
 import { UI_LOCALE } from '@/lib/format'
 import { LocalTime } from '@/components/LocalTime'
 import { useState, useEffect } from 'react'
@@ -9,18 +9,16 @@ import Link from 'next/link'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
-type DipSignal = 'STRONG_DIP' | 'WATCH_DIP' | 'FALLING_KNIFE' | 'OVERBOUGHT' | 'IN_TREND' | 'INSUFFICIENT_DATA'
-
+// Q153-R2-18: the regime the API sends also carries `color`, `riskLevel` and
+// `dipSignal`. This page renders none of them (Q153-C1/C5/C6), so they are not
+// declared here: a read of one is a type error, not just a failed guard.
 interface MA200Regime {
   zone: string
   deviationPct: number | null
   slopePositive: boolean | null
   slopePct: number | null       // change of the 200-day average over 20 days, e.g. 0.00087 = +0.087%
   label: string
-  color: string
-  riskLevel: 'low' | 'medium' | 'high' | 'extreme'
   interpretation: string
-  dipSignal: DipSignal
   dipSignalExplained: string
 }
 
@@ -63,7 +61,7 @@ interface ApiResponse {
  * One neutral colour for every zone (Q153-C6). The zones were coloured as a
  * traffic light — green 0–10% above, lime 0–10% below, red at both extremes —
  * which carried "buy the dip / stop" without the words. Red/green is kept only
- * for the SIGN of the measured slope (SlopeChip).
+ * for a measured slope beyond +0.5% / below −0.5% (SlopeChip).
  */
 const NEUTRAL = '#94a3b8'
 
@@ -437,7 +435,7 @@ export default function MADeviationPage() {
                           { label: 'RSI(14)', value: row.rsi14 != null ? row.rsi14.toFixed(1) : '—' },
                           { label: 'Trading Days', value: String(row.tradingDays) },
                           { label: '200MA change (20d)', value: regime.slopePct != null
-                              ? `${regime.slopePct > 0 ? '+' : ''}${(regime.slopePct * 100).toFixed(2)}%`
+                              ? formatSlopePct(regime.slopePct)
                               : '—', color: slopeState(regime.slopePct) === 'rising' ? '#22c55e' : slopeState(regime.slopePct) === 'falling' ? '#ef4444' : undefined },
                         ].map(({ label, value, color }) => (
                           <div key={label} className="bg-slate-800/50 rounded-lg px-3 py-2">

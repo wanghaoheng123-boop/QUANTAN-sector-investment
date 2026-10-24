@@ -25,7 +25,9 @@ export const metadata: Metadata = {
   // dark pool data … curated signal briefs" — marketing language CLAUDE.md
   // forbids, "real-time" for vendor-delayed feeds, and "dark pool data" for a
   // source that publishes none (the dark-pool prints are illustrative).
-  description: 'Research tooling for sector and single-name market data: delayed prices, charts, indicators and news briefs across the 11 GICS sectors.',
+  // Q153-R2-13: not "delayed prices" either — some feeds are vendor-delayed and
+  // others stream live (ComplianceBanner), and each surface labels its own.
+  description: 'Research tooling for sector and single-name market data: prices (freshness labelled on each surface), charts, indicators and news briefs.',
   keywords: 'stock market, sector analysis, market data, technical indicators',
   manifest: '/manifest.json',
   appleWebApp: {

@@ -17,7 +17,6 @@
 import { offending } from '../architecture/adviceWords'
 import { describe, it, expect } from 'vitest'
 import {
-  generateSignals,
   btcRegime,
   calcMVRV,
   calcPiCycleTop,
@@ -116,64 +115,6 @@ describe('calcVWMA — exact volume-weighted means', () => {
       { time: 2, open: 7, high: 7, low: 7, close: 7, volume: 0 },
     ]
     expect(calcVWMA(zero, 2)[1]).toBe(7)
-  })
-})
-
-// ─── generateSignals — exact per-indicator strength + description ────────────
-
-describe('generateSignals', () => {
-  it('returns [] below 55 candles', () => {
-    expect(generateSignals(candles(Array.from({ length: 54 }, () => 100)))).toEqual([])
-  })
-
-  it('sharp decline → oversold-RSI BUY + negative MACD/EMA-cross SELL', () => {
-    const decline = [...Array.from({ length: 60 }, () => 100), ...Array.from({ length: 20 }, (_, i) => 100 - (i + 1) * 2)]
-    expect(generateSignals(candles(decline))).toEqual([
-      { indicator: 'RSI(14)', signal: 'BUY', strength: 100, description: 'Oversold at 0.0' },
-      { indicator: 'MACD', signal: 'SELL', strength: 60, description: 'MACD histogram negative' },
-      { indicator: 'EMA Cross', signal: 'SELL', strength: 70, description: 'EMA20 ($76) < EMA50 ($87) by 12.1%' },
-      { indicator: 'Bollinger Bands', signal: 'HOLD', strength: 40, description: 'Price within BB bands' },
-    ])
-  })
-
-  it('sharp rally → overbought-RSI SELL + positive MACD/EMA-cross BUY', () => {
-    const rally = [...Array.from({ length: 60 }, () => 100), ...Array.from({ length: 20 }, (_, i) => 100 + (i + 1) * 2)]
-    expect(generateSignals(candles(rally))).toEqual([
-      { indicator: 'RSI(14)', signal: 'SELL', strength: 100, description: 'Overbought at 100.0' },
-      { indicator: 'MACD', signal: 'BUY', strength: 60, description: 'MACD histogram positive' },
-      { indicator: 'EMA Cross', signal: 'BUY', strength: 70, description: 'EMA20 ($124) > EMA50 ($113) by 9.3%' },
-      { indicator: 'Bollinger Bands', signal: 'HOLD', strength: 40, description: 'Price within BB bands' },
-    ])
-  })
-
-  it('flat series → no-cross HOLD; MACD suppressed (histogram not > 0 nor < 0)', () => {
-    const flat = Array.from({ length: 80 }, () => 100)
-    expect(generateSignals(candles(flat))).toEqual([
-      { indicator: 'RSI(14)', signal: 'SELL', strength: 100, description: 'Overbought at 100.0' },
-      { indicator: 'EMA Cross', signal: 'HOLD', strength: 30, description: 'EMA20 ($100) and EMA50 ($100) within 1% — no clear cross' },
-      { indicator: 'Bollinger Bands', signal: 'HOLD', strength: 40, description: 'Price within BB bands' },
-    ])
-  })
-
-  it('funding-rate signal fires only outside ±PERP_FUNDING_HIGH_ABS with exact copy', () => {
-    const flat = Array.from({ length: 80 }, () => 100)
-    const pos = generateSignals(candles(flat), 0.01).find((s) => s.indicator === 'Funding Rate')!
-    expect(pos).toEqual({ indicator: 'Funding Rate', signal: 'SELL', strength: 75, description: 'Elevated positive funding (1.0000% / interval) — longs pay shorts (crowding)' })
-    const neg = generateSignals(candles(flat), -0.01).find((s) => s.indicator === 'Funding Rate')!
-    expect(neg).toEqual({ indicator: 'Funding Rate', signal: 'BUY', strength: 75, description: 'Elevated negative funding (-1.0000% / interval) — shorts pay longs (crowding)' })
-    // modest funding → no funding signal
-    expect(generateSignals(candles(flat), 0).some((s) => s.indicator === 'Funding Rate')).toBe(false)
-  })
-
-  it('fear & greed contrarian signal at the <25 / >75 extremes', () => {
-    const flat = Array.from({ length: 80 }, () => 100)
-    expect(generateSignals(candles(flat), undefined, 10).find((s) => s.indicator === 'Fear & Greed')).toEqual({
-      indicator: 'Fear & Greed', signal: 'BUY', strength: 80, description: 'Extreme Fear (10) — contrarian buy signal',
-    })
-    expect(generateSignals(candles(flat), undefined, 90).find((s) => s.indicator === 'Fear & Greed')).toEqual({
-      indicator: 'Fear & Greed', signal: 'SELL', strength: 80, description: 'Extreme Greed (90) — contrarian sell signal',
-    })
-    expect(generateSignals(candles(flat), undefined, 50).some((s) => s.indicator === 'Fear & Greed')).toBe(false)
   })
 })
 

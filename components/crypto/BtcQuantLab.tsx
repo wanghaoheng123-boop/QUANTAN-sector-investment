@@ -16,7 +16,7 @@ import {
   interpretFundingRate,
 } from '@/lib/crypto'
 import { barLabel, isDailyInterval } from '@/lib/barInterval'
-import { ma200Regime, slopeState, slopeText } from '@/lib/quant/technicals'
+import { ma200Regime, slopeSignText, slopeState, slopeText } from '@/lib/quant/technicals'
 import { fetchJsonSafe } from '@/lib/fetchJsonSafe'
 import { LiquidationsPanel } from '@/components/crypto/LiquidationsPanel'
 
@@ -238,12 +238,10 @@ export default function BtcQuantLab({ candles, interval = '1d' }: Props) {
       label: 'Funding Rate',
       value: metrics?.fundingRate != null ? `${(metrics.fundingRate * 100).toFixed(4)}%` : 'N/A',
       signal: fundingInfo?.signal ?? 'N/A',
-      color:
-        fundingInfo?.signal === 'BULLISH'
-          ? 'text-green-400'
-          : fundingInfo?.signal === 'BEARISH'
-            ? 'text-orange-400'
-            : 'text-slate-400',
+      // Q153-R2-1: funding's BULLISH/BEARISH is a CONTRARIAN lean (crowded shorts
+      // read BULLISH — lib/crypto.ts interpretFundingRate), the same shape as an
+      // oversold RSI. It was green/orange; it is described, not colour-coded.
+      color: fundingInfo == null ? 'text-slate-400' : 'text-slate-300',
     },
     // Q-138: a "Liquidation Bias" card (formerly "OI Net Direction") sat here,
     // coloured and undated beside BULLISH / BUY THE DIP. Its window is the
@@ -333,7 +331,7 @@ export default function BtcQuantLab({ candles, interval = '1d' }: Props) {
               label="Funding Rate (8h)"
               value={metrics?.fundingRate != null ? `${(metrics.fundingRate * 100).toFixed(4)}%` : '—'}
               sub={metrics?.nextFundingTime ? <>Next: <LocalTime value={metrics.nextFundingTime} /></> : undefined}
-              color={fundingInfo?.color ?? 'text-slate-400'}
+              color={fundingInfo == null ? 'text-slate-400' : 'text-slate-300'}
             />
             <MetricCard
               label="Open Interest"
@@ -412,7 +410,8 @@ export default function BtcQuantLab({ candles, interval = '1d' }: Props) {
 
             {/* 200-day MA deviation regime: a description of the distance and slope (Q-153).
                 Q153-C1/C5/C6: no class badge, no "Risk: low", one neutral
-                colour; red/green only for the sign of the measured slope. */}
+                colour; red/green only for a daily slope beyond +0.5% / below
+                −0.5%. */}
             {ma200 != null && Number.isFinite(latestClose) && (
               <div className="rounded-xl border border-slate-800 p-4 mt-2">
                 <div className="text-[10px] uppercase tracking-widest mb-1 text-slate-400">
@@ -426,11 +425,14 @@ export default function BtcQuantLab({ candles, interval = '1d' }: Props) {
                   {regime.deviationPct != null ? ` · Deviation: ${regime.deviationPct > 0 ? '+' : ''}${regime.deviationPct.toFixed(1)}%` : ''}
                   {regime.slopePct != null && (
                     // Q153-C11: three states with the classifier's threshold
-                    // (lib/quant/technicals.ts slopeText), over 20 BARS.
+                    // (lib/quant/technicals.ts slopeText) — on DAILY bars only.
+                    // The ±0.5% band is defined for 20 days of a 200-day average
+                    // (Q153-R2-11); other bars show the sign and the value, in
+                    // one neutral colour.
                     <span
-                      className={`ml-2 ${slopeState(regime.slopePct) === 'rising' ? 'text-emerald-400' : slopeState(regime.slopePct) === 'falling' ? 'text-red-400' : 'text-slate-300'}`}
+                      className={`ml-2 ${!daily ? 'text-slate-300' : slopeState(regime.slopePct) === 'rising' ? 'text-emerald-400' : slopeState(regime.slopePct) === 'falling' ? 'text-red-400' : 'text-slate-300'}`}
                     >
-                      {daily ? '200DMA' : '200-bar MA'} {slopeText(regime.slopePct, daily ? '20d' : '20 bars')}
+                      {daily ? `200DMA ${slopeText(regime.slopePct)}` : `200-bar MA ${slopeSignText(regime.slopePct, '20 bars')}`}
                     </span>
                   )}
                 </div>
@@ -456,7 +458,7 @@ export default function BtcQuantLab({ candles, interval = '1d' }: Props) {
       <div className="text-center text-[10px] text-slate-400 max-w-2xl mx-auto space-y-1">
         <p>
           Indicators are simplified heuristics — not validated trading signals, not execution logic, and can disagree with other venues or
-          professional systems. Funding is shown in exchange decimal form.
+          professional systems. Funding is the exchange&apos;s per-interval rate, shown as a percentage (not annualised).
         </p>
         <p>Not financial advice.</p>
       </div>

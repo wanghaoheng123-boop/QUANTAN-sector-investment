@@ -72,8 +72,8 @@ export function TechnicalsTab({
             {/* 200-day MA deviation regime: distance and slope, described (Q-153).
                 Q153-C1/C5/C6: no class badge (its labels were not true of the
                 classes), no "Risk: low/high" (an unmeasured claim, rendered in
-                green), and one neutral colour — red/green is kept only for the
-                sign of the measured slope. */}
+                green), and one neutral colour — red/green is kept only for a measured
+                slope beyond +0.5% / below −0.5%. */}
             {data.ma200Regime && (
               <div className="rounded-xl border border-slate-800 p-4">
                 <div className="text-[10px] uppercase tracking-widest mb-1 text-slate-400">200-day average: distance and slope</div>

@@ -17,9 +17,14 @@ const __SYNTHETIC__CANDLES = Array.from({ length: 240 }, (_, i) => ({
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
-function renderSignals(interval?: string) {
+/** Steeper than the series above: its 200-bar average moves ~+5% in 20 bars, well past the +0.5% daily band. */
+const __SYNTHETIC__STEEP = Array.from({ length: 240 }, (_, i) => ({
+  time: 1_700_000_000 + i * 3_600, open: 60_000 + i * 200, high: 60_200 + i * 200, low: 59_800 + i * 200, close: 60_050 + i * 200, volume: 1_000,
+}))
+
+function renderSignals(interval?: string, candles = __SYNTHETIC__CANDLES) {
   vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new TypeError('not mocked'))))
-  render(<BtcQuantLab candles={__SYNTHETIC__CANDLES} interval={interval} />)
+  render(<BtcQuantLab candles={candles} interval={interval} />)
   fireEvent.click(screen.getByRole('button', { name: 'Analysis' }))
 }
 
@@ -46,9 +51,23 @@ describe('BtcQuantLab — labels follow the candle interval', () => {
     renderSignals('1h')
     const text = document.body.textContent ?? ''
     // The synthetic series rises steadily, so its 200-bar average is up.
-    // Q153-C11: three states with the classifier's threshold, over 20 BARS.
-    expect(text).toMatch(/200-bar MA (?:▲ rising|● flat) \+\d+\.\d{2}% \/ 20 bars/)
-    expect(text).not.toMatch(/%\/bar|200-bar MA falling/)
+    // Q153-R2-11: off daily bars only the SIGN and the value are shown. The
+    // ±0.5% band (and so "rising" / "flat" / "falling") is defined for 20 DAYS
+    // of a 200-DAY average, not 20 hourly bars of a 200-hour one.
+    expect(text).toMatch(/200-bar MA ▲ \+\d+\.\d{2}% \/ 20 bars/)
+    expect(text).not.toMatch(/%\/bar|200-bar MA falling|within ±|\b(?:rising|flat|falling)\b/i)
+  })
+
+  it('off daily bars the slope is one neutral colour; the daily threshold colours stay on daily bars', () => {
+    // Same steep series both times: the 200-bar average is far above +0.5% in 20 bars.
+    renderSignals('1h', __SYNTHETIC__STEEP)
+    const hourly = screen.getByText(/200-bar MA ▲/)
+    expect(hourly.className).toContain('text-slate-300')
+    expect(hourly.className).not.toMatch(/emerald|red-|green/)
+    cleanup()
+    renderSignals('1d', __SYNTHETIC__STEEP)
+    const daily = screen.getByText(/200DMA ▲ rising/)
+    expect(daily.className).toContain('text-emerald-400')
   })
 
   it('a 1D interval is daily, not "1D bars" (R2-241-2)', () => {
