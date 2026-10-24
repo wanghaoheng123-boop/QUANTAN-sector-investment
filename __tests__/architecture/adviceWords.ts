@@ -141,11 +141,16 @@ export function isInCodeAttribute(n: ts.Node, sf: ts.SourceFile): boolean {
   return false
 }
 
+/**
+ * A `.json` file is parsed as TypeScript: its error recovery returns the same
+ * string literals as the JSON parse (measured on a nested document with arrays,
+ * numbers, booleans and null), and a JSON-specific arm survived a mutation test
+ * for that reason, so it was removed rather than kept untested.
+ */
 export function parseSource(path: string, source: string): ts.SourceFile {
-  const kind = path.endsWith('.json') ? ts.ScriptKind.JSON
-    : path.endsWith('x') ? ts.ScriptKind.TSX
-      : path.endsWith('.mjs') || path.endsWith('.js') ? ts.ScriptKind.JS
-        : ts.ScriptKind.TS
+  const kind = path.endsWith('x') ? ts.ScriptKind.TSX
+    : path.endsWith('.mjs') || path.endsWith('.js') ? ts.ScriptKind.JS
+      : ts.ScriptKind.TS
   return ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true, kind)
 }
 

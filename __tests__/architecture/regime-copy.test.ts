@@ -52,6 +52,14 @@
  * review's M2 (no no-substitution templates) is M2.
  * "N failing" counts failing tests; the names are the first that failed.
  *
+ * THREE FURTHER EDITS, after a read of this header (run on 0a00d86, which added
+ * the tests for the first two): Rv1 (the attribute walk does not stop at a nested
+ * JSX element) and Ra16 (aliases found in one pass instead of to a fixpoint) were
+ * killed. Rv2 (a .json file parsed as TypeScript) SURVIVED: on the nested test
+ * document tried, TypeScript's error recovery returned the same string literals as
+ * the JSON parse, so the JSON-specific arm of parseSource was removed instead of
+ * tested.
+ *
  *   M1-every-attribute-is-code                           adviceWords    KILLED (12 failing) plant N1; plant N2; the visitor: what counts as rendered text reads an attribute
  *   M1b-old-six-name-allowlist                           adviceWords    KILLED (9 failing) plant N1; plant N2; the visitor: what counts as rendered text reads an attribute
  *   M1c-empty-deny-list                                  adviceWords    KILLED (6 failing) plant NEG-code-attributes; the visitor: what counts as rendered text does not read the 
@@ -530,6 +538,7 @@ describe('regime copy describes, and quotes no unmeasured returns (Q-153)', () =
 
     it('reads a .json file the same way, property names included', () => {
       expect(renderedText('copy.json', '{ "title": "Buy the dip", "n": 3 }').map((t) => t.text)).toEqual(['title', 'Buy the dip', 'n'])
+      expect(renderedText('copy.json', '{ "a": { "b": ["Sell", "Scale in"] }, "t": true, "z": null }').map((t) => t.text)).toEqual(['a', 'b', 'Sell', 'Scale in', 't', 'z'])
     })
 
     it('reads no-substitution template literals and ignores literal TYPES and imports', () => {
