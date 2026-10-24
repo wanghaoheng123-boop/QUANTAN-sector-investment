@@ -18,6 +18,7 @@ import { parseQuoteTime } from '@/lib/format'
 import { applyRateLimit } from '@/lib/api/rateLimit'
 import { DEGRADED_CACHE_CONTROL } from '@/lib/api/reliability'
 import { normalizeTicker, sanitizeError } from '@/lib/api/sanitize'
+import { hyphenShareClassCandidate } from '@/lib/data/securityId'
 import { normalizedChangePercent } from '@/lib/yahooQuoteFields'
 import {
   NO_QUOTE_NOTE,
@@ -38,6 +39,21 @@ export const dynamic = 'force-dynamic'
 
 
 
+
+type Settled = [PromiseSettledResult<unknown>, PromiseSettledResult<unknown>]
+
+/** The quote and the key statistics for one symbol, each settled on its own. */
+function fetchBoth(symbol: string): Promise<Settled> {
+  return Promise.allSettled([
+    yahooFinance.quote(symbol),
+    yahooFinance.quoteSummary(symbol, { modules: ['defaultKeyStatistics'] }),
+  ]) as Promise<Settled>
+}
+
+/** A quote that resolved to an object with at least one field. */
+function hasQuote(r: PromiseSettledResult<unknown>): boolean {
+  return r.status === 'fulfilled' && r.value != null && typeof r.value === 'object' && Object.keys(r.value).length > 0
+}
 
 function safeNum(v: unknown): number | null {
   if (typeof v === 'number' && Number.isFinite(v)) return v
@@ -99,16 +115,27 @@ export async function GET(
   }
 
   try {
-    // Parallel fetch: quote + quoteSummary
-    const [quoteResult, summaryResult] = await Promise.allSettled([
-      yahooFinance.quote(ticker),
-      yahooFinance.quoteSummary(ticker, {
-        modules: ['defaultKeyStatistics'],
-      }),
-    ]) as [
-      PromiseSettledResult<unknown>,
-      PromiseSettledResult<unknown>,
-    ]
+    // Parallel fetch: quote + quoteSummary, for the symbol as typed.
+    let symbol = ticker
+    let [quoteResult, summaryResult] = await fetchBoth(symbol)
+
+    // Q149-R2-3: Yahoo spells a US share class with a hyphen. `BF.B` and `LEN.B`
+    // resolve to no quote, `BRK.B` is rejected, and the route then said "no quote"
+    // or "try again" about a liquid security. The typed symbol is still tried
+    // first, because a dot and one letter is also a foreign exchange suffix that
+    // resolves as typed; only a MISS (no quote, or a rejected one) tries the hyphen
+    // spelling once, and the attempt that resolved is the one reported. A miss on
+    // both keeps the typed symbol's own result. lib/data/securityId.ts decides
+    // which spellings are candidates.
+    const candidate = hyphenShareClassCandidate(ticker)
+    if (candidate != null && !hasQuote(quoteResult)) {
+      const retry = await fetchBoth(candidate)
+      if (hasQuote(retry[0])) {
+        symbol = candidate
+        quoteResult = retry[0]
+        summaryResult = retry[1]
+      }
+    }
 
     // ── Price ────────────────────────────────────────────
     // Q149-D4: for a symbol Yahoo does not know, quote() RESOLVES to undefined.
@@ -162,7 +189,7 @@ export async function GET(
       {}
     ) as Record<string, unknown>
 
-    const analysis = buildAnalysis(ticker, price, keyStats, q, summaryResult.status === 'fulfilled')
+    const analysis = buildAnalysis(symbol, price, keyStats, q, summaryResult.status === 'fulfilled')
 
     // Q-140 (I2): a FAILED fetch is not "no data for this security type". With
     // Yahoo down this used to say "Dark pool metrics are not available for this

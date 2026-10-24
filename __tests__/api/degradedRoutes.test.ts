@@ -290,6 +290,79 @@ describe('/api/darkpool — a fetch failure is not explained as a coverage gap',
     expect(res.headers.get('cache-control')).toBe(DEGRADED_CACHE_CONTROL)
   })
 
+  // Q149-R2-3: Yahoo answers a US share class in its hyphen spelling. Typed with a
+  // dot, `quote()` resolves to undefined (or is rejected) and the route said
+  // "no quote" about a liquid security. The mock below answers ONLY the hyphen
+  // spelling of the share classes, rejects one dot spelling as the vendor's schema
+  // validation did, and answers the dot spelling of an invented foreign listing:
+  // the shapes measured on 2026-10-24. No vendor value is in the mock.
+  describe('a share class typed with a dot', () => {
+    const EQUITY = { quoteType: 'EQUITY', regularMarketPrice: 25, regularMarketChange: 1 }
+    const KEY_STATISTICS = { defaultKeyStatistics: { sharesShort: 1e6, shortPercentOfFloat: 0.02, sharesOutstanding: 1e9, floatShares: 9e8 } }
+    const known = new Set(['BF-B', 'LEN-B', 'BRK-B', 'ABCD.L'])
+    beforeEach(() => {
+      quoteMock.mockImplementation(async (s: string) => {
+        if (s === 'BRK.B') throw new Error('Failed Yahoo Schema validation')
+        return known.has(s) ? EQUITY : undefined
+      })
+      summaryMock.mockImplementation(async (s: string) => {
+        if (known.has(s)) return KEY_STATISTICS
+        throw new Error('Quote not found')
+      })
+    })
+    const symbolsQuoted = () => quoteMock.mock.calls.map((c) => c[0])
+
+    it.each([['BF.B', 'BF-B'], ['LEN.B', 'LEN-B'], ['BRK.B', 'BRK-B'], ['bf.b', 'BF-B']])('%s resolves like %s', async (typed, yahoo) => {
+      const direct = await darkpool(yahoo)
+      quoteMock.mockClear(); summaryMock.mockClear()
+      const { res, body } = await darkpool(typed)
+      expect(res.status).toBe(200)
+      expect(body.quote.price).toBe(25)
+      expect(body.metrics).toEqual(direct.body.metrics)
+      expect(body.statusNote).toBeNull()
+      expect(body.degraded).toBeUndefined()
+      expect(body.ticker).toBe(yahoo)
+      // The typed spelling is tried first; the hyphen spelling once, for quote AND summary.
+      expect(symbolsQuoted()).toEqual([typed.toUpperCase(), yahoo])
+      expect(summaryMock.mock.calls.map((c) => c[0])).toEqual([typed.toUpperCase(), yahoo])
+    })
+
+    it('the hyphen spelling is fetched once, with no retry', async () => {
+      const { body } = await darkpool('BF-B')
+      expect(body.quote.price).toBe(25)
+      expect(symbolsQuoted()).toEqual(['BF-B'])
+    })
+
+    it('a foreign listing that resolves as typed is NOT rewritten', async () => {
+      const { body } = await darkpool('ABCD.L')
+      expect(body.quote.price).toBe(25)
+      expect(body.ticker).toBe('ABCD.L')
+      expect(symbolsQuoted()).toEqual(['ABCD.L'])
+      expect(summaryMock.mock.calls.map((c) => c[0])).toEqual(['ABCD.L'])
+    })
+
+    it('a dot symbol nobody knows is still "no quote", answered for the symbol the user typed', async () => {
+      const { res, body } = await darkpool('QQQQ.B')
+      expect(res.status).toBe(200)
+      expect(body.statusNote).toBe(NO_QUOTE)
+      expect(body.degraded).toBeUndefined()
+      expect(body.ticker).toBe('QQQQ.B')
+      expect(symbolsQuoted()).toEqual(['QQQQ.B', 'QQQQ-B'])
+    })
+
+    it('symbols with no dot are fetched once: indices, pairs, futures', async () => {
+      for (const s of ['^GSPC', 'BTC-USD', 'EURUSD=X', 'ES=F', 'AAPL']) await darkpool(s)
+      expect(symbolsQuoted()).toEqual(['^GSPC', 'BTC-USD', 'EURUSD=X', 'ES=F', 'AAPL'])
+    })
+
+    it('if the typed symbol failed and the hyphen spelling also has no quote, the typed symbol\'s own answer stands', async () => {
+      quoteMock.mockRejectedValue(new Error('yahoo down'))
+      summaryMock.mockRejectedValue(new Error('yahoo down'))
+      const { body } = await darkpool('BF.B')
+      expect(body).toMatchObject({ degraded: true, ticker: 'BF.B', statusNote: 'The market-data feed failed for this ticker; try again shortly.' })
+    })
+  })
+
   // Q149-R2-8 (age wiring): the pure builder is tested with a clock argument; this
   // pins that the ROUTE hands it the real clock, not a constant.
   it('the route dates the short interest against the current time', async () => {

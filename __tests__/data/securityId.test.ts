@@ -4,6 +4,7 @@ import { join } from 'path'
 import {
   canonicalSecurityId,
   dataFileNameFor,
+  hyphenShareClassCandidate,
   securityIdFromFileName,
   assertNoIdCollisions,
 } from '@/lib/data/securityId'
@@ -44,6 +45,32 @@ describe('canonicalSecurityId — one security, one identity', () => {
     for (const bad of ['', '   ', '../etc/passwd', 'A B', 'A..B', 'A-B-C-D-E']) {
       expect(canonicalSecurityId(bad)).toBeNull()
     }
+  })
+})
+
+describe('hyphenShareClassCandidate — a spelling to TRY, not a replacement (Q149-R2-3)', () => {
+  it('offers the hyphen spelling of a share class typed with a dot', () => {
+    expect(hyphenShareClassCandidate('BRK.B')).toBe('BRK-B')
+    expect(hyphenShareClassCandidate('bf.b')).toBe('BF-B')
+    expect(hyphenShareClassCandidate('  LEN.B ')).toBe('LEN-B')
+  })
+
+  it('offers nothing for a symbol not typed with a dot: the hyphen form is already Yahoo\'s', () => {
+    for (const s of ['BRK-B', 'BF-B', 'BTC-USD', 'EURUSD=X', '^GSPC', 'AAPL', '']) {
+      expect(hyphenShareClassCandidate(s), s).toBeNull()
+    }
+  })
+
+  it('offers nothing for a dot form that is not share-class-shaped, or not an identity', () => {
+    for (const s of ['ABCD.LO', '0700.HK', 'A..B', '../x', 'A B.C']) {
+      expect(hyphenShareClassCandidate(s), s).toBeNull()
+    }
+  })
+
+  it('does offer a candidate for a one-letter exchange suffix; the caller must fetch the typed symbol first', () => {
+    // The rule cannot tell `.B` (a share class) from `.L` (an exchange). That is why the
+    // function returns a candidate and the route tries it only after the typed symbol misses.
+    expect(hyphenShareClassCandidate('ABCD.L')).toBe('ABCD-L')
   })
 })
 
