@@ -21,9 +21,11 @@ import { normalizeTicker, sanitizeError } from '@/lib/api/sanitize'
 import { normalizedChangePercent } from '@/lib/yahooQuoteFields'
 import {
   NO_QUOTE_NOTE,
+  NO_QUOTE_WITH_FIGURES_NOTE,
   NO_SHORT_INTEREST_NOTE,
   NO_SHORT_INTEREST_TYPES,
   buildDarkPoolMetrics,
+  hasAnyFigure,
   hasShortInterestData,
   type DarkPoolAnalysis,
   type PricePoint,
@@ -47,6 +49,7 @@ function buildAnalysis(
   quote: PricePoint,
   keyStats: Record<string, unknown>,
   rawQuote: Record<string, unknown>,
+  summaryResolved: boolean,
 ): DarkPoolAnalysis {
   const now = Date.now()
   const metrics = buildDarkPoolMetrics(keyStats, rawQuote, now)
@@ -55,8 +58,10 @@ function buildAnalysis(
   // drift, so it is logged for alerting. Q-149: this fired on every request (the
   // field it read did not exist), and then on every float the builder WITHHELD
   // (Q149-D3) — an alert that is always on hides the drift it is for. A withheld
-  // float is visible in the response as `floatWithheld`; it is not drift.
-  if (rawQuote.quoteType === 'EQUITY' && quote.price != null && keyStats.floatShares === undefined) {
+  // float is visible in the response as `floatWithheld`; it is not drift. Nor is
+  // a key-statistics request that FAILED (Q149-R2-4a): an empty block from an
+  // outage is not a block that dropped a field.
+  if (summaryResolved && rawQuote.quoteType === 'EQUITY' && quote.price != null && keyStats.floatShares === undefined) {
     console.warn(JSON.stringify({
       event: 'darkpool.shares_float_missing',
       ticker,
@@ -157,7 +162,7 @@ export async function GET(
       {}
     ) as Record<string, unknown>
 
-    const analysis = buildAnalysis(ticker, price, keyStats, q)
+    const analysis = buildAnalysis(ticker, price, keyStats, q, summaryResult.status === 'fulfilled')
 
     // Q-140 (I2): a FAILED fetch is not "no data for this security type". With
     // Yahoo down this used to say "Dark pool metrics are not available for this
@@ -168,7 +173,9 @@ export async function GET(
     // to "try again shortly".
     const summaryFailed = summaryResult.status === 'rejected' && !NO_SHORT_INTEREST_TYPES.has(String(q.quoteType))
     if (noQuote) {
-      analysis.statusNote = NO_QUOTE_NOTE
+      // Q149-R2-4c: "has no quote" alone over a card that shows figures is a false
+      // sentence about that card; say what was observed on each side.
+      analysis.statusNote = hasAnyFigure(analysis.metrics) ? NO_QUOTE_WITH_FIGURES_NOTE : NO_QUOTE_NOTE
     } else if (quoteFailed || summaryFailed) {
       analysis.degraded = true
       analysis.statusNote = quoteFailed && summaryFailed
@@ -178,9 +185,12 @@ export async function GET(
           : 'The short-interest figures failed to load; try again shortly.'
     }
 
+    // Q149-R2-4d: an empty quote for a valid ticker is also what a transient
+    // upstream gap looks like, so it is held for the short window, not the healthy
+    // six minutes. It is not `degraded`: no fetch failed.
     return NextResponse.json(analysis, {
       headers: {
-        'Cache-Control': analysis.degraded ? DEGRADED_CACHE_CONTROL : 's-maxage=60, stale-while-revalidate=300',
+        'Cache-Control': analysis.degraded || noQuote ? DEGRADED_CACHE_CONTROL : 's-maxage=60, stale-while-revalidate=300',
       },
     })
   } catch (err) {

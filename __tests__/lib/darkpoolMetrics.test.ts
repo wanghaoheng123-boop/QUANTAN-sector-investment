@@ -15,6 +15,7 @@ import {
   SHORT_INTEREST_STALE_DAYS,
   SHORT_PERCENT_OF_FLOAT_SCALE,
   buildDarkPoolMetrics,
+  hasAnyFigure,
   hasShortInterestData,
   isoDateOrNull,
 } from '@/lib/darkpool'
@@ -53,6 +54,17 @@ describe('buildDarkPoolMetrics', () => {
     expect(hasShortInterestData(build({ shortPercentOfFloat: 0.01 }))).toBe(true)
     expect(hasShortInterestData(build({ shortRatio: 2 }))).toBe(true)
     expect(hasShortInterestData(build({ sharesOutstanding: 1e9, floatShares: 9e8 }))).toBe(false)
+  })
+
+  // Q149-R2-4c: any figure the card will show makes "has no quote" alone untrue.
+  it('hasAnyFigure: short interest, a share count, a withheld float or a volume each count; an empty block does not', () => {
+    expect(hasAnyFigure(build({}))).toBe(false)
+    expect(hasAnyFigure(build({ sharesShort: 1 }))).toBe(true)
+    expect(hasAnyFigure(build({ sharesOutstanding: 1e9 }))).toBe(true)
+    expect(hasAnyFigure(build({ floatShares: 1e9 }))).toBe(true)
+    expect(hasAnyFigure(build({ floatShares: 3e9, sharesOutstanding: 0 }))).toBe(true) // kept: no shares-out to compare
+    expect(hasAnyFigure(build({ floatShares: 3e9, sharesOutstanding: 1e9 }))).toBe(true) // withheld, and said so
+    expect(hasAnyFigure(build({}, { averageDailyVolume10Day: 7e6 }))).toBe(true)
   })
 
   it('reads the TEN-day volume, not the three-month one (Q149-D10, M25)', () => {

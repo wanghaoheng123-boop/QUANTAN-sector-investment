@@ -4,7 +4,6 @@
  * SOME failure signal is present.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { NO_QUOTE_NOTE, NO_SHORT_INTEREST_NOTE } from '@/lib/darkpool'
 import { DEGRADED_CACHE_CONTROL } from '@/lib/api/reliability'
 import { NextRequest } from 'next/server'
 
@@ -27,6 +26,19 @@ vi.mock('@/lib/api/reliability', async (orig) => ({
   withRetry: vi.fn((fn: () => Promise<unknown>) => fn()),
 }))
 
+// The notes are asserted as literal text, not through the exported constants: a
+// test that imports the constant passes whatever the constant says (Q149-R2-8).
+const NO_SHORT_INTEREST = 'Yahoo Finance reports no short-interest figures for this ticker.'
+const NO_QUOTE = 'Yahoo Finance has no quote for this ticker.'
+const NO_QUOTE_WITH_FIGURES = 'Yahoo Finance returned no price quote for this ticker; the figures below are shown without it.'
+const HEALTHY_CACHE_CONTROL = 's-maxage=60, stale-while-revalidate=300'
+
+const darkpool = async (ticker: string) => {
+  const { GET } = await import('@/app/api/darkpool/[ticker]/route')
+  const res = await GET(req(`/api/darkpool/${ticker}`), { params: Promise.resolve({ ticker }) })
+  return { res, body: await res.json() }
+}
+
 const req = (url: string) => new NextRequest(new URL(url, 'http://localhost:3000'))
 
 /** 300 synthetic daily closes, enough for the 200-day SMA and its slope. */
@@ -41,7 +53,7 @@ beforeEach(() => {
   vi.spyOn(console, 'error').mockImplementation(() => {})
   vi.spyOn(console, 'warn').mockImplementation(() => {})
 })
-afterEach(() => { vi.restoreAllMocks() })
+afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers() })
 
 describe('/api/ma-deviation — a degraded board is not cached', () => {
   it('a failed board is followed by a fresh one, not served again from the module cache', async () => {
@@ -90,7 +102,7 @@ describe('/api/darkpool — a fetch failure is not explained as a coverage gap',
     // Red-team L9: the old note guessed "ETF, ADR, or OTC" for every all-letter
     // ticker (AAPL included) and this test pinned the guess. It now says what
     // was observed and nothing about the security type.
-    expect(body.statusNote).toBe(NO_SHORT_INTEREST_NOTE)
+    expect(body.statusNote).toBe(NO_SHORT_INTEREST)
   })
 
   // Q-149: a 10-day volume comes from the QUOTE, which every ETF has, so it
@@ -105,7 +117,7 @@ describe('/api/darkpool — a fetch failure is not explained as a coverage gap',
     const body = await (await GET(req('/api/darkpool/XLK'), { params: Promise.resolve({ ticker: 'XLK' }) })).json()
     expect(body).not.toHaveProperty('hasRealData')
     expect(body.metrics).toMatchObject({ avgDailyVolume: 6_000_000, sharesOutstanding: 300_000_000, sharesShorted: null, shortFloatPct: null })
-    expect(body.statusNote).toBe(NO_SHORT_INTEREST_NOTE)
+    expect(body.statusNote).toBe(NO_SHORT_INTEREST)
     expect(body.statusNote).not.toMatch(/share-count/)
     expect(warn).not.toHaveBeenCalled()
     warn.mockRestore()
@@ -161,6 +173,20 @@ describe('/api/darkpool — a fetch failure is not explained as a coverage gap',
     warn.mockRestore()
   })
 
+  // Q149-R2-4a: the drift alert is for a summary that RESOLVED without the field.
+  // With the key-statistics request failing, the empty block is an outage, which
+  // the response already reports as `degraded`.
+  it('an equity whose key-statistics request FAILED is degraded and logs no schema drift', async () => {
+    const { GET } = await import('@/app/api/darkpool/[ticker]/route')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    quoteMock.mockResolvedValue({ quoteType: 'EQUITY', regularMarketPrice: 25, regularMarketChange: 1 })
+    summaryMock.mockRejectedValue(new Error('yahoo down'))
+    const body = await (await GET(req('/api/darkpool/ABCD'), { params: Promise.resolve({ ticker: 'ABCD' }) })).json()
+    expect(body.degraded).toBe(true)
+    expect(warn).not.toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
   // Q149-D3: a float the builder WITHHELD is not drift; the response says why instead.
   it('a withheld float, an index, or a missing price logs no drift', async () => {
     const { GET } = await import('@/app/api/darkpool/[ticker]/route')
@@ -196,28 +222,91 @@ describe('/api/darkpool — a fetch failure is not explained as a coverage gap',
   // Q149-D4: quote() RESOLVES to undefined for a symbol Yahoo does not know.
   // The route dereferenced it, threw, and answered 502 "failed".
   it('a ticker Yahoo has no quote for is "no quote", 200, not a 502 outage', async () => {
-    const { GET } = await import('@/app/api/darkpool/[ticker]/route')
     quoteMock.mockResolvedValue(undefined)
     summaryMock.mockRejectedValue(new Error('Quote not found'))
-    const res = await GET(req('/api/darkpool/ZZZZZZ'), { params: Promise.resolve({ ticker: 'ZZZZZZ' }) })
+    const { res, body } = await darkpool('ZZZZZZ')
     expect(res.status).toBe(200)
-    const body = await res.json()
-    expect(body.statusNote).toBe(NO_QUOTE_NOTE)
+    expect(body.statusNote).toBe(NO_QUOTE)
     expect(body.degraded).toBeUndefined()
     expect(body.quote).toEqual({ price: null, change: null, changePct: null, quoteTime: null })
   })
 
-  // Q149-D5: Yahoo has no key statistics for a crypto pair or a currency and
-  // rejects the request — a permanent absence, not "try again shortly".
-  it('a crypto pair or currency without key statistics is not an outage', async () => {
-    const { GET } = await import('@/app/api/darkpool/[ticker]/route')
-    for (const quoteType of ['CRYPTOCURRENCY', 'CURRENCY']) {
+  // Q149-R2-4d: an empty quote is also what a transient upstream gap looks like,
+  // so the answer is held for the short window. It is not `degraded`: no fetch failed.
+  it('a no-quote answer uses the short cache window, a healthy one the long window', async () => {
+    quoteMock.mockResolvedValue(undefined)
+    summaryMock.mockRejectedValue(new Error('Quote not found'))
+    const noQuote = await darkpool('ZZZZZZ')
+    expect(noQuote.res.headers.get('cache-control')).toBe(DEGRADED_CACHE_CONTROL)
+    expect(noQuote.res.headers.get('cache-control')).toBe('s-maxage=30, stale-while-revalidate=60')
+    expect(noQuote.body.degraded).toBeUndefined()
+    quoteMock.mockResolvedValue({ quoteType: 'ETF', regularMarketPrice: 300, regularMarketChange: 1 })
+    summaryMock.mockResolvedValue({ defaultKeyStatistics: {} })
+    expect((await darkpool('XLK')).res.headers.get('cache-control')).toBe(HEALTHY_CACHE_CONTROL)
+  })
+
+  // Q149-R2-4c: no quote, but the key statistics carry figures. "Has no quote"
+  // alone would sit over a populated card.
+  it('no quote but key-statistics figures: the note says both, and the card is not called empty', async () => {
+    quoteMock.mockResolvedValue(undefined)
+    summaryMock.mockResolvedValue({ defaultKeyStatistics: { sharesShort: 1e6, shortPercentOfFloat: 0.02, sharesOutstanding: 1e9 } })
+    const { res, body } = await darkpool('ABCD')
+    expect(body.metrics).toMatchObject({ sharesShorted: 1e6, shortFloatPct: 2, sharesOutstanding: 1e9 })
+    expect(body.statusNote).toBe(NO_QUOTE_WITH_FIGURES)
+    expect(body.statusNote).not.toBe(NO_QUOTE)
+    expect(body.degraded).toBeUndefined()
+    expect(res.headers.get('cache-control')).toBe(DEGRADED_CACHE_CONTROL)
+
+    // A share count alone is a figure on the card too.
+    summaryMock.mockResolvedValue({ defaultKeyStatistics: { sharesOutstanding: 1e9 } })
+    expect((await darkpool('ABCD')).body.statusNote).toBe(NO_QUOTE_WITH_FIGURES)
+
+    // Nothing on the card: the plain note stands.
+    summaryMock.mockResolvedValue({ defaultKeyStatistics: {} })
+    expect((await darkpool('ABCD')).body.statusNote).toBe(NO_QUOTE)
+  })
+
+  // Q149-D5 / Q149-R2-4b: Yahoo has no key statistics for these security types
+  // and rejects the request — a permanent absence, not "try again shortly". One
+  // case per type, from a LITERAL list: a loop over the imported set cannot
+  // notice a member being deleted.
+  it.each(['CRYPTOCURRENCY', 'CURRENCY', 'FUTURE', 'INDEX', 'MONEYMARKET', 'MUTUALFUND'])(
+    'a %s whose key statistics are rejected is not an outage',
+    async (quoteType) => {
       quoteMock.mockResolvedValue({ quoteType, regularMarketPrice: 60_000, regularMarketChange: 100 })
       summaryMock.mockRejectedValue(new Error('No fundamentals data found'))
-      const body = await (await GET(req('/api/darkpool/BTC-USD'), { params: Promise.resolve({ ticker: 'BTC-USD' }) })).json()
-      expect(body.degraded, quoteType).toBeUndefined()
-      expect(body.statusNote, quoteType).toBe(NO_SHORT_INTEREST_NOTE)
-    }
+      const { res, body } = await darkpool('ABCD')
+      expect(body.degraded).toBeUndefined()
+      expect(body.statusNote).toBe(NO_SHORT_INTEREST)
+      expect(res.headers.get('cache-control')).toBe(HEALTHY_CACHE_CONTROL)
+    },
+  )
+
+  it.each(['EQUITY', 'ETF'])('a %s whose key statistics are rejected IS an outage', async (quoteType) => {
+    quoteMock.mockResolvedValue({ quoteType, regularMarketPrice: 25, regularMarketChange: 1 })
+    summaryMock.mockRejectedValue(new Error('yahoo down'))
+    const { res, body } = await darkpool('ABCD')
+    expect(body).toMatchObject({ degraded: true, statusNote: 'The short-interest figures failed to load; try again shortly.' })
+    expect(res.headers.get('cache-control')).toBe(DEGRADED_CACHE_CONTROL)
+  })
+
+  // Q149-R2-8 (age wiring): the pure builder is tested with a clock argument; this
+  // pins that the ROUTE hands it the real clock, not a constant.
+  it('the route dates the short interest against the current time', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-10-24T12:00:00Z'))
+    quoteMock.mockResolvedValue({ quoteType: 'EQUITY', regularMarketPrice: 25, regularMarketChange: 1 })
+    summaryMock.mockResolvedValue({ defaultKeyStatistics: { sharesShort: 1e6, floatShares: 1e8, dateShortInterest: new Date('2026-10-14T00:00:00Z') } })
+    const fresh = (await darkpool('ABCD')).body
+    expect(fresh.fetchedAt).toBe('2026-10-24T12:00:00.000Z')
+    expect(fresh.metrics).toMatchObject({ shortInterestAsOf: '2026-10-14', shortInterestAgeDays: 10, shortInterestStale: false })
+
+    summaryMock.mockResolvedValue({ defaultKeyStatistics: { sharesShort: 1e6, floatShares: 1e8, dateShortInterest: new Date('2026-09-18T00:00:00Z') } })
+    expect((await darkpool('ABCD')).body.metrics).toMatchObject({ shortInterestAgeDays: 36, shortInterestStale: true })
+
+    // A date after the fetch is unknown, not a negative age (Q149-R2-10).
+    summaryMock.mockResolvedValue({ defaultKeyStatistics: { sharesShort: 1e6, floatShares: 1e8, dateShortInterest: new Date('2026-10-29T00:00:00Z') } })
+    expect((await darkpool('ABCD')).body.metrics).toMatchObject({ shortInterestAsOf: null, shortInterestAgeDays: null, shortInterestStale: false })
   })
 })
 

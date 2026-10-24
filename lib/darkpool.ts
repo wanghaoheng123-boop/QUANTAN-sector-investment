@@ -246,11 +246,39 @@ export function hasShortInterestData(m: DarkPoolMetric): boolean {
 }
 
 /**
+ * True when the card will show any figure at all: short interest, a share count
+ * or a volume. With no quote the volume and the quote's share count are absent,
+ * so a figure here came from the key statistics.
+ */
+export function hasAnyFigure(m: DarkPoolMetric): boolean {
+  return (
+    hasShortInterestData(m) ||
+    m.sharesOutstanding !== null ||
+    m.sharesFloat !== null ||
+    m.floatWithheld !== null ||
+    m.avgDailyVolume !== null
+  )
+}
+
+/**
  * Security types for which Yahoo publishes no short interest, so a failed key
  * statistics fetch is an absence, not an outage (Q149-D5: BTC-USD and EURUSD=X
- * were told to "try again shortly").
+ * were told to "try again shortly"). Measured 2026-10-24: CRYPTOCURRENCY,
+ * CURRENCY, FUTURE and MONEYMARKET reject the key-statistics request; INDEX and
+ * MUTUALFUND resolve with an empty block, so those two members take no effect
+ * today and are kept for the day they reject. Each member is pinned by a test.
  */
-export const NO_SHORT_INTEREST_TYPES = new Set(['CRYPTOCURRENCY', 'CURRENCY', 'INDEX', 'MUTUALFUND', 'FUTURE'])
+export const NO_SHORT_INTEREST_TYPES = new Set([
+  'CRYPTOCURRENCY',
+  'CURRENCY',
+  'FUTURE',
+  'INDEX',
+  'MONEYMARKET',
+  'MUTUALFUND',
+])
 
 export const NO_SHORT_INTEREST_NOTE = 'Yahoo Finance reports no short-interest figures for this ticker.'
 export const NO_QUOTE_NOTE = 'Yahoo Finance has no quote for this ticker.'
+/** No quote, yet the key statistics carried figures: "has no quote" alone would sit over a populated card. */
+export const NO_QUOTE_WITH_FIGURES_NOTE =
+  'Yahoo Finance returned no price quote for this ticker; the figures below are shown without it.'
