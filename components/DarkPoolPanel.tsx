@@ -173,7 +173,7 @@ export default function DarkPoolPanel({
             <p className="text-[10px] text-slate-400 leading-relaxed">
               Short interest is the number of shares sold short and not yet bought back, reported twice a
               month as of a settlement date. The percentage is Yahoo&apos;s own: its denominator is usually the
-              float, but for some dual-class and ADR names it is shares outstanding. It is not a measure of
+              float, but for some dual-class and ADR names it tracks shares outstanding. It is not a measure of
               off-exchange trading.
             </p>
           )}

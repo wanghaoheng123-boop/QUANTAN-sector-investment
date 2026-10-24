@@ -224,7 +224,7 @@ describe('DarkPoolPanel — says what this source does not publish (Q-149)', () 
 describe('DarkPoolPanel — the short % states whose denominator it is (Q149-R2-2)', () => {
   it('explains, once, that the denominator is usually the float and for some names shares outstanding', () => {
     const html = render(analysis(true))
-    expect(html).toContain('its denominator is usually the float, but for some dual-class and ADR names it is shares outstanding')
+    expect(html).toContain('its denominator is usually the float, but for some dual-class and ADR names it tracks shares outstanding')
   })
 
   it('a withheld float says the short % is on the vendor\'s own denominator, when there is a short %', () => {
