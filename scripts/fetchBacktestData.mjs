@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { WINDOW_START } from './lib/dataVintage.mjs';
 import { planSave } from './lib/planSave.mjs';
+import { loadRecordedRevisions } from './lib/recordedRevisions.mjs';
 import { TICKERS } from './lib/universe.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -27,20 +28,10 @@ mkdirSync(OUTPUT_DIR, { recursive: true });
 
 /**
  * Q-144: recorded, reviewed acceptances of vendor revisions (see
- * matchRecordedRevisions in scripts/lib/planSave.mjs). An unreadable file means
- * NO acceptances — every revision is refused as before — never "accept".
+ * scripts/lib/recordedRevisions.mjs). An unreadable file means NO
+ * acceptances — every revision is refused as before — never "accept".
  */
-const ACCEPTED_REVISIONS = (() => {
-  const file = path.resolve(__dirname, 'lib', 'acceptedRevisions.json');
-  try {
-    const rows = JSON.parse(readFileSync(file, 'utf8')).rows;
-    if (!Array.isArray(rows)) throw new Error('no rows array');
-    return rows;
-  } catch (e) {
-    console.warn(`::warning title=Recorded revisions unreadable::${e.message}; no revision will be adopted this run`);
-    return [];
-  }
-})();
+const ACCEPTED_REVISIONS = loadRecordedRevisions(path.resolve(__dirname, 'lib', 'acceptedRevisions.json'));
 
 /**
  * Persist a fixture, refusing to overwrite a good file with a degraded fetch, a

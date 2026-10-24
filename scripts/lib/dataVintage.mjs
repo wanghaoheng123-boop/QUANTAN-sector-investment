@@ -308,7 +308,9 @@ export function assessRefresh(existing, incoming, { existingFetchedAt } = {}) {
     finalized: d.finalized.length,
     superseded: d.superseded.length,
     supersededBars: d.superseded,
-    restatedBars: d.restated,
+    // Key, moved fields and relative sizes only: the raw `was`/`now` values
+    // stay inside diffSeries, so no caller can print them (I8; exit-path E-6).
+    restatedBars: d.restated.map(({ key, fields, maxRelativeChange, signedChanges }) => ({ key, fields, maxRelativeChange, signedChanges })),
     reasons,
   }
 }
