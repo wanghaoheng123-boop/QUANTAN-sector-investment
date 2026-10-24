@@ -23,7 +23,11 @@ export type FloatWithheldReason = 'exceeds-shares-out' | 'inconsistent-with-shor
 
 export interface DarkPoolMetric {
   sharesShorted: number | null
-  /** Percent of float sold short, in PERCENT units (0.71 means 0.71%). */
+  /**
+   * The vendor's own short-interest percent, in PERCENT units (0.71 means 0.71%).
+   * Its denominator is the vendor's: usually the float published beside it, but
+   * for some dual-class and ADR names it tracks shares outstanding (Q149-R2-2).
+   */
   shortFloatPct: number | null
   /** Settlement date the short interest figure is as of (YYYY-MM-DD), or null. */
   shortInterestAsOf: string | null

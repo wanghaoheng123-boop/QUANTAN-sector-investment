@@ -343,8 +343,8 @@ export const METRIC_GLOSSARY: Record<string, MetricMeta> = {
   // candidate", ">5 = risk of squeeze"), the same kind the dark-pool panel's
   // signal banner was removed for; they now say what the figure is.
   shortFloatPct: {
-    label: 'Short % of Float',
-    definition: "Shares sold short and not yet bought back, as a percent of the vendor's float figure, as of a settlement date.",
+    label: 'Short Interest % (as reported)',
+    definition: "Shares sold short and not yet bought back, as the vendor's own percent, as of a settlement date. Its denominator is not always the float published beside it: for some dual-class and ADR names it tracks shares outstanding.",
     range: 'Varies widely by company; no band is calibrated here.',
     howToUse: 'A level, not a signal: it does not say who is buying or selling. Check the as-of date — the figure is reported twice a month and lags the market.',
   },

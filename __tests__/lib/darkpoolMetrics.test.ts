@@ -26,7 +26,7 @@ describe('buildDarkPoolMetrics', () => {
   it('scales the fraction Yahoo returns into percent units', () => {
     expect(SHORT_PERCENT_OF_FLOAT_SCALE).toBe(100)
     expect(build({ shortPercentOfFloat: 0.0071 }).shortFloatPct).toBeCloseTo(0.71, 10)
-    // More than all of the float can be short; that is not invalid.
+    // Over 100% is not invalid on its own: the vendor's denominator is not always the float.
     expect(build({ shortPercentOfFloat: 1.4 }).shortFloatPct).toBeCloseTo(140, 10)
     expect(build({ shortPercentOfFloat: -0.01 }).shortFloatPct).toBeNull()
   })

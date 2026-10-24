@@ -66,20 +66,37 @@ export default function DarkPoolPanel({
   // Q-149: the sub-label names what is known, in the order a reader needs it.
   // A settlement date older than a missed reporting cycle says STALE with its
   // age (I2), rather than printing an old date as if it were current.
+  const staleMark =
+    metrics?.shortInterestStale && metrics.shortInterestAgeDays != null ? `STALE (${metrics.shortInterestAgeDays} days)` : null
   const shortSub = [
     metrics?.sharesShorted != null ? `${fmtShares(metrics.sharesShorted)} shares` : null,
     metrics?.shortInterestAsOf ? `as of ${metrics.shortInterestAsOf}` : null,
-    metrics?.shortInterestStale && metrics.shortInterestAgeDays != null ? `STALE (${metrics.shortInterestAgeDays} days)` : null,
+    staleMark,
   ].filter(Boolean).join(' · ') || 'not reported'
+  // Q149-R2-10: Days to Cover is divided from the same settlement date as the
+  // short count, so it is exactly as old. A mark on one card and not the other
+  // would present half of one report as current.
+  const daysToCoverSub = [
+    'as reported by Yahoo; not computed from the volume shown',
+    metrics?.daysToCover != null ? staleMark : null,
+  ].filter(Boolean).join(' · ')
   // Q149-D2: a float the vendor reported and the route withheld is not "not reported".
+  const floatWithheldSub =
+    metrics?.floatWithheld === 'exceeds-shares-out'
+      ? 'Float withheld: larger than shares outstanding'
+      : metrics?.floatWithheld === 'inconsistent-with-short-interest'
+        ? 'Float withheld: inconsistent with the short-interest figures'
+        : null
+  // Q149-R2-2: with the float withheld, the short % printed beside it is on the
+  // vendor's own denominator, which for these names is often shares outstanding.
   const floatSub =
     metrics?.sharesFloat != null
       ? `Float ${fmtShares(metrics.sharesFloat)}`
-      : metrics?.floatWithheld === 'exceeds-shares-out'
-        ? 'Float withheld: larger than shares outstanding'
-        : metrics?.floatWithheld === 'inconsistent-with-short-interest'
-          ? 'Float withheld: inconsistent with the short-interest figures'
-          : 'Float not reported'
+      : floatWithheldSub != null
+        ? shortPct != null
+          ? `${floatWithheldSub} · short % is on Yahoo's own denominator`
+          : floatWithheldSub
+        : 'Float not reported'
 
   // ── Bullish print ratio (illustrative) ────────────────────────────────
   const bullishPrints = prints.filter((p) => p.sentiment === 'BULLISH')
@@ -131,11 +148,11 @@ export default function DarkPoolPanel({
           </p>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            <MetricCard label="Short Interest (% of float)" value={fmtPct(shortPct, 2)} sub={shortSub} />
+            <MetricCard label="Short Interest (% as reported)" value={fmtPct(shortPct, 2)} sub={shortSub} />
             <MetricCard
               label="Days to Cover"
               value={metrics?.daysToCover != null ? metrics.daysToCover.toFixed(1) : '—'}
-              sub="as reported by Yahoo; not computed from the volume shown"
+              sub={daysToCoverSub}
             />
             <MetricCard label="10-Day Avg Volume" value={fmtShares(metrics?.avgDailyVolume)} sub="shares per day" />
             <MetricCard
@@ -155,7 +172,9 @@ export default function DarkPoolPanel({
           {shortPct != null && (
             <p className="text-[10px] text-slate-400 leading-relaxed">
               Short interest is the number of shares sold short and not yet bought back, reported twice a
-              month as of a settlement date. It is not a measure of off-exchange trading.
+              month as of a settlement date. The percentage is Yahoo&apos;s own: its denominator is usually the
+              float, but for some dual-class and ADR names it is shares outstanding. It is not a measure of
+              off-exchange trading.
             </p>
           )}
 

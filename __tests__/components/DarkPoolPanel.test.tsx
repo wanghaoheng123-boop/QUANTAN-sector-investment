@@ -72,6 +72,15 @@ const render = (apiData: DarkPoolAnalysis | null) =>
  * against the whole document would pass even with the prints badge deleted —
  * scoping the assertion to this section is what makes it a real guard.
  */
+/** The markup between a card's label and the next card's label. */
+function card(html: string, label: string, nextLabel: string): string {
+  const i = html.indexOf(label)
+  const j = html.indexOf(nextLabel, i)
+  expect(i, label).toBeGreaterThan(-1)
+  expect(j, nextLabel).toBeGreaterThan(i)
+  return html.slice(i, j)
+}
+
 function printsSection(html: string): string {
   const i = html.indexOf('Block Prints')
   expect(i).toBeGreaterThan(-1)
@@ -132,7 +141,8 @@ describe('DarkPoolPanel — the Yahoo attribution is scoped to the metrics', () 
 
   it('still reports the real metrics it does cover', () => {
     const html = render(analysis(true))
-    expect(html).toContain('Short Interest (% of float)')
+    expect(html).toContain('Short Interest (% as reported)')
+    expect(html).not.toContain('% of float') // the denominator is the vendor's, not guaranteed to be the float
     expect(html).toContain('1.25%')
     expect(html).toContain('123.46M shares · as of 2026-07-31')
     expect(html).not.toContain('STALE')
@@ -180,6 +190,10 @@ describe('DarkPoolPanel — says what this source does not publish (Q-149)', () 
     expect(html).toContain('Float not reported')
     // The definition line describes a number; with no number it does not render.
     expect(html).not.toContain('reported twice a month')
+    // Q149-R2-8 (M17): an empty Short Interest card says "not reported". The Shares
+    // Outstanding card's "Float not reported" contains that phrase too, so the
+    // assertion is on the card's own sub-label element.
+    expect(card(html, 'Short Interest (% as reported)', 'Days to Cover')).toContain('>not reported<')
   })
 
   it('a float the route WITHHELD says so, with the reason — not "not reported" (Q149-D2)', () => {
@@ -199,5 +213,69 @@ describe('DarkPoolPanel — says what this source does not publish (Q-149)', () 
     const html = render(analysis(true))
     expect(html).toContain('Illustrative dark pool prints — generated examples, not real trades')
     expect(html).not.toContain('recent off-exchange block trades')
+  })
+})
+
+/**
+ * Q149 round 2 (R2-2, R2-8, R2-10): the percent's denominator is the vendor's;
+ * the definition line follows the percent; Days to Cover is as old as the short
+ * count it is divided from.
+ */
+describe('DarkPoolPanel — the short % states whose denominator it is (Q149-R2-2)', () => {
+  it('explains, once, that the denominator is usually the float and for some names shares outstanding', () => {
+    const html = render(analysis(true))
+    expect(html).toContain('its denominator is usually the float, but for some dual-class and ADR names it is shares outstanding')
+  })
+
+  it('a withheld float says the short % is on the vendor\'s own denominator, when there is a short %', () => {
+    const withheld = (m: Partial<DarkPoolMetric>) =>
+      render({ ...analysis(true), metrics: { ...METRICS, sharesFloat: null, floatWithheld: 'exceeds-shares-out', ...m } })
+    // The card ends at the first `</div></div>` after its label (sub-label, then card).
+    const sub = (html: string) => {
+      const i = html.indexOf('Shares Outstanding')
+      expect(i).toBeGreaterThan(-1)
+      return html.slice(i, html.indexOf('</div></div>', i))
+    }
+    expect(sub(withheld({}))).toMatch(/Float withheld: larger than shares outstanding · short % is on Yahoo(&#x27;|')s own denominator/)
+    expect(sub(withheld({ floatWithheld: 'inconsistent-with-short-interest' })))
+      .toMatch(/Float withheld: inconsistent with the short-interest figures · short % is on Yahoo(&#x27;|')s own denominator/)
+    // No short % printed, so there is no denominator to describe.
+    expect(sub(withheld({ shortFloatPct: null }))).not.toMatch(/denominator/)
+    // A kept float carries no such caveat.
+    expect(sub(render(analysis(true)))).not.toMatch(/denominator/)
+  })
+})
+
+describe('DarkPoolPanel — the definition line follows the percent (Q149-R2-8, M18)', () => {
+  it('renders when a percent is printed, even with no short count', () => {
+    const html = render({ ...analysis(true), metrics: { ...METRICS, sharesShorted: null } })
+    expect(html).toContain('reported twice a month')
+  })
+
+  it('does not render for a short count alone: it describes the percent card', () => {
+    const html = render({ ...analysis(true), metrics: { ...METRICS, shortFloatPct: null } })
+    expect(html).not.toContain('reported twice a month')
+  })
+})
+
+describe('DarkPoolPanel — Days to Cover carries the same STALE mark as the short count (Q149-R2-10)', () => {
+  const stale = { shortInterestAsOf: '2026-06-30', shortInterestAgeDays: 46, shortInterestStale: true }
+  const dtc = (html: string) => card(html, 'Days to Cover', '10-Day Avg Volume')
+
+  it('both cards say STALE with the same age', () => {
+    const html = render({ ...analysis(true), metrics: { ...METRICS, ...stale } })
+    expect(card(html, 'Short Interest (% as reported)', 'Days to Cover')).toContain('STALE (46 days)')
+    expect(dtc(html)).toContain('as reported by Yahoo; not computed from the volume shown · STALE (46 days)')
+  })
+
+  it('a current settlement date marks neither card', () => {
+    const html = render(analysis(true))
+    expect(html).not.toContain('STALE')
+  })
+
+  it('no Days to Cover figure, nothing to mark stale on that card', () => {
+    const html = render({ ...analysis(true), metrics: { ...METRICS, ...stale, daysToCover: null } })
+    expect(dtc(html)).not.toContain('STALE')
+    expect(card(html, 'Short Interest (% as reported)', 'Days to Cover')).toContain('STALE (46 days)')
   })
 })
