@@ -1,0 +1,110 @@
+{
+ "note": "Rendered strings that Q-153 round 1 (69f6cf6) introduced and round 2 (d8280a8) removed: renderedText() of the five UI/regime files and lib/crypto.ts at 69f6cf6, minus the same files at d8280a8, minus the same files at 9dbe71e (origin/main before the package), minus q153RemovedCopy.json. They are NOT in the word lists - 'Above the average' is an honest phrase that sits beside 'Above their 200-day average' - so regime-copy.test.ts matches them as exact whole literals (whitespace normalised). kind=label: a class or column label; claim: a sentence about the classification; fragment: a piece of a template or a generic message, recorded and not asserted.",
+ "entries": [
+  {
+   "file": "app/ma-deviation/page.tsx",
+   "text": "▲ up",
+   "kind": "label"
+  },
+  {
+   "file": "app/ma-deviation/page.tsx",
+   "text": "▼ down",
+   "kind": "label"
+  },
+  {
+   "file": "app/ma-deviation/page.tsx",
+   "text": "● flat",
+   "kind": "label"
+  },
+  {
+   "file": "app/ma-deviation/page.tsx",
+   "text": "/ 20d",
+   "kind": "fragment"
+  },
+  {
+   "file": "app/ma-deviation/page.tsx",
+   "text": "How the gauge names a distance from the 200-day average, and how it classifies it. It describes where price is, not what it will do; this platform has not measured forward returns for these zones.",
+   "kind": "claim"
+  },
+  {
+   "file": "app/ma-deviation/page.tsx",
+   "text": "Deviation zones and their classification",
+   "kind": "label"
+  },
+  {
+   "file": "app/ma-deviation/page.tsx",
+   "text": "Classification",
+   "kind": "label"
+  },
+  {
+   "file": "app/ma-deviation/page.tsx",
+   "text": "is how much the 200-day average itself moved over the last 20 days. The classification calls the average rising only above +0.5%; anything else, including a flat or slowly rising average, counts as not rising.",
+   "kind": "claim"
+  },
+  {
+   "file": "app/ma-deviation/page.tsx",
+   "text": "combines the zone and the slope. It describes where price sits relative to its long-run average; it is not a forecast, and this platform has not measured what followed each classification.",
+   "kind": "claim"
+  },
+  {
+   "file": "app/ma-deviation/page.tsx",
+   "text": "The zones and classifications on this page describe price relative to its 200-day average. They are research tooling, not investment advice, and not a forecast.",
+   "kind": "claim"
+  },
+  {
+   "file": "components/stock/quantlab/tabs/TechnicalsTab.tsx",
+   "text": "% over 20 days",
+   "kind": "fragment"
+  },
+  {
+   "file": "components/stock/quantlab/tabs/TechnicalsTab.tsx",
+   "text": "↗ up",
+   "kind": "label"
+  },
+  {
+   "file": "components/stock/quantlab/tabs/TechnicalsTab.tsx",
+   "text": "↘ down",
+   "kind": "label"
+  },
+  {
+   "file": "components/stock/quantlab/tabs/TechnicalsTab.tsx",
+   "text": "→ flat",
+   "kind": "label"
+  },
+  {
+   "file": "lib/quant/technicals.ts",
+   "text": "Below a rising average",
+   "kind": "label"
+  },
+  {
+   "file": "lib/quant/technicals.ts",
+   "text": "Below the average",
+   "kind": "label"
+  },
+  {
+   "file": "lib/quant/technicals.ts",
+   "text": "Below an average that is not rising",
+   "kind": "label"
+  },
+  {
+   "file": "lib/quant/technicals.ts",
+   "text": "Far above the average",
+   "kind": "label"
+  },
+  {
+   "file": "lib/quant/technicals.ts",
+   "text": "Above the average",
+   "kind": "label"
+  },
+  {
+   "file": "lib/quant/technicals.ts",
+   "text": "Not enough data",
+   "kind": "fragment"
+  },
+  {
+   "file": "lib/quant/technicals.ts",
+   "text": "Price is more than 20% above its 200-day simple moving average, a distance it rarely reaches.",
+   "kind": "claim"
+  }
+ ]
+}

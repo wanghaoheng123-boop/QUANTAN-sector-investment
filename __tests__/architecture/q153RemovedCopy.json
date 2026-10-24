@@ -1,5 +1,5 @@
 {
- "note": "Every rendered string the Q-153 package removed from the regime surfaces, extracted with renderedText() from origin/main minus the branch (2026-10-18) and frozen. kind=advice entries are positive controls for regime-copy.test.ts; neutral = a descriptive label or a fragment whose advice half is another entry; code = class names, colours, glyphs and enum names; figure = a bare number from the removed unsourced return table, undetectable as text (its header is an advice entry).",
+ "note": "Every rendered string the Q-153 package removed from the regime surfaces, extracted with renderedText() from origin/main minus the branch (2026-10-18) and frozen. Kinds: advice = a trade instruction, sizing or return claim, and a positive control for regime-copy.test.ts (the decider must flag every one if restored); neutral = a descriptive label, or a fragment whose advice half is another entry; code = Tailwind classes, hex colours, enum names and the punctuation left around template interpolations, never shown as words; glyph = a symbol that was DISPLAYED (the C6 traffic-light circles, the slope arrows), so not code - the six circles may not reappear in any rendered literal; figure = one of the 26 medians and hit rates of the removed unsourced return table. A figure is a string literal (for example '+3.6%', '68%'), so it IS detectable: regime-copy.test.ts asserts that none reappears on a surface, and a rule refuses any bare-percentage string literal. Strings that Q-153 round 1 introduced and round 2 removed are in q153Round1Copy.json.",
  "entries": [
   {
    "file": "lib/quant/technicals.ts",
@@ -24,7 +24,7 @@
   {
    "file": "lib/quant/technicals.ts",
    "text": "N/A",
-   "kind": "code"
+   "kind": "neutral"
   },
   {
    "file": "lib/quant/technicals.ts",
@@ -304,17 +304,17 @@
   {
    "file": "components/crypto/BtcQuantLab.tsx",
    "text": "↗",
-   "kind": "code"
+   "kind": "glyph"
   },
   {
    "file": "components/crypto/BtcQuantLab.tsx",
    "text": "↘",
-   "kind": "code"
+   "kind": "glyph"
   },
   {
    "file": "components/crypto/BtcQuantLab.tsx",
    "text": "→",
-   "kind": "code"
+   "kind": "glyph"
   },
   {
    "file": "components/crypto/BtcQuantLab.tsx",
@@ -379,7 +379,7 @@
   {
    "file": "components/crypto/BtcQuantLab.tsx",
    "text": "Indicators are simplified heuristics — not validated trading signals, not execution logic, and can disagree with other venues or professional systems. Funding is shown in exchange decimal form; always verify on the exchange before trading.",
-   "kind": "neutral"
+   "kind": "advice"
   },
   {
    "file": "components/crypto/BtcQuantLab.tsx",
@@ -469,12 +469,12 @@
   {
    "file": "components/stock/quantlab/tabs/TechnicalsTab.tsx",
    "text": "↗",
-   "kind": "code"
+   "kind": "glyph"
   },
   {
    "file": "components/stock/quantlab/tabs/TechnicalsTab.tsx",
    "text": "↘",
-   "kind": "code"
+   "kind": "glyph"
   },
   {
    "file": "components/stock/quantlab/tabs/TechnicalsTab.tsx",
@@ -534,7 +534,7 @@
   {
    "file": "app/ma-deviation/page.tsx",
    "text": "🟢",
-   "kind": "code"
+   "kind": "glyph"
   },
   {
    "file": "app/ma-deviation/page.tsx",
@@ -549,7 +549,7 @@
   {
    "file": "app/ma-deviation/page.tsx",
    "text": "🟡",
-   "kind": "code"
+   "kind": "glyph"
   },
   {
    "file": "app/ma-deviation/page.tsx",
@@ -564,7 +564,7 @@
   {
    "file": "app/ma-deviation/page.tsx",
    "text": "🔴",
-   "kind": "code"
+   "kind": "glyph"
   },
   {
    "file": "app/ma-deviation/page.tsx",
@@ -579,7 +579,7 @@
   {
    "file": "app/ma-deviation/page.tsx",
    "text": "🟠",
-   "kind": "code"
+   "kind": "glyph"
   },
   {
    "file": "app/ma-deviation/page.tsx",
@@ -594,7 +594,7 @@
   {
    "file": "app/ma-deviation/page.tsx",
    "text": "🔵",
-   "kind": "code"
+   "kind": "glyph"
   },
   {
    "file": "app/ma-deviation/page.tsx",
@@ -609,7 +609,7 @@
   {
    "file": "app/ma-deviation/page.tsx",
    "text": "⚫",
-   "kind": "code"
+   "kind": "glyph"
   },
   {
    "file": "app/ma-deviation/page.tsx",
@@ -854,12 +854,12 @@
   {
    "file": "app/ma-deviation/page.tsx",
    "text": "▲",
-   "kind": "code"
+   "kind": "glyph"
   },
   {
    "file": "app/ma-deviation/page.tsx",
    "text": "▼",
-   "kind": "code"
+   "kind": "glyph"
   },
   {
    "file": "app/ma-deviation/page.tsx",
