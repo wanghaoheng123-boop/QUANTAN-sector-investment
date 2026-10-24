@@ -117,6 +117,44 @@ describe('buildDarkPoolMetrics', () => {
     expect(isoDateOrNull(undefined)).toBeNull()
   })
 
+  // Q149-R2-10: a settlement date after the fetch cannot be the as-of date of a
+  // published figure. It is unknown: no date, no age, not STALE. Today is valid.
+  it('a settlement date in the future is unknown, not a negative age (Q149-R2-10)', () => {
+    const at = (date: string) => build({ sharesShort: 1e6, dateShortInterest: new Date(`${date}T00:00:00Z`) })
+    // NOW is 2026-10-17T12:00Z: the 17th at 00:00Z is today (age 0), the 18th is 12 hours ahead.
+    expect(at('2026-10-17')).toMatchObject({ shortInterestAsOf: '2026-10-17', shortInterestAgeDays: 0, shortInterestStale: false })
+    for (const future of ['2026-10-18', '2026-10-22', '2027-10-17']) {
+      expect(at(future), future).toMatchObject({ shortInterestAsOf: null, shortInterestAgeDays: null, shortInterestStale: false })
+    }
+    // The count itself is still a measurement; only its date is unknown.
+    expect(at('2026-10-22').sharesShorted).toBe(1e6)
+  })
+
+  it('a settlement date equal to the fetch instant is valid, age 0; one millisecond ahead is not', () => {
+    const date = new Date('2026-10-17T00:00:00Z')
+    const at = (now: number) => build({ dateShortInterest: date }, {}, now)
+    expect(at(date.getTime())).toMatchObject({ shortInterestAsOf: '2026-10-17', shortInterestAgeDays: 0 })
+    expect(at(date.getTime() - 1)).toMatchObject({ shortInterestAsOf: null, shortInterestAgeDays: null })
+  })
+
+  it('with no usable clock the date is kept and has no age', () => {
+    expect(build({ dateShortInterest: new Date('2026-10-01T00:00:00Z') }, {}, Number.NaN))
+      .toMatchObject({ shortInterestAsOf: '2026-10-01', shortInterestAgeDays: null, shortInterestStale: false })
+  })
+
+  // Q149-R2-8: the identity runs only on a positive short count AND a positive
+  // short %. Zero is a measurement, but it makes the identity a division by zero
+  // or a ratio of zero, which is not a unit mismatch. Each case kills one `>= 0`.
+  it('a zero short count or a zero short % does not fail the identity (Q149-R2-8)', () => {
+    expect(build({ floatShares: 1e9, sharesShort: 0, shortPercentOfFloat: 0.01 }))
+      .toMatchObject({ sharesFloat: 1e9, floatWithheld: null })
+    expect(build({ floatShares: 1e9, sharesShort: 1e7, shortPercentOfFloat: 0 }))
+      .toMatchObject({ sharesFloat: 1e9, floatWithheld: null })
+    // The same inputs with both positive and inconsistent ARE withheld: the guard is not simply off.
+    expect(build({ floatShares: 1e9, sharesShort: 1e7 * 3, shortPercentOfFloat: 0.01 }).floatWithheld)
+      .toBe('inconsistent-with-short-interest')
+  })
+
   it('refuses negative counts and ratios', () => {
     expect(build({ sharesShort: -1, shortRatio: -2 }, { averageDailyVolume10Day: -3 })).toMatchObject({ sharesShorted: null, daysToCover: null, avgDailyVolume: null })
   })

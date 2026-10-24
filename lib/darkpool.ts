@@ -167,6 +167,20 @@ export function isoDateOrNull(v: unknown): string | null {
 }
 
 /**
+ * The short-interest settlement date as a UTC calendar date, or null when it
+ * cannot be the as-of date of a figure published by `nowMs`. A date after `nowMs`
+ * is not an as-of date: the figure it labels would be dated in the future, the
+ * age would be negative and the card would print the future date under "as of"
+ * (Q149-R2-10). It is unknown, which renders as no date, no age and not STALE.
+ * A settlement date of today (UTC midnight, at or before `nowMs`) is valid, age 0.
+ * With a non-finite `nowMs` there is nothing to compare against and the date is kept.
+ */
+function settlementDateOrNull(v: unknown, nowMs: number): string | null {
+  const date = isoDateOrNull(v)
+  return date != null && Number.isFinite(nowMs) && Date.parse(date) > nowMs ? null : date
+}
+
+/**
  * The metrics this route can stand behind, from `defaultKeyStatistics` and the
  * quote, as of `nowMs`. Pure: the route's only job is to fetch.
  *
@@ -190,7 +204,7 @@ export function buildDarkPoolMetrics(
   const sharesOutstanding = positive(ks('sharesOutstanding')) ?? positive(q('sharesOutstanding'))
   const shortFraction = nonNegative(ks('shortPercentOfFloat'))
   const sharesShorted = nonNegative(ks('sharesShort'))
-  const asOf = isoDateOrNull(ks('dateShortInterest'))
+  const asOf = settlementDateOrNull(ks('dateShortInterest'), nowMs)
   const ageDays = asOf != null && Number.isFinite(nowMs) ? Math.floor((nowMs - Date.parse(asOf)) / DAY_MS) : null
   const float = judgeFloat(positive(ks('floatShares')), sharesOutstanding, sharesShorted, shortFraction)
   return {
