@@ -42,7 +42,7 @@ const METRICS: DarkPoolMetric = {
   shortInterestAgeDays: 15,
   shortInterestStale: false,
   daysToCover: 2.5,
-  avgDailyVolume: 40_000_000,
+  avgDailyVolume: 34_567_890,
   sharesOutstanding: 9_876_543_210,
   sharesFloat: 8_765_432_100,
   floatWithheld: null,
