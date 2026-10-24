@@ -1,20 +1,15 @@
 /**
  * GET /api/darkpool/[ticker]
  *
- * Off-exchange / dark pool analytics sourced from Yahoo Finance.
+ * Short interest and share counts for a ticker, from Yahoo Finance
+ * (`quoteSummary.defaultKeyStatistics`), plus the quote.
  *
- * Yahoo Finance provides:
- *   • `marketStore`  — Finra BATS/OTCQX off-exchange % via quoteSummary.defaultKeyStatistics
- *   • `analysisModules` → "Major Holders" module with holder breakdown
- *   • `quoteType`  → `marketStore` boolean (is this OTCQX etc.)
- *   • Price/volume from regular Yahoo quote
- *
- * The offExchangeShares / totalShares ratio gives the genuine
- * "dark pool / off-exchange" trading volume percentage — the same
- * metric shown on Yahoo Finance's "Major Holders" page under
- * "Trading Statistics".
- *
- * No API key required (yfinance uses public endpoints).
+ * Q-149: this header used to say Yahoo provides "`marketStore` — Finra
+ * BATS/OTCQX off-exchange %". It does not: no yahoo-finance2 module carries
+ * off-exchange volume, and the fields this route read for it did not exist, so
+ * the figure was null on every request. The route now reads only fields the
+ * vendor interfaces declare (lib/darkpool.ts) and says off-exchange volume is
+ * not published by this source.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -23,7 +18,19 @@ import { parseQuoteTime } from '@/lib/format'
 import { applyRateLimit } from '@/lib/api/rateLimit'
 import { DEGRADED_CACHE_CONTROL } from '@/lib/api/reliability'
 import { normalizeTicker, sanitizeError } from '@/lib/api/sanitize'
-import type { DarkPoolAnalysis, PricePoint } from '@/lib/darkpool'
+import { hyphenShareClassCandidate } from '@/lib/data/securityId'
+import { normalizedChangePercent } from '@/lib/yahooQuoteFields'
+import {
+  NO_QUOTE_NOTE,
+  NO_QUOTE_WITH_FIGURES_NOTE,
+  NO_SHORT_INTEREST_NOTE,
+  NO_SHORT_INTEREST_TYPES,
+  buildDarkPoolMetrics,
+  hasAnyFigure,
+  hasShortInterestData,
+  type DarkPoolAnalysis,
+  type PricePoint,
+} from '@/lib/darkpool'
 
 const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] })
 
@@ -32,6 +39,21 @@ export const dynamic = 'force-dynamic'
 
 
 
+
+type Settled = [PromiseSettledResult<unknown>, PromiseSettledResult<unknown>]
+
+/** The quote and the key statistics for one symbol, each settled on its own. */
+function fetchBoth(symbol: string): Promise<Settled> {
+  return Promise.allSettled([
+    yahooFinance.quote(symbol),
+    yahooFinance.quoteSummary(symbol, { modules: ['defaultKeyStatistics'] }),
+  ]) as Promise<Settled>
+}
+
+/** A quote that resolved to an object with at least one field. */
+function hasQuote(r: PromiseSettledResult<unknown>): boolean {
+  return r.status === 'fulfilled' && r.value != null && typeof r.value === 'object' && Object.keys(r.value).length > 0
+}
 
 function safeNum(v: unknown): number | null {
   if (typeof v === 'number' && Number.isFinite(v)) return v
@@ -42,95 +64,36 @@ function buildAnalysis(
   ticker: string,
   quote: PricePoint,
   keyStats: Record<string, unknown>,
-  financialData: Record<string, unknown> | null,
-  // Top-level quote fields that also contain relevant metrics
-  avgDailyVolumeFromQuote: number | null
+  rawQuote: Record<string, unknown>,
+  summaryResolved: boolean,
 ): DarkPoolAnalysis {
-  const sharesOutstanding = safeNum(keyStats?.sharesOutstanding ?? financialData?.sharesOutstanding)
-  const sharesFloat = safeNum(keyStats?.ordinarySharesNumber ?? financialData?.sharesOutstanding)
+  const now = Date.now()
+  const metrics = buildDarkPoolMetrics(keyStats, rawQuote, now)
 
-  // Phase 14 (R4-H-4): silent null fallback hid Yahoo schema drift. When
-  // the quote came back populated but sharesFloat resolved to null, the
-  // route used to return null silently — operators never saw it, so a
-  // Yahoo field rename or coverage gap could degrade the float-based
-  // ratios across the user base without detection. Emit a single
-  // structured warn so log aggregation can alert on drift. Behavior is
-  // unchanged: downstream still treats null as "unknown" and proceeds.
-  const quoteHasPrice = quote.price != null && quote.price > 0
-  if (quoteHasPrice && sharesFloat === null) {
+  // Phase 14 (R4-H-4): a populated EQUITY quote with NO float field is schema
+  // drift, so it is logged for alerting. Q-149: this fired on every request (the
+  // field it read did not exist), and then on every float the builder WITHHELD
+  // (Q149-D3) — an alert that is always on hides the drift it is for. A withheld
+  // float is visible in the response as `floatWithheld`; it is not drift. Nor is
+  // a key-statistics request that FAILED (Q149-R2-4a): an empty block from an
+  // outage is not a block that dropped a field.
+  if (summaryResolved && rawQuote.quoteType === 'EQUITY' && quote.price != null && keyStats.floatShares === undefined) {
     console.warn(JSON.stringify({
       event: 'darkpool.shares_float_missing',
       ticker,
-      keyStatsHasOrdinaryShares: keyStats?.ordinarySharesNumber !== undefined,
-      keyStatsHasSharesOutstanding: keyStats?.sharesOutstanding !== undefined,
-      financialDataHasSharesOutstanding: financialData?.sharesOutstanding !== undefined,
-      fetchedAt: new Date().toISOString(),
+      keyStatsHasSharesOutstanding: keyStats.sharesOutstanding !== undefined,
+      fetchedAt: new Date(now).toISOString(),
     }))
   }
 
-  // Yahoo Finance does not publish per-ticker off-exchange share counts via public API.
-  // offExchangePct would require Finra ADF aggregate data which is not accessible without a
-  // dedicated data vendor (Bloomberg BVAL, Refinitiv, or Finra itself).
-  // We still try the field in case it surfaces for some tickers.
-  const offExchangeShares = safeNum(keyStats?.offExchangeShares ?? keyStats?.marketStore)
-  const totalShares = sharesOutstanding ?? sharesFloat
-
-  let offExchangePct: number | null = null
-  let onExchangePct: number | null = null
-
-  if (offExchangeShares != null && totalShares != null && totalShares > 0) {
-    // Phase 13 S2 defensive clamp: Yahoo occasionally returns inconsistent
-    // shares-outstanding vs shares-trading numbers (data error or stale
-    // float). Cap percentages to [0, 100] so UI charts don't display
-    // negative on-exchange% or > 100 % off-exchange.
-    const rawPct = (offExchangeShares / totalShares) * 100
-    offExchangePct = Math.max(0, Math.min(100, rawPct))
-    onExchangePct = 100 - offExchangePct
-  }
-
-  // Yahoo field names verified via live API inspection:
-  //   sharesShort        (defaultKeyStatistics) — shares currently sold short
-  //   averageDailyVolume10Day (top-level quote) — 10-day average daily volume
-  const sharesShorted = safeNum(keyStats?.sharesShort)
-  const avgDailyVolume = safeNum(
-    keyStats?.averageDailyVolume10Day ??
-    keyStats?.averageDailyVolume ??
-    avgDailyVolumeFromQuote
-  )
-  const shortFloatPct = safeNum(keyStats?.shortPercentOfFloat)
-  const daysToCover = safeNum(keyStats?.shortRatio)
-
-  const hasRealData =
-    offExchangePct !== null ||
-    sharesShorted !== null ||
-    shortFloatPct !== null ||
-    avgDailyVolume !== null
-
-  // Red-team L9: this used to say "not available for this security type (ETF,
-  // ADR, or OTC)" for EVERY all-letter ticker — AAPL included. The route does
-  // not know the security type, so it says only what it observed.
-  const statusNote: string | null = hasRealData
-    ? null
-    : 'Yahoo Finance reported no off-exchange trading data for this ticker.'
-
+  // Red-team L9: say only what was observed — the route does not know the
+  // security type.
   return {
     ticker,
-    fetchedAt: new Date().toISOString(),
+    fetchedAt: new Date(now).toISOString(),
     quote,
-    metrics: {
-      offExchangePct,
-      onExchangePct,
-      offExchangeShares,
-      totalShares,
-      sharesShorted,
-      shortFloatPct,
-      daysToCover,
-      avgDailyVolume,
-      sharesOutstanding,
-      sharesFloat,
-    },
-    hasRealData,
-    statusNote,
+    metrics,
+    statusNote: hasShortInterestData(metrics) ? null : NO_SHORT_INTEREST_NOTE,
   }
 }
 
@@ -152,24 +115,39 @@ export async function GET(
   }
 
   try {
-    // Parallel fetch: quote + quoteSummary
-    const [quoteResult, summaryResult] = await Promise.allSettled([
-      yahooFinance.quote(ticker),
-      yahooFinance.quoteSummary(ticker, {
-        modules: ['defaultKeyStatistics', 'financialData', 'quoteType'],
-      }),
-    ]) as [
-      PromiseSettledResult<unknown>,
-      PromiseSettledResult<unknown>,
-    ]
+    // Parallel fetch: quote + quoteSummary, for the symbol as typed.
+    let symbol = ticker
+    let [quoteResult, summaryResult] = await fetchBoth(symbol)
+
+    // Q149-R2-3: Yahoo spells a US share class with a hyphen. `BF.B` and `LEN.B`
+    // resolve to no quote, `BRK.B` is rejected, and the route then said "no quote"
+    // or "try again" about a liquid security. The typed symbol is still tried
+    // first, because a dot and one letter is also a foreign exchange suffix that
+    // resolves as typed; only a MISS (no quote, or a rejected one) tries the hyphen
+    // spelling once, and the attempt that resolved is the one reported. A miss on
+    // both keeps the typed symbol's own result. lib/data/securityId.ts decides
+    // which spellings are candidates.
+    const candidate = hyphenShareClassCandidate(ticker)
+    if (candidate != null && !hasQuote(quoteResult)) {
+      const retry = await fetchBoth(candidate)
+      if (hasQuote(retry[0])) {
+        symbol = candidate
+        quoteResult = retry[0]
+        summaryResult = retry[1]
+      }
+    }
 
     // ── Price ────────────────────────────────────────────
-    const q =
-      quoteResult.status === 'fulfilled'
-        ? (quoteResult.value as Record<string, unknown>)
-        : {}
+    // Q149-D4: for a symbol Yahoo does not know, quote() RESOLVES to undefined.
+    // Dereferencing it threw, and the catch answered 502 "failed" for a ticker
+    // that simply has no quote.
+    const quoteValue = quoteResult.status === 'fulfilled' ? quoteResult.value : null
+    const q = (quoteValue && typeof quoteValue === 'object' ? quoteValue : {}) as Record<string, unknown>
+    const noQuote = quoteResult.status === 'fulfilled' && Object.keys(q).length === 0
 
-    const rawPrice = safeNum(q.regularMarketPrice ?? q.currentPrice)
+    // Q149-R2-5: `currentPrice` is not a declared quote member (the guard in
+    // __tests__/architecture/darkpool-vendor-fields.test.ts reads every vendor read).
+    const rawPrice = safeNum(q.regularMarketPrice)
     const rawChange = safeNum(q.regularMarketChange)
     const rawChangePct = safeNum(
       (q as Record<string, unknown>).regularMarketChangePercent
@@ -187,11 +165,12 @@ export async function GET(
         ? {
             price: rawPrice,
             change: finiteOrNull(rawChange),
-            changePct: Number.isFinite(rawChangePct)
-              ? (rawChangePct as number)
-              : Number.isFinite(rawChange) && rawPrice > 0
-                ? (100 * (rawChange as number)) / rawPrice
-                : null,
+            // Red-team Q145-R5: the percent was taken raw, so a decimal-form
+            // row (0.016 meaning 1.6%) rendered +0.02%. It goes through the
+            // same normaliser as /api/prices and both streams.
+            changePct: rawChangePct != null || rawChange != null
+              ? normalizedChangePercent(rawChangePct, rawChange, rawPrice)
+              : null,
             quoteTime: parseQuoteTime(q.regularMarketTime),
           }
         : {
@@ -212,33 +191,35 @@ export async function GET(
       {}
     ) as Record<string, unknown>
 
-    const financialData = (
-      (summary.financialData as unknown as Record<string, unknown>) ??
-      null
-    ) as Record<string, unknown> | null
-
-    const avgDailyVolumeFromQuote =
-      safeNum((q as Record<string, unknown>).averageDailyVolume10Day as number) ??
-      safeNum((q as Record<string, unknown>).averageDailyVolume as number)
-    const analysis = buildAnalysis(ticker, price, keyStats, financialData, avgDailyVolumeFromQuote)
+    const analysis = buildAnalysis(symbol, price, keyStats, q, summaryResult.status === 'fulfilled')
 
     // Q-140 (I2): a FAILED fetch is not "no data for this security type". With
     // Yahoo down this used to say "Dark pool metrics are not available for this
     // security type (ETF, ADR, or OTC)" — a wrong explanation for an outage.
     const quoteFailed = quoteResult.status === 'rejected'
-    const summaryFailed = summaryResult.status === 'rejected'
-    if (quoteFailed || summaryFailed) {
+    // Q149-D5: Yahoo has no key statistics for a crypto pair, a currency, an
+    // index or a fund, and rejects the request. That is an absence, not an outage
+    // to "try again shortly".
+    const summaryFailed = summaryResult.status === 'rejected' && !NO_SHORT_INTEREST_TYPES.has(String(q.quoteType))
+    if (noQuote) {
+      // Q149-R2-4c: "has no quote" alone over a card that shows figures is a false
+      // sentence about that card; say what was observed on each side.
+      analysis.statusNote = hasAnyFigure(analysis.metrics) ? NO_QUOTE_WITH_FIGURES_NOTE : NO_QUOTE_NOTE
+    } else if (quoteFailed || summaryFailed) {
       analysis.degraded = true
       analysis.statusNote = quoteFailed && summaryFailed
         ? 'The market-data feed failed for this ticker; try again shortly.'
         : quoteFailed
-          ? 'The price quote failed to load; the off-exchange statistics below are shown without it.'
-          : 'The off-exchange statistics failed to load; try again shortly.'
+          ? 'The price quote failed to load; the short-interest figures below are shown without it.'
+          : 'The short-interest figures failed to load; try again shortly.'
     }
 
+    // Q149-R2-4d: an empty quote for a valid ticker is also what a transient
+    // upstream gap looks like, so it is held for the short window, not the healthy
+    // six minutes. It is not `degraded`: no fetch failed.
     return NextResponse.json(analysis, {
       headers: {
-        'Cache-Control': analysis.degraded ? DEGRADED_CACHE_CONTROL : 's-maxage=60, stale-while-revalidate=300',
+        'Cache-Control': analysis.degraded || noQuote ? DEGRADED_CACHE_CONTROL : 's-maxage=60, stale-while-revalidate=300',
       },
     })
   } catch (err) {
