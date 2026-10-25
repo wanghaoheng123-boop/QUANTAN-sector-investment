@@ -3538,5 +3538,59 @@
       "npm run test"
     ],
     "notes_2026_10_18": "Found by the #248 re-gate (Q145-R2-2): the same defect as Q-145 on field names outside the guard's list (useBtcPriceWs.ts:104-105, 124-125, :53; btc/quote route :35,38; BtcHeader :13,63). Pre-existing; Q-145 is scoped to the Yahoo quote producers."
+  },
+  {
+    "id": "Q-158",
+    "title": "Redesign the shared application shell and homepage for a clearer, accessible research workspace",
+    "domain": "Frontend/UX",
+    "priority": "P2",
+    "status": "partial",
+    "owner_role": "Implementer",
+    "files": [
+      "app/layout.tsx",
+      "app/globals.css",
+      "app/page.tsx",
+      "components/SiteNav.tsx",
+      "components/SectorCard.tsx",
+      "components/Sparkline.tsx",
+      "__tests__/components/LandingNewsFailure.test.tsx",
+      "scripts/smoke-production.mjs"
+    ],
+    "acceptance_criteria": [
+      "Shared navigation and homepage use a coherent visual system with clearer hierarchy, spacing and readable typography",
+      "Navigation remains usable with keyboard and narrow viewports, with visible focus and accurate active-page state",
+      "Existing price, freshness, missing-data and failure disclosures remain accurate; no invented financial figures or new financial claims",
+      "Lint, typecheck, relevant tests and production build pass; desktop and narrow-view browser checks and independent red-team review are recorded"
+    ],
+    "verify_commands": [
+      "npm run lint",
+      "npm run typecheck",
+      "npm run test",
+      "npm run build"
+    ],
+    "notes_2026_10_25": "IN PROGRESS on codex/ui-workspace-redesign from origin/main ed725ef, explicitly requested by the user. Bounded shell/homepage slice; broader stock, sector, BTC, backtest and portfolio restyling is subsequent work. Recovery of Claude's 00:45 SGT interruption is recorded in wave_2026_10_25_claude_recovery_and_ui_redesign. The backlog schema has no in-progress status, so partial is used until verified. Existing Q-144/Q-145 and open PR items retain their prior statuses pending their separate closure audit.",
+    "verification_2026_10_25": "IMPLEMENTED AND LOCALLY VERIFIED on codex/ui-workspace-redesign; draft PR publication pending, so status remains partial. Typecheck/lint/final production build green; 2,797 tests / 193 files accounted for by full run plus affected-file rechecks; local final-build smoke 20/20; workflow/data checks green. Desktop 1440px and phone 320/375px browser checks passed, including no horizontal overflow, sector filters, drawer focus/Escape and AAPL search navigation. Completed red-team/security/disinformation reviews approved the bounded diff. Extra final red-team attempt after small phone-spacing/news-error changes hit usage limit; no additional independent round is claimed. Exact evidence and open PR status are in wave_2026_10_25_q158_verification_handoff."
+  },
+  {
+    "id": "Q-159",
+    "title": "A slow BTC REST fallback response can overwrite a newer websocket price",
+    "domain": "Data/Integrity",
+    "priority": "P2",
+    "status": "pending",
+    "files": [
+      "components/crypto/hooks/useBtcPriceWs.ts",
+      "lib/btcSnapshot.ts",
+      "__tests__/hooks/useBtcPriceWs.test.ts"
+    ],
+    "acceptance_criteria": [
+      "When a fresh websocket price arrives while a fallback REST request is in flight, the late REST answer must not overwrite that newer price",
+      "Preserve fallback recovery when no usable websocket price arrives; vendor freshness and transport receipt time stay distinct",
+      "Add a deterministic deferred-response regression that controls the REST/websocket event ordering and fails on the existing overwrite"
+    ],
+    "verify_commands": [
+      "npm run typecheck",
+      "npm run test -- __tests__/hooks/useBtcPriceWs.test.ts __tests__/lib/btcSnapshot.test.tsx"
+    ],
+    "notes_2026_10_25": "Pre-existing residual found by the red-team while reviewing the PR #253 vendor-time follow-up (806f13d), not introduced or repaired by the UI redesign or vendor-time fix. The response path checks cancellation but not whether a newer usable websocket price arrived after the REST request began. Named in reviews/q157-vendor-time-followup-2026-10-25.md on the q156 branch. Requires data-integrity and adversarial review; no owner decision or credential is needed for a deterministic ordering fix."
   }
 ]

@@ -34,7 +34,7 @@ async function main() {
   const home = await fetch(`${base}/`)
   passed &= ok(home.ok && home.status === 200, `GET / → ${home.status}`)
   const html = await home.text()
-  passed &= ok(html.includes('Sector Intelligence'), 'HTML contains hero title')
+  passed &= ok(/<h1\b[^>]*>Market overview<\/h1>/.test(html), 'HTML contains the market overview heading')
 
   const prices = await getJson('/api/prices?tickers=AAPL,SPY')
   passed &= ok(prices.ok && prices.status === 200, `GET /api/prices → ${prices.status}`)
