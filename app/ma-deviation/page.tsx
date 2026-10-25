@@ -1,5 +1,6 @@
 'use client'
 
+import { formatSlopePct, slopeState, slopeText } from '@/lib/quant/technicals'
 import { UI_LOCALE } from '@/lib/format'
 import { LocalTime } from '@/components/LocalTime'
 import { useState, useEffect } from 'react'
@@ -8,19 +9,16 @@ import Link from 'next/link'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
-type DipSignal = 'STRONG_DIP' | 'WATCH_DIP' | 'FALLING_KNIFE' | 'OVERBOUGHT' | 'IN_TREND' | 'INSUFFICIENT_DATA'
-
+// Q153-R2-18: the regime the API sends also carries `color`, `riskLevel` and
+// `dipSignal`. This page renders none of them (Q153-C1/C5/C6), so they are not
+// declared here: a read of one is a type error, not just a failed guard.
 interface MA200Regime {
   zone: string
   deviationPct: number | null
   slopePositive: boolean | null
-  slopePct: number | null       // raw numeric slope, e.g. 0.00087 = +0.087%/bar
+  slopePct: number | null       // change of the 200-day average over 20 days, e.g. 0.00087 = +0.087%
   label: string
-  color: string
-  riskLevel: 'low' | 'medium' | 'high' | 'extreme'
   interpretation: string
-  forwardReturnContext: string
-  dipSignal: DipSignal
   dipSignalExplained: string
 }
 
@@ -42,7 +40,7 @@ interface SectorRow {
 interface ApiResponse {
   rows: SectorRow[]
   computedAt: string
-  /** Absent on a degraded answer, which carries no forward-return context. */
+  /** The route's disclaimer; carried on degraded answers too (Q153-C12). */
   disclaimer?: string
   /** Q-140: set when most sector fetches failed; the board is incomplete. */
   degraded?: boolean
@@ -59,24 +57,29 @@ interface ApiResponse {
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const DIP_SIGNAL_CONFIG: Record<DipSignal, { label: string; badgeClass: string; icon: string }> = {
-  STRONG_DIP:        { label: 'Strong Dip Buy', badgeClass: 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300', icon: '🟢' },
-  WATCH_DIP:         { label: 'Watch — Caution', badgeClass: 'bg-yellow-500/20 border-yellow-500/40 text-yellow-300', icon: '🟡' },
-  FALLING_KNIFE:     { label: 'Falling Knife ⚠', badgeClass: 'bg-red-500/20 border-red-500/40 text-red-300',    icon: '🔴' },
-  OVERBOUGHT:        { label: 'Overbought', badgeClass: 'bg-orange-500/20 border-orange-500/40 text-orange-300', icon: '🟠' },
-  IN_TREND:          { label: 'In Uptrend', badgeClass: 'bg-blue-500/20 border-blue-500/40 text-blue-300',       icon: '🔵' },
-  INSUFFICIENT_DATA: { label: 'No Data', badgeClass: 'bg-slate-700/50 border-slate-600 text-slate-400',          icon: '⚫' },
-}
+/**
+ * One neutral colour for every zone (Q153-C6). The zones were coloured as a
+ * traffic light — green 0–10% above, lime 0–10% below, red at both extremes —
+ * which carried "buy the dip / stop" without the words. Red/green is kept only
+ * for a measured slope beyond +0.5% / below −0.5% (SlopeChip).
+ */
+const NEUTRAL = '#94a3b8'
 
-// empirical reference table (static educational content)
-const EMPIRICAL_TABLE = [
-  { zone: '> +20%',     label: 'Extreme Overextension', color: '#ef4444', dipSignal: 'OVERBOUGHT',    fwd3m: '+1.2%', fwd6m: '+2.8%', fwd12m: '+3.5%', hitRate12m: '52%', note: 'Highest mean-reversion risk. Trim positions.' },
-  { zone: '+10–20%',   label: 'Extended Bull',          color: '#f97316', dipSignal: 'OVERBOUGHT',    fwd3m: '+2.1%', fwd6m: '+4.2%', fwd12m: '+6.4%', hitRate12m: '58%', note: 'Stretched momentum. Monitor for exhaustion candles.' },
-  { zone: '0 to +10%', label: 'Healthy Uptrend',        color: '#22c55e', dipSignal: 'IN_TREND',      fwd3m: '+3.6%', fwd6m: '+6.8%', fwd12m: '+11.2%', hitRate12m: '68%', note: 'Best risk-adjusted returns. Ideal holding zone.' },
-  { zone: '0 to -10%', label: 'First Dip Zone ✅',       color: '#84cc16', dipSignal: 'STRONG_DIP',   fwd3m: '+4.8%', fwd6m: '+8.4%', fwd12m: '+15.3%', hitRate12m: '72%', note: 'Strongest buy signal when 200MA slope is rising.' },
-  { zone: '-10–20%',   label: 'Deep Dip / Caution',     color: '#eab308', dipSignal: 'WATCH_DIP',     fwd3m: '+2.9%', fwd6m: '+6.1%', fwd12m: '+11.8%', hitRate12m: '61%', note: 'High variance — confirm 200MA slope before entering.' },
-  { zone: '-20–30%',   label: 'Bear Alert',             color: '#f97316', dipSignal: 'FALLING_KNIFE', fwd3m: '+0.4%', fwd6m: '+4.2%', fwd12m: '+10.1%', hitRate12m: '55%', note: 'Falling knife if 200MA declining. Only staged buying.' },
-  { zone: '< -30%',    label: 'Crash / Capitulation',   color: '#ef4444', dipSignal: 'STRONG_DIP',    fwd3m: '+6.1%', fwd6m: '+14.3%', fwd12m: '+28.7%', hitRate12m: '63%', note: 'Maximum long-term opportunity but extreme near-term pain.' },
+// Q-153: a LEGEND of the zones — the band and its name. It was an "Empirical
+// Forward Return Reference" of median 3M/6M/12M returns and hit rates "based on …
+// S&P 500 & sector ETF daily data (1990–2024)": hardcoded figures from an
+// analysis this repository has never run (I5). Q153-C2: its Classification
+// column mapped each band to one class, which the band alone cannot determine
+// (the slope decides), so it contradicted the classifier in 7 of 21 band ×
+// slope cases. The column is gone.
+const ZONE_LEGEND: Array<{ zone: string; label: string }> = [
+  { zone: '> +20%',    label: 'More than 20% above' },
+  { zone: '+10–20%',   label: '10–20% above' },
+  { zone: '0 to +10%', label: '0–10% above' },
+  { zone: '0 to -10%', label: '0–10% below' },
+  { zone: '-10–20%',   label: '10–20% below' },
+  { zone: '-20–30%',   label: '20–30% below' },
+  { zone: '< -30%',    label: 'More than 30% below' },
 ]
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
@@ -112,12 +115,17 @@ function DeviationBar({ pct, color }: { pct: number; color: string }) {
   )
 }
 
-function SlopeChip({ positive, slopePct }: { positive: boolean | null; slopePct?: number | null }) {
-  if (positive === null) return <span className="text-slate-400 text-xs">—</span>
-  const pct = slopePct != null ? `${slopePct > 0 ? '+' : ''}${(slopePct * 100).toFixed(3)}%` : null
+/**
+ * The MEASURED 20-day change of the 200-day average (Q-153), in three states
+ * with the classifier's threshold (Q153-C11: by sign alone, +0.19% read "▲ up"
+ * beside a classification that does not call it rising).
+ */
+function SlopeChip({ slopePct }: { slopePct?: number | null }) {
+  const state = slopeState(slopePct)
+  if (state == null) return <span className="text-slate-400 text-xs">—</span>
   return (
-    <span className={`inline-flex items-center gap-0.5 text-[10px] font-mono px-1.5 py-0.5 rounded ${positive ? 'text-emerald-400 bg-emerald-500/10' : 'text-red-400 bg-red-500/10'}`}>
-      {positive ? '▲' : '▼'} {positive ? 'Rising' : 'Declining'}{pct ? ` ${pct}` : ''}
+    <span className={`inline-flex items-center gap-0.5 text-[10px] font-mono px-1.5 py-0.5 rounded ${state === 'rising' ? 'text-emerald-400 bg-emerald-500/10' : state === 'falling' ? 'text-red-400 bg-red-500/10' : 'text-slate-300 bg-slate-500/10'}`}>
+      {slopeText(slopePct)}
     </span>
   )
 }
@@ -166,7 +174,7 @@ export default function MADeviationPage() {
   const [sortKey, setSortKey] = useState<SortKey>('deviation')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
   const [expandedTicker, setExpandedTicker] = useState<string | null>(null)
-  const [showEmpiricalTable, setShowEmpiricalTable] = useState(false)
+  const [showLegend, setShowLegend] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -217,11 +225,13 @@ export default function MADeviationPage() {
     return sortDir === 'asc' ? av - bv : bv - av
   }) ?? []
 
-  // Summary counts
-  const dipCount = data?.rows.filter(r => r.regime?.dipSignal === 'STRONG_DIP').length ?? 0
-  const watchCount = data?.rows.filter(r => r.regime?.dipSignal === 'WATCH_DIP').length ?? 0
-  const knifeCount = data?.rows.filter(r => r.regime?.dipSignal === 'FALLING_KNIFE').length ?? 0
-  const bullCount  = data?.rows.filter(r => r.regime?.dipSignal === 'IN_TREND' || r.regime?.dipSignal === 'OVERBOUGHT').length ?? 0
+  // Q153-C1: the summary counted sectors per CLASS ("1 Below a rising average ·
+  // 4 Below the average · 0 Below an average that is not rising"), a screen of
+  // what to buy whose labels were not true of the classes — on 2026-10-17 the
+  // "0" sat beside four rows below a non-rising average. It counts measured
+  // facts instead: which side of its average each row is on.
+  const aboveCount = data?.rows.filter(r => r.regime?.deviationPct != null && r.regime.deviationPct >= 0).length ?? 0
+  const belowCount = data?.rows.filter(r => r.regime?.deviationPct != null && r.regime.deviationPct < 0).length ?? 0
 
   return (
     <div className="min-h-screen">
@@ -239,10 +249,8 @@ export default function MADeviationPage() {
                 200-Day MA Deviation Gauge
               </h1>
               <p className="text-slate-400 text-sm max-w-2xl leading-relaxed">
-                Quantitative analysis of how far each sector ETF trades from its 200-day Simple Moving Average —
-                the institutional benchmark for long-term trend direction and dip-buying opportunity zones.
-                Combines deviation%, 200MA slope, and RSI to distinguish <strong className="text-emerald-400">true dips</strong> from{' '}
-                <strong className="text-red-400">falling knives</strong>.
+                How far each sector ETF trades from its 200-day simple moving average, how that average has moved over 20 days,
+                and the 14-day RSI. A description of where price sits relative to its long-run average; not a forecast or a trade signal.
               </p>
             </div>
             <div className="flex flex-col items-end gap-2">
@@ -259,10 +267,10 @@ export default function MADeviationPage() {
                 </div>
               )}
               <button
-                onClick={() => setShowEmpiricalTable(p => !p)}
+                onClick={() => setShowLegend(p => !p)}
                 className="px-4 py-2 rounded-lg text-xs font-medium bg-blue-600/20 border border-blue-500/30 text-blue-300 hover:bg-blue-600/30 transition-colors"
               >
-                {showEmpiricalTable ? 'Hide' : 'Show'} Empirical Return Table
+                {showLegend ? 'Hide' : 'Show'} zone legend
               </button>
             </div>
           </div>
@@ -271,12 +279,10 @@ export default function MADeviationPage() {
           {!loading && data && (
             <div className="flex flex-wrap gap-3 mt-6">
               {[
-                { label: 'Strong Dip Buy', count: dipCount,   color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/30' },
-                { label: 'Watch / Caution', count: watchCount, color: 'text-yellow-400',  bg: 'bg-yellow-500/10 border-yellow-500/30' },
-                { label: 'Falling Knife',   count: knifeCount, color: 'text-red-400',     bg: 'bg-red-500/10 border-red-500/30' },
-                { label: 'In Uptrend',       count: bullCount,  color: 'text-blue-400',    bg: 'bg-blue-500/10 border-blue-500/30' },
+                { label: 'Above their 200-day average', count: aboveCount },
+                { label: 'Below their 200-day average', count: belowCount },
               ].map(s => (
-                <div key={s.label} className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-medium ${s.bg} ${s.color}`}>
+                <div key={s.label} className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-slate-700 bg-slate-900/40 text-xs font-medium text-slate-200">
                   <span className="text-lg font-bold font-mono">{s.count}</span>
                   <span className="text-slate-400">{s.label}</span>
                 </div>
@@ -288,46 +294,31 @@ export default function MADeviationPage() {
 
       <div className="max-w-7xl mx-auto px-4 py-8 space-y-8">
 
-        {/* Empirical Reference Table */}
-        {showEmpiricalTable && (
+        {/* Zone legend (Q-153: it was a table of unsourced forward returns) */}
+        {showLegend && (
           <section className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6">
-            <h2 className="text-sm font-bold text-white mb-1">📊 Empirical Forward Return Reference</h2>
+            <h2 className="text-sm font-bold text-white mb-1">Zone legend</h2>
             <p className="text-xs text-slate-400 mb-4">
-              Based on historical cross-section analysis of S&amp;P 500 &amp; sector ETF daily data (1990–2024).
-              Returns shown are <em>median</em> forward returns following instances where price entered each zone.
-              Forward returns when 200MA slope is positive vs negative diverge significantly — see interpretation column.
-              <strong className="text-amber-300"> Not investment advice. Past performance ≠ future results.</strong>
+              How the gauge names a distance from the 200-day average. It describes where price is, not what it will do;
+              this platform has not measured forward returns for these zones.
             </p>
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
-                <caption className="sr-only">Empirical forward returns by deviation zone — median 3M, 6M, and 12M returns with hit rates</caption>
+                <caption className="sr-only">Deviation zones</caption>
                 <thead>
                   <tr className="border-b border-slate-700">
-                    {['Deviation Zone', 'Zone Label', 'Dip Signal', '3M Fwd', '6M Fwd', '12M Fwd', '12M Hit Rate', 'Context'].map(h => (
+                    {['Distance from the 200-day average', 'Zone'].map(h => (
                       <th key={h} scope="col" className="text-left pb-2 pr-4 text-slate-400 font-medium whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {EMPIRICAL_TABLE.map((row) => {
-                    const cfg = DIP_SIGNAL_CONFIG[row.dipSignal as DipSignal]
-                    return (
-                      <tr key={row.zone} className="border-b border-slate-800/50 hover:bg-slate-800/20 transition-colors">
-                        <td className="py-2 pr-4 font-mono font-semibold" style={{ color: row.color }}>{row.zone}</td>
-                        <td className="py-2 pr-4 text-white font-medium">{row.label}</td>
-                        <td className="py-2 pr-4">
-                          <span className={`px-1.5 py-0.5 rounded border text-[10px] font-medium ${cfg.badgeClass}`}>
-                            {cfg.label}
-                          </span>
-                        </td>
-                        <td className="py-2 pr-4 font-mono text-slate-300">{row.fwd3m}</td>
-                        <td className="py-2 pr-4 font-mono text-slate-300">{row.fwd6m}</td>
-                        <td className="py-2 pr-4 font-mono font-semibold text-white">{row.fwd12m}</td>
-                        <td className="py-2 pr-4 font-mono text-slate-400">{row.hitRate12m}</td>
-                        <td className="py-2 pr-4 text-slate-400 max-w-[200px]">{row.note}</td>
-                      </tr>
-                    )
-                  })}
+                  {ZONE_LEGEND.map((row) => (
+                    <tr key={row.zone} className="border-b border-slate-800/50 hover:bg-slate-800/20 transition-colors">
+                      <td className="py-2 pr-4 font-mono font-semibold text-slate-300">{row.zone}</td>
+                      <td className="py-2 pr-4 text-white font-medium">{row.label}</td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
@@ -352,7 +343,7 @@ export default function MADeviationPage() {
         <section className="rounded-2xl border border-slate-800 bg-slate-900/30 overflow-hidden">
           <div className="overflow-x-auto">
           {/* Table Header */}
-          <div className="px-5 py-4 border-b border-slate-800 grid grid-cols-[1.5rem_1fr_4.5rem_4.5rem_4rem_4rem_120px_1fr] gap-3 items-center">
+          <div className="px-5 py-4 border-b border-slate-800 grid grid-cols-[1.5rem_1fr_4.5rem_4.5rem_4rem_4rem_1fr] gap-3 items-center">
             <span />
             <SortTh label="Sector / ETF" skey="name" sortKey={sortKey} sortDir={sortDir} handleSort={handleSort} />
             <SortTh label="Price" skey="price" sortKey={sortKey} sortDir={sortDir} handleSort={handleSort} />
@@ -360,14 +351,12 @@ export default function MADeviationPage() {
             <SortTh label="Dev %" skey="deviation" sortKey={sortKey} sortDir={sortDir} handleSort={handleSort} />
             <SortTh label="RSI 14" skey="rsi" sortKey={sortKey} sortDir={sortDir} handleSort={handleSort} />
             <span className="text-[11px] text-slate-400 font-medium">200MA Slope</span>
-            <span className="text-[11px] text-slate-400 font-medium">Dip Signal</span>
           </div>
 
           {loading && Array.from({ length: 13 }).map((_, i) => <SkeletonRow key={i} />)}
 
           {!loading && sorted.map((row) => {
             const regime = row.regime
-            const cfg = DIP_SIGNAL_CONFIG[regime?.dipSignal ?? 'INSUFFICIENT_DATA']
             const isExpanded = expandedTicker === row.ticker
             const devPct = regime?.deviationPct
 
@@ -375,7 +364,7 @@ export default function MADeviationPage() {
               <div key={row.ticker} className="border-b border-slate-800/50 last:border-0">
                 {/* Main row */}
                 <button
-                  className="w-full text-left grid grid-cols-[1.5rem_1fr_4.5rem_4.5rem_4rem_4rem_120px_1fr] gap-3 items-center px-5 py-3.5 hover:bg-slate-800/30 transition-colors group"
+                  className="w-full text-left grid grid-cols-[1.5rem_1fr_4.5rem_4.5rem_4rem_4rem_1fr] gap-3 items-center px-5 py-3.5 hover:bg-slate-800/30 transition-colors group"
                   onClick={() => setExpandedTicker(isExpanded ? null : row.ticker)}
                   aria-expanded={isExpanded}
                   aria-controls={`detail-${row.ticker}`}
@@ -401,54 +390,37 @@ export default function MADeviationPage() {
 
                   {/* Deviation % */}
                   <div className="flex flex-col gap-0.5">
-                    <span
-                      className="text-sm font-bold font-mono"
-                      style={{ color: regime?.color ?? '#64748b' }}
-                    >
+                    <span className="text-sm font-bold font-mono text-slate-200">
                       {devPct != null ? `${devPct >= 0 ? '+' : ''}${devPct.toFixed(1)}%` : '—'}
                     </span>
                     {devPct != null && (
-                      <DeviationBar pct={devPct} color={regime?.color ?? '#64748b'} />
+                      <DeviationBar pct={devPct} color={NEUTRAL} />
                     )}
                   </div>
 
                   {/* RSI */}
-                  <div className={`text-sm font-mono font-semibold ${row.rsi14 != null ? (row.rsi14 < 30 ? 'text-emerald-400' : row.rsi14 > 70 ? 'text-red-400' : 'text-slate-300') : 'text-slate-400'}`}>
+                  {/* Q153-C6: RSI below 30 was emerald — the contrarian buy cue in colour. */}
+                  <div className={`text-sm font-mono font-semibold ${row.rsi14 != null ? 'text-slate-300' : 'text-slate-400'}`}>
                     {row.rsi14 != null ? row.rsi14.toFixed(0) : '—'}
                   </div>
 
                   {/* Slope */}
-                  <SlopeChip positive={regime?.slopePositive ?? null} slopePct={regime?.slopePct ?? null} />
-
-                  {/* Dip Signal badge */}
-                  <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg border text-[11px] font-medium ${cfg.badgeClass} w-fit`}>
-                    <span>{cfg.icon}</span>
-                    {cfg.label}
-                  </span>
+                  <SlopeChip slopePct={regime?.slopePct ?? null} />
                 </button>
 
                 {/* Expanded detail panel */}
                 {isExpanded && regime && (
                   <div id={`detail-${row.ticker}`} className="px-5 pb-5 pt-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 bg-slate-900/50 border-t border-slate-800/50">
                     {/* Zone info */}
-                    <div className="rounded-xl border border-slate-700 p-4" style={{ borderColor: `${regime.color}30` }}>
+                    <div className="rounded-xl border border-slate-700 p-4">
                       <div className="text-xs text-slate-400 mb-1 uppercase tracking-wider">Zone</div>
-                      <div className="text-base font-bold mb-2" style={{ color: regime.color }}>{regime.label}</div>
+                      <div className="text-base font-bold mb-2 text-slate-200">{regime.label}</div>
                       <p className="text-xs text-slate-400 leading-relaxed">{regime.interpretation}</p>
                     </div>
 
-                    {/* Forward return context */}
+                    {/* What was measured, in one sentence (Q153-C1: no class label). */}
                     <div className="rounded-xl border border-slate-700 p-4">
-                      <div className="text-xs text-slate-400 mb-1 uppercase tracking-wider">Historical Return Context</div>
-                      <p className="text-xs text-slate-300 leading-relaxed">{regime.forwardReturnContext}</p>
-                    </div>
-
-                    {/* Dip signal detail */}
-                    <div className={`rounded-xl border p-4 ${cfg.badgeClass.replace('text-', 'border-').split(' ')[1]}`} style={{ borderColor: `${regime.color}30` }}>
-                      <div className="text-xs text-slate-400 mb-1 uppercase tracking-wider">🔬 Dip Signal Analysis</div>
-                      <div className={`text-xs font-semibold mb-2 ${cfg.badgeClass.split(' ').find(c => c.startsWith('text-')) ?? 'text-slate-300'}`}>
-                        {cfg.label}
-                      </div>
+                      <div className="text-xs text-slate-400 mb-1 uppercase tracking-wider">Measured</div>
                       <p className="text-xs text-slate-400 leading-relaxed">{regime.dipSignalExplained}</p>
                     </div>
 
@@ -459,13 +431,12 @@ export default function MADeviationPage() {
                           { label: 'Price', value: row.price != null ? `$${row.price.toFixed(2)}` : '—' },
                           { label: '200MA', value: row.sma200 != null ? `$${row.sma200.toFixed(2)}` : '—' },
                           { label: '50MA', value: row.sma50 != null ? `$${row.sma50.toFixed(2)}` : '—' },
-                          { label: 'Deviation', value: devPct != null ? `${devPct >= 0 ? '+' : ''}${devPct.toFixed(2)}%` : '—', color: regime.color },
+                          { label: 'Deviation', value: devPct != null ? `${devPct >= 0 ? '+' : ''}${devPct.toFixed(2)}%` : '—' },
                           { label: 'RSI(14)', value: row.rsi14 != null ? row.rsi14.toFixed(1) : '—' },
                           { label: 'Trading Days', value: String(row.tradingDays) },
-                          { label: '200MA Slope', value: regime.slopePct != null
-                              ? `${regime.slopePct > 0 ? '+' : ''}${(regime.slopePct * 100).toFixed(4)}% (${regime.slopePositive ? '▲' : '▼'})`
-                              : '—', color: regime.slopePct != null ? (regime.slopePct > 0 ? '#22c55e' : '#ef4444') : undefined },
-                          { label: 'Risk Level', value: regime.riskLevel.toUpperCase() },
+                          { label: '200MA change (20d)', value: regime.slopePct != null
+                              ? formatSlopePct(regime.slopePct)
+                              : '—', color: slopeState(regime.slopePct) === 'rising' ? '#22c55e' : slopeState(regime.slopePct) === 'falling' ? '#ef4444' : undefined },
                         ].map(({ label, value, color }) => (
                           <div key={label} className="bg-slate-800/50 rounded-lg px-3 py-2">
                             <div className="text-slate-400 text-[10px] mb-0.5">{label}</div>
@@ -504,7 +475,7 @@ export default function MADeviationPage() {
                 .sort((a, b) => (a.regime?.deviationPct ?? 0) - (b.regime?.deviationPct ?? 0))
                 .map(row => {
                   const dev = row.regime!.deviationPct!
-                  const color = row.regime!.color
+                  const color = NEUTRAL // Q153-C6: one neutral colour, not the zone traffic light
                   const isPos = dev >= 0
                   const width = Math.min(Math.abs(dev) / 35 * 45, 45)
                   return (
@@ -560,51 +531,32 @@ export default function MADeviationPage() {
           </section>
         )}
 
-        {/* Key to reading this gauge */}
+        {/* Key to reading this gauge (Q-153: it gave "Strong Dip Buy Conditions",
+            "scale in with a maximum of 30–40% of your target position" and
+            "screaming buy" — trade and sizing instructions, the copy Q-083 gates) */}
         <section className="rounded-2xl border border-slate-800 bg-slate-900/20 p-6">
-          <h2 className="text-sm font-bold text-white mb-4">📖 How to Use This Gauge — Buying Dips, Not Falling Knives</h2>
+          <h2 className="text-sm font-bold text-white mb-4">How to read this gauge</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs text-slate-400 leading-relaxed">
             <div className="space-y-3">
-              <div>
-                <div className="text-emerald-400 font-semibold mb-1">✅ Strong Dip Buy Conditions</div>
-                <ul className="list-disc list-inside space-y-1 text-slate-400">
-                  <li>Price is 0–10% below the 200-day SMA</li>
-                  <li>The 200MA slope is <strong className="text-white">still positive</strong> (rising)</li>
-                  <li>RSI is below 40 (oversold confirmation)</li>
-                  <li>Market breadth (% stocks above their 200MA) is not collapsing</li>
-                </ul>
-              </div>
-              <div>
-                <div className="text-red-400 font-semibold mb-1">🔪 Falling Knife Warning Signs</div>
-                <ul className="list-disc list-inside space-y-1 text-slate-400">
-                  <li>Price is &gt;15% below a <strong className="text-white">declining</strong> 200MA</li>
-                  <li>RSI is 35–50 (momentum deteriorating, not capitulating)</li>
-                  <li>The 200MA has been declining for &gt;30 days</li>
-                  <li>Sector breadth is &lt;20% (most stocks also breaking down)</li>
-                </ul>
-              </div>
+              <p>
+                <strong className="text-white">Deviation</strong> is how far the latest price is from its 200-day simple moving average, in percent.
+                The zones name bands of that distance.
+              </p>
+              <p>
+                <strong className="text-white">Slope</strong> is how much the 200-day average itself moved over the last 20 days.
+                It reads rising above +0.5%, falling below −0.5%, and flat in between.
+              </p>
             </div>
             <div className="space-y-3">
-              <div>
-                <div className="text-yellow-400 font-semibold mb-1">⚠️ Watch Zone Discipline</div>
-                <p className="text-slate-400">
-                  When the signal shows &ldquo;Watch / Caution&rdquo;, scale in with a maximum of 30–40% of your target position.
-                  Use a staged entry (e.g., 3 tranches over 2–4 weeks). Only add if the 200MA slope shows signs of flattening.
-                </p>
-              </div>
-              <div>
-                <div className="text-blue-400 font-semibold mb-1">📐 The 200MA Slope is the Key Variable</div>
-                <p className="text-slate-400">
-                  A rising 200MA acting as support = institutional buy zone. A declining 200MA acting as resistance = falling knife territory.
-                  The same -12% deviation can be a screaming buy (rising 200MA, 2010/2016) or a warning (declining 200MA, 2008/2022).
-                </p>
-              </div>
+              <p>
+                <strong className="text-white">RSI(14)</strong> is the 14-day relative strength index on a 0–100 scale, shown as a number.
+                None of these figures is a forecast, and this platform has not measured what followed each zone.
+              </p>
             </div>
           </div>
           <div className="mt-4 p-3 rounded-lg bg-amber-950/30 border border-amber-500/20 text-amber-300/70 text-[11px]">
-            ⚠️ <strong>Disclaimer:</strong> All deviation zones, forward return references, and dip signals on this page are for educational and research purposes only.
-            They are based on historical statistical analysis and do not constitute investment advice. Past performance is not indicative of future results.
-            Always consult a licensed financial advisor before making investment decisions.
+            ⚠️ <strong>Disclaimer:</strong> The zones on this page describe price relative to its 200-day average. They are research tooling,
+            not investment advice, and not a forecast.
           </div>
         </section>
 

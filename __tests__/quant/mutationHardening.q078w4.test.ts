@@ -14,9 +14,9 @@
  * mutants shift a pinned value. Integer-exact deviation boundaries (flat-100
  * SMA base) pin every `>`/`>=` edge; fp values use toBeCloseTo.
  */
+import { offending } from '../architecture/adviceWords'
 import { describe, it, expect } from 'vitest'
 import {
-  generateSignals,
   btcRegime,
   calcMVRV,
   calcPiCycleTop,
@@ -118,64 +118,6 @@ describe('calcVWMA — exact volume-weighted means', () => {
   })
 })
 
-// ─── generateSignals — exact per-indicator strength + description ────────────
-
-describe('generateSignals', () => {
-  it('returns [] below 55 candles', () => {
-    expect(generateSignals(candles(Array.from({ length: 54 }, () => 100)))).toEqual([])
-  })
-
-  it('sharp decline → oversold-RSI BUY + negative MACD/EMA-cross SELL', () => {
-    const decline = [...Array.from({ length: 60 }, () => 100), ...Array.from({ length: 20 }, (_, i) => 100 - (i + 1) * 2)]
-    expect(generateSignals(candles(decline))).toEqual([
-      { indicator: 'RSI(14)', signal: 'BUY', strength: 100, description: 'Oversold at 0.0' },
-      { indicator: 'MACD', signal: 'SELL', strength: 60, description: 'MACD histogram negative' },
-      { indicator: 'EMA Cross', signal: 'SELL', strength: 70, description: 'EMA20 ($76) < EMA50 ($87) by 12.1%' },
-      { indicator: 'Bollinger Bands', signal: 'HOLD', strength: 40, description: 'Price within BB bands' },
-    ])
-  })
-
-  it('sharp rally → overbought-RSI SELL + positive MACD/EMA-cross BUY', () => {
-    const rally = [...Array.from({ length: 60 }, () => 100), ...Array.from({ length: 20 }, (_, i) => 100 + (i + 1) * 2)]
-    expect(generateSignals(candles(rally))).toEqual([
-      { indicator: 'RSI(14)', signal: 'SELL', strength: 100, description: 'Overbought at 100.0' },
-      { indicator: 'MACD', signal: 'BUY', strength: 60, description: 'MACD histogram positive' },
-      { indicator: 'EMA Cross', signal: 'BUY', strength: 70, description: 'EMA20 ($124) > EMA50 ($113) by 9.3%' },
-      { indicator: 'Bollinger Bands', signal: 'HOLD', strength: 40, description: 'Price within BB bands' },
-    ])
-  })
-
-  it('flat series → no-cross HOLD; MACD suppressed (histogram not > 0 nor < 0)', () => {
-    const flat = Array.from({ length: 80 }, () => 100)
-    expect(generateSignals(candles(flat))).toEqual([
-      { indicator: 'RSI(14)', signal: 'SELL', strength: 100, description: 'Overbought at 100.0' },
-      { indicator: 'EMA Cross', signal: 'HOLD', strength: 30, description: 'EMA20 ($100) and EMA50 ($100) within 1% — no clear cross' },
-      { indicator: 'Bollinger Bands', signal: 'HOLD', strength: 40, description: 'Price within BB bands' },
-    ])
-  })
-
-  it('funding-rate signal fires only outside ±PERP_FUNDING_HIGH_ABS with exact copy', () => {
-    const flat = Array.from({ length: 80 }, () => 100)
-    const pos = generateSignals(candles(flat), 0.01).find((s) => s.indicator === 'Funding Rate')!
-    expect(pos).toEqual({ indicator: 'Funding Rate', signal: 'SELL', strength: 75, description: 'Elevated positive funding (1.0000% / interval) — longs pay shorts (crowding)' })
-    const neg = generateSignals(candles(flat), -0.01).find((s) => s.indicator === 'Funding Rate')!
-    expect(neg).toEqual({ indicator: 'Funding Rate', signal: 'BUY', strength: 75, description: 'Elevated negative funding (-1.0000% / interval) — shorts pay longs (crowding)' })
-    // modest funding → no funding signal
-    expect(generateSignals(candles(flat), 0).some((s) => s.indicator === 'Funding Rate')).toBe(false)
-  })
-
-  it('fear & greed contrarian signal at the <25 / >75 extremes', () => {
-    const flat = Array.from({ length: 80 }, () => 100)
-    expect(generateSignals(candles(flat), undefined, 10).find((s) => s.indicator === 'Fear & Greed')).toEqual({
-      indicator: 'Fear & Greed', signal: 'BUY', strength: 80, description: 'Extreme Fear (10) — contrarian buy signal',
-    })
-    expect(generateSignals(candles(flat), undefined, 90).find((s) => s.indicator === 'Fear & Greed')).toEqual({
-      indicator: 'Fear & Greed', signal: 'SELL', strength: 80, description: 'Extreme Greed (90) — contrarian sell signal',
-    })
-    expect(generateSignals(candles(flat), undefined, 50).some((s) => s.indicator === 'Fear & Greed')).toBe(false)
-  })
-})
-
 // ─── btcRegime — regime matrix, confidence formula, exact metrics/reasons ────
 
 describe('btcRegime', () => {
@@ -249,46 +191,25 @@ describe('btcRegime', () => {
 
 // ─── ma200Regime — full zone-metadata matrix (the 110-survivor pool) ─────────
 
+// MIGRATION NOTE — Q-153 (2026-10-17): the zone copy now DESCRIBES the
+// measurement. Labels, interpretations and dipSignalExplained were trade
+// instructions with unsourced forward returns; forwardReturnContext is gone.
+// Zone, color, riskLevel and every dipSignal are unchanged, and the strings stay
+// pinned exactly so the mutation shard still kills string mutants. (Q153-C4: an
+// earlier note said the classification "mirrors lib/backtest/regimeSignal.ts".
+// Only the null-slope arm is pinned to it, by the AL-5 parity test; the
+// known-slope arms still diverge, and regimeSignal has no riskLevel or color.)
 interface ZoneMeta {
-  zone: string; label: string; color: string; riskLevel: string
-  interpretation: string; forwardReturnContext: string
+  zone: string; label: string; color: string; riskLevel: string; interpretation: string
 }
 const ZONE_META: Record<string, ZoneMeta> = {
-  EXTREME_BULL: {
-    zone: 'EXTREME_BULL', label: 'Extreme Overextension', color: '#ef4444', riskLevel: 'extreme',
-    interpretation: 'Price is >20% above its 200-day SMA — a historically rare euphoric condition. Mean-reversion risk is elevated.',
-    forwardReturnContext: 'Historically weak: median 12M forward return near +2–4% with high variance and elevated drawdown risk. Avoid new long entries at these levels.',
-  },
-  EXTENDED_BULL: {
-    zone: 'EXTENDED_BULL', label: 'Extended Bull Run', color: '#f97316', riskLevel: 'high',
-    interpretation: 'Price is 10–20% above 200-day SMA. Momentum is stretched. Corrections are statistically more likely.',
-    forwardReturnContext: 'Historically mixed to below-average near-term returns (~+5–8% median 12M). Volatility spikes are common. Trim positions on further extensions.',
-  },
-  HEALTHY_BULL: {
-    zone: 'HEALTHY_BULL', label: 'Healthy Uptrend', color: '#22c55e', riskLevel: 'low',
-    interpretation: 'Price is 0–10% above 200-day SMA. The classic "in uptrend" zone. Most institutional managers view this as the preferred hold zone.',
-    forwardReturnContext: 'Historically best risk/reward: median 12M forward return ~+10–14%. Low drawdown frequency. Hold existing positions; add on minor pullbacks.',
-  },
-  FIRST_DIP: {
-    zone: 'FIRST_DIP', label: 'First Dip Zone', color: '#84cc16', riskLevel: 'low',
-    interpretation: 'Price has dipped 0–10% below 200-day SMA — the "first test" of the long-term average. IF the 200MA is still rising, this is historically the highest-probability buy zone.',
-    forwardReturnContext: 'Historically strong when 200MA slope is positive: median 12M return ~+14–18%. Dips like this recover within 3–6 months in ~70% of historical cases (S&P 500, 1950–2020).',
-  },
-  DEEP_DIP: {
-    zone: 'DEEP_DIP', label: 'Deep Dip / Caution', color: '#eab308', riskLevel: 'medium',
-    interpretation: 'Price is 10–20% below 200-day SMA. Meaningful correction. Must check 200MA slope. Falling knife risk rises significantly if 200MA is declining.',
-    forwardReturnContext: 'Historically variable: +12–16% median 12M when 200MA is rising (true dip); near 0% or negative when 200MA is declining (trend breakdown). RSI divergence is key confirming signal.',
-  },
-  BEAR_ALERT: {
-    zone: 'BEAR_ALERT', label: 'Bear Alert Zone', color: '#f97316', riskLevel: 'high',
-    interpretation: 'Price is 20–30% below 200-day SMA — bear market territory. Either a deep washout opportunity or the beginning of a structural decline. Context is everything.',
-    forwardReturnContext: 'High variance: median 12M return +18–25% in post-crash recovery scenarios (2009, 2020) but -10% to -30% in secular bears (2001–2002, 2008). Never average down without confirming 200MA slope inflection.',
-  },
-  CRASH_ZONE: {
-    zone: 'CRASH_ZONE', label: 'Crash / Capitulation', color: '#ef4444', riskLevel: 'extreme',
-    interpretation: 'Price >30% below 200-day SMA — capitulation or systemic crisis territory. Historically presents the maximum long-term return opportunity but maximum near-term pain.',
-    forwardReturnContext: 'Maximum historical opportunity: median 18M forward return +30–50%+ in recoveries. However, timing is extremely difficult — requires confirmation of 200MA slope stabilizing and market breadth recovering before averaging in.',
-  },
+  EXTREME_BULL: { zone: 'EXTREME_BULL', label: 'More than 20% above the 200-day average', color: '#ef4444', riskLevel: 'extreme', interpretation: 'Price is more than 20% above its 200-day simple moving average.' },
+  EXTENDED_BULL: { zone: 'EXTENDED_BULL', label: '10–20% above the 200-day average', color: '#f97316', riskLevel: 'high', interpretation: 'Price is 10–20% above its 200-day simple moving average.' },
+  HEALTHY_BULL: { zone: 'HEALTHY_BULL', label: '0–10% above the 200-day average', color: '#22c55e', riskLevel: 'low', interpretation: 'Price is 0–10% above its 200-day simple moving average.' },
+  FIRST_DIP: { zone: 'FIRST_DIP', label: '0–10% below the 200-day average', color: '#84cc16', riskLevel: 'low', interpretation: 'Price is 0–10% below its 200-day simple moving average.' },
+  DEEP_DIP: { zone: 'DEEP_DIP', label: '10–20% below the 200-day average', color: '#eab308', riskLevel: 'medium', interpretation: 'Price is 10–20% below its 200-day simple moving average.' },
+  BEAR_ALERT: { zone: 'BEAR_ALERT', label: '20–30% below the 200-day average', color: '#f97316', riskLevel: 'high', interpretation: 'Price is 20–30% below its 200-day simple moving average.' },
+  CRASH_ZONE: { zone: 'CRASH_ZONE', label: 'More than 30% below the 200-day average', color: '#ef4444', riskLevel: 'extreme', interpretation: 'Price is more than 30% below its 200-day simple moving average.' },
 }
 
 describe('ma200Regime — deviation-zone boundaries + full metadata (null slope)', () => {
@@ -314,18 +235,18 @@ describe('ma200Regime — deviation-zone boundaries + full metadata (null slope)
     expect(r.color).toBe(m.color)
     expect(r.riskLevel).toBe(m.riskLevel)
     expect(r.interpretation).toBe(m.interpretation)
-    expect(r.forwardReturnContext).toBe(m.forwardReturnContext)
+    expect('forwardReturnContext' in r).toBe(false)
     expect(r.slopePositive).toBeNull() // 220 bars < 221 ⇒ slope unknown
   })
 
   it('overbought zones → OVERBOUGHT dipSignal with the exact template', () => {
     expect(ma200Regime(125, flat220).dipSignal).toBe('OVERBOUGHT')
     expect(ma200Regime(125, flat220).dipSignalExplained).toBe(
-      'Price is extended above the 200-day SMA by 25.0%. Not a dip — this is an overextension zone. Avoid chasing; wait for pullback toward the 200MA.',
+      "Price is 25.0% above the 200-day average; its 20-day slope cannot be computed yet (fewer than 221 closes).",
     )
     expect(ma200Regime(105, flat220).dipSignal).toBe('IN_TREND')
     expect(ma200Regime(105, flat220).dipSignalExplained).toBe(
-      'Price is in a healthy uptrend, 5.0% above the 200-day SMA. No dip signal — standard hold/accumulate-on-correction posture.',
+      "Price is 5.0% above the 200-day average; its 20-day slope cannot be computed yet (fewer than 221 closes).",
     )
   })
 
@@ -339,19 +260,19 @@ describe('ma200Regime — deviation-zone boundaries + full metadata (null slope)
   it('null-slope dip zones → WATCH_DIP in every zone (unknown slope is never a falling knife)', () => {
     expect(ma200Regime(95, flat220).dipSignal).toBe('WATCH_DIP')
     expect(ma200Regime(95, flat220).dipSignalExplained).toBe(
-      'Price is -5.0% below 200-day SMA. Insufficient history to confirm 200MA slope direction — treat as watch until confirmed.',
+      "Price is 5.0% below the 200-day average; its 20-day slope cannot be computed yet (fewer than 221 closes).",
     )
     expect(ma200Regime(85, flat220).dipSignal).toBe('WATCH_DIP')
     expect(ma200Regime(85, flat220).dipSignalExplained).toBe(
-      'Deep dip zone (-15.0% below 200MA). Insufficient history to confirm 200MA slope direction — the trend is unknown, not confirmed declining. Treat as watch until the slope can be computed.',
+      "Price is 15.0% below the 200-day average; its 20-day slope cannot be computed yet (fewer than 221 closes).",
     )
     expect(ma200Regime(75, flat220).dipSignal).toBe('WATCH_DIP')
     expect(ma200Regime(75, flat220).dipSignalExplained).toBe(
-      'Extreme deep dip (-25.0% below 200MA). Insufficient history to confirm 200MA slope direction — the trend is unknown, not confirmed declining. Treat as watch until the slope can be computed.',
+      "Price is 25.0% below the 200-day average; its 20-day slope cannot be computed yet (fewer than 221 closes).",
     )
     expect(ma200Regime(60, flat220).dipSignal).toBe('WATCH_DIP')
     expect(ma200Regime(60, flat220).dipSignalExplained).toBe(
-      'Capitulation zone (-40.0% below 200MA). Insufficient history to confirm 200MA slope direction — the trend is unknown, not confirmed declining. Treat as watch until the slope can be computed.',
+      "Price is 40.0% below the 200-day average; its 20-day slope cannot be computed yet (fewer than 221 closes).",
     )
   })
 })
@@ -367,22 +288,22 @@ describe('ma200Regime — dipSignal by slope direction', () => {
     expect(r.slopePositive).toBe(true)
     expect(r.dipSignal).toBe('STRONG_DIP')
     expect(r.dipSignalExplained).toBe(
-      'First test of rising 200-day SMA (-5.0% below). 200MA slope is POSITIVE — this is a textbook high-probability buy zone. ',
+      "Price is 5.0% below the 200-day average; the average moved +6.07% over 20 days (rising by the +0.5% threshold).",
     )
     expect(ma200Regime(SMA_RISE * 0.95, rising250, 25).dipSignalExplained).toBe(
-      'First test of rising 200-day SMA (-5.0% below). 200MA slope is POSITIVE — this is a textbook high-probability buy zone. RSI(14) at 25 — oversold confirmation.',
+      "Price is 5.0% below the 200-day average; the average moved +6.07% over 20 days (rising by the +0.5% threshold). RSI(14) is 25.",
     )
   })
 
   it('rising 200MA: DEEP_DIP → WATCH_DIP (scale-in), BEAR_ALERT → WATCH_DIP, CRASH → STRONG_DIP', () => {
     expect(ma200Regime(SMA_RISE * 0.85, rising250).dipSignal).toBe('WATCH_DIP')
     expect(ma200Regime(SMA_RISE * 0.85, rising250, 25).dipSignalExplained).toBe(
-      'Deep dip zone (-15.0% below 200MA) with a still-rising 200MA. Historical forward returns are positive, but volatility is elevated. Scale in cautiously — do NOT go all-in. RSI(14) at 25 — extreme oversold signal supports staged entry.',
+      "Price is 15.0% below the 200-day average; the average moved +6.07% over 20 days (rising by the +0.5% threshold). RSI(14) is 25.",
     )
     expect(ma200Regime(SMA_RISE * 0.75, rising250).dipSignal).toBe('WATCH_DIP')
     expect(ma200Regime(SMA_RISE * 0.65, rising250).dipSignal).toBe('STRONG_DIP')
     expect(ma200Regime(SMA_RISE * 0.65, rising250).dipSignalExplained).toBe(
-      'Capitulation zone (-35.0% below 200MA) with 200MA slope starting to flatten/rise — this mirrors post-crash bottoming patterns. Maximum long-term opportunity with disciplined staged buying.',
+      "Price is 35.0% below the 200-day average; the average moved +6.07% over 20 days (rising by the +0.5% threshold).",
     )
   })
 
@@ -391,14 +312,14 @@ describe('ma200Regime — dipSignal by slope direction', () => {
     expect(fd.slopePositive).toBe(false)
     expect(fd.dipSignal).toBe('WATCH_DIP')
     expect(fd.dipSignalExplained).toBe(
-      'Price is -5.0% below 200-day SMA but the 200MA slope is NEGATIVE (declining). This elevates falling-knife risk. Wait for 200MA to flatten before committing.',
+      "Price is 5.0% below the 200-day average; the average moved -5.40% over 20 days (not rising by the +0.5% threshold).",
     )
     expect(ma200Regime(SMA_FALL * 0.85, falling250).dipSignal).toBe('FALLING_KNIFE')
     expect(ma200Regime(SMA_FALL * 0.75, falling250).dipSignalExplained).toBe(
-      'FALLING KNIFE — HIGH CONVICTION: -25.0% below a DECLINING 200-day SMA. This matches historical bear market profiles (2001, 2008, 2022). Avoid long exposure until 200MA slope inflects positive.',
+      "Price is 25.0% below the 200-day average; the average moved -5.40% over 20 days (not rising by the +0.5% threshold).",
     )
     expect(ma200Regime(SMA_FALL * 0.65, falling250).dipSignalExplained).toBe(
-      'EXTREME FALLING KNIFE: -35.0% below a still-declining 200-day SMA. Systemic bear market or structural breakdown. Only the most aggressive contrarian positioning is warranted, with full expectation of further short-term pain.',
+      "Price is 35.0% below the 200-day average; the average moved -5.40% over 20 days (not rising by the +0.5% threshold).",
     )
   })
 
@@ -408,7 +329,7 @@ describe('ma200Regime — dipSignal by slope direction', () => {
       zone: 'INSUFFICIENT_DATA', deviationPct: null, slopePositive: null, slopePct: null,
       label: 'Insufficient Data', color: '#64748b', riskLevel: 'medium',
       interpretation: 'Fewer than 200 daily closes available — cannot compute 200-day SMA.',
-      forwardReturnContext: 'N/A', dipSignal: 'INSUFFICIENT_DATA', dipSignalExplained: 'Not enough history to assess.',
+      dipSignal: 'INSUFFICIENT_DATA', dipSignalExplained: 'Not enough history to assess.',
     })
     const flat220 = Array.from({ length: 220 }, () => 100)
     expect(ma200Regime(0, flat220).zone).toBe('INSUFFICIENT_DATA')
@@ -417,12 +338,43 @@ describe('ma200Regime — dipSignal by slope direction', () => {
   })
 })
 
+describe('ma200Regime — Q-153: the copy describes, and a slow rise is not "declining"', () => {
+  it('a 200-day average up less than +0.5% over 20 days reads "not rising", with its real + sign', () => {
+    // 221+ closes rising slowly: the slope is positive but below the threshold.
+    const slow = Array.from({ length: 260 }, (_, i) => 100 + i * 0.002)
+    const r = ma200Regime(95, slow)
+    expect(r.slopePositive).toBe(false)
+    expect(r.slopePct).toBeGreaterThan(0)
+    expect(r.dipSignalExplained).toMatch(/the average moved \+0\.\d\d% over 20 days \(not rising by the \+0\.5% threshold\)/)
+    expect(r.dipSignalExplained).not.toMatch(/negative|declin/i)
+  })
+
+  it('no zone, slope state or RSI produces trade instructions or forward-return claims', () => {
+    // Q153-C9: the same list regime-copy.test.ts uses — two guards over the
+    // same copy carried two different lists.
+    const series = {
+      flat: Array.from({ length: 220 }, () => 100),
+      rising: Array.from({ length: 250 }, (_, i) => 100 + i * 0.5),
+      falling: Array.from({ length: 250 }, (_, i) => 200 - i * 0.4),
+    }
+    for (const closes of Object.values(series)) {
+      const sma = closes.slice(-200).reduce((a, b) => a + b, 0) / 200
+      for (const k of [1.3, 1.15, 1.05, 0.95, 0.85, 0.75, 0.6]) {
+        for (const rsi of [undefined, 25, 75]) {
+          const r = ma200Regime(sma * k, closes, rsi)
+          for (const text of [r.label, r.interpretation, r.dipSignalExplained]) expect(offending(text), text).toBe(false)
+        }
+      }
+    }
+  })
+})
+
 describe('trendLabel — exact branch strings', () => {
   it('pins all five outcomes', () => {
     expect(trendLabel(null, null, 100)).toBe('Insufficient history')
-    expect(trendLabel(110, 100, 120)).toBe('Price > SMA50 > SMA200 (bullish stack)')
-    expect(trendLabel(100, 120, 90)).toBe('Price < SMA50 < SMA200 (bearish stack)') // price 90 < SMA50 100 < SMA200 120
-    expect(trendLabel(105, 100, 102)).toBe('Golden cross zone (SMA50 above SMA200)')
-    expect(trendLabel(95, 100, 102)).toBe('Death cross zone (SMA50 below SMA200)')
+    expect(trendLabel(110, 100, 120)).toBe('Price > SMA50 > SMA200')
+    expect(trendLabel(100, 120, 90)).toBe('Price < SMA50 < SMA200') // price 90 < SMA50 100 < SMA200 120
+    expect(trendLabel(105, 100, 102)).toBe('SMA50 above SMA200')
+    expect(trendLabel(95, 100, 102)).toBe('SMA50 below SMA200')
   })
 })

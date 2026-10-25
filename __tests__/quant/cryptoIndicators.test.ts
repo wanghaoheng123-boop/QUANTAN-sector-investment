@@ -9,7 +9,6 @@ import {
   calcVWAP,
   calcBollingerBands,
   interpretFundingRate,
-  interpretFearGreed,
   type BtcCandle,
 } from '@/lib/crypto'
 import {
@@ -19,7 +18,6 @@ import {
   calcDifficultyRibbon,
   calcOBV,
   calcVWMA,
-  generateSignals,
 } from '@/lib/quant/btc-indicators'
 
 const SECONDS_PER_DAY = 86400
@@ -189,52 +187,5 @@ describe('interpretFundingRate', () => {
   it('returns NEUTRAL on non-finite input', () => {
     expect(interpretFundingRate(NaN).signal).toBe('NEUTRAL')
     expect(interpretFundingRate(Infinity).signal).toBe('NEUTRAL')
-  })
-})
-
-describe('interpretFearGreed', () => {
-  it('flags >= 75 as Extreme Greed', () => {
-    expect(interpretFearGreed(80).label).toBe('Extreme Greed')
-    expect(interpretFearGreed(75).label).toBe('Extreme Greed')
-  })
-
-  it('flags 25-44 as Fear', () => {
-    expect(interpretFearGreed(30).label).toBe('Fear')
-  })
-
-  it('flags <25 as Extreme Fear', () => {
-    expect(interpretFearGreed(10).label).toBe('Extreme Fear')
-  })
-})
-
-
-// ─── generateSignals end-to-end smoke ───────────────────────────────────────
-
-describe('generateSignals', () => {
-  it('returns [] on insufficient candles (<55)', () => {
-    const candles = makeCandles(Array.from({ length: 30 }, () => 50_000))
-    expect(generateSignals(candles)).toEqual([])
-  })
-
-  it('returns RSI + MACD + EMA Cross + BB signals on sufficient data', () => {
-    const candles = makeCandles(Array.from({ length: 100 }, (_, i) => 50_000 + i * 100))
-    const signals = generateSignals(candles)
-    const indicators = signals.map((s) => s.indicator)
-    expect(indicators).toContain('RSI(14)')
-    expect(indicators).toContain('EMA Cross')
-  })
-
-  it('adds Funding Rate signal when provided extreme funding', () => {
-    const candles = makeCandles(Array.from({ length: 100 }, (_, i) => 50_000 + i * 10))
-    const signals = generateSignals(candles, 0.005, 50)
-    const funding = signals.find((s) => s.indicator === 'Funding Rate')
-    expect(funding?.signal).toBe('SELL')  // positive funding = crowded longs
-  })
-
-  it('adds Fear & Greed contrarian signal when extreme', () => {
-    const candles = makeCandles(Array.from({ length: 100 }, (_, i) => 50_000 + i * 10))
-    const signals = generateSignals(candles, undefined, 10)  // extreme fear
-    const fg = signals.find((s) => s.indicator === 'Fear & Greed')
-    expect(fg?.signal).toBe('BUY')
   })
 })
