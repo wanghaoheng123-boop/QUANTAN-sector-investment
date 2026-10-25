@@ -67,6 +67,30 @@ export function canonicalSecurityId(raw: string): SecurityId | null {
 }
 
 /**
+ * The hyphen spelling of a share class typed with a dot (`BRK.B` -> `BRK-B`), as
+ * a CANDIDATE to try after the typed symbol misses; never a replacement for it.
+ *
+ * Yahoo spells a US share class with a hyphen and answers the dot spelling with
+ * nothing or a validation error (measured 2026-10-24 on five share-class symbols).
+ * But a dot followed by ONE letter is also how Yahoo spells a foreign exchange
+ * suffix (`.L`, `.T`), and those resolve as typed and NOT as the hyphen spelling.
+ * `SHARE_CLASS` matches both and cannot tell them apart: its rule is an
+ * assumption about the US universe (see above), and applying it to every symbol a
+ * public route receives would turn a quote that exists into "no quote". So the
+ * caller fetches what the user typed, and only on a miss tries this.
+ *
+ * Null when the input was not typed with a dot, or is not share-class-shaped.
+ */
+export function hyphenShareClassCandidate(raw: string): string | null {
+  const typed = raw.trim().toUpperCase()
+  if (!typed.includes('.')) return null
+  const id = canonicalSecurityId(typed)
+  if (id == null) return null
+  const m = SHARE_CLASS.exec(id)
+  return m ? `${m[1]}-${m[2]}` : null
+}
+
+/**
  * Filesystem-safe name for a security's fixture. `.` is legal in filenames, but
  * the existing corpus uses the hyphen form, so this preserves it rather than
  * forcing a rename of every fixture.
