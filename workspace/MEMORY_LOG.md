@@ -2620,3 +2620,29 @@ The built app was inspected at desktop 1440px and phone 320/375px: no horizontal
 **Single next action:** publish the verified Q-158 branch as a draft PR and inspect its CI/preview. Q-158 remains `partial` while publication is pending; do not merge #252 on invented owner authorization or call #249 mutation-verified.
 
 Follow-up publication check: PR #253 exact head `806f13d` has all CI and Vercel checks SUCCESS. UI screenshots are `/private/tmp/quantan-ui-desktop.png` and `/private/tmp/quantan-ui-mobile.png`; phone client/scroll widths match at both 320px and 375px. These are preview/local checks, not production deployment.
+
+
+## 2026-10-26 — Q-158 published as draft PR #254
+
+The user explicitly approved pushing **`7b40053`** (the UI, test, smoke and handoff changes) to the **public** `wanghaoheng123-boop/QUANTAN-sector-investment` repository on `codex/ui-workspace-redesign`, and opening a draft PR. The ordinary push succeeded; [draft PR #254](https://github.com/wanghaoheng123-boop/QUANTAN-sector-investment/pull/254) was created and attached to the chat. No merge or production deployment was performed or authorized by this publication step.
+
+The final adversary review resumed today and completed against exact **`7b40053`**, finding no new blocker. This supersedes the prior handoff's incomplete additional review attempt without rewriting that history. Prior passing local suites were not rerun for publication.
+
+**Checks at this snapshot:** typecheck, lint, benchmark, workflows and pytest **SUCCESS**; test and coverage **in progress**; Vercel **building**. This is not a final green-CI report. The Vercel bot supplied [the preview URL](https://quantan-git-codex-ui-works-5adbe0-wanghaoheng123-7549s-projects.vercel.app); its contents and completed deployment are not asserted by this entry. The root agent will inspect final checks.
+
+Only `workspace/SESSION_STATE.json`, `workspace/MEMORY_LOG.md` and `workspace/IMPROVEMENT_BACKLOG.json` changed in this handoff. Q-158 remains **partial**, now **draft published, awaiting design review and merge**; publication is no longer pending. Historical untracked review directories and Claude's other worktrees remain untouched.
+
+**Single next action:** inspect draft #254's final CI and Vercel preview, then present the redesign for review. Do not merge under the publication-only authorization.
+
+
+### 2026-10-26 — Correction: the aggregated local all-clear missed a final-tree failure
+
+CI for **`7b40053`** failed **two vendor-register assertions** in its test/coverage jobs. Deleting `components/Sparkline.tsx` had left an active `www.w3.org` SVG-namespace row citing the deleted file. The earlier local full run preceded that deletion, and the affected rerun covered only the orphan guard. **The earlier aggregated 2,797-test all-clear therefore did not prove the final tree passed.** This dated correction supersedes that interpretation while preserving the original history.
+
+`reviews/vendor-licence-register.json` now withdraws **only that detected namespace entry**, dated 26 Oct. Its history remains, including the residual that the URI still occurs in public SVG assets. No guard or broader legal/exposure scope changed. Security validation passed **115/115** targeted tests.
+
+A fresh **complete** suite on the current UI plus registry-fix tree passed **193/193 files and 2,797/2,797 tests in 15.24 seconds**. Evidence: `/private/tmp/quantan-ui-final-full-tests.log`. This complete run replaces the invalid aggregate as final-tree evidence. The combined registry/state/memory/backlog follow-up commit and push are pending at this snapshot; **new CI is not yet claimed green**.
+
+The original Vercel build succeeded, but the preview requires SSO. The CLI had no existing authentication; no login was completed and no protection was changed. **Preview HTML remains unverified.** Build success does not establish a browser-inspected preview. Q-158 remains `partial` for the follow-up CI, design review and merge; production is unchanged.
+
+**Single next action:** commit/push the four metadata files, then inspect current exact-head CI and Vercel checks for draft #254. No merge is authorized by the publication request.

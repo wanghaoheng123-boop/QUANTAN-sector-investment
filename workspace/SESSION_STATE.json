@@ -1289,5 +1289,28 @@
     "backlog": "Q-158 remains partial while publication is pending. Q-159 records the pre-existing REST/websocket ordering race; it was not repaired in this UI package. Existing older backlog items were not falsely closed.",
     "next": "Publish the verified Q-158 branch as a draft PR and inspect its CI/preview, then resume the open PR queue from the saved reports. Keep #252 owner-gated and do not describe #249 as mutation-verified.",
     "btc_followup_ci": "GitHub exact-head check after push: PR #253 at 806f13d has all CI and Vercel checks SUCCESS. This confirms the preview/build checks, not production deployment."
+  },
+  "wave_2026_10_26_q158_draft_publication": {
+    "package": "Q-158 — publish the verified UI redesign as a draft PR; no merge or production deployment.",
+    "authorization": "The user explicitly approved pushing commit 7b40053 (UI, tests, smoke check and handoff) to the public wanghaoheng123-boop/QUANTAN-sector-investment repository on codex/ui-workspace-redesign and opening a draft PR. This is the approved payload and destination, not an inferred publication permission.",
+    "published_commit": "7b40053 — Q-158: redesign the research workspace and market overview. Ordinary push to origin/codex/ui-workspace-redesign succeeded.",
+    "pull_request": {
+      "number": 254,
+      "url": "https://github.com/wanghaoheng123-boop/QUANTAN-sector-investment/pull/254",
+      "state": "OPEN, draft; attached to this chat"
+    },
+    "review": "The final adversary review was resumed on 2026-10-26 and completed on exact commit 7b40053, with no new blocker. This supersedes the incomplete extra-review attempt recorded in the 2026-10-25 verification handoff; the prior history is retained.",
+    "checks_at_handoff": "At the publication snapshot for 7b40053: typecheck, lint, benchmark, workflows and pytest SUCCESS; test and coverage still in progress; Vercel building. These are pending checks at this point, not a final green-CI claim. The root agent will inspect the final results.",
+    "preview": {
+      "url": "https://quantan-git-codex-ui-works-5adbe0-wanghaoheng123-7549s-projects.vercel.app",
+      "evidence": "URL supplied by the Vercel bot; deployment building at this snapshot. Preview contents and successful deployment are not asserted here."
+    },
+    "scope_preserved": "No feature code or previously passing suites were changed or rerun by this publication handoff. Only the canonical state, memory and Q-158 publication record are updated. Historical untracked review directories are preserved.",
+    "status": "Q-158 remains partial: draft #254 published, registry correction verified locally, follow-up push/CI pending, preview HTML behind SSO, and design review/merge outstanding. No merge or production deployment.",
+    "next": "Commit and push the registry metadata correction with this dated handoff, inspect new exact-head test/coverage/smoke and Vercel checks, then present draft #254 for design review. Do not merge under publication-only authorization.",
+    "correction_2026_10_26": "The prior aggregated local all-clear did NOT establish a passing final tree. CI on 7b40053 failed two assertions in the vendor-register test (test and coverage jobs): deleting components/Sparkline.tsx left an active www.w3.org SVG-namespace entry whose evidence cited that deleted file. The initial full local run preceded the deletion; rerunning only the orphan guard missed the now-invalid vendor row. This dated correction supersedes any earlier final-tree all-green interpretation of the 2,797-test aggregate; the historical entries are retained.",
+    "fix_2026_10_26": "reviews/vendor-licence-register.json withdraws only the detected www.w3.org Sparkline namespace entry, dated 2026-10-26, preserving the row history and explicitly noting that the URI still occurs in public SVG assets. No guard was weakened, no broader licence/exposure claim was made, and no auth/protection setting changed. Security review passed 115/115 targeted tests.",
+    "final_tree_verification_2026_10_26": "After the registry metadata correction, the exact current UI plus registry-fix tree passed a fresh COMPLETE suite: 193/193 test files, 2,797/2,797 tests, 15.24 seconds. Evidence: /private/tmp/quantan-ui-final-full-tests.log. This complete run replaces the invalid aggregated final-tree all-clear. The correction is locally verified; the combined metadata follow-up commit/push and its new CI are pending at this snapshot.",
+    "preview_access_2026_10_26": "The original Vercel build succeeded, but the preview requires SSO. The local CLI had no existing authenticated session; no authentication was completed and no deployment protection was changed. Preview HTML remains unverified. A successful build is not a claim that preview content was inspected."
   }
 }
