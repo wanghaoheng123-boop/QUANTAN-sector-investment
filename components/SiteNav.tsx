@@ -41,6 +41,24 @@ import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useDialogA11y } from '@/hooks/useDialogA11y'
+import {
+  LayoutDashboard, PanelsTopLeft, FlaskConical, Newspaper, Grid2X2,
+  ChartNoAxesCombined, Gem, Bitcoin, Wallet, ChartPie, Shield, ArrowUpRight,
+} from 'lucide-react'
+
+const NAV_ICONS = {
+  '/': LayoutDashboard,
+  '/desk': PanelsTopLeft,
+  '/backtest': FlaskConical,
+  '/briefs': Newspaper,
+  '/heatmap': Grid2X2,
+  '/ma-deviation': ChartNoAxesCombined,
+  '/commodities': Gem,
+  '/crypto/btc': Bitcoin,
+  '/portfolio': Wallet,
+  '/portfolio/factor-attribution': ChartPie,
+  '/risk/scenarios': Shield,
+}
 
 interface NavItem {
   href: string
@@ -60,7 +78,7 @@ interface NavGroup {
  * renders all of them.
  */
 const NAV_PRIMARY: NavItem[] = [
-  { href: '/', label: 'Markets', hint: 'All 11 GICS sectors, live' },
+  { href: '/', label: 'Overview', hint: 'All 11 GICS sectors' },
   { href: '/desk', label: 'Desk', hint: 'Multi-instrument monitor' },
   { href: '/backtest', label: 'Backtest', hint: 'Single-pass historical test' },
   { href: '/briefs', label: 'Briefs', hint: 'Curated sector news' },
@@ -101,7 +119,7 @@ export function isActivePath(pathname: string, href: string): boolean {
 }
 
 const linkBase =
-  'text-xs font-medium transition-colors rounded px-1.5 py-1 focus:outline-none focus:ring-2 focus:ring-amber-400'
+  'text-xs font-medium transition-colors rounded-md px-2 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400'
 
 function TopLink({ item, pathname }: { item: NavItem; pathname: string }) {
   const active = isActivePath(pathname, item.href)
@@ -109,12 +127,12 @@ function TopLink({ item, pathname }: { item: NavItem; pathname: string }) {
     <Link
       href={item.href}
       aria-current={active ? 'page' : undefined}
-      className={`${linkBase} ${active ? 'text-white' : 'text-slate-300 hover:text-white'}`}
+      className={`${linkBase} ${active ? 'bg-amber-400/10 text-amber-300' : 'text-slate-300 hover:bg-white/5 hover:text-white'}`}
     >
       {item.label}
       <span
         aria-hidden="true"
-        className={`block h-px transition-all duration-200 ${active ? 'bg-amber-500' : 'bg-transparent'}`}
+        className="sr-only"
       />
     </Link>
   )
@@ -301,7 +319,7 @@ function MobileDrawer({
 export function SiteNavDesktop() {
   const pathname = usePathname() || '/'
   return (
-    <nav aria-label="Main" className="hidden items-center gap-1 lg:flex">
+    <nav aria-label="Main" className="hidden items-center gap-1 lg:flex xl:hidden">
       {NAV_PRIMARY.map((item) => (
         <TopLink key={item.href} item={item} pathname={pathname} />
       ))}
@@ -310,6 +328,55 @@ export function SiteNavDesktop() {
         <NavDisclosure key={group.label} group={group} pathname={pathname} />
       ))}
     </nav>
+  )
+}
+
+/** The wide workspace uses the same destinations as the compact navigation. */
+export function SiteNavSidebar() {
+  const pathname = usePathname() || '/'
+  const section = (label: string, items: NavItem[]) => (
+    <div key={label} className="space-y-1">
+      <p className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">{label}</p>
+      {items.map((item) => {
+        const active = isActivePath(pathname, item.href)
+        const Icon = NAV_ICONS[item.href as keyof typeof NAV_ICONS]
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            aria-current={active ? 'page' : undefined}
+            className={`group flex min-h-11 items-center gap-3 rounded-lg px-3 text-[13px] font-medium transition-colors ${
+              active
+                ? 'bg-amber-400/10 text-amber-300'
+                : 'text-slate-400 hover:bg-white/[0.04] hover:text-slate-100'
+            }`}
+          >
+            <Icon className="h-[18px] w-[18px] shrink-0" strokeWidth={1.6} aria-hidden="true" />
+            <span>{item.label}</span>
+            {active && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-amber-400" aria-hidden="true" />}
+          </Link>
+        )
+      })}
+    </div>
+  )
+
+  return (
+    <aside className="workspace-sidebar">
+      <Link href="/" className="flex h-20 items-center gap-3 border-b border-white/[0.06] px-6" aria-label="QUANTAN home">
+        <span className="workspace-logomark" aria-hidden="true">Q<span /></span>
+        <span className="text-sm font-semibold tracking-[0.16em] text-white">QUANTAN</span>
+      </Link>
+      <nav aria-label="Workspace" className="flex-1 space-y-7 overflow-y-auto px-3 py-7">
+        {section('Workspace', NAV_PRIMARY)}
+        {NAV_GROUPS.map((group) => section(group.label, group.items))}
+      </nav>
+      <div className="m-4 rounded-xl border border-white/[0.08] bg-white/[0.02] p-4">
+        <div className="mb-2 flex items-center gap-2 text-xs font-medium text-slate-200"><FlaskConical className="h-4 w-4 text-amber-300" aria-hidden="true" />Research workspace</div>
+        <p className="text-xs leading-relaxed text-slate-400">Explore the data. Inspect the assumptions.</p>
+        <Link href="/backtest" className="mt-3 flex items-center justify-between text-xs font-medium text-amber-300 hover:text-amber-200">Open backtest<ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" /></Link>
+      </div>
+      <div className="border-t border-white/[0.06] px-6 py-4 text-[11px] text-slate-400">Market intelligence, in perspective.</div>
+    </aside>
   )
 }
 

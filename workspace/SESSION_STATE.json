@@ -1233,5 +1233,84 @@
     "filed": "Q-145..Q-152 (#245); Q-153 (ma200Regime copy + two-state slope), Q-154 (DCF residuals), Q-155 (owner: .agents/.codex copies) in the records PR.",
     "next": "Q-145 (quote producers: null not 0; ~12 consumers incl. untyped JSON ones; scoping WIP on local branch fix/q145-null-not-zero a98be76), Q-153 (route via Q-083), Q-144 (BTC restatement: keep first vintage, append, record without values; needs data-integrity), Q-143 (idle-cash Sharpe).",
     "open_now": "Owner-gated: Q-082/Q-083 legal, Q-097 branch protection (lint now requirable), Q-150 tail-risk trade actions, Q-152 unconsumed routes and test-only modules, Q-155 Codex copies, rotate the start-universal.sh token, authorise the Vercel connector."
+  },
+  "wave_2026_10_25_claude_recovery_and_ui_redesign": {
+    "package": "Q-158 — user-authorized, bounded application shell and homepage UI redesign, with recovery of Claude's interrupted handoff.",
+    "status": "in progress; implementation and verification pending",
+    "authorization": "User asked to check what Claude did today, continue unfinished work, and redesign the user interface with better UI and design.",
+    "branch": "codex/ui-workspace-redesign, based on origin/main ed725ef. The root main checkout was stale at 27d24a9 (2026-10-17); it was not the latest project state.",
+    "recovery_evidence": "Claude session 59ac7acf-a424-437c-aa36-6315c2a97cb7 stopped at 2026-10-25 00:45 SGT with a session-limit HTTP 429. Last assistant messages and existing worktree/status evidence were inspected. Prior verification counts below are Claude's recorded results, not checks rerun by this session.",
+    "merged_before_this_session": {
+      "PR_248": "Q-145, ea2db4c, merged 2026-10-18: missing quote prices/changes remain null rather than zero. Backlog closure was not recorded.",
+      "PR_250": "Q-144, ed725ef, merged 2026-10-24: store finished, settled bars; replace legacy unfinished bars. Scheduled refresh success still needs confirmation; the recorded-revision exit is a separate open PR."
+    },
+    "open_prs_at_recovery": {
+      "PR_249": "Q-153 regime copy, q153 worktree / fix/q153-regime-copy, f1fa5b9. Claude reported typecheck clean and 149 targeted tests passing. Final review interrupted; completed quant-indicators-family Stryker run unread at cutoff. Two review reports remain untracked in that worktree.",
+      "PR_251": "Q-149 dark-pool fields, q149 worktree / fix/q149-darkpool-fields, d2ed425. Claude reported typecheck clean and 103 targeted tests passing. Final re-gate interrupted; review reports remain untracked.",
+      "PR_252": "Q-144 recorded-revision exit, q144b worktree / fix/q144-recorded-revision-acceptance, 610bd6a. Additional edits to acceptedRevisions.test.ts, acceptedRevisions.json, planSave.mjs and recordedRevisions.mjs were uncommitted at recovery. Round-2 report approves code with fixes but requires evidence of the owner's CAT adoption decision and a rewritten squash message; do not infer owner approval from an agent-written attestation.",
+      "PR_253": "Q-156/Q-157 nullable options/BTC changes and BTC price-feed state, q156 worktree / fix/q156-q157-missing-change-null, ed0ab2c. Claude reported 2,823 tests passing. Second red-team review interrupted; production verification and closure remain."
+    },
+    "records_preserved": "records2 / chore/records-2026-10-24 has a modified findings-ledger.csv and three untracked Q-144 review reports. They were not imported, staged or discarded. Existing backlog items were not falsely closed.",
+    "scope": "Shared shell/navigation, visual hierarchy, spacing, typography, accessible responsive layout and homepage presentation; preserve data freshness, missing-data and failure disclosures. No signal, valuation, backtest or allocation changes.",
+    "specialists": "Frontend engineer for implementation; red-team for adversarial review before completion. Coordinator owns only canonical session state, memory and backlog records.",
+    "acceptance": "Working navigation and homepage; desktop and narrow-view visual inspection; lint, typecheck, relevant tests and production build pass; independent red-team findings resolved or explicitly recorded.",
+    "verification": "Pending. No claim of completion, publication or deployment.",
+    "next": "Implement and verify Q-158, then append exact results here. Resume the four open PRs from their saved review reports without discarding uncommitted work."
+  },
+  "wave_2026_10_25_q158_verification_handoff": {
+    "package": "Q-158 — verified shared-shell/homepage redesign and recovery handoff. This wave supersedes the in-progress status in wave_2026_10_25_claude_recovery_and_ui_redesign; that earlier recovery record is preserved.",
+    "branch": "codex/ui-workspace-redesign from ed725ef; UI changes are prepared for a draft PR. No merge or production deployment is claimed.",
+    "implemented": "Persistent desktop sidebar using the existing navigation destinations; compact searchable header and preserved mobile modal; graphite workspace styling; compact market overview and sector cards; session-direction filters; briefs rail with publisher and UTC stamps; compact historical-backtest entry. Missing quotes and changes remain missing; receipt time is labelled Received and stream connectivity is not quote freshness. A news network exception now leaves a persistent unavailable notice. Removed the now-unused components/Sparkline.tsx and updated the smoke check to assert the new h1.",
+    "files": [
+      "app/globals.css",
+      "app/layout.tsx",
+      "app/page.tsx",
+      "components/SectorCard.tsx",
+      "components/SiteNav.tsx",
+      "components/Sparkline.tsx (deleted)",
+      "__tests__/components/LandingNewsFailure.test.tsx",
+      "scripts/smoke-production.mjs",
+      "workspace/SESSION_STATE.json",
+      "workspace/MEMORY_LOG.md",
+      "workspace/IMPROVEMENT_BACKLOG.json"
+    ],
+    "verification_environment": "Google Drive FUSE caused ETIMEDOUT reads at startup, including on tracked source and node_modules. Validation used a local git archive plus exact changed-file overlays in /private/tmp/quantan-ui-20261025, bundled Node 24.22.1, locally installed dependencies and a rebuilt native SQLite addon. No env/secrets were copied; auth configuration was not validated in this scratch environment. Root and scratch sources were checked by SHA-256.",
+    "tests": "2,797 tests across 193 files accounted for by one full run and affected-file rechecks: the first run passed 2,795 and failed only the orphan-module guard after the sole Sparkline consumer was removed; deleting the unused file made that guard pass 9/9. The final persistent-news-failure regression plus affected homepage tests passed 8/8. This is not a claim of a second complete suite run.",
+    "gates": "Typecheck clean; full lint and final focused lint clean; final production build passed. check:ci workflow lint and verify:data passed (56 fixture files, 73,211 rows, zero hard failures, two known NFLX/UNH warnings); its first smoke run caught the renamed heading, the smoke assertion was updated, and final-build local smoke passed 20/20. No signal/backtest calculation changed, so no new benchmark result is claimed.",
+    "browser": "Built app inspected at 1440px desktop and 320/375px phone widths. No horizontal page overflow; phone header measured 57px. UP showed three matching sector links and ALL restored eleven. Mobile drawer initially focused its close button and Escape closed it. At 375px, entering AAPL and pressing Enter opened /stock/AAPL; the home link returned to the overview. These checks exercise the local production build, not Vercel production. At 320px the first card began at 667.5px inside the 812px viewport; document client/scroll widths matched at 314px and at 375px matched at 369px. Screenshots: /private/tmp/quantan-ui-desktop.png and /private/tmp/quantan-ui-mobile.png.",
+    "reviews": "The completed UI red-team review found no blocking data/null or navigation regression; security-compliance and disinformation reviews approved the bounded copy/news diff. An additional final UI red-team attempt after the phone-spacing and persistent-news-error adjustments hit a usage limit and did not complete. The final small adjustments have affected-test, typecheck, lint, build and browser evidence; do not describe them as having an additional completed independent re-gate.",
+    "btc_followup": "PR #253 updated on its existing fix/q156-q157-missing-change-null branch with commit 806f13d097ec60e8631b3290d2dbd3435bb59513. Coinbase vendor time now drives LIVE/STALE; receipt time stays separate; malformed/missing/future/replayed timestamps cannot produce LIVE or suppress REST fallback. Verification: 2,848 tests / 195 files accounted for through full run plus affected recheck, typecheck/lint/build passed, red-team found no blocker. reviews/q157-vendor-time-followup-2026-10-25.md was committed; the original untracked review report was preserved. No merge/production verification is claimed.",
+    "remaining_prs": {
+      "PR_249": "Q-153 remains open. Correction to the earlier unread-result description: the quant-indicators-family Stryker run failed in its initial test run, with two worker SIGSEGVs and exit 1; it produced NO mutation score. Latest targeted review passed 144 tests. Review/ledger artifacts remain uncommitted.",
+      "PR_251": "Q-149 runtime fixes are present and 84 targeted tests passed in the recovery review. Review reports and follow-up ledger records remain uncommitted; preserve the prescribed squash-only publication and corrected message. A test-header narrative still needs simplification.",
+      "PR_252": "Q-144 adoption exit remains blocked: an agent-written CAT owner-adoption attestation has no recorded authorization. Four additional files are uncommitted and the review evidence is untracked; 67 tests passed on those saved edits. Preserve quarantine until an evidenced decision or removal of the CAT row, and use a corrected squash message.",
+      "PR_253": "Vendor-time follow-up pushed; await current CI and final PR closure. Existing slow-REST-overwrites-newer-websocket race is Q-159."
+    },
+    "backlog": "Q-158 remains partial while publication is pending. Q-159 records the pre-existing REST/websocket ordering race; it was not repaired in this UI package. Existing older backlog items were not falsely closed.",
+    "next": "Publish the verified Q-158 branch as a draft PR and inspect its CI/preview, then resume the open PR queue from the saved reports. Keep #252 owner-gated and do not describe #249 as mutation-verified.",
+    "btc_followup_ci": "GitHub exact-head check after push: PR #253 at 806f13d has all CI and Vercel checks SUCCESS. This confirms the preview/build checks, not production deployment."
+  },
+  "wave_2026_10_26_q158_draft_publication": {
+    "package": "Q-158 — publish the verified UI redesign as a draft PR; no merge or production deployment.",
+    "authorization": "The user explicitly approved pushing commit 7b40053 (UI, tests, smoke check and handoff) to the public wanghaoheng123-boop/QUANTAN-sector-investment repository on codex/ui-workspace-redesign and opening a draft PR. This is the approved payload and destination, not an inferred publication permission.",
+    "published_commit": "7b40053 — Q-158: redesign the research workspace and market overview. Ordinary push to origin/codex/ui-workspace-redesign succeeded.",
+    "pull_request": {
+      "number": 254,
+      "url": "https://github.com/wanghaoheng123-boop/QUANTAN-sector-investment/pull/254",
+      "state": "OPEN, draft; attached to this chat"
+    },
+    "review": "The final adversary review was resumed on 2026-10-26 and completed on exact commit 7b40053, with no new blocker. This supersedes the incomplete extra-review attempt recorded in the 2026-10-25 verification handoff; the prior history is retained.",
+    "checks_at_handoff": "At the publication snapshot for 7b40053: typecheck, lint, benchmark, workflows and pytest SUCCESS; test and coverage still in progress; Vercel building. These are pending checks at this point, not a final green-CI claim. The root agent will inspect the final results.",
+    "preview": {
+      "url": "https://quantan-git-codex-ui-works-5adbe0-wanghaoheng123-7549s-projects.vercel.app",
+      "evidence": "URL supplied by the Vercel bot; deployment building at this snapshot. Preview contents and successful deployment are not asserted here."
+    },
+    "scope_preserved": "No feature code or previously passing suites were changed or rerun by this publication handoff. Only the canonical state, memory and Q-158 publication record are updated. Historical untracked review directories are preserved.",
+    "status": "Q-158 remains partial: draft #254 published, registry correction verified locally, follow-up push/CI pending, preview HTML behind SSO, and design review/merge outstanding. No merge or production deployment.",
+    "next": "Commit and push the registry metadata correction with this dated handoff, inspect new exact-head test/coverage/smoke and Vercel checks, then present draft #254 for design review. Do not merge under publication-only authorization.",
+    "correction_2026_10_26": "The prior aggregated local all-clear did NOT establish a passing final tree. CI on 7b40053 failed two assertions in the vendor-register test (test and coverage jobs): deleting components/Sparkline.tsx left an active www.w3.org SVG-namespace entry whose evidence cited that deleted file. The initial full local run preceded the deletion; rerunning only the orphan guard missed the now-invalid vendor row. This dated correction supersedes any earlier final-tree all-green interpretation of the 2,797-test aggregate; the historical entries are retained.",
+    "fix_2026_10_26": "reviews/vendor-licence-register.json withdraws only the detected www.w3.org Sparkline namespace entry, dated 2026-10-26, preserving the row history and explicitly noting that the URI still occurs in public SVG assets. No guard was weakened, no broader licence/exposure claim was made, and no auth/protection setting changed. Security review passed 115/115 targeted tests.",
+    "final_tree_verification_2026_10_26": "After the registry metadata correction, the exact current UI plus registry-fix tree passed a fresh COMPLETE suite: 193/193 test files, 2,797/2,797 tests, 15.24 seconds. Evidence: /private/tmp/quantan-ui-final-full-tests.log. This complete run replaces the invalid aggregated final-tree all-clear. The correction is locally verified; the combined metadata follow-up commit/push and its new CI are pending at this snapshot.",
+    "preview_access_2026_10_26": "The original Vercel build succeeded, but the preview requires SSO. The local CLI had no existing authenticated session; no authentication was completed and no deployment protection was changed. Preview HTML remains unverified. A successful build is not a claim that preview content was inspected."
   }
 }

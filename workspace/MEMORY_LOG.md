@@ -2579,3 +2579,70 @@ The lesson I keep re-learning: **a guard written to catch the defect you just fi
 - An untracked file at a path the new base adds makes `git rebase` refuse with "could not detach HEAD". My chained test run then passed on the OLD base and I nearly pushed it as rebased.
 
 Open and next: Q-145 (quote producers emit 0 for a missing price or change), Q-153 (the daily 200-MA regime copy still gives trade instructions and unsourced forward returns), Q-144 (BTC frozen by a 0.002% restatement), and the owner-gated items in SESSION_STATE.
+
+
+## 2026-10-25 — Recover Claude's interrupted work; start the UI redesign (Q-158)
+
+The user asked to check Claude's work today, continue unfinished work and redesign the user interface. Claude's saved session stopped at **00:45 SGT on 25 Oct** on a session-limit HTTP 429. Its work was spread across existing worktrees. The root checkout was still `main` at `27d24a9` (17 Oct), while `origin/main` was `ed725ef` (24 Oct). This session selected **`codex/ui-workspace-redesign` from `ed725ef`** for the user's bounded shared-shell/homepage redesign.
+
+**Already merged before this session:** #248 / Q-145 (`ea2db4c`, 18 Oct) and #250 / Q-144 (`ed725ef`, 24 Oct). Their backlog closure lagged the code. Q-144 still needs a successful scheduled refresh before claiming its operational symptom is resolved; the acceptance exit is separately open as #252. No old backlog item was closed by this recovery entry.
+
+**Still open at recovery:**
+
+- #249 / Q-153, `.claude/worktrees/q153`, `f1fa5b9`: Claude reported typecheck and 149 targeted tests passing; final review interrupted and a finished quant-indicators-family Stryker result unread. Two review reports are untracked.
+- #251 / Q-149, `.claude/worktrees/q149`, `d2ed425`: Claude reported typecheck and 103 targeted tests passing; final re-gate interrupted. Two review reports are untracked.
+- #252 / Q-144 exit, `.claude/worktrees/q144b`, `610bd6a`: four files have additional uncommitted edits (`__tests__/data/acceptedRevisions.test.ts`, `scripts/lib/acceptedRevisions.json`, `scripts/lib/planSave.mjs`, `scripts/lib/recordedRevisions.mjs`). Its round-2 report approves the code with fixes but requires an evidenced owner decision on CAT adoption and a custom squash message excluding earlier false claims. An agent-written claim that the owner chose adoption is not evidence. Preserve these edits and the untracked review.
+- #253 / Q-156/Q-157, `.claude/worktrees/q156`, `ed0ab2c`: Claude reported 2,823 tests passing. Second red-team review stopped on the limit; production verification remains. Its first review is untracked.
+
+`.claude/worktrees/records2` also contains a modified `reviews/findings-ledger.csv` and three untracked Q-144 review reports. Those changes were preserved in place and **not imported** into this branch. Recorded prior test counts are evidence from Claude's saved messages, not fresh validation by this session.
+
+**Q-158 scope:** improve the shared shell/navigation and homepage hierarchy, spacing, typography and responsive accessibility. Preserve the existing freshness, missing-data and failure messages. No quantitative model, valuation, allocation or backtest changes. Frontend implementation and an independent red-team review are required before closure. Broader page redesigns stay outside this slice.
+
+**Record paths touched so far:** `workspace/SESSION_STATE.json`, `workspace/MEMORY_LOG.md`, `workspace/IMPROVEMENT_BACKLOG.json` (new Q-158, `partial` because the schema has no in-progress status). Implementation, verification and publication remain pending; their exact results will be appended.
+
+**Single next action:** implement and verify Q-158 on this branch, then resume the four PRs from the existing reports and saved work rather than restarting them.
+
+
+## 2026-10-25 — Q-158 verified locally; BTC vendor-time follow-up pushed
+
+The shared shell and homepage redesign is implemented on `codex/ui-workspace-redesign` from `ed725ef`: desktop sidebar, searchable compact header, responsive market overview and sector cards, session filters, briefs rail and a smaller backtest entry. Existing nullable quote/change handling remains. Connectivity no longer claims quote liveness, receipt time says **Received**, and a news network exception leaves a persistent **Unavailable** notice. The sole decorative Sparkline consumer was removed, so the unused component was deleted too. The smoke check now asserts the new `Market overview` h1.
+
+**Exact product/test paths:** `app/globals.css`, `app/layout.tsx`, `app/page.tsx`, `components/SectorCard.tsx`, `components/SiteNav.tsx`, deleted `components/Sparkline.tsx`, `__tests__/components/LandingNewsFailure.test.tsx`, and `scripts/smoke-production.mjs`. Canonical state, memory and backlog were updated; no parallel handoff file was created.
+
+**Verification, and what failed first:** Google Drive FUSE timed out reading tracked source and dependencies. A local archive with changed-file overlays in `/private/tmp/quantan-ui-20261025` under bundled Node 24.22.1 supplied reproducible validation without copying env/secrets. Full tests first passed 2,795 and failed the orphan guard on the newly unused Sparkline. After deletion, that guard passed 9/9; the final network-error regression and affected homepage tests passed 8/8. **2,797 tests / 193 files are accounted for through the full run plus affected rechecks**, not a second complete suite. Typecheck, full/focused lint and final production build passed. Workflow lint and data verification passed (56 fixture files, 73,211 rows, zero hard failures, two known warnings). Smoke initially failed the old hero-title assertion; after correcting it, final-build local smoke passed **20/20**. No new benchmark result is claimed because no signal/backtest calculation changed.
+
+The built app was inspected at desktop 1440px and phone 320/375px: no horizontal page overflow, 57px phone header, UP filter three matching sectors and ALL eleven, drawer close-button focus/Escape, and AAPL search + Enter reaching `/stock/AAPL`, then returning home. Security-compliance, disinformation and the completed UI red-team review approved the bounded changes. **An extra final red-team attempt after the small phone-spacing/persistent-news-error changes hit a usage limit; it did not complete.** Those final changes have test/type/lint/build/browser evidence, not an additional independent re-gate. Scratch auth was not validated because no secrets were copied.
+
+**Continued Claude's unfinished #253:** vendor time, rather than browser receipt time, now drives Coinbase LIVE/STALE. Replayed, missing, malformed and future timestamps cannot manufacture LIVE or keep fallback suppressed. The follow-up was committed and pushed to the existing branch as **`806f13d`** with `reviews/q157-vendor-time-followup-2026-10-25.md`; 2,848 tests / 195 files were accounted for through a full run plus affected recheck, types/lint/build passed and red-team found no blocker. The original untracked review was preserved. No merge or production verification is claimed. The pre-existing late-REST-overwrites-newer-websocket race is filed as **Q-159**, not quietly repaired here.
+
+**Open PR corrections and resumption points:** #249's unread Stryker result was a failed initial test run (two worker SIGSEGVs, exit 1), **no mutation score**; 144 targeted recovery tests passed. #251's required runtime fixes passed 84 targeted tests, but review/ledger artifacts remain uncommitted and its corrected squash-only publication must be preserved. #252 still has four uncommitted files and an unsupported agent-written CAT owner-adoption attestation; 67 tests passed on those saved edits, but it remains blocked until authorization is evidenced or the CAT row is removed. Preserve quarantine and use the corrected squash message. None of these PRs was merged by this session. The earlier recovery entry's unfinished-result wording is superseded by this evidence; its history is retained.
+
+**Single next action:** publish the verified Q-158 branch as a draft PR and inspect its CI/preview. Q-158 remains `partial` while publication is pending; do not merge #252 on invented owner authorization or call #249 mutation-verified.
+
+Follow-up publication check: PR #253 exact head `806f13d` has all CI and Vercel checks SUCCESS. UI screenshots are `/private/tmp/quantan-ui-desktop.png` and `/private/tmp/quantan-ui-mobile.png`; phone client/scroll widths match at both 320px and 375px. These are preview/local checks, not production deployment.
+
+
+## 2026-10-26 — Q-158 published as draft PR #254
+
+The user explicitly approved pushing **`7b40053`** (the UI, test, smoke and handoff changes) to the **public** `wanghaoheng123-boop/QUANTAN-sector-investment` repository on `codex/ui-workspace-redesign`, and opening a draft PR. The ordinary push succeeded; [draft PR #254](https://github.com/wanghaoheng123-boop/QUANTAN-sector-investment/pull/254) was created and attached to the chat. No merge or production deployment was performed or authorized by this publication step.
+
+The final adversary review resumed today and completed against exact **`7b40053`**, finding no new blocker. This supersedes the prior handoff's incomplete additional review attempt without rewriting that history. Prior passing local suites were not rerun for publication.
+
+**Checks at this snapshot:** typecheck, lint, benchmark, workflows and pytest **SUCCESS**; test and coverage **in progress**; Vercel **building**. This is not a final green-CI report. The Vercel bot supplied [the preview URL](https://quantan-git-codex-ui-works-5adbe0-wanghaoheng123-7549s-projects.vercel.app); its contents and completed deployment are not asserted by this entry. The root agent will inspect final checks.
+
+Only `workspace/SESSION_STATE.json`, `workspace/MEMORY_LOG.md` and `workspace/IMPROVEMENT_BACKLOG.json` changed in this handoff. Q-158 remains **partial**, now **draft published, awaiting design review and merge**; publication is no longer pending. Historical untracked review directories and Claude's other worktrees remain untouched.
+
+**Single next action:** inspect draft #254's final CI and Vercel preview, then present the redesign for review. Do not merge under the publication-only authorization.
+
+
+### 2026-10-26 — Correction: the aggregated local all-clear missed a final-tree failure
+
+CI for **`7b40053`** failed **two vendor-register assertions** in its test/coverage jobs. Deleting `components/Sparkline.tsx` had left an active `www.w3.org` SVG-namespace row citing the deleted file. The earlier local full run preceded that deletion, and the affected rerun covered only the orphan guard. **The earlier aggregated 2,797-test all-clear therefore did not prove the final tree passed.** This dated correction supersedes that interpretation while preserving the original history.
+
+`reviews/vendor-licence-register.json` now withdraws **only that detected namespace entry**, dated 26 Oct. Its history remains, including the residual that the URI still occurs in public SVG assets. No guard or broader legal/exposure scope changed. Security validation passed **115/115** targeted tests.
+
+A fresh **complete** suite on the current UI plus registry-fix tree passed **193/193 files and 2,797/2,797 tests in 15.24 seconds**. Evidence: `/private/tmp/quantan-ui-final-full-tests.log`. This complete run replaces the invalid aggregate as final-tree evidence. The combined registry/state/memory/backlog follow-up commit and push are pending at this snapshot; **new CI is not yet claimed green**.
+
+The original Vercel build succeeded, but the preview requires SSO. The CLI had no existing authentication; no login was completed and no protection was changed. **Preview HTML remains unverified.** Build success does not establish a browser-inspected preview. Q-158 remains `partial` for the follow-up CI, design review and merge; production is unchanged.
+
+**Single next action:** commit/push the four metadata files, then inspect current exact-head CI and Vercel checks for draft #254. No merge is authorized by the publication request.
