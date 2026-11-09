@@ -49,12 +49,16 @@ describe('/api/ma-deviation — a degraded board is not cached', () => {
     const first = await (await GET(req('/api/ma-deviation'))).json()
     expect(first.degraded).toBe(true)
     expect(first.error.message).toMatch(/Price data failed for \d+ of \d+ instruments/)
+    // Q153-C12: the degraded answer carries the same classified rows, so it
+    // carries the same disclaimer.
+    expect(first.disclaimer).toMatch(/not a forecast.*Not investment advice/i)
 
     chartMock.mockResolvedValue(__SYNTHETIC__chart())
     const second = await (await GET(req('/api/ma-deviation'))).json()
     expect(second.degraded).toBeUndefined()
     expect(second._cached).toBe(false)
     expect(second.rows.some((r: { price: number | null }) => r.price != null)).toBe(true)
+    expect(second.disclaimer).toBe(first.disclaimer)
   })
 
   it('a degraded board is held at the CDN for 30 s only, not the healthy 5 minutes', async () => {

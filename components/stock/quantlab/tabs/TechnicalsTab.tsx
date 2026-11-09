@@ -1,5 +1,6 @@
 'use client'
 
+import { slopeState, slopeText } from '@/lib/quant/technicals'
 import { halfKelly } from '@/lib/quant/kelly'
 import { fmtB, fmtPct } from '@/components/stock/quantlab/formatters'
 import type { QuantLabAdvMetrics } from '@/components/stock/quantlab/hooks/useQuantLabFundamentals'
@@ -36,7 +37,7 @@ export function TechnicalsTab({
   return (
     <div className="space-y-6">
             <p className="text-xs text-slate-400">
-              Indicators use daily closes (~2y+ when available). ATR stops are <strong className="text-slate-400">2×ATR</strong> offsets — not a trade recommendation.
+              Indicators use daily closes (~2y+ when available). The ±2×ATR(14) levels are distances from the last close, not stop placement.
             </p>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
@@ -68,94 +69,51 @@ export function TechnicalsTab({
               </div>
             </div>
 
-            {/* 200-day MA deviation regime — buy-the-dip / falling-knife signal */}
+            {/* 200-day MA deviation regime: distance and slope, described (Q-153).
+                Q153-C1/C5/C6: no class badge (its labels were not true of the
+                classes), no "Risk: low/high" (an unmeasured claim, rendered in
+                green), and one neutral colour — red/green is kept only for a measured
+                slope beyond +0.5% / below −0.5%. */}
             {data.ma200Regime && (
-              <div
-                className="rounded-xl border p-4"
-                style={{ borderColor: data.ma200Regime.color + '55', backgroundColor: data.ma200Regime.color + '0d' }}
-              >
-                <div className="flex items-start justify-between flex-wrap gap-3">
-                  <div>
-                    <div className="text-[10px] uppercase tracking-widest mb-1" style={{ color: data.ma200Regime.color }}>
-                      200-Day MA Regime
-                    </div>
-                    <div className="text-xl font-bold" style={{ color: data.ma200Regime.color }}>
-                      {data.ma200Regime.label}
-                    </div>
-                    <div className="text-xs text-slate-400 mt-0.5">
-                      {data.technicals.sma200 != null
-                        ? `200DMA: $${data.technicals.sma200.toFixed(2)}`
-                        : ''}
-                      {data.ma200Regime.deviationPct != null
-                        ? ` · Deviation: ${data.ma200Regime.deviationPct >= 0 ? '+' : ''}${data.ma200Regime.deviationPct.toFixed(1)}%`
-                        : ''}
-                    </div>
-                  </div>
-                  <div
-                    className={`text-sm font-bold px-3 py-1 rounded-full border ${
-                      data.ma200Regime.dipSignal === 'STRONG_DIP'
-                        ? 'bg-emerald-950/60 border-emerald-500/50 text-emerald-300'
-                        : data.ma200Regime.dipSignal === 'FALLING_KNIFE'
-                          ? 'bg-red-950/60 border-red-500/50 text-red-300'
-                          : data.ma200Regime.dipSignal === 'WATCH_DIP'
-                            ? 'bg-yellow-950/60 border-yellow-500/50 text-yellow-300'
-                            : 'bg-slate-900/60 border-slate-700 text-slate-300'
-                    }`}
-                  >
-                    {data.ma200Regime.dipSignal === 'STRONG_DIP'
-                      ? '✓ BUY THE DIP'
-                      : data.ma200Regime.dipSignal === 'FALLING_KNIFE'
-                        ? '✗ FALLING KNIFE'
-                        : data.ma200Regime.dipSignal === 'WATCH_DIP'
-                          ? '⚠ WATCH — NO ADD'
-                          : data.ma200Regime.dipSignal === 'OVERBOUGHT'
-                            ? '⚠ OVERBOUGHT'
-                            : data.ma200Regime.dipSignal === 'IN_TREND'
-                              ? '→ IN TREND'
-                              : data.ma200Regime.dipSignal}
-                  </div>
+              <div className="rounded-xl border border-slate-800 p-4">
+                <div className="text-[10px] uppercase tracking-widest mb-1 text-slate-400">200-day average: distance and slope</div>
+                <div className="text-xl font-bold text-slate-200">{data.ma200Regime.label}</div>
+                <div className="text-xs text-slate-400 mt-0.5">
+                  {data.technicals.sma200 != null
+                    ? `200DMA: $${data.technicals.sma200.toFixed(2)}`
+                    : ''}
+                  {data.ma200Regime.deviationPct != null
+                    ? ` · Deviation: ${data.ma200Regime.deviationPct >= 0 ? '+' : ''}${data.ma200Regime.deviationPct.toFixed(1)}%`
+                    : ''}
                 </div>
                 <p className="text-xs text-slate-400 mt-2 leading-relaxed">
                   {data.ma200Regime.dipSignalExplained}
                 </p>
-                <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
-                  {data.ma200Regime.forwardReturnContext}
-                </p>
-                <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-2 text-[10px] text-slate-400">
-                  <div>
-                    <span className="uppercase tracking-wide mr-1">Risk: </span>
-                    <span
-                      className={
-                        data.ma200Regime.riskLevel === 'low'
-                          ? 'text-green-400'
-                          : data.ma200Regime.riskLevel === 'medium'
-                            ? 'text-yellow-400'
-                            : 'text-red-400'
-                      }
-                    >
-                      {data.ma200Regime.riskLevel}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="uppercase tracking-wide mr-1">200MA slope: </span>
-                    {data.ma200Regime.slopePct != null
-                      ? `${data.ma200Regime.slopePct > 0 ? '↗' : '↘'} ${data.ma200Regime.slopePositive ? 'Rising' : 'Declining'} (${data.ma200Regime.slopePct > 0 ? '+' : ''}${(data.ma200Regime.slopePct * 100).toFixed(4)}%/bar)`
-                      : data.ma200Regime.slopePositive === true
-                        ? '↗ Rising'
-                        : data.ma200Regime.slopePositive === false
-                          ? '↘ Declining'
-                          : '—'}
-                  </div>
+                <div className="mt-2 text-[10px] text-slate-400">
+                  <span className="uppercase tracking-wide mr-1">200MA slope: </span>
+                  <span
+                    className={
+                      slopeState(data.ma200Regime.slopePct) === 'rising'
+                        ? 'text-emerald-400'
+                        : slopeState(data.ma200Regime.slopePct) === 'falling'
+                          ? 'text-red-400'
+                          : 'text-slate-300'
+                    }
+                  >
+                    {slopeText(data.ma200Regime.slopePct)}
+                  </span>
                 </div>
               </div>
             )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="rounded-xl border border-slate-800 p-4">
-                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">ATR reference stops</h3>
+                {/* Q-153: levels, not stops — "reference stops" / "long risk" was
+                    stop-placement copy of the kind removed from the sector page (S1). */}
+                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Last close ± 2 × ATR(14)</h3>
                 <div className="text-xs space-y-1 font-mono text-slate-300">
-                  <div>Long risk ~2 ATR below: {data.technicals.atrStopLong?.toFixed(2) ?? '—'}</div>
-                  <div>Short risk ~2 ATR above: {data.technicals.atrStopShort?.toFixed(2) ?? '—'}</div>
+                  <div>2 ATR below: {data.technicals.atrStopLong?.toFixed(2) ?? '—'}</div>
+                  <div>2 ATR above: {data.technicals.atrStopShort?.toFixed(2) ?? '—'}</div>
                 </div>
               </div>
               <div className="rounded-xl border border-slate-800 p-4">
@@ -221,13 +179,14 @@ export function TechnicalsTab({
 
             <div className="rounded-xl border border-slate-700 p-4 space-y-3">
               <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-widest">Extended analytics (5y history)</h3>
-              {advLoading && <p className="text-xs text-slate-400">Loading win rate & beta proxy…</p>}
+              {advLoading && <p className="text-xs text-slate-400">Loading up-day share & beta proxy…</p>}
               {!advLoading && advError && (
                 <p role="status" data-testid="adv-error" className="text-xs text-amber-400">Extended analytics failed to load ({advError}).</p>
               )}
               {adv && (
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs font-mono text-slate-300">
-                  <div>Win rate (~252d): {adv.winRate252d != null ? fmtPct(adv.winRate252d) : '—'}</div>
+                  {/* Q153-C16: the share of UP DAYS, not the win rate of any strategy. */}
+                  <div>Up days (~252d): {adv.winRate252d != null ? fmtPct(adv.winRate252d) : '—'}</div>
                   <div>Beta* (vs SPY logs): {adv.betaVsSpyLogReturns?.toFixed(2) ?? '—'}</div>
                   <div>ρ 1y: {adv.correlationVsSpy1y?.toFixed(2) ?? '—'}</div>
                   <div>Div. yield: {adv.dividendYield != null ? fmtPct(adv.dividendYield) : '—'}</div>

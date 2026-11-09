@@ -204,7 +204,7 @@ describe('buildFundamentalsPayload — RICH fixture (full payload)', () => {
     expect(t.atr14).toBeCloseTo(1.245320725, 8)
     expect(t.atrStopLong).toBeCloseTo(160.2777047, 6)
     expect(t.atrStopShort).toBeCloseTo(165.2589876, 6)
-    expect(t.trendLabel).toBe('Golden cross zone (SMA50 above SMA200)')
+    expect(t.trendLabel).toBe('SMA50 above SMA200')
     // MIGRATION NOTE (Q110-Q2, 2026-09-05). This golden was 0.005516396121 and
     // it FROZE A BUG: `maxDrawdown` divided the largest absolute drop by the
     // final running peak instead of the peak standing when it happened, which

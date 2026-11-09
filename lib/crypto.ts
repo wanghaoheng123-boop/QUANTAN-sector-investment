@@ -196,16 +196,3 @@ export function interpretFundingRate(rate: number): {
   }
   return { label: 'Neutral', color: 'text-slate-400', signal: 'NEUTRAL' }
 }
-
-/** Fear & Greed interpretation */
-export function interpretFearGreed(value: number): {
-  label: string
-  color: string
-  description: string
-} {
-  if (value >= 75) return { label: 'Extreme Greed', color: 'text-green-400', description: 'Market is highly greedy — caution' }
-  if (value >= 55) return { label: 'Greed', color: 'text-lime-400', description: 'Bullish sentiment dominating' }
-  if (value >= 45) return { label: 'Neutral', color: 'text-slate-400', description: 'Sentiment is balanced' }
-  if (value >= 25) return { label: 'Fear', color: 'text-orange-400', description: 'Bearish sentiment — potential buying opportunity' }
-  return { label: 'Extreme Fear', color: 'text-red-400', description: 'Market is fearful — high risk environment' }
-}
