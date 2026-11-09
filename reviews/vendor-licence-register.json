@@ -656,7 +656,9 @@
     {
       "kind": "http-host",
       "id": "www.w3.org",
-      "lifecycle": "active",
+      "lifecycle": "withdrawn",
+      "withdrawn_on": "2026-10-26",
+      "withdrawn_reason": "Q-158 deleted components/Sparkline.tsx after removing its only consumer, retiring the sole occurrence detected by the register's executable-text walk. This URI was an SVG namespace identifier, never an HTTP request. The same namespace remains in public/quantan-logo.svg, outside the walk's executable extensions; withdrawal does not claim every textual occurrence disappeared.",
       "classification": "xml-namespace",
       "vendor": "n/a",
       "end_user_exposed": false,

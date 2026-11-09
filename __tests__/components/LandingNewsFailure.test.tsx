@@ -47,6 +47,19 @@ describe('landing page — a failed news or price fetch is said, not hidden', ()
     expect(screen.queryByText(/No news available at the moment/)).not.toBeInTheDocument()
   })
 
+  it('a network failure keeps the news feed visibly unavailable after the toast', async () => {
+    vi.stubGlobal('EventSource', SilentEventSource)
+    vi.stubGlobal('fetch', vi.fn((url: string) => String(url).startsWith('/api/briefs')
+      ? Promise.reject(new TypeError('Network request failed'))
+      : Promise.resolve(respond(200, { quotes: [] })),
+    ))
+    const { default: Page } = await import('@/app/page')
+    render(<Page />)
+    await waitFor(() => expect(screen.getByText('Unavailable · Yahoo Finance')).toBeInTheDocument())
+    expect(screen.getByText('The news feed could not be reached. Please try again later.')).toBeInTheDocument()
+    expect(screen.queryByText(/No news available at the moment/)).not.toBeInTheDocument()
+  })
+
   it('a 500 from /api/prices raises the price-refresh notice', async () => {
     vi.stubGlobal('EventSource', SilentEventSource)
     vi.stubGlobal('fetch', vi.fn((url: string) => Promise.resolve(

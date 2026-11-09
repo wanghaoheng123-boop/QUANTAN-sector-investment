@@ -8,7 +8,7 @@ import ComplianceBanner from '@/components/ComplianceBanner'
 import KeyboardShortcuts, { ShortcutsButton } from '@/components/KeyboardShortcuts'
 import MarketStatus from '@/components/MarketStatus'
 import Breadcrumbs from '@/components/Breadcrumbs'
-import { SiteNavDesktop, SiteNavMobile } from '@/components/SiteNav'
+import { SiteNavDesktop, SiteNavMobile, SiteNavSidebar } from '@/components/SiteNav'
 
 export const viewport: Viewport = {
   themeColor: '#0a0a0f',
@@ -49,7 +49,7 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body className="bg-bg text-white antialiased" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
+      <body className="text-white antialiased" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
         <Providers>
           {/* Skip-link — Phase 13 S2 fix (F6.1) — WCAG 2.4.1 Bypass Blocks (Level A).
               Hidden by default; visible only on keyboard focus. Allows keyboard
@@ -60,69 +60,62 @@ export default function RootLayout({
           >
             Skip to main content
           </a>
-          {/* Global Nav — restructured 2026-08-14 (F-IA-1 + F-UI-1).
-              Was: a flat `flex-wrap` row of 7 links + search + auth + status
-              that collapsed into five stacked bands at 375 px and measured
-              211 px tall (26 % of the viewport) while STILL not exposing
-              /portfolio, /portfolio/factor-attribution, /risk/scenarios or
-              /backtest. Now: a single 56 px row at every breakpoint, with the
-              full destination list owned by `components/SiteNav.tsx`. */}
-          <header className="sticky top-0 z-50 border-b border-slate-800/50 bg-slate-950/90 backdrop-blur-xl">
-            <div className="max-w-7xl mx-auto px-4 h-14 flex items-center gap-3">
-              {/* Must be a <Link>, not a raw <a>. Measured on production
-                  2026-09-14 (Q-119): the raw anchor took 190.5 ms median and
-                  re-issued 16 requests against the nav <Link>'s 23 ms and zero,
-                  because a document navigation rebuilds the whole app shell —
-                  and it also discards every bit of client state (SWR caches,
-                  the open SSE stream, scroll position) that a soft nav keeps. */}
-              <Link href="/" className="flex items-center gap-2.5 group shrink-0">
-                <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center text-xs font-bold text-white shadow-lg shadow-amber-900/50 group-hover:shadow-amber-700/60 transition-shadow">
-                  QU
+          <SiteNavSidebar />
+          <div className="workspace-frame">
+            <header className="workspace-header sticky top-0 z-50">
+              <div className="mx-auto flex h-14 max-w-[1600px] items-center gap-3 px-4 sm:px-6 xl:h-20 xl:gap-5 xl:px-8">
+                {/* Must be a <Link>, not a raw <a>. Measured on production
+                    2026-09-14 (Q-119): the raw anchor took 190.5 ms median and
+                    re-issued 16 requests against the nav <Link>'s 23 ms and zero,
+                    because a document navigation rebuilds the whole app shell —
+                    and it also discards every bit of client state (SWR caches,
+                    the open SSE stream, scroll position) that a soft nav keeps. */}
+                <Link href="/" className="flex shrink-0 items-center gap-2.5 xl:hidden" aria-label="QUANTAN home">
+                  <span className="workspace-logomark workspace-logomark-small" aria-hidden="true">Q<span /></span>
+                  <span className="hidden text-xs font-semibold tracking-[0.12em] text-white sm:inline">QUANTAN</span>
+                </Link>
+                {/* Breadcrumbs only where there is room — below xl the nav's
+                    aria-current already communicates location. */}
+                <div className="hidden min-w-0 shrink-0 xl:flex">
+                  <span className="mr-4 text-xs font-medium text-slate-400">Market intelligence</span>
+                  <Breadcrumbs />
                 </div>
-                <span className="font-bold text-white text-sm tracking-wide">QUANTAN</span>
-                <span className="text-slate-400 text-xs hidden 2xl:block font-mono">/ Market Intelligence</span>
-              </Link>
-              {/* Breadcrumbs only where there is room — below xl the nav's
-                  aria-current already communicates location. */}
-              <div className="hidden xl:flex shrink-0">
-                <Breadcrumbs />
-              </div>
 
-              <SiteNavDesktop />
+                <SiteNavDesktop />
 
-              <div className="flex-1" />
+                <div className="hidden xl:block xl:flex-1" />
 
-              <div className="hidden sm:block w-36 md:w-48 lg:w-56 xl:w-72 min-w-0 shrink">
-                <GlobalSearch />
-              </div>
-              <ShortcutsButton />
-              <div className="hidden sm:flex shrink-0">
-                <MarketStatus />
-              </div>
-              <SafeAuth />
-              <SiteNavMobile />
-            </div>
-          </header>
-          <main id="main-content" tabIndex={-1} className="focus:outline-none">
-            {children}
-          </main>
-          <KeyboardShortcuts />
-          <ComplianceBanner />
-          <footer className="border-t border-slate-800/60 mt-12 py-8">
-            <div className="max-w-7xl mx-auto px-4">
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-400">
-                <div className="flex items-center gap-2">
-                  <div className="w-5 h-5 rounded bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center text-[9px] font-bold text-white">QU</div>
-                  <span className="font-medium text-slate-400">QUANTAN</span>
-                  <span className="text-slate-700" aria-hidden="true">·</span>
-                  <span>Market Intelligence Platform</span>
+                <div className="workspace-search min-w-0 flex-1 sm:max-w-xs lg:max-w-[180px] xl:max-w-sm">
+                  <GlobalSearch />
                 </div>
-                <p className="text-center sm:text-right max-w-lg">
-                  Data for informational purposes only — not investment advice. Dark pool panels and some signals are simulated for demonstration purposes.
-                </p>
+                <div className="hidden sm:block"><ShortcutsButton /></div>
+                <div className="hidden sm:flex shrink-0">
+                  <MarketStatus />
+                </div>
+                <SafeAuth />
+                <SiteNavMobile />
               </div>
-            </div>
-          </footer>
+            </header>
+            <main id="main-content" tabIndex={-1} className="min-h-[calc(100vh-15rem)] focus:outline-none">
+              {children}
+            </main>
+            <KeyboardShortcuts />
+            <ComplianceBanner />
+            <footer className="border-t border-white/[0.06] py-6">
+              <div className="mx-auto max-w-[1600px] px-4 sm:px-6 xl:px-8">
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-400">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-slate-400">QUANTAN</span>
+                    <span className="text-slate-700" aria-hidden="true">·</span>
+                    <span>Market Intelligence Platform</span>
+                  </div>
+                  <p className="text-center sm:text-right max-w-lg">
+                    Data for informational purposes only — not investment advice. Dark pool panels and some signals are simulated for demonstration purposes.
+                  </p>
+                </div>
+              </div>
+            </footer>
+          </div>
         </Providers>
       </body>
     </html>

@@ -5,7 +5,6 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import { BACKTEST_SCOPE_LINE } from '@/lib/backtest/strategyDescription'
 import SectorCard from '@/components/SectorCard'
-import SessionMoveCard from '@/components/SessionMoveCard'
 import PriceTicker from '@/components/PriceTicker'
 import { SECTORS } from '@/lib/sectors'
 import { formatMovePct, sessionMovesFromQuotes, type SessionMove } from '@/lib/sessionMoves'
@@ -183,6 +182,7 @@ export default function HomePage() {
         }
       } catch (e: unknown) {
         if (controller.signal.aborted || (e instanceof DOMException && e.name === 'AbortError')) return
+        setNewsDegraded('The news feed could not be reached. Please try again later.')
         showToast(`News feed failed: ${e instanceof Error ? e.message : 'Network error'}`, 'warn', 5000)
       } finally {
         if (!controller.signal.aborted) setNewsLoading(false)
@@ -221,8 +221,6 @@ export default function HomePage() {
     return acc
   }, {}), [moves])
 
-  const sortedMoves = useMemo(() => [...moves].sort((a, b) => b.changePct - a.changePct), [moves])
-
   const tickerItems = useMemo(() => SECTORS.map(s => ({
     ticker: s.etf,
     name: s.name,
@@ -237,376 +235,163 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen">
-      {/* Error toast notifications — replaces silent .catch(() => {}) (Phase 12 H5) */}
       <ErrorToastList toasts={toasts} onDismiss={dismissToast} />
-
-      {/* Price Ticker */}
       {tickerItems.length > 0 && <PriceTicker items={tickerItems} />}
 
-      <div className="max-w-7xl mx-auto px-4 py-10 space-y-14">
-
-        {/* Hero */}
-        <div className="text-center space-y-4 py-6">
-          {/* Status pill — three states keyed off useLiveQuotes:
-                • emerald + pulsing  — stream connected, market open
-                • amber              — stream connected, market closed (snapshot only)
-                • slate              — reconnecting / EventSource unavailable
-              2026-08-14: the trailing "N/M streams" counter is gone. It existed
-              because the dashboard once held one SSE connection PER ticker and
-              the browser's ~6-per-origin cap silently starved most of them, so
-              the count was real signal ("6/13"). With a single multiplexed
-              stream there is nothing to count — and connection topology was
-              never something to put in front of a user anyway. */}
-          <div
-            className={`inline-flex items-center gap-2.5 rounded-full px-4 py-1.5 text-xs mb-2 shadow-lg ${
-              live.marketOpen && streamConnected
-                ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 shadow-emerald-900/20'
-                : streamConnected
-                  ? 'bg-amber-500/10 border border-amber-500/30 text-amber-400 shadow-amber-900/20'
-                  : 'bg-slate-700/30 border border-slate-600/40 text-slate-400'
-            }`}
-            role="status"
-            aria-live="polite"
-          >
-            <span
-              className={`w-1.5 h-1.5 rounded-full ${
-                live.marketOpen && streamConnected
-                  ? 'bg-emerald-400 animate-pulse'
-                  : streamConnected
-                    ? 'bg-amber-400'
-                    : 'bg-slate-500'
-              }`}
-              aria-hidden="true"
-            />
-            {live.marketOpen && streamConnected
-              ? 'LIVE'
-              : streamConnected
-                ? 'MARKET CLOSED'
-                : 'CONNECTING'}
-            <span className="text-slate-400">·</span>
-            {lastUpdate ? <>Updated <LocalTime value={lastUpdate} /></> : 'Awaiting first tick…'}
+      <div className="mx-auto max-w-[1440px] space-y-6 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+        <header className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="mb-2 hidden text-xs font-medium tracking-[0.16em] text-slate-400 uppercase sm:block">Research workspace</p>
+            <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">Market overview</h1>
+            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-400">A view across {SECTORS.length} GICS sectors. Start with the session, then explore the detail.</p>
           </div>
-          <h1 className="text-4xl sm:text-5xl font-bold tracking-tight">
-            <span className="gradient-text">Sector Intelligence</span>
-          </h1>
-          <p className="text-slate-400 text-base max-w-xl mx-auto leading-relaxed">
-            Market data across all {SECTORS.length} GICS sectors — Yahoo Finance quotes, K-line charts with RSI, MACD and ATR, and sector briefs. Research tooling, not investment advice.
-          </p>
-        </div>
-
-        {/* Backtest CTA */}
-        <section aria-labelledby="section-backtest" className="bg-gradient-to-r from-amber-950/40 via-slate-900/80 to-amber-950/30 rounded-2xl border border-amber-800/30 p-6">
-          <div className="flex items-center justify-between flex-wrap gap-4">
-            <div>
-              {/* 2026-08-14: dropped the hardcoded "NEW" badge — the backtest
-                  dashboard shipped months ago, so the badge was stale copy
-                  nothing could ever expire. */}
-              <div className="flex items-center gap-2 mb-1">
-                <h2 id="section-backtest" className="text-lg font-bold text-white">Institutional Backtest Dashboard</h2>
-              </div>
-              {/* Q-105: this also said "label WR ~55% gross / ~54% net" — a
-                  hand-written, stale figure from the 20-day LABEL benchmark
-                  (a different rulebook from the 60-bar engine described
-                  beside it), whose net value sat at the always-buy base rate. */}
-              <p className="text-sm text-slate-400 max-w-lg">
-                {BACKTEST_SCOPE_LINE}. The rules, for the signal path that ran, are on the backtest page. Simulated results, not a live accuracy guarantee.
-              </p>
+          <div className="flex flex-wrap items-center gap-3 pt-1">
+            <div className="flex items-center gap-2 rounded-lg border border-slate-700/70 bg-slate-900/50 px-3 py-2 text-xs text-slate-300" role="status" aria-live="polite">
+              <span className={`h-1.5 w-1.5 rounded-full ${streamConnected ? 'bg-amber-400' : 'bg-slate-500'}`} aria-hidden="true" />
+              {streamConnected ? (live.marketOpen ? 'Stream connected' : 'Market closed') : 'Connecting'}
             </div>
-            <Link
-              href="/backtest"
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 text-sm font-semibold rounded-xl transition-colors shadow-lg shadow-amber-900/40"
-            >
-              <span>View Backtest</span>
-              <span>→</span>
+            <Link href="/desk" aria-label="Open market desk" className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-700 px-3 text-sm font-medium text-slate-200 transition-colors hover:border-slate-500 hover:bg-slate-800/60">
+              <span className="sm:hidden">Market desk</span><span className="hidden sm:inline">Open market desk</span> <span aria-hidden="true">↗</span>
             </Link>
           </div>
-        </section>
+        </header>
 
-        {/* Largest session moves */}
-        <section aria-labelledby="section-top-signals">
-          <div className="flex items-center justify-between mb-5">
-            <div>
-              <h2 id="section-top-signals" className="text-lg font-bold text-white">Largest session moves</h2>
-              <p className="text-xs text-slate-400 mt-0.5">From Yahoo change % (normalized). UP/DOWN = vs prior close — not buy/sell advice.</p>
-            </div>
-            <Link href="/briefs" className="text-sm text-blue-400 hover:text-blue-300 transition-colors">
-              View all briefs →
-            </Link>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
-            {largestMoves.map((move) => {
-              const sector = SECTORS.find(s => s.etf === move.etf)
-              if (!sector) return null
-              return (
-                <Link key={move.etf} href={`/sector/${sector.slug}`}>
-                  <SessionMoveCard move={move} compact />
-                </Link>
-              )
-            })}
-          </div>
-        </section>
-
-        {/* Market Overview Stats */}
-        <section aria-label="Market overview stats" className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <section aria-label="Market overview stats" className="grid grid-cols-2 overflow-hidden rounded-xl border border-slate-800 bg-slate-900/40 sm:grid-cols-4">
           {[
-            // Q-135: "Bullish/Bearish" named a session move as a view, and
-            // "Avg Confidence" averaged a fabricated 42 + 14×|Δ%| score.
-            { label: 'Sectors up today', value: upMoves.length, of: SECTORS.length, color: '#00d084' },
-            { label: 'Sectors down today', value: downMoves.length, of: SECTORS.length, color: '#ff6b7a' },
-            { label: 'Flat (0.00%)', value: flatMoves.length, of: SECTORS.length, color: '#94a3b8' },
-            { label: 'No change data', value: noChangeData, of: SECTORS.length, color: noChangeData > 0 ? '#f59e0b' : '#64748b' },
-          ].map((stat, i) => (
-            <div key={i} className="rounded-xl border border-slate-800 p-4 bg-slate-900/60 hover:border-slate-700/80 transition-colors">
-              <div className="text-2xl font-bold font-mono" style={{ color: stat.color }}>
-                {stat.value}
-                {stat.of && <span className="text-slate-400 text-base font-normal">/{stat.of}</span>}
-              </div>
-              <div className="text-xs text-slate-400 mt-1">{stat.label}</div>
+            { label: 'Sectors up today', value: upMoves.length, detail: 'Above the prior close', className: 'text-[var(--color-up)]' },
+            { label: 'Sectors down today', value: downMoves.length, detail: 'Below the prior close', className: 'text-[var(--color-down)]' },
+            { label: 'Flat (0.00%)', value: flatMoves.length, detail: 'Unchanged vs prior close', className: 'text-slate-200' },
+            { label: 'No change data', value: noChangeData, detail: 'Missing session change', className: noChangeData > 0 ? 'text-amber-400' : 'text-slate-200' },
+          ].map((stat) => (
+            <div key={stat.label} className="border-slate-800 p-4 odd:border-r sm:border-r sm:last:border-r-0 sm:p-5">
+              <p className={`font-mono text-3xl font-medium tabular-nums ${stat.className}`}>{stat.value}<span className="text-sm font-normal text-slate-400">/{SECTORS.length}</span></p>
+              <p className="mt-2 text-xs font-medium text-slate-300">{stat.label}</p>
+              <p className="mt-1 hidden text-xs text-slate-400 sm:block">{stat.detail}</p>
             </div>
           ))}
         </section>
 
-        {/* Market Breadth */}
-        <section aria-labelledby="section-market-breadth" className="rounded-2xl border border-slate-800 p-5 bg-slate-900/30">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 id="section-market-breadth" className="text-sm font-bold text-white">Market Breadth</h2>
-              <p className="text-[10px] text-slate-400 mt-0.5">Session direction distribution across all sectors</p>
-            </div>
-            <div className="flex items-center gap-4 text-[10px] font-mono">
-              <div className="flex items-center gap-1.5">
-                <div className="w-2 h-2 rounded-full bg-green-400" />
-                <span className="text-slate-400">Up {upMoves.length}</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-2 h-2 rounded-full bg-red-400" />
-                <span className="text-slate-400">Down {downMoves.length}</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-2 h-2 rounded-full bg-amber-400" />
-                <span className="text-slate-400">Flat {flatMoves.length}{noChangeData > 0 ? ` · no change data ${noChangeData}` : ''}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Horizontal stacked bar */}
-          <div className="w-full h-6 bg-slate-800 rounded-lg overflow-hidden flex">
-            {upMoves.length > 0 && (
-              <div
-                className="h-full bg-gradient-to-r from-green-500 to-green-400 flex items-center justify-center transition-all duration-700"
-                style={{ width: `${(upMoves.length / SECTORS.length) * 100}%` }}
-              >
-                {upMoves.length >= 3 && (
-                  <span className="text-[10px] font-bold text-white font-mono">{upMoves.length}</span>
-                )}
-              </div>
-            )}
-            {flatMoves.length > 0 && (
-              <div
-                className="h-full bg-gradient-to-r from-yellow-600 to-yellow-400 flex items-center justify-center transition-all duration-700"
-                style={{ width: `${(flatMoves.length / SECTORS.length) * 100}%` }}
-              >
-                {flatMoves.length >= 2 && (
-                  <span className="text-[10px] font-bold text-white font-mono">{flatMoves.length}</span>
-                )}
-              </div>
-            )}
-            {downMoves.length > 0 && (
-              <div
-                className="h-full bg-gradient-to-r from-red-400 to-red-500 flex items-center justify-center transition-all duration-700"
-                style={{ width: `${(downMoves.length / SECTORS.length) * 100}%` }}
-              >
-                {downMoves.length >= 3 && (
-                  <span className="text-[10px] font-bold text-white font-mono">{downMoves.length}</span>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Sector list below bar */}
-          <div className="mt-4 flex flex-wrap gap-2">
-            {sortedMoves
-              .map((move) => {
-                const sector = SECTORS.find((s) => s.etf === move.etf)
-                const color = move.direction === 'UP' ? '#00d084' : move.direction === 'DOWN' ? '#ff6b7a' : '#94a3b8'
-                return (
-                  <div
-                    key={move.etf}
-                    className="flex items-center gap-1.5 px-2 py-1 rounded bg-slate-800/80 border border-slate-700/50"
-                  >
-                    <span className="text-xs">{sector?.icon}</span>
-                    <span className="text-[10px] font-mono text-slate-400">{move.etf}</span>
-                    <span className="text-[10px] font-mono font-medium" style={{ color }}>
-                      {formatMovePct(move.changePct)}
-                    </span>
-                  </div>
-                )
-              })}
-          </div>
-        </section>
-
-        {/* Sector Grid */}
-        <section aria-labelledby="section-all-sectors">
-          <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
-            <div>
-              <h2 id="section-all-sectors" className="text-lg font-bold text-white">All Sectors</h2>
-              <p className="text-xs text-slate-400 mt-0.5">Click any sector for its K-line chart and news</p>
-            </div>
-            <div className="flex gap-2 flex-wrap">
-              {/* Q-135: these filtered on BUY / SELL / HOLD — trade words for session moves. */}
-              {['ALL', 'UP', 'DOWN', 'FLAT'].map((f) => (
-                <button
-                  key={f}
-                  onClick={() => setActiveFilter(f)}
-                  aria-pressed={activeFilter === f}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
-                    activeFilter === f
-                      ? 'bg-amber-500 text-slate-950'
-                      : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-                  }`}
-                >
-                  {f}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {filteredSectors.map(sector => (
-              <SectorCard
-                key={sector.slug}
-                sector={sector}
-                quote={quotes[sector.etf]}
-                move={moveMap[sector.etf]}
-              />
-            ))}
-          </div>
-        </section>
-
-        {/* Recent Briefs - Live from Yahoo Finance */}
-        <section aria-labelledby="section-latest-news">
-          <div className="flex items-center justify-between mb-5">
-            <div>
-              <h2 id="section-latest-news" className="text-lg font-bold text-white">Latest Financial News</h2>
-              <p className="text-xs text-slate-400 mt-0.5">
-                {newsLoading
-                  ? 'Loading latest news...'
-                  // L6: "Partial" understated a total outage.
-                  : newsDegraded
-                    ? (newsBriefs.length === 0 ? 'Unavailable · Yahoo Finance' : `Partial from Yahoo Finance · ${newsBriefs.length} articles`)
-                    : `Live from Yahoo Finance · ${newsBriefs.length} articles`}
-              </p>
-              {/* Q-140 (I2): a failed or thinned feed is said, not shown as a quiet news day. */}
-              {!newsLoading && newsDegraded && (
-                <p role="status" className="text-xs text-amber-400 mt-1">{newsDegraded}</p>
-              )}
-            </div>
-            <Link href="/briefs" className="text-sm text-amber-400 hover:text-amber-300 transition-colors">
-              View all →
-            </Link>
-          </div>
-          {newsLoading ? (
-            <div className="space-y-4">
-              {[1, 2, 3].map(i => (
-                <div key={i} className="rounded-xl border border-slate-800 p-5 bg-slate-900/40">
-                  <div className="flex items-start gap-4">
-                    <div className="shrink-0 hidden sm:flex">
-                      <div className="w-10 h-10 rounded-lg bg-slate-800 animate-pulse" />
-                    </div>
-                    <div className="flex-1 space-y-2">
-                      <div className="h-3 w-20 bg-slate-800 rounded animate-pulse" />
-                      <div className="h-5 w-full bg-slate-800 rounded animate-pulse" />
-                      <div className="h-4 w-3/4 bg-slate-800 rounded animate-pulse" />
-                    </div>
-                  </div>
+        <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="min-w-0 space-y-6">
+            <section aria-labelledby="section-all-sectors" className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900/25">
+              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 px-4 py-4 sm:px-5">
+                <div>
+                  <h2 id="section-all-sectors" className="text-base font-semibold text-white">Sector watch</h2>
+                  <p className="mt-1 text-xs text-slate-400">ETF moves versus the prior close</p>
                 </div>
-              ))}
-            </div>
-          ) : newsBriefs.length > 0 ? (
-            <div className="space-y-4">
-              {newsBriefs.slice(0, 3).map(brief => (
-                <a
-                  key={brief.id}
-                  href={brief.link}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block rounded-xl border border-slate-800 p-5 hover:border-amber-500/40 hover:bg-slate-900/40 transition-all group"
-                >
-                  <div className="flex items-start gap-4">
-                    <div className="shrink-0 hidden sm:flex">
-                      <div
-                        className="w-10 h-10 rounded-lg flex items-center justify-center text-lg"
-                        style={{ backgroundColor: `${brief.sectorColor || '#f59e0b'}20` }}
-                      >
-                        {brief.tickers[0] ? `💼` : '📰'}
-                      </div>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                        {brief.sectorName && (
-                          <span
-                            className="text-xs font-medium px-2 py-0.5 rounded"
-                            style={{ backgroundColor: `${brief.sectorColor}20`, color: brief.sectorColor }}
-                          >
-                            {brief.sectorName}
-                          </span>
-                        )}
-                        {brief.tickers.slice(0, 2).map(t => (
-                          <span key={t} className="text-xs px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 font-mono">
-                            {t}
-                          </span>
-                        ))}
-                        <span className="text-xs text-slate-400">
-                          {brief.publisher}
-                        </span>
-                        {brief.timestamp && (
-                          <span className="text-xs text-slate-400">
-                            {formatUtcDateTime(brief.timestamp)}
-                          </span>
-                        )}
-                      </div>
-                      <h3 className="text-base font-semibold text-white group-hover:text-slate-200 mb-1.5 leading-snug line-clamp-2">
-                        {brief.title}
-                      </h3>
-                      <p className="text-sm text-slate-400 line-clamp-2">{brief.summary}</p>
-                      <div className="flex flex-wrap gap-1.5 mt-2.5">
-                        {brief.tags.slice(0, 4).map(tag => (
-                          <span key={tag} className="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-400">{tag}</span>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="shrink-0 text-slate-400 group-hover:text-amber-400 transition-colors">↗</div>
-                  </div>
-                </a>
-              ))}
-            </div>
-          ) : newsDegraded ? null : (
-            // A failed feed is announced above; "no news" is only for a feed that answered.
-            <div className="rounded-xl border border-slate-800 p-8 text-center">
-              <p className="text-slate-400">No news available at the moment. Check back shortly.</p>
-            </div>
-          )}
-        </section>
-
-        {/* What's inside */}
-        <section aria-labelledby="section-whats-inside" className="rounded-2xl border border-slate-800 p-8 bg-slate-900/30">
-          <h2 id="section-whats-inside" className="text-lg font-bold text-white mb-6 text-center">What every sector page includes</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-            {[
-              // Q-135: the third card promised entry, stop and target levels with
-              // risk/reward that no producer supplies; the first promised dark-pool
-              // markers and news pins Q-096 removed from the chart.
-              { icon: '📊', title: 'K-Line Chart', desc: 'Candlestick charts with EMA overlays, volume, and RSI, MACD and ATR panels.' },
-              { icon: '🔵', title: 'Dark-Pool Tab', desc: 'Volume and short-interest fields from Yahoo Finance where it publishes them. For sector ETFs it mostly does not, and the tab shows — rather than a number. Its block-print table is illustrative, and labelled so.' },
-              { icon: '⚡', title: 'Session Moves', desc: 'Each sector ETF\u2019s move versus the prior close, with its quote time — a measurement, not a trade signal.' },
-            ].map((item, i) => (
-              <div key={i} className="text-center space-y-2 p-4 rounded-xl border border-slate-800 hover:border-amber-800/40 hover:bg-amber-500/5 transition-all">
-                <div className="text-2xl">{item.icon}</div>
-                <div className="font-semibold text-white text-sm">{item.title}</div>
-                <div className="text-xs text-slate-400 leading-relaxed">{item.desc}</div>
+                <div className="flex gap-1 rounded-lg bg-slate-950/70 p-1" aria-label="Filter sectors by session direction">
+                  {['ALL', 'UP', 'DOWN', 'FLAT'].map((f) => (
+                    <button
+                      key={f}
+                      type="button"
+                      onClick={() => setActiveFilter(f)}
+                      aria-label={f}
+                      aria-pressed={activeFilter === f}
+                      className={`min-h-9 rounded-md px-3 text-xs font-medium transition-colors ${activeFilter === f ? 'bg-slate-700 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}
+                    >
+                      {f === 'ALL' ? 'All' : f === 'UP' ? 'Up' : f === 'DOWN' ? 'Down' : 'Flat'}
+                    </button>
+                  ))}
+                </div>
               </div>
-            ))}
+              <div className="grid grid-cols-1 gap-3 p-3 sm:grid-cols-2 sm:p-4 lg:grid-cols-3">
+                {filteredSectors.map(sector => (
+                  <SectorCard key={sector.slug} sector={sector} quote={quotes[sector.etf]} move={moveMap[sector.etf]} />
+                ))}
+              </div>
+              {filteredSectors.length === 0 && <p className="px-5 pb-6 text-sm text-slate-400">No sectors with a measured {activeFilter.toLowerCase()} move.</p>}
+              <div className="flex flex-wrap justify-between gap-2 border-t border-slate-800 px-4 py-3 text-xs text-slate-400 sm:px-5">
+                <span>Yahoo Finance · Session measurements, not trade signals</span>
+                <span>{lastUpdate ? <>Received <LocalTime value={lastUpdate} /></> : 'Awaiting first quote'}</span>
+              </div>
+            </section>
+
+            <section aria-labelledby="section-top-signals" className="rounded-xl border border-slate-800 bg-slate-900/25">
+              <div className="flex items-center justify-between gap-3 border-b border-slate-800 px-5 py-4">
+                <div>
+                  <h2 id="section-top-signals" className="text-base font-semibold text-white">Session leaders &amp; laggards</h2>
+                  <p className="mt-1 text-xs text-slate-400">Up to three advancing and two declining sector ETFs</p>
+                </div>
+              </div>
+              {largestMoves.length > 0 ? (
+                <div className="divide-y divide-slate-800/80">
+                  {largestMoves.map((move) => {
+                    const sector = SECTORS.find(s => s.etf === move.etf)
+                    if (!sector) return null
+                    return (
+                      <Link key={move.etf} href={`/sector/${sector.slug}`} className="flex min-h-14 items-center justify-between gap-3 px-5 py-3 transition-colors hover:bg-slate-800/50">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <span className="w-10 shrink-0 font-mono text-xs font-medium text-slate-200">{move.etf}</span>
+                          <span className="truncate text-sm text-slate-400">{sector.name}</span>
+                        </div>
+                        <span className={`shrink-0 font-mono text-sm tabular-nums ${move.direction === 'UP' ? 'text-[var(--color-up)]' : 'text-[var(--color-down)]'}`}>
+                          {formatMovePct(move.changePct)} <span aria-hidden="true" className="ml-3 text-slate-500">↗</span>
+                        </span>
+                      </Link>
+                    )
+                  })}
+                </div>
+              ) : <p className="px-5 py-6 text-sm text-slate-400">No advancing or declining moves available.</p>}
+            </section>
+
+            <section aria-labelledby="section-backtest" className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-800 bg-slate-900/40 p-5">
+              <div className="max-w-xl">
+                <p className="mb-2 text-xs font-medium tracking-wider text-amber-400 uppercase">Research tools</p>
+                <h2 id="section-backtest" className="text-base font-semibold text-white">Explore the historical backtest</h2>
+                <p className="mt-2 text-xs leading-relaxed text-slate-400">{BACKTEST_SCOPE_LINE}. The rules for the signal path that ran are on the backtest page. Simulated results, not a live accuracy guarantee.</p>
+              </div>
+              <Link href="/backtest" className="inline-flex min-h-10 items-center gap-3 rounded-lg border border-slate-700 px-4 text-sm font-medium text-slate-200 transition-colors hover:border-amber-500/60 hover:text-amber-300">
+                View backtest <span aria-hidden="true">→</span>
+              </Link>
+            </section>
           </div>
-        </section>
+
+          <aside className="min-w-0 rounded-xl border border-slate-800 bg-slate-900/25" aria-labelledby="section-latest-news">
+            <div className="border-b border-slate-800 p-5">
+              <div className="flex items-center justify-between gap-3">
+                <h2 id="section-latest-news" className="text-base font-semibold text-white">Latest briefs</h2>
+                <Link href="/briefs" className="text-xs font-medium text-amber-400 hover:text-amber-300">View all <span aria-hidden="true">→</span></Link>
+              </div>
+              <p className="mt-2 text-xs text-slate-400">{newsLoading ? 'Loading latest news…' : newsDegraded ? (newsBriefs.length === 0 ? 'Unavailable · Yahoo Finance' : `Partial from Yahoo Finance · ${newsBriefs.length} articles`) : `Yahoo Finance · ${newsBriefs.length} articles`}</p>
+              {!newsLoading && newsDegraded && <p role="status" className="mt-3 rounded-lg border border-amber-900/60 bg-amber-950/20 p-3 text-xs leading-relaxed text-amber-300">{newsDegraded}</p>}
+            </div>
+            {newsLoading ? (
+              <div className="divide-y divide-slate-800" aria-label="Loading news">
+                {[1, 2, 3].map(i => (
+                  <div key={i} className="space-y-3 p-5">
+                    <div className="h-3 w-24 animate-pulse rounded bg-slate-800" />
+                    <div className="h-4 w-full animate-pulse rounded bg-slate-800" />
+                    <div className="h-4 w-3/4 animate-pulse rounded bg-slate-800" />
+                  </div>
+                ))}
+              </div>
+            ) : newsBriefs.length > 0 ? (
+              <div className="divide-y divide-slate-800">
+                {newsBriefs.slice(0, 5).map(brief => (
+                  <a key={brief.id} href={brief.link} target="_blank" rel="noopener noreferrer" className="group block space-y-3 p-5 transition-colors hover:bg-slate-800/40">
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                      <span>{brief.sectorName || 'Markets'}</span>
+                      {brief.tickers.slice(0, 2).map(t => (
+                        <span key={t} className="rounded border border-slate-700/80 px-1.5 py-0.5 font-mono text-slate-300">{t}</span>
+                      ))}
+                    </div>
+                    <h3 className="text-sm font-medium leading-relaxed text-slate-100 group-hover:text-amber-200">
+                      {brief.title} <span aria-hidden="true" className="text-slate-500">↗</span>
+                    </h3>
+                    <p className="line-clamp-2 text-xs leading-relaxed text-slate-400">{brief.summary}</p>
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-400">
+                      <span>{brief.publisher}</span>
+                      {brief.timestamp && <span>· {formatUtcDateTime(brief.timestamp)} UTC</span>}
+                    </div>
+                  </a>
+                ))}
+              </div>
+            ) : newsDegraded ? null : <p className="p-5 text-sm leading-relaxed text-slate-400">No news available at the moment. Check back shortly.</p>}
+            <div className="border-t border-slate-800 p-5">
+              <p className="text-xs leading-relaxed text-slate-400">Explore a sector for charts, company research and related news. Research tooling, not investment advice.</p>
+            </div>
+          </aside>
+        </div>
       </div>
     </div>
   )
