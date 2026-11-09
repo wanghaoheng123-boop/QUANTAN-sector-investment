@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { WINDOW_START } from './lib/dataVintage.mjs';
 import { planSave } from './lib/planSave.mjs';
+import { loadRecordedRevisions } from './lib/recordedRevisions.mjs';
 import { TICKERS } from './lib/universe.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -24,6 +25,13 @@ const OUTPUT_DIR = path.resolve(__dirname, 'backtestData');
 const PERIOD_DAYS = 1825; // 5 years — descriptive now, not the anchor
 
 mkdirSync(OUTPUT_DIR, { recursive: true });
+
+/**
+ * Q-144: recorded, reviewed acceptances of vendor revisions (see
+ * scripts/lib/recordedRevisions.mjs). An unreadable file means NO
+ * acceptances — every revision is refused as before — never "accept".
+ */
+const ACCEPTED_REVISIONS = loadRecordedRevisions(path.resolve(__dirname, 'lib', 'acceptedRevisions.json'));
 
 /**
  * Persist a fixture, refusing to overwrite a good file with a degraded fetch, a
@@ -48,7 +56,7 @@ function saveResult(ticker, sector, candles) {
       );
     }
   }
-  const plan = planSave({ ticker, sector, prev, candles, nowMs: Date.now() });
+  const plan = planSave({ ticker, sector, prev, candles, nowMs: Date.now(), acceptances: ACCEPTED_REVISIONS });
   if (!plan.ok) throw new Error(plan.reason);
   for (const line of plan.log) console.log(line);
   writeFileSync(filePath, JSON.stringify(plan.doc, null, 2), 'utf8');

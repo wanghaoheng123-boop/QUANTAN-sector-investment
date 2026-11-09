@@ -439,7 +439,7 @@ describe('Q144-R2-5 — planSave: what the refresh writes for one instrument', (
     expect(plan.doc.candles[300].time).toBe(s[300].time)
     expect(plan.doc.fingerprint).toBe(seriesFingerprint(s.slice(0, 301)))
     expect(plan.doc.windowStart).toBe(WINDOW_START)
-    expect(plan.doc.vintage).toEqual({ appended: 301, restated: 0, missing: 0, finalized: 0, superseded: 0 })
+    expect(plan.doc.vintage).toEqual({ appended: 301, restated: 0, missing: 0, finalized: 0, superseded: 0, accepted: 0 })
     expect(plan.log.join('\n')).toContain('held back 1 unfinished or unsettled bar(s)')
   })
 
@@ -458,7 +458,7 @@ describe('Q144-R2-5 — planSave: what the refresh writes for one instrument', (
     const plan = planSave({ ...base, prev: { candles: disk, fetchedAt: legacyFetchedAt }, candles: vendor, nowMs: NOW_MS })
     expect(plan.ok).toBe(true)
     if (!plan.ok) return
-    expect(plan.doc.vintage).toEqual({ appended: 0, restated: 0, missing: 0, finalized: 0, superseded: 1 })
+    expect(plan.doc.vintage).toEqual({ appended: 0, restated: 0, missing: 0, finalized: 0, superseded: 1, accepted: 0 })
     expect(plan.doc.candles[300]).toEqual(finishedTail)
     const notice = plan.log.find((l) => l.startsWith('::notice'))
     expect(notice).toContain('2026-03-28 was stored before its day ended; high/low/close/volume moved up to 5.2e-2')
@@ -506,7 +506,7 @@ describe('Q-144 — the fetch script delegates every decision to planSave', () =
 
   it('saveResult passes the raw bars and Date.now() to planSave and writes its doc', async () => {
     const s = await src()
-    expect(s.match(/planSave\(\{ ticker, sector, prev, candles, nowMs: Date\.now\(\) \}\)/g)).toHaveLength(1)
+    expect(s.match(/planSave\(\{ ticker, sector, prev, candles, nowMs: Date\.now\(\), acceptances: ACCEPTED_REVISIONS \}\)/g)).toHaveLength(1)
     expect(s).toMatch(/writeFileSync\(filePath, JSON\.stringify\(plan\.doc, null, 2\), 'utf8'\)/)
     expect(s.match(/const rows = saveResult\((?:ticker|'BTC'), sector, candles\)/g)).toHaveLength(2)
     expect(s).not.toMatch(/assessRefresh|dropUnfinishedBars|clampPartialFinalBar|fetchedAt:/)
