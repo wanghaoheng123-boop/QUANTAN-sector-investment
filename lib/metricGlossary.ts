@@ -338,23 +338,21 @@ export const METRIC_GLOSSARY: Record<string, MetricMeta> = {
   },
 
   // -------- Volume / Flow --------
-  offExchangePct: {
-    label: 'Off-Exchange %',
-    definition: 'Percent of daily volume traded on dark pools / off-exchange ATSs.',
-    range: '20–60% typical for large-caps.',
-    howToUse: 'Rising off-ex % near key levels = institutional positioning. Sustained >50% = quiet accumulation/distribution.',
-  },
+  // Q-149: `offExchangePct` is gone — no data source here publishes off-exchange
+  // volume. The two entries below carried unsourced bands (">40% = squeeze
+  // candidate", ">5 = risk of squeeze"), the same kind the dark-pool panel's
+  // signal banner was removed for; they now say what the figure is.
   shortFloatPct: {
-    label: 'Short % of Float',
-    definition: 'Shares sold short as % of free-trading shares (float).',
-    range: '0–50%+. >20% = high; >40% = squeeze candidate.',
-    howToUse: 'High short% + positive catalyst = squeeze risk for shorts. Use with days-to-cover for context.',
+    label: 'Short Interest % (as reported)',
+    definition: "Shares sold short and not yet bought back, as the vendor's own percent, as of a settlement date. Its denominator is not always the float published beside it: for some dual-class and ADR names it tracks shares outstanding.",
+    range: 'Varies widely by company; no band is calibrated here.',
+    howToUse: 'A level, not a signal: it does not say who is buying or selling. Check the as-of date — the figure is reported twice a month and lags the market.',
   },
   daysToCover: {
     label: 'Days to Cover',
-    definition: 'Short interest divided by avg daily volume — number of trading days needed for shorts to exit.',
-    range: '0.5–10+ days.',
-    howToUse: '>5 = risk of squeeze on positive catalyst. <2 = shorts can easily exit.',
+    definition: 'Short interest divided by an average daily volume, as the vendor reports it.',
+    range: 'Depends on the volume window the vendor divides by.',
+    howToUse: 'A level, not a signal. It is not computed from the 10-day volume shown beside it.',
   },
 
   // -------- Crypto-specific --------

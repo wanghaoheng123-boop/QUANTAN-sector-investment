@@ -21,7 +21,7 @@ interface DarkPoolPanelProps {
   prints: Synthetic<DarkPoolPrint[]>
   ticker: string
   color: string
-  /** Real off-exchange analytics loaded from /api/darkpool/[ticker] */
+  /** Short interest and share counts loaded from /api/darkpool/[ticker] */
   apiData?: DarkPoolAnalysis | null
   /** True while fetching apiData */
   apiLoading?: boolean
@@ -60,32 +60,43 @@ export default function DarkPoolPanel({
   // `assert(true, …)` could never do.
   const prints = unwrapSynthetic(printsWrapped, 'DarkPoolPanel.prints')
 
-  const { metrics, hasRealData, statusNote } = apiData ?? {
-    metrics: {},
-    hasRealData: false,
-    statusNote: null,
-  }
-
-  // ── Sentiment from real data ─────────────────────────────────────────────
-  const offPct = metrics.offExchangePct
-  const shortPct = metrics.shortFloatPct
-
-  // Derive sentiment: if short interest > 10% of float → distribution signal
-  const shortSignal: 'DISTRIBUTION' | 'ACCUMULATION' | 'NEUTRAL' =
-    shortPct == null
-      ? 'NEUTRAL'
-      : shortPct > 10
-        ? 'DISTRIBUTION'
-        : shortPct > 5
-          ? 'NEUTRAL'
-          : 'ACCUMULATION'
-
-  const shortColor =
-    shortSignal === 'DISTRIBUTION'
-      ? '#ff6b7a'
-      : shortSignal === 'ACCUMULATION'
-        ? '#00d084'
-        : '#94a3b8'
+  const metrics = apiData?.metrics
+  const statusNote = apiData?.statusNote ?? null
+  const shortPct = metrics?.shortFloatPct ?? null
+  // Q-149: the sub-label names what is known, in the order a reader needs it.
+  // A settlement date older than a missed reporting cycle says STALE with its
+  // age (I2), rather than printing an old date as if it were current.
+  const staleMark =
+    metrics?.shortInterestStale && metrics.shortInterestAgeDays != null ? `STALE (${metrics.shortInterestAgeDays} days)` : null
+  const shortSub = [
+    metrics?.sharesShorted != null ? `${fmtShares(metrics.sharesShorted)} shares` : null,
+    metrics?.shortInterestAsOf ? `as of ${metrics.shortInterestAsOf}` : null,
+    staleMark,
+  ].filter(Boolean).join(' · ') || 'not reported'
+  // Q149-R2-10: Days to Cover is divided from the same settlement date as the
+  // short count, so it is exactly as old. A mark on one card and not the other
+  // would present half of one report as current.
+  const daysToCoverSub = [
+    'as reported by Yahoo; not computed from the volume shown',
+    metrics?.daysToCover != null ? staleMark : null,
+  ].filter(Boolean).join(' · ')
+  // Q149-D2: a float the vendor reported and the route withheld is not "not reported".
+  const floatWithheldSub =
+    metrics?.floatWithheld === 'exceeds-shares-out'
+      ? 'Float withheld: larger than shares outstanding'
+      : metrics?.floatWithheld === 'inconsistent-with-short-interest'
+        ? 'Float withheld: inconsistent with the short-interest figures'
+        : null
+  // Q149-R2-2: with the float withheld, the short % printed beside it is on the
+  // vendor's own denominator, which for these names is often shares outstanding.
+  const floatSub =
+    metrics?.sharesFloat != null
+      ? `Float ${fmtShares(metrics.sharesFloat)}`
+      : floatWithheldSub != null
+        ? shortPct != null
+          ? `${floatWithheldSub} · short % is on Yahoo's own denominator`
+          : floatWithheldSub
+        : 'Float not reported'
 
   // ── Bullish print ratio (illustrative) ────────────────────────────────
   const bullishPrints = prints.filter((p) => p.sentiment === 'BULLISH')
@@ -96,7 +107,7 @@ export default function DarkPoolPanel({
 
   return (
     <div className="space-y-4">
-      {/* ── Real off-exchange metrics ──────────────────────────────── */}
+      {/* ── Short interest and share counts (Yahoo) ───────────────────── */}
       {apiLoading && !apiData && (
         <div className="rounded-xl border border-amber-500/20 bg-amber-950/10 p-4 space-y-2 animate-pulse">
           <div className="h-4 bg-slate-800 rounded w-2/3" />
@@ -126,65 +137,45 @@ export default function DarkPoolPanel({
             </div>
           )}
 
-          {/* Real metrics grid */}
+          {/* Q-149: this grid's first card was "Off-Exchange Vol", sub-labelled
+              "Finra BATS", for a value no field supplied — it was "—" on every
+              ticker. No data source here publishes off-exchange volume, so the
+              panel says that once, instead of rendering an empty card that
+              credits a venue. */}
+          <p className="text-xs text-slate-400 leading-relaxed">
+            Off-exchange (dark-pool) volume is not published by this data source. The figures below are
+            short interest and share counts.
+          </p>
+
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            <MetricCard
-              label="Off-Exchange Vol"
-              value={fmtPct(offPct, 2)}
-              sub={offPct != null ? `${(100 - offPct).toFixed(1)}% on-exchange` : 'Finra BATS'}
-            />
-            <MetricCard
-              label="Short Interest"
-              value={fmtPct(shortPct, 2)}
-              sub={metrics.sharesShorted != null ? `${fmtShares(metrics.sharesShorted)} shares` : 'of float'}
-            />
+            <MetricCard label="Short Interest (% as reported)" value={fmtPct(shortPct, 2)} sub={shortSub} />
             <MetricCard
               label="Days to Cover"
-              value={metrics.daysToCover != null ? metrics.daysToCover.toFixed(1) : '—'}
-              sub={metrics.avgDailyVolume != null ? `Vol: ${fmtShares(metrics.avgDailyVolume)}/day` : 'avg daily vol'}
+              value={metrics?.daysToCover != null ? metrics.daysToCover.toFixed(1) : '—'}
+              sub={daysToCoverSub}
             />
+            <MetricCard label="10-Day Avg Volume" value={fmtShares(metrics?.avgDailyVolume)} sub="shares per day" />
             <MetricCard
-              label="Float / Shares Out"
-              value={
-                metrics.sharesFloat != null
-                  ? fmtShares(metrics.sharesFloat)
-                  : metrics.sharesOutstanding != null
-                    ? fmtShares(metrics.sharesOutstanding)
-                    : '—'
-              }
-              sub="Yahoo Finance"
+              label="Shares Outstanding"
+              value={fmtShares(metrics?.sharesOutstanding)}
+              sub={floatSub}
             />
           </div>
 
-          {/* Short signal banner */}
-          {hasRealData && (
-            <div
-              className="rounded-xl border p-3 flex items-center gap-3"
-              role="alert"
-              aria-label={`Short interest signal: ${shortSignal}`}
-              style={{
-                borderColor: `${shortColor}40`,
-                backgroundColor: `${shortColor}10`,
-              }}
-            >
-              <div
-                className="w-2.5 h-2.5 rounded-full shrink-0"
-                style={{ backgroundColor: shortColor }}
-              />
-              <div>
-                <div className="text-xs font-semibold" style={{ color: shortColor }}>
-                  Short Interest Signal: {shortSignal}
-                </div>
-                <div className="text-[10px] text-slate-400 mt-0.5 leading-relaxed">
-                  {shortSignal === 'DISTRIBUTION'
-                    ? 'Elevated short interest (>10% of float) may indicate bearish sentiment or institutional hedging.'
-                    : shortSignal === 'ACCUMULATION'
-                      ? 'Low short interest (<5% of float) suggests limited near-term selling pressure.'
-                      : 'Short interest is moderate — no strong directional signal from short data.'}
-                  {' Source: Finra / Yahoo Finance.'}
-                </div>
-              </div>
-            </div>
+          {/* Q-149: this was a "Short Interest Signal" banner — DISTRIBUTION above
+              10% of float, ACCUMULATION below 5% — in red and green. Short
+              interest does not say who is buying, the bands had no source, and
+              the field was read 100× too small, so every stock (GME included)
+              was labelled ACCUMULATION, and every ETF, which has no short
+              interest figure at all, was told its short interest was
+              "moderate". What the number is, stated plainly, replaces it. */}
+          {shortPct != null && (
+            <p className="text-[10px] text-slate-400 leading-relaxed">
+              Short interest is the number of shares sold short and not yet bought back, reported twice a
+              month as of a settlement date. The percentage is Yahoo&apos;s own: its denominator is usually the
+              float, but for some dual-class and ADR names it tracks shares outstanding. It is not a measure of
+              off-exchange trading.
+            </p>
           )}
 
           {/* Price */}
@@ -225,12 +216,12 @@ export default function DarkPoolPanel({
               beneath it, with nothing marking where the attribution stopped. It
               now names the metrics it actually covers and disclaims the rest. */}
           <div className="text-[10px] text-slate-400 leading-relaxed">
-            Source for the metrics above: Yahoo Finance aggregate off-exchange trading data.{' '}
+            Source for the figures above: Yahoo Finance (short interest, share counts, 10-day average
+            volume).{' '}
             {apiData.fetchedAt && (
               <>Fetched: <LocalTime value={apiData.fetchedAt} withDate />. </>
             )}
-            Off-exchange % = Finra BATS/OTCQX/OTCBB volume ÷ total volume. This source does not
-            cover the flow gauge or the block prints below.
+            The flow gauge and the block prints below are not from this source.
           </div>
         </>
       )}
@@ -238,7 +229,7 @@ export default function DarkPoolPanel({
       {/* ── Off-exchange flow gauge (ILLUSTRATIVE) ────────────────────
           UX-6: `bullishPct` is derived from `prints`, which are always
           synthetic, so this gauge is synthetic too — it was gated on the
-          tautology `(hasRealData || true)`, i.e. always rendered, immediately
+          tautology `(hasRealData || true)` (a flag since removed), i.e. always rendered, immediately
           under the real Yahoo provenance line and with no label of its own. The
           dead conditional is gone and the badge is now part of the header. */}
       <div className="bg-slate-900/60 rounded-xl p-4 border border-slate-800" role="region" aria-label="Off-exchange flow sentiment (illustrative)">
@@ -275,11 +266,11 @@ export default function DarkPoolPanel({
           </span>
           <div className="flex items-center gap-2 text-xs text-slate-400">
             {/* UX-6: unconditional. `prints` come from lib/mockData.ts's
-                mulberry32 generator on EVERY render path — `hasRealData`
-                describes the Yahoo METRICS above, not this table, so gating the
-                badge on `!hasRealData` hid the label exactly on the liquid
-                tickers a professional trades (AAPL: fabricated prints at ≈$100
-                while the real quote was $305.40, badge absent). */}
+                mulberry32 generator on EVERY render path. The badge used to be
+                gated on a flag (`hasRealData`, since removed) that described the
+                Yahoo figures above, not this table, so it vanished exactly on the
+                liquid tickers a professional trades — fabricated prints near $100
+                beside a real quote three times higher, with no badge. */}
             <span className="px-2 py-0.5 rounded bg-amber-900/30 text-amber-400 border border-amber-500/30 text-[10px]">
               ILLUSTRATIVE
             </span>
@@ -290,7 +281,7 @@ export default function DarkPoolPanel({
 
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
-            <caption className="sr-only">Dark pool prints — recent off-exchange block trades</caption>
+            <caption className="sr-only">Illustrative dark pool prints — generated examples, not real trades</caption>
             <thead>
               <tr className="text-slate-400 border-b border-slate-800">
                 <th scope="col" className="text-left px-4 py-2 font-medium">Time</th>
@@ -359,7 +350,7 @@ export default function DarkPoolPanel({
           <span className="text-amber-400/80">
             ⚠ Illustrative block prints — not from a proprietary data feed.
           </span>
-          {' '}Individual print data requires a subscription service (e.g. Finra ADF, CBOE UQDF, or Bloomberg LP).
+          {' '}No data source for individual off-exchange prints is connected.
         </div>
       </div>
     </div>
