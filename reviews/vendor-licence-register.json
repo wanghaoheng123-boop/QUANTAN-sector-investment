@@ -86,8 +86,9 @@
       "recorded_on": "2026-08-27",
       "evidence": [
         "app/api/crypto/btc/route.ts:78",
-        "app/api/crypto/btc/quote/route.ts:17",
-        "components/crypto/hooks/useBtcCandles.ts:34"
+        "app/api/crypto/btc/quote/route.ts:21",
+        "components/crypto/hooks/useBtcCandles.ts:34",
+        "components/crypto/hooks/useBtcPriceWs.ts:96"
       ],
       "exposed_via": [
         "app/api/crypto/btc/quote/route.ts",
@@ -1702,7 +1703,7 @@
       "recorded_by": "Q-100 review round 3 (red-team) — recorded 2026-08-27",
       "recorded_on": "2026-08-27",
       "evidence": [
-        "components/crypto/hooks/useBtcPriceWs.ts:6"
+        "components/crypto/hooks/useBtcPriceWs.ts:15"
       ],
       "exposed_via": [
         "app/crypto/btc/page.tsx"

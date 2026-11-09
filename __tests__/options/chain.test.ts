@@ -576,3 +576,30 @@ describe('fetchOptionsChain', () => {
     })
   })
 })
+
+describe('Q-156 — a missing contract change is null, not a measured 0', () => {
+  const contract = (extra: Record<string, unknown>) => ({
+    contractSymbol: 'X', strike: 100, lastPrice: 5, contractSize: 'REGULAR',
+    expiration: new Date(Date.now() + oneYearMs), lastTradeDate: new Date(), impliedVolatility: 0.25, inTheMoney: false, ...extra,
+  })
+
+  it('a blank, a boolean, an array or hex is null, not the 0 or 1 Number() makes of it (red-team F5)', async () => {
+    optionsMock.mockResolvedValue(makeRawChain({
+      spot: 100, expirationMs: Date.now() + oneYearMs,
+      calls: [' ', false, true, [], '0x10'].map((change) => contract({ change, percentChange: change })),
+    }))
+    const chain = await fetchOptionsChain('X')
+    expect(chain.calls.map((c) => c.change)).toEqual([null, null, null, null, null])
+    expect(chain.calls.map((c) => c.percentChange)).toEqual([undefined, undefined, undefined, undefined, undefined])
+  })
+
+  it('no change, a null change or a non-numeric change is null; a real 0 stays 0', async () => {
+    optionsMock.mockResolvedValue(makeRawChain({
+      spot: 100, expirationMs: Date.now() + oneYearMs,
+      calls: [contract({}), contract({ change: null }), contract({ change: 'n/a' }), contract({ change: 0 }), contract({ change: -0.4, percentChange: -7.4 })],
+    }))
+    const chain = await fetchOptionsChain('X')
+    expect(chain.calls.map((c) => c.change)).toEqual([null, null, null, 0, -0.4])
+    expect(chain.calls.map((c) => c.percentChange)).toEqual([undefined, undefined, undefined, undefined, -7.4])
+  })
+})

@@ -43,7 +43,7 @@ export default function BtcPage() {
     setCandles,
   })
 
-  const { btcPrice } = useBtcPriceWs()
+  const { btcPrice, feed } = useBtcPriceWs()
 
   const indicatorConfig = useMemo(
     () => buildIndicatorConfig(activeIndicator, emaSelection, vis),
@@ -83,7 +83,7 @@ export default function BtcPage() {
 
   return (
     <div className="min-h-screen">
-      <BtcHeader btcPrice={btcPrice} wsConnected={wsConnected} />
+      <BtcHeader btcPrice={btcPrice} feed={feed} />
 
       <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">
         <BtcTabBar

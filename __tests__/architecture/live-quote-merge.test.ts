@@ -30,10 +30,17 @@
  * read as a proof: a quote built in a local and passed by name to `setQuote`; a
  * shadowed helper or an early return on the stock and sector pages (caught by
  * the render tests, not here); a change field read through a local alias or
- * coalesced to a named constant; `lib/options/chain.ts`, whose contract `change`
- * still defaults to 0 (Q-156); and the BTC price feed's `change24h` /
- * `changePct24h`, field names outside this list, which still default to 0
- * (Q-157).
+ * coalesced to a named constant; and a zero produced from a field whose name is
+ * not on the list (the BTC feed's Coinbase `open_24h` and CoinGecko
+ * `usd_24h_change`). __tests__/lib/btcSnapshot.test.tsx pins those PARSERS, and
+ * __tests__/hooks/useBtcPriceWs.test.ts pins the hook's three call sites (the
+ * socket, the quote route and direct CoinGecko); this guard pins neither.
+ * `lib/options/chain.ts` still turns a missing strike, last price, implied
+ * volatility or spot into 0 on fields this list does not name (Q-160).
+ *
+ * Q-156 and Q-157 (2026-10-24) removed the two exemptions this guard shipped
+ * with: the options contract `change` and the BTC feed's `change24h` /
+ * `changePct24h` are null when missing, and those names are on the list.
  */
 import { execSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
@@ -140,8 +147,8 @@ export function bootMissingProblems(path: string, source: string): string[] {
   return problems
 }
 
-const ZERO_FIELDS = new Set(['change', 'changePct', 'pe', 'high52w', 'low52w'])
-const CHANGE_FIELDS = new Set(['change', 'changePct'])
+const ZERO_FIELDS = new Set(['change', 'changePct', 'pe', 'high52w', 'low52w', 'change24h', 'changePct24h', 'percentChange', 'high24h', 'low24h', 'volume24h'])
+const CHANGE_FIELDS = new Set(['change', 'changePct', 'change24h', 'changePct24h', 'percentChange'])
 const isNumber = (e: ts.Expression): boolean => {
   const u = unwrap(e)
   if (ts.isNumericLiteral(u) || (ts.isPrefixUnaryExpression(u) && ts.isNumericLiteral(u.operand))) return true
@@ -199,8 +206,14 @@ export function zeroOffenders(path: string, source: string): string[] {
     if (ts.isConditionalExpression(n) && readsChangeField(n.condition) && (isNumber(n.whenTrue) || isNumber(n.whenFalse))) {
       out.push(at(n))
     }
-    if (ts.isPropertyAssignment(n) && (ts.isIdentifier(n.name) || ts.isStringLiteral(n.name)) && CHANGE_FIELDS.has(n.name.text) && isNumber(n.initializer)) {
-      out.push(at(n))
+    if (ts.isPropertyAssignment(n) && (ts.isIdentifier(n.name) || ts.isStringLiteral(n.name)) && ZERO_FIELDS.has(n.name.text)) {
+      // `change: 0`, and `changePct24h: Number(x) || 0` / `high24h: x ?? 0`
+      // whatever x reads (red-team F3 on Q-156/Q-157: only the bare literal was caught).
+      const init = unwrap(n.initializer)
+      const coalescedToNumber = ts.isBinaryExpression(init)
+        && (init.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken || init.operatorToken.kind === ts.SyntaxKind.BarBarToken)
+        && isNumber(init.right)
+      if ((CHANGE_FIELDS.has(n.name.text) && isNumber(n.initializer)) || coalescedToNumber) out.push(at(n))
     }
   })
   return out
@@ -211,8 +224,6 @@ const PAGES = [
   { path: 'app/sector/[slug]/page.tsx', setter: 'setQuote', helper: 'mergeSectorTick' },
 ]
 const LANDING = { path: 'app/page.tsx', helper: 'mergeLandingTick' }
-/** Q-156: options-contract `change` still defaults to 0 — a separate package. */
-const ZERO_EXEMPT = new Set(['lib/options/chain.ts'])
 
 const productFiles = execSync('git ls-files -z app components hooks lib', { cwd: ROOT }).toString().split('\0')
   .filter((p) => /\.(?:tsx?|jsx?|mjs)$/.test(p) && !p.endsWith('.d.ts'))
@@ -318,13 +329,14 @@ describe('no product file turns a missing change into a number (property 2)', ()
 
   it('visits the product tree, including every quote consumer', () => {
     expect(productFiles.length).toBeGreaterThan(200)
-    for (const p of ['app/heatmap/page.tsx', 'app/commodities/page.tsx', 'app/desk/page.tsx', 'components/PriceTicker.tsx', 'components/SectorCard.tsx', 'lib/liveQuoteState.ts', 'lib/data/mergeQuotes.ts', 'lib/data/bloomberg/bridgeClient.ts']) {
+    for (const p of ['app/heatmap/page.tsx', 'app/commodities/page.tsx', 'app/desk/page.tsx', 'components/PriceTicker.tsx', 'components/SectorCard.tsx', 'lib/liveQuoteState.ts', 'lib/data/mergeQuotes.ts', 'lib/data/bloomberg/bridgeClient.ts',
+      'lib/options/chain.ts', 'lib/btcSnapshot.ts', 'components/crypto/hooks/useBtcPriceWs.ts', 'components/crypto/BtcHeader.tsx', 'app/api/crypto/btc/quote/route.ts']) {
       expect(productFiles).toContain(p)
     }
   })
 
-  it('no product file outside the named exemption does it', () => {
-    const offenders = productFiles.filter((p) => !ZERO_EXEMPT.has(p)).flatMap((p) => zeroOffenders(p, read(p)))
+  it('no product file does it', () => {
+    const offenders = productFiles.flatMap((p) => zeroOffenders(p, read(p)))
     expect(offenders).toEqual([])
   })
 
@@ -333,13 +345,29 @@ describe('no product file turns a missing change into a number (property 2)', ()
     expect(zeroOffenders('probe.ts', 'const FLAT_PCT = 0; const x = quotes[t]?.changePct ?? FLAT_PCT')).toEqual([])
   })
 
-  it('RESIDUAL (Q-157): the BTC price feed still defaults change24h / changePct24h to 0', () => {
-    const src = read('components/crypto/hooks/useBtcPriceWs.ts')
-    expect(src).toMatch(/change24h: d\.change24h \?\? 0/)
-    expect(zeroOffenders('components/crypto/hooks/useBtcPriceWs.ts', src)).toEqual([]) // invisible to this list, by name
+  it('the BTC feed and options-contract change names are on the list (Q-156, Q-157 positive controls)', () => {
+    for (const bad of [
+      'const s = { change24h: d.change24h ?? 0 }',
+      'const s = { changePct24h: d.changePct24h ?? 0 }',
+      'const s = { change24h: 0 }',
+      'const isUp = (btcPrice?.changePct24h ?? 0) >= 0',
+      'const c = { change: Number(raw.change ?? 0) }',
+      'const c = { percentChange: Number(raw.percentChange) }',
+    ]) expect(zeroOffenders('probe.ts', bad), bad).not.toEqual([])
   })
 
-  it('RESIDUAL (Q-156): the options chain still defaults a contract change to 0', () => {
-    expect(zeroOffenders('lib/options/chain.ts', read('lib/options/chain.ts'))).not.toEqual([])
+  it('a listed field initialised from ANY expression coalesced to a number is caught (red-team F3)', () => {
+    for (const bad of [
+      'const s = { changePct24h: Number(q.bitcoin?.usd_24h_change) || 0 }',
+      'const s = { high24h: parseFloat(d.high_24h) ?? 0 }',
+      'const s = { volume24h: v || 0 }',
+    ]) expect(zeroOffenders('probe.ts', bad), bad).not.toEqual([])
+    expect(zeroOffenders('probe.ts', 'const s = { high24h: positive(d.high_24h) }')).toEqual([])
+  })
+
+  it('RESIDUAL: a zero produced into a local from a field name not on the list passes (the parser and hook tests pin the BTC sources)', () => {
+    expect(zeroOffenders('probe.ts', 'const chg = open24 > 0 ? price - open24 : 0')).toEqual([])
+    expect(zeroOffenders('probe.ts', 'const pct = Number(q.bitcoin?.usd_24h_change) || 0')).toEqual([])
+    expect(zeroOffenders('probe.ts', 'const c = { lastPrice: Number(raw.lastPrice ?? 0) }')).toEqual([]) // Q-160
   })
 })
